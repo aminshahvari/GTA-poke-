@@ -1,0 +1,16 @@
+{
+  "name": "stacked-poker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Invite-only No-Limit Hold'em tournament club for friends",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node test/t_eval.js && node test/t_rules.js && node test/t_sim.js 20 && node test/t_server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "pg": "8.13.1",
+    "ws": "8.18.0"
+  }
+}
