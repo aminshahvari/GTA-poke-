@@ -739,6 +739,8 @@ function renderControls(d, mySeat, mine){
   const myTurn = meSeat && d.acting === mySeat && d.actUid === club.me.id && d.legal && d.phase === 'hand';
   if(myTurn && lastSent !== turnKey){
     if(c.dataset.turn === turnKey) return;
+    // your turn: fold the chat away so the action buttons are in view (unless you're mid-message)
+    if(chatOpen && document.activeElement !== $('chatInput')) openChat(false);
     // a pre-action fires by itself when it still fits the situation
     if(preAct){
       const L = d.legal, pa = preAct; preAct = null;
@@ -1016,7 +1018,7 @@ function renderChat(){
   const seated = isDemo() || (!!club.myTable && club.myTable === curTid());
   $('chatForm').hidden = !seated && !club.me.owner;
   $('chatQuick').hidden = $('chatForm').hidden;
-  $('chatNote').textContent = off ? 'The organizer turned table chat off.' : muted ? 'The organizer muted your chat.' : !seated && !club.me.owner ? 'Only players at this table can chat. You can read along.' : 'Club rule (WSOP): never talk about a hand that is still being played, and never say what you folded.';
+  $('chatNote').textContent = off ? 'The organizer turned table chat off.' : muted ? 'The organizer muted your chat.' : !seated && !club.me.owner ? 'Only players at this table can chat. You can read along.' : '';
   $('chatInput').disabled = off || muted;
 }
 function openChat(open){
