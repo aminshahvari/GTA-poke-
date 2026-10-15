@@ -16,13 +16,13 @@ const showScreen = id => ['auth','lobby','game'].forEach(s => $(s).hidden = s !=
 (function drawGlobe(){
   const c = $('globe'), x = c.getContext('2d'), W = 900, R = 420;
   const g = x.createRadialGradient(W/2, W/2, 40, W/2, W/2, R);
-  g.addColorStop(0, 'rgba(255,190,140,.55)'); g.addColorStop(.5, 'rgba(150,80,60,.35)'); g.addColorStop(1, 'rgba(60,40,40,0)');
+  g.addColorStop(0, 'rgba(120,170,255,.45)'); g.addColorStop(.5, 'rgba(46,107,207,.25)'); g.addColorStop(1, 'rgba(22,26,35,0)');
   x.fillStyle = g; x.beginPath(); x.arc(W/2, W/2, R, 0, Math.PI*2); x.fill();
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647; const pts = [];
   for(let i = 0; i < 70; i++){ const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R * .85; pts.push([W/2 + Math.cos(a)*r, W/2 + Math.sin(a)*r*.8]); }
-  x.strokeStyle = 'rgba(255,220,190,.18)';
+  x.strokeStyle = 'rgba(180,205,255,.16)';
   pts.forEach((p, i) => pts.slice(i+1).forEach(q => { if(Math.hypot(p[0]-q[0], p[1]-q[1]) < 120){ x.beginPath(); x.moveTo(...p); x.lineTo(...q); x.stroke(); } }));
-  pts.forEach(p => { x.fillStyle = 'rgba(255,230,200,.85)'; x.beginPath(); x.arc(p[0], p[1], 2 + rnd()*2.5, 0, Math.PI*2); x.fill(); });
+  pts.forEach(p => { x.fillStyle = 'rgba(200,220,255,.8)'; x.beginPath(); x.arc(p[0], p[1], 2 + rnd()*2.5, 0, Math.PI*2); x.fill(); });
 })();
 
 function modal(html, buttons){
@@ -453,7 +453,7 @@ function cardHTML(c, cls = '', extra = ''){
 }
 const initials = n => String(n || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 const chipsIcon = (n = 3) => `<span class="chips">${'<i></i>'.repeat(n)}</span>`;
-const COLORS = ['#a8452f','#8f3b6e','#2f6c8f','#3d7d5b','#9a7a24','#6b5aa6','#4b6670','#7b6a5c','#b8161f'];
+const COLORS = ['#3b6fb6','#7a5aa6','#2f8a8f','#3d8a62','#b07a2a','#5a6fc2','#4b6680','#8a6a5c','#b0505a'];
 const colorOf = uid => { let h = 0; for(const c of String(uid)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
 
 function renderTable(){
@@ -682,7 +682,7 @@ window.addEventListener('resize', () => { if(view === 'table') renderTable(); })
 function celebrate(){
   if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const c = $('confetti'), x = c.getContext('2d'); c.hidden = false; c.width = innerWidth; c.height = innerHeight;
-  const cols = ['#e6bb68','#d3212d','#f5f0f0','#6fdcab','#f6dc95'];
+  const cols = ['#f2a93b','#4a90f5','#e8ebf1','#4fd1a1','#9cc6ff'];
   const ps = Array.from({ length: 140 }, () => ({ x: Math.random() * c.width, y: -20 - Math.random() * c.height * .6, vx: (Math.random() - .5) * 2, vy: 2 + Math.random() * 3, r: Math.random() * 6, w: 5 + Math.random() * 6, col: cols[Math.floor(Math.random() * cols.length)] }));
   const t0 = performance.now();
   (function frame(t){ x.clearRect(0, 0, c.width, c.height); ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.r += .1; x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.fillStyle = p.col; x.fillRect(-p.w/2, -p.w/4, p.w, p.w/2); x.restore(); }); if(t - t0 < 4500) requestAnimationFrame(frame); else c.hidden = true; })(t0);
