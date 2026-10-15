@@ -269,6 +269,7 @@ function directorMainHTML(){
         <label>Late registration<select id="nLate"><option value="0">Off</option><option value="2">Until end of level 2</option><option value="4" selected>Until end of level 4</option><option value="6">Until end of level 6</option></select></label></div>
         <div class="two"><label>Ante<select id="nAnte"><option value="each" selected>Every player</option><option value="bb">Big blind (WSOP)</option></select></label>
         <label>Time to act<select id="nAct"><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="20" selected>20 seconds</option><option value="30">30 seconds</option></select></label></div>
+        <label>Hand helper<select id="nHelper"><option value="on" selected>On: show hand strength and win chance</option><option value="off">Off (pro mode)</option></select></label>
         <div class="two"><label>Start<select id="nWhen"><option value="manual">When I press Start</option><option value="at">At a set time</option></select></label>
         <label>Repeat<select id="nRepeat"><option value="none">Just once</option><option value="daily">Every day</option><option value="weekly">Every week</option></select></label></div>
         <label id="atWrap" hidden>Start time<input type="datetime-local" id="nAt" value="${local}"></label>
@@ -391,7 +392,7 @@ function wireLobby(){
   on('lateInvite', e => { e.preventDefault(); askInvite(); });
   on('againBtn', () => {
     const T = club.tourney, d = new Date();
-    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: T && T.tableSize ? T.tableSize : 6, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4 });
+    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: T && T.tableSize ? T.tableSize : 6, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true });
     send({ t: 'join' }); tab = 'event';
   });
   on('newCustomBtn', () => { tab = 'director'; renderLobby(); });
@@ -401,7 +402,7 @@ function wireLobby(){
     nf.onsubmit = e => {
       e.preventDefault();
       const at = $('nWhen').value === 'at' ? new Date($('nAt').value).getTime() : null;
-      send({ t: 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value });
+      send({ t: 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value, helper: $('nHelper').value });
       tab = 'event';
     };
   }
@@ -531,6 +532,7 @@ function renderTable(){
   $('tName').textContent = `Table ${d.n}`;
   $('sPlayers').textContent = `${d.seats.filter(Boolean).length} seated`;
   renderControls(d, mySeat, mine);
+  renderHelper(d, mySeat >= 0 ? d.seats[mySeat] : null, mine);
   tickClock();
 }
 // Pre-actions (like the big online rooms): pick Check/Fold, Check, Call or Call any before your turn.
@@ -802,6 +804,90 @@ $('seats').addEventListener('click', async e => {
   const pick = await modal(`<h2>Throw something at ${esc(nameOf(uid))}</h2><div class="throw-grid">${Object.entries(THROW_ICONS).map(([k, v]) => `<button data-v="${k}">${v}</button>`).join('')}</div>`, [{ label: 'Cancel', value: null }]);
   if(pick) send({ t: 'throw', item: pick, to: uid });
 });
+
+// ---------- hand helper: what you have, your chance to win and whether a call pays ----------
+const eqCache = new Map();
+let helperMin = false; try{ helperMin = localStorage.getItem('stacked:helper') === 'min'; }catch(e){}
+function preName(c){
+  const [a, b] = c.slice().sort((x, y) => E.rankOf(y) - E.rankOf(x)), ra = E.rankOf(a), rb = E.rankOf(b);
+  const N = { 14: 'Ace', 13: 'King', 12: 'Queen', 11: 'Jack', 10: 'Ten', 9: 'Nine', 8: 'Eight', 7: 'Seven', 6: 'Six', 5: 'Five', 4: 'Four', 3: 'Three', 2: 'Two' };
+  const P = { 14: 'Aces', 13: 'Kings', 12: 'Queens', 11: 'Jacks', 10: 'Tens', 9: 'Nines', 8: 'Eights', 7: 'Sevens', 6: 'Sixes', 5: 'Fives', 4: 'Fours', 3: 'Threes', 2: 'Twos' };
+  if(ra === rb) return 'Pocket ' + P[ra];
+  return `${N[ra]}-${N[rb]} ${E.suitOf(a) === E.suitOf(b) ? 'suited' : 'offsuit'}`;
+}
+function madeName(hole, board){
+  const v = E.evaluate(hole.concat(board)), cat = E.category(v);
+  // three of a kind with a pocket pair is a "set"
+  if(cat === 3 && E.rankOf(hole[0]) === E.rankOf(hole[1]) && board.some(c => E.rankOf(c) === E.rankOf(hole[0]))) return 'Set of ' + E.describe(v).replace(/^Three of a Kind, /, '');
+  // is the best hand all on the board?
+  const boardOnly = board.length === 5 && E.evaluate(board) === v;
+  // a pair that is only on the board helps everyone, so say so
+  const cnt = {}; board.forEach(c => { const r = E.rankOf(c); cnt[r] = (cnt[r] || 0) + 1; });
+  const holeR = hole.map(E.rankOf);
+  if(!boardOnly && cat === 1 && Object.keys(cnt).some(r => cnt[r] >= 2 && !holeR.includes(+r))) return E.describe(v) + ' (on the board)';
+  return E.describe(v) + (boardOnly ? ' (on the board)' : '');
+}
+function drawsOf(hole, board){
+  if(board.length < 3 || board.length > 4) return '';
+  const all = hole.concat(board), cur = E.category(E.evaluate(all));
+  if(cur >= 4) return '';
+  const used = new Set(all); let flushOuts = 0, straightOuts = 0;
+  for(let c = 0; c < 52; c++){
+    if(used.has(c)) continue;
+    const cat = E.category(E.evaluate(all.concat([c])));
+    if(cat === 5 || cat === 8) flushOuts++; else if(cat === 4) straightOuts++;
+  }
+  const parts = [];
+  if(flushOuts) parts.push('flush draw');
+  if(straightOuts) parts.push(straightOuts >= 8 ? 'open-ended straight draw' : 'gutshot straight draw');
+  const outs = flushOuts + straightOuts;
+  if(!outs) return '';
+  const pct = board.length === 3 ? Math.min(outs * 4, 100) : outs * 2;
+  return `${parts.join(' + ')} · ${outs} outs (about ${pct}% to hit${board.length === 3 ? ' by the river' : ' on the river'})`;
+}
+function equityFor(key, hole, board, nOpp){
+  if(eqCache.has(key)) return eqCache.get(key);
+  eqCache.set(key, null);
+  setTimeout(() => {
+    const e = E.equity(hole, board, nOpp, board.length === 5 ? 1200 : 1800);
+    eqCache.set(key, e); if(eqCache.size > 60) eqCache.delete(eqCache.keys().next().value);
+    if(view === 'table') renderTable();
+  }, 30);
+  return null;
+}
+function renderHelper(d, me, mine){
+  const el = $('helper');
+  const T = demo ? { helper: true } : club && club.tourney;
+  const on = T && T.helper !== false && me && me.inHand && !me.folded && mine && d.phase === 'hand' && !d.result;
+  if(!on){ el.hidden = true; return; }
+  const board = d.board.map(cs), nOpp = d.seats.filter(p => p && p.inHand && !p.folded && p.uid !== club.me.id).length;
+  if(!nOpp){ el.hidden = true; return; }
+  const key = `${d.tid}:${d.handNo}:${d.board.join('')}:${nOpp}`;
+  const eq = equityFor(key, mine, board, nOpp);
+  const name = board.length ? madeName(mine, board) : preName(mine);
+  const draw = drawsOf(mine, board);
+  const L = d.legal && d.actUid === club.me.id ? d.legal : null;
+  let advice = '', tone = '';
+  if(eq != null){
+    if(L && !L.canCheck){
+      const need = L.toCall / (L.pot + L.toCall);
+      if(eq >= need + .05){ advice = `Call needs ${Math.round(need * 100)}%, you have ${Math.round(eq * 100)}%: calling pays.${eq > .65 ? ' You can raise for value.' : ''}`; tone = 'good'; }
+      else if(eq >= need - .03){ advice = `Close: call needs ${Math.round(need * 100)}%, you have ${Math.round(eq * 100)}%.`; tone = 'mid'; }
+      else { advice = `Call needs ${Math.round(need * 100)}%, you have ${Math.round(eq * 100)}%: folding is fine.`; tone = 'bad'; }
+    } else if(L){
+      advice = eq > .6 ? 'Strong: bet for value.' : eq > .4 ? 'Medium: a small bet or a check both work.' : (board.length === 5 ? 'Weak: check, no need to put more in.' : 'Weak: check and see a free card.');
+      tone = eq > .6 ? 'good' : eq > .4 ? 'mid' : 'bad';
+    }
+  }
+  const pct = eq == null ? '…' : Math.round(eq * 100) + '%';
+  const bar = eq == null ? 0 : Math.round(eq * 100);
+  el.hidden = false;
+  el.className = 'helper' + (helperMin ? ' min' : '');
+  el.innerHTML = `<div class="h-top"><b class="h-name">${esc(name)}</b><span class="h-eq ${eq == null ? '' : eq > .5 ? 'good' : eq > .3 ? 'mid' : 'bad'}">${pct}<small> to win vs ${nOpp}</small></span></div>
+    ${helperMin ? '' : `<div class="h-bar"><i style="width:${bar}%"></i></div>
+    ${draw ? `<div class="h-line">🎯 ${esc(draw)}</div>` : ''}${advice ? `<div class="h-line ${tone}">💡 ${esc(advice)}</div>` : ''}`}`;
+  el.onclick = () => { helperMin = !helperMin; try{ localStorage.setItem('stacked:helper', helperMin ? 'min' : ''); }catch(e){} renderTable(); };
+}
 
 // ---------- demo table: a practice game that runs only in this browser ----------
 let demo = null;

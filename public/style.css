@@ -405,3 +405,16 @@ details.terms-d summary{cursor:pointer;color:var(--gold);font-weight:600;margin:
 .news h4{margin:14px 0 6px;color:var(--gold);font-family:var(--cond);letter-spacing:.06em}
 .news ul{margin:0;padding-left:18px;display:grid;gap:6px;line-height:1.45;font-size:14px}
 .demo-box{border-color:rgba(63,174,122,.45);background:linear-gradient(160deg,rgba(29,107,75,.25),rgba(20,16,19,.9))}
+
+/* hand helper */
+.helper{margin:0 12px 6px;padding:8px 12px;border-radius:12px;background:rgba(20,16,19,.88);border:1px solid var(--line);display:grid;gap:5px;cursor:pointer;font-size:13px}
+.helper[hidden]{display:none}
+.h-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.h-name{font-size:15px;color:#fff}
+.h-eq{font-weight:800;font-size:17px;white-space:nowrap}
+.h-eq small{font-size:11px;font-weight:600;color:var(--muted)}
+.h-eq.good{color:#6fdcab}.h-eq.mid{color:var(--gold)}.h-eq.bad{color:#ff6b74}
+.h-bar{height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.h-bar i{display:block;height:100%;background:linear-gradient(90deg,#b8161f,#e6bb68 45%,#3fae7a);transition:width .4s}
+.h-line{color:var(--muted);line-height:1.35}
+.h-line.good{color:#9be8c4}.h-line.mid{color:#f3d48f}.h-line.bad{color:#ff9aa1}

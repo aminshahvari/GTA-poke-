@@ -164,6 +164,7 @@ window.LEARN.rules = window.LEARN.rules.replace('%%TERMS%%', window.LEARN.terms)
 // Change log shown to the organizer in the Director tab, newest first.
 window.LEARN.news = [
   { date: 'Oct 15, 2026', items: [
+    'Hand helper under the table: on every street it names your hand (set, two pair, full house...), shows your chance to win against the players still in, your draws and outs, and whether the price is right to call or bet. Tap it to shrink it. The organizer can turn it off under Change settings.',
     'Tables can be 6-max, 8-handed or 9-handed (Change settings). 6-max is the default.',
     'Late registration: players can join after the start, until the end of level 2, 4 or 6. They get a full stack and the emptiest seat; a new table opens when all are full.',
     'Fixed: when two tables were breaking at the same time a moved player could lose their seat. Players are never dropped now.',

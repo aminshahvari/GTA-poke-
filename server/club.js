@@ -43,7 +43,7 @@ function payoutPcts(n){
 function pointsFor(n, place){ const pct = payoutPcts(n)[place - 1]; return pct ? Math.max(2, Math.round(pct * n / 10)) : 1; }
 
 // ---------- registration ----------
-function create({ name, stack, levelMin, startAt, repeat, anteMode, actSec, tableSize, lateLevels }){
+function create({ name, stack, levelMin, startAt, repeat, anteMode, actSec, tableSize, lateLevels, helper }){
   const t = T();
   if(t && (t.status === 'running')) throw new Error('A tournament is already running.');
   stack = [10000, 20000, 30000, 50000, 60000, 100000].includes(+stack) ? +stack : 30000;
@@ -51,7 +51,7 @@ function create({ name, stack, levelMin, startAt, repeat, anteMode, actSec, tabl
   store.set('tourney', { id: 't' + Date.now(), status: 'registering', name: String(name || 'Club Tournament').slice(0, 60), stack, levelMin,
     startAt: startAt ? +startAt : null, repeat: ['daily', 'weekly'].includes(repeat) ? repeat : 'none', regs: [], createdAt: Date.now(),
     anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : 20,
-    tableSize: SIZES.includes(+tableSize) ? +tableSize : 9, lateLevels: LATE.includes(+lateLevels) ? +lateLevels : 0 });
+    tableSize: SIZES.includes(+tableSize) ? +tableSize : 9, lateLevels: LATE.includes(+lateLevels) ? +lateLevels : 0, helper: helper !== false && helper !== 'off' });
   hooks.onClub();
 }
 function join(uid){
