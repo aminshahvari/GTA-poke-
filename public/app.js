@@ -243,6 +243,7 @@ function directorMainHTML(){
     return `<div class="card-box"><span class="status-pill">Registration open</span><h3>${esc(T.name)}</h3>
       <p>${T.regs.length} joined · ${Math.max(1, Math.ceil(T.regs.length / 9))} table${T.regs.length > 9 ? 's' : ''}${T.startAt ? ' · starts ' + esc(when(T.startAt)) : ''}</p>
       <div class="plist">${T.regs.map(u => pchip(u, true)).join('') || '<span class="note">Waiting for players to join.</span>'}</div>
+      ${T.regs.length < 2 ? `<p class="warn-note">You need at least 2 players to start. Send an invite, and ask your friend to tap <b>Join tournament</b> on the Tournament tab.</p>` : ''}
       <div class="btn-row"><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button><button class="btn" id="cancelBtn">Cancel</button></div></div>${members}`;
   }
   return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>

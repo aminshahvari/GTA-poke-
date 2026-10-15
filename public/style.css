@@ -311,3 +311,6 @@ details.terms-d summary{cursor:pointer;color:var(--gold);font-weight:600;margin:
 .trow.prize small{display:block}
 .trow.prize .btn{width:auto;flex:none;padding:8px 12px}
 .skillq{font-size:28px;font-weight:700;text-align:center;margin:10px 0}
+
+.btn:disabled,.btn[disabled]{opacity:.4;cursor:not-allowed;filter:grayscale(1)}
+.warn-note{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:rgba(255,190,60,.12);color:#ffcf70;font-size:14px;line-height:1.4}
