@@ -157,7 +157,7 @@ rules: `
 <li>An all-in that's less than a full raise doesn't reopen the betting for players who already acted and aren't facing at least a full raise.</li>
 <li>There's no limit on the number of raises.</li></ul>
 <h4>Showdown and pots</h4>
-<ul><li>Cards speak: the best hand wins.</li><li>At showdown the last player who bet or raised on the river shows first; if the river was checked, the first player left of the button shows first. Winning hands are always shown; losing hands are mucked automatically.</li><li>When a player is all-in and the betting is over, all hands are turned face up before the remaining cards are dealt.</li>
+<ul><li>Cards speak: the best hand wins.</li><li>At showdown the last player who bet or raised on the river shows first; if the river was checked, the first player left of the button shows first. In this club every hand that reaches showdown is turned face up, winners and losers alike, so everyone sees what the caller had.</li><li>When a player is all-in and the betting is over, all hands are turned face up before the remaining cards are dealt.</li>
 <li>Side pots are built automatically. A player can only win the pots they put chips into.</li><li>Equal hands split the pot. An odd chip goes to the first player left of the button.</li></ul>
 <h4>Eliminations and prizes</h4>
 <ul><li>If two players bust in the same hand at the same table, the one who started the hand with more chips (after the big blind ante) finishes higher. Equal stacks tie and share the places.</li><li><b>Hand-for-hand:</b> when one more elimination reaches the money and there are 2 or more tables, every table plays one hand and waits for the others. Players who bust in the same hand-for-hand round at different tables tie and share those places.</li>

@@ -261,10 +261,8 @@ async function playHand(g, io){
   const { awards, pots } = distribute(players.map(p => ({ seat: p.seat, total: p.total, folded: p.folded, val: p.val })), h.dead, g.btn);
   if(cont.length > 1 && !h.tabled){
     // TDA 18 / WSOP 70: the last river aggressor shows first (else the first live seat left of the button).
-    // Winners of a contested pot always show; other losing hands are mucked automatically.
-    const first = h.lastAggr >= 0 && cont.some(p => p.seat === h.lastAggr) ? h.lastAggr : (nextIn(h, g.btn) || cont[0]).seat;
-    const winners = new Set(pots.filter(q => q.elig.length > 1).flatMap(q => q.winners));
-    cont.forEach(p => p.shown = p.seat === first || winners.has(p.seat));
+    // Club rule: every hand that reaches showdown is turned face up, so a player who called to the end shows what they lost with.
+    cont.forEach(p => p.shown = true);
   }
   awards.forEach((amt, seat) => { const p = g.seats[seat]; p.stack += amt; p.won = amt; });
   h.result = { pots, awards, showdown: cont.length > 1 };
