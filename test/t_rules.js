@@ -119,5 +119,24 @@ async function scripted(stacks, script, opts = {}){
   await E.playHand(g, io);
   ok(seen.slice(0,5).join() === '0c,1c,2k,0c,1c', 'BB option then raise reopens: ' + seen.join());
 
+  // Online-style antes: every player posts, antes don't count toward the call
+  ok(E.levelFor(0, 'each')[2] === 25 && E.levelFor(0, 'bb')[2] === 200, 'ante sizes ' + E.levelFor(0, 'each') + ' / ' + E.levelFor(0, 'bb'));
+  g = E.newGame({ players: Array.from({length:4}, (_,i) => ({ name:'P'+i, isHero:true })) }); g.anteMode = 'each'; g.btn = 3; g.sb = 0; g.bb = 1;
+  let firstL = null;
+  io.heroAction = async (p, L) => { if(!firstL) firstL = L; return { t:'fold' }; };
+  await E.playHand(g, io);
+  ok(g.hand.players.every(p => p.ante === 25), 'every player antes 25');
+  ok(firstL && firstL.toCall === 200, 'UTG calls 200, not 225: ' + (firstL && firstL.toCall));
+  ok(g.seats[2].stack === 30000 + 100 + 75, 'BB wins SB + three antes: ' + g.seats.map(p => p && p.stack));
+  ok(g.seats.reduce((s,p)=>s+(p?p.stack:0),0) === 120000, 'conservation with antes');
+  // a player all-in for part of the ante can still win the ante pot from everyone
+  g = E.newGame({ players: Array.from({length:3}, (_,i) => ({ name:'P'+i, isHero:true })) }); g.anteMode = 'each'; g.btn = 2; g.sb = 0; g.bb = 1; g.seats[0].stack = 10; // seat 0 becomes button
+  io.heroAction = async (p, L) => L.canCheck ? { t:'check' } : { t:'call' };
+  await E.playHand(g, io);
+  const s0 = g.hand.players.find(p => p.seat === 0);
+  ok(s0.allIn && s0.ante === 10, 'short player all-in on the ante');
+  ok(g.seats.reduce((s,p)=>s+(p?p.stack:0),0) === 60010, 'conservation short ante');
+  ok(s0.won === 0 || s0.won <= 30, 'short ante player can win at most 3 x 10: ' + s0.won);
+
   console.log(`${pass} passed, ${fail} failed`);
 })();

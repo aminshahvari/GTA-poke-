@@ -355,3 +355,45 @@ details.terms-d summary{cursor:pointer;color:var(--gold);font-weight:600;margin:
 .fh summary{cursor:pointer;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .fh summary span .mc,.fh div .mc{font-size:12px;min-width:22px;margin-right:2px;border:1px solid #ddd}
 .fh div{display:grid;gap:3px;margin-top:6px}
+/* ---------- action panel (pro layout) ---------- */
+.turnbar{position:relative;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:visible;margin-bottom:2px}
+.turnbar i{position:absolute;inset:0;border-radius:3px;background:linear-gradient(90deg,#3fae7a,#6fdcab);transform-origin:left;transition:transform .25s linear}
+.turnbar i.low{background:linear-gradient(90deg,#b8161f,#ff4d57)}
+.turnbar span{position:absolute;right:0;top:-18px;font-size:12px;color:var(--muted);font-weight:600}
+.act-main{display:grid;grid-template-columns:repeat(var(--n,3),1fr);gap:8px}
+.act-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:62px;border-radius:14px;color:#fff;border:1px solid rgba(255,255,255,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 6px 14px rgba(0,0,0,.35);transition:transform .08s,filter .15s;-webkit-tap-highlight-color:transparent}
+.act-btn:active{transform:scale(.97);filter:brightness(1.15)}
+.act-btn b{font-family:var(--cond);font-size:19px;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
+.act-btn span{font-size:15px;font-weight:700;opacity:.95}
+.act-btn.fold{background:linear-gradient(#5a5357,#3b3539)}
+.act-btn.call{background:linear-gradient(#2f9a6e,#1d6b4b)}
+.act-btn.raise{background:linear-gradient(#e2323e,#a5121b)}
+.act-btn.raise.allin{background:linear-gradient(#f0c35a,#c48a1c);color:#1b1407}
+.act-btn.back{background:linear-gradient(#3a3438,#2a2528)}
+.act-btn.raise span:not(.num){font-size:12px;font-weight:600;opacity:.8;text-transform:none}
+.sizing{display:grid;gap:9px;background:rgba(20,16,19,.92);border:1px solid var(--line);border-radius:14px;padding:10px}
+.sizing .amt{display:flex;align-items:baseline;justify-content:center;gap:10px}
+.sizing .amt small{font-family:var(--cond);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-size:12px}
+.sizing .amt b{font-size:28px;color:var(--gold);font-weight:800}
+.sizing .amt span{color:var(--muted);font-size:14px;font-weight:600}
+.sz-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(56px,1fr));gap:6px}
+.sz-presets button{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:9px 0;font-family:var(--cond);font-weight:700;font-size:14px;letter-spacing:.03em}
+.sz-presets button[aria-pressed=true]{background:var(--gold);color:#1b1407;border-color:var(--gold)}
+.sz-presets button:last-child{border-color:#c48a1c;color:#f0c35a}
+.sz-presets button:last-child[aria-pressed=true]{color:#1b1407}
+.sz-slider{display:flex;align-items:center;gap:10px}
+.sz-slider input{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:8px;border-radius:4px;background:linear-gradient(90deg,#a5121b,#f0c35a);outline:none}
+.sz-slider input::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:#fff;border:3px solid var(--gold);box-shadow:0 3px 8px rgba(0,0,0,.5)}
+.sz-slider input::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#fff;border:3px solid var(--gold)}
+.sz-slider .step{width:42px;height:42px;border-radius:50%;font-size:22px}
+.preacts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.preacts button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--line);font-size:14px;font-weight:600;color:var(--muted)}
+.preacts button i{width:16px;height:16px;border-radius:4px;border:2px solid currentColor;flex:none;display:grid;place-items:center}
+.preacts button[aria-pressed=true]{background:rgba(63,174,122,.18);border-color:#3fae7a;color:#fff}
+.preacts button[aria-pressed=true] i{background:#3fae7a;border-color:#3fae7a}
+.preacts button[aria-pressed=true] i::after{content:'✓';font-size:11px;font-style:normal;color:#fff;font-weight:900}
+
+.next-box{border-color:rgba(230,187,104,.45);background:linear-gradient(160deg,rgba(184,22,31,.18),rgba(20,16,19,.9))}
+.btn.big{padding:14px 22px;font-size:17px}
+.owner-row{display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-top:6px}
+.turnbar i.bank{background:linear-gradient(90deg,#c48a1c,#f0c35a)}

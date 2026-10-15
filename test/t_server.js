@@ -41,6 +41,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       if(m.t === 'chat'){ (c.chats = c.chats || []).push(m.msg); }
       if(m.t === 'chaterr') c.chatErr = m.error;
       if(m.t === 'fair') c.fair = m.report;
+      if(m.t === 'invite') c.invite = m;
             if(m.t === 'claimed') c.claimed = (c.claimed || 0) + 1;
       if(m.t === 'table'){
         const tb = m.table; c.tables[tb.tid] = tb;
@@ -141,6 +142,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       if((await window.FAIR.verify(bad)).bad !== 1) fail('tampered hand not detected');
       console.log(`fair deal: ${r.ok} hands verified, ${compared} dealt hands cross-checked`);
     } }
+  // group invite link: many people, then cancelled
+  { owner.ws.send(JSON.stringify({ t: 'invite', group: true })); await sleep(200);
+    const code = owner.invite && owner.invite.code;
+    if(!code || !owner.invite.group) fail('no group invite');
+    const a1 = await post('/api/redeem', { code, name: 'Group A', pin: '1111', agree: true }), a2 = await post('/api/redeem', { code, name: 'Group B', pin: '1111', agree: true });
+    if(!a1.token || !a2.token) fail('group link should work for several people');
+    await sleep(150); const gi = (owner.club.invites || []).find(i => i.code === code);
+    if(!gi || gi.used !== 2) fail('group link use count ' + JSON.stringify(gi));
+    owner.ws.send(JSON.stringify({ t: 'revoke', code })); await sleep(150);
+    if(!(await post('/api/redeem', { code, name: 'Group C', pin: '1111', agree: true })).error) fail('cancelled group link still works'); }
   // points + rewards shop
   const win = clients.find(c => c.id === h.results[0].uid), loser = clients.find(c => c.id === h.results.find(r => r.pts === 1 && r.uid !== owner.id).uid);
   if(process.env.VERBOSE_T) console.log(JSON.stringify(h.results.filter(r => r.tie)), JSON.stringify((t.places||[]).filter(r=>r.tie)));

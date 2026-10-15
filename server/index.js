@@ -53,14 +53,15 @@ const api = {
   },
   redeem({ code, name, pin, agree }){
     const inv = store.get('invite:' + code);
-    if(!inv || inv.usedBy || inv.revoked) throw new Error('This invite link has already been used or was cancelled. Ask for a new one.');
+    const dead = !inv || inv.revoked || (inv.multi ? (inv.uses || []).length >= inv.max || Date.now() > inv.expiresAt : inv.usedBy);
+    if(dead) throw new Error(inv && inv.multi ? 'This group link is full, expired or was cancelled. Ask the organizer for a new one.' : 'This invite link has already been used or was cancelled. Ask for a new one.');
     name = cleanName(name);
     if(!validName(name)) throw new Error('Pick a name with 2 to 16 letters or numbers.');
     if(store.get('name:' + name.toLowerCase())) throw new Error('That name is taken. Try another.');
     if(!validPin(pin)) throw new Error('Pick a PIN of 4 to 8 digits.');
     if(agree !== true) throw new Error('Please confirm you are 19 or older and agree to the club rules.');
     const u = createUser(name, pin, 'member');
-    store.set('invite:' + code, { ...inv, usedBy: u.id, usedAt: Date.now() });
+    store.set('invite:' + code, inv.multi ? { ...inv, uses: [...(inv.uses || []), u.id] } : { ...inv, usedBy: u.id, usedAt: Date.now() });
     broadcastClub();
     return { token: newSession(u.id) };
   },
@@ -72,10 +73,12 @@ const api = {
   invite(_, u){ return { code: inviteCode(u) }; },
   status(){ return { hasOwner: !!owner() }; }
 };
-function inviteCode(u){
+const GROUP_MAX = 20, GROUP_DAYS = 7;
+function inviteCode(u, group){
   if(!isOwner(u)) throw new Error('Only the club owner can invite people.');
   const code = crypto.randomBytes(9).toString('base64url');
-  store.set('invite:' + code, { code, createdAt: Date.now(), by: u.id });
+  store.set('invite:' + code, group ? { code, createdAt: Date.now(), by: u.id, multi: true, max: GROUP_MAX, uses: [], expiresAt: Date.now() + GROUP_DAYS * 864e5 }
+    : { code, createdAt: Date.now(), by: u.id });
   return code;
 }
 
@@ -165,13 +168,14 @@ function clubView(u){
     me: { id: u.id, name: u.name, owner: isOwner(u) },
     tourney: t ? { id: t.id, status: t.status, name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: t.startAt, repeat: t.repeat, regs: t.regs,
       level: t.level, levelEndsAt: t.levelEndsAt, paused: t.paused, pausedLeft: t.pausedLeft, entrants: t.entrants, remaining: t.remaining,
-      places: t.places, note: t.note, payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null } : null,
+      places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null } : null,
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
     members, history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
     chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION
   };
   if(isOwner(u)){
-    view.invites = store.values('invite:').filter(i => !i.usedBy && !i.revoked).map(i => ({ code: i.code, createdAt: i.createdAt }));
+    view.invites = store.values('invite:').filter(i => !i.revoked && (i.multi ? Date.now() < i.expiresAt && (i.uses || []).length < i.max : !i.usedBy))
+      .map(i => ({ code: i.code, createdAt: i.createdAt, multi: !!i.multi, used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt }));
     view.conflicts = conflictPairs();
     const hh = Object.fromEntries(store.values('user:').filter(x => !x.removed && x.household).map(x => [x.id, x.household]));
     view.households = hh;
@@ -283,7 +287,7 @@ wss.on('connection', (ws, req) => {
         case 'addReward': own(u); rewards.addReward(m); broadcastClub(); break;
         case 'removeReward': own(u); rewards.removeReward(String(m.id || '')); broadcastClub(); break;
         case 'redeemStatus': own(u); rewards.setStatus(String(m.id || ''), m.status); broadcastClub(); break;
-        case 'invite': own(u); sendWS(ws, { t: 'invite', code: inviteCode(u) }); broadcastClub(); break;
+        case 'invite': own(u); sendWS(ws, { t: 'invite', code: inviteCode(u, !!m.group), group: !!m.group }); broadcastClub(); break;
         case 'revoke': own(u); { const inv = store.get('invite:' + m.code); if(inv) store.set('invite:' + m.code, { ...inv, revoked: true }); broadcastClub(); } break;
         case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); for(const k of store.keys('session:')) if(store.get(k).uid === x.id) store.del(k); club.leave(x.id); } broadcastClub(); } break;
       }

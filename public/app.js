@@ -89,7 +89,7 @@ function connect(){
     if(m.t === 'club'){ onClub(m.club); return; }
     if(m.t === 'table'){ tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
-    if(m.t === 'invite'){ showInvite(m.code); return; }
+    if(m.t === 'invite'){ showInvite(m.code, m.group); return; }
     if(m.t === 'skillq'){ askSkill(m.rid, m.q); return; }
     if(m.t === 'claimed'){ modal('<h2>Prize claimed 🎉</h2><p>The organizer has been told and will get it to you. You can follow it under Prizes.</p>', [{ label: 'Great', value: 1, primary: true }]); return; }
     if(m.t === 'hands'){ myHands = m.hands; if(view === 'lobby' && tab === 'learn') renderLobby(); return; }
@@ -131,25 +131,39 @@ function renderLobby(){
   body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : eventHTML();
   wireLobby();
 }
+function ownerNextHTML(){
+  const T = club.tourney;
+  if(!club.me.owner || (T && ['registering', 'running'].includes(T.status))) return '';
+  const name = T ? T.name : `${new Date().toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`;
+  return `<div class="card-box next-box"><span class="eyebrow">Organizer</span><h3>Start the next tournament</h3>
+    <p>${T ? `Same settings as last time: ${fmt(T.stack)} chips, ${T.levelMin}-minute levels, ${T.actSec || 20} seconds to act, ${T.anteMode === 'each' ? 'every player antes' : 'big blind ante'}.` : 'Opens registration so your friends can join.'}</p>
+    <div class="btn-row"><button class="btn red big" id="againBtn">${T ? 'Play again' : 'Open a tournament'}</button><button class="btn" id="newCustomBtn">Change settings</button></div></div>`;
+}
 function eventHTML(){
+  return ownerNextHTML() + eventMainHTML();
+}
+function eventMainHTML(){
   const T = club.tourney;
   if(!T || ['cancelled', 'finished'].includes(T.status) && !club.history.length && T.status !== 'finished'){
     return `<div class="card-box"><span class="status-pill idle">Nothing scheduled</span><h3>No tournament open right now</h3>
-      <p>${club.me.owner ? 'Open the next one from the Director tab.' : 'When the club owner opens the next tournament, it shows up here and you can join.'}</p>${T && T.note ? `<p class="note">${esc(T.note)}</p>` : ''}</div>`;
+      <p>${club.me.owner ? 'Tap Open a tournament above to start one.' : 'When the club owner opens the next tournament, it shows up here and you can join.'}</p>${T && T.note ? `<p class="note">${esc(T.note)}</p>` : ''}</div>`;
   }
   if(T.status === 'registering'){
     const mine = T.regs.includes(club.me.id);
     return `<div class="card-box"><span class="status-pill">Registration open</span><h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Starts</small><b>${T.startAt ? esc(when(T.startAt)) : 'When the owner starts it'}</b></div><div><small>Stack</small><b>${fmt(T.stack)}</b></div><div><small>Levels</small><b>${T.levelMin} min</b></div></div>
+      <p class="note">${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act, plus a 30-second time bank for the whole tournament.</p>
       ${T.repeat !== 'none' ? `<p class="note">Repeats ${T.repeat === 'daily' ? 'every day' : 'every week'} at this time.</p>` : ''}
       <p>${T.regs.length} joined</p>
       <div class="plist">${T.regs.map(u => pchip(u, false)).join('') || '<span class="note">Nobody has joined yet.</span>'}</div>
       <div class="btn-row">${mine ? '<button class="btn" id="leaveBtn">Leave</button>' : '<button class="btn red" id="joinBtn">Join tournament</button>'}</div>
-      ${mine ? "<p>You're in. Your table opens by itself when the tournament starts.</p>" : ''}</div>${lastResultHTML()}`;
+      ${mine ? "<p>You're in. Your table opens by itself when the tournament starts.</p>" : ''}
+      ${club.me.owner ? `<div class="owner-row"><button class="btn" id="inviteBtn">Invite a friend</button><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button></div>
+      ${T.regs.length < 2 ? '<p class="warn-note">You need at least 2 players to start. Send an invite, and ask your friend to tap <b>Join tournament</b>.</p>' : ''}` : ''}</div>${lastResultHTML()}`;
   }
   if(T.status === 'running'){
     const out = (T.places || []).find(r => r.uid === club.me.id);
-    const [sb, bb] = E.levelAt(T.level);
+    const [sb, bb] = E.levelFor(T.level, T.anteMode);
     return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Players left</small><b>${T.remaining} of ${T.entrants}</b></div><div><small>Level</small><b>${T.level + 1}</b></div><div><small>Blinds</small><b>${fmt(sb)}/${fmt(bb)}</b></div></div>
       ${club.myTable ? `<button class="btn red" data-watch="${esc(club.myTable)}">Go to my table</button>` : out ? `<p>You finished ${ord(out.place)}. You can still watch.</p>` : '<p>You are not playing in this one. You can watch any table.</p>'}
@@ -226,8 +240,8 @@ function directorMainHTML(){
   const T = club.tourney;
   const members = `<div class="card-box"><span class="eyebrow">Members · ${club.members.length}</span>
     <div class="btn-row"><button class="btn red" id="inviteBtn">Create invite link</button></div>
-    <p class="note">Each link works once. Send it to one friend in WhatsApp or Telegram. They open it, pick a name and PIN, and they're in.</p>
-    ${club.invites && club.invites.length ? `<div class="table-list">${club.invites.map(i => `<div class="trow"><b>Unused invite</b><small>${new Date(i.createdAt).toLocaleDateString()}</small><button class="back" data-copy="${esc(i.code)}">Copy</button><button class="back" data-revoke="${esc(i.code)}">Cancel</button></div>`).join('')}</div>` : ''}
+    <p class="note">Pick a <b>group link</b> for a WhatsApp or Telegram group (up to 20 people, 7 days), or a <b>personal link</b> for one friend. They open it, pick a name and PIN, and they're in.</p>
+    ${club.invites && club.invites.length ? `<div class="table-list">${club.invites.map(i => `<div class="trow"><b>${i.multi ? 'Group link' : 'Unused invite'}</b><small>${i.multi ? `${i.used} of ${i.max} joined · until ${new Date(i.expiresAt).toLocaleDateString()}` : new Date(i.createdAt).toLocaleDateString()}</small><button class="back" data-copy="${esc(i.code)}" data-group="${i.multi ? 1 : ''}">Copy</button><button class="back" data-revoke="${esc(i.code)}">Cancel</button></div>`).join('')}</div>` : ''}
     <div class="table-list">${club.members.map(m => { const hh = club.households && club.households[m.id], mates = hh ? club.members.filter(x => x.id !== m.id && club.households[x.id] === hh).map(x => x.name) : [];
       return `<div class="trow"><b>${esc(m.name)}</b><small>${m.role === 'owner' ? 'Owner' : 'Member since ' + new Date(m.createdAt).toLocaleDateString()}${mates.length ? ` · Home with ${esc(mates.join(', '))}` : ''}</small><span class="row-btns">${m.role === 'owner' ? '' : `<button class="back" data-mute="${esc(m.id)}" data-on="${(club.mutedIds || []).includes(m.id) ? 1 : 0}">${(club.mutedIds || []).includes(m.id) ? 'Unmute' : 'Mute'}</button>`}<button class="back" data-home="${esc(m.id)}">Home</button>${m.role === 'owner' ? '' : `<button class="back" data-remove="${esc(m.id)}">Remove</button>`}</span></div>`; }).join('')}</div>
     <div class="btn-row"><button class="btn" id="chatOffBtn">${club.chatOff ? 'Turn table chat on' : 'Turn table chat off'}</button></div>
@@ -241,6 +255,8 @@ function directorMainHTML(){
         <label>Name<input id="nName" maxlength="40" value="${esc(new Date().toLocaleDateString('en-US', { weekday: 'long' }))} Night Tournament"></label>
         <div class="two"><label>Starting stack<select id="nStack"><option>10000</option><option>20000</option><option selected>30000</option><option>50000</option><option value="60000">60000 (WSOP Main Event)</option></select></label>
         <label>Level length<select id="nLevel"><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20" selected>20 min</option><option value="30">30 min</option></select></label></div>
+        <div class="two"><label>Ante<select id="nAnte"><option value="each" selected>Every player (online style)</option><option value="bb">Big blind ante (WSOP/WPT live)</option></select></label>
+        <label>Time to act<select id="nAct"><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="20" selected>20 seconds</option><option value="30">30 seconds</option></select></label></div>
         <div class="two"><label>Start<select id="nWhen"><option value="manual">When I press Start</option><option value="at">At a set time</option></select></label>
         <label>Repeat<select id="nRepeat"><option value="none">Just once</option><option value="daily">Every day</option><option value="weekly">Every week</option></select></label></div>
         <label id="atWrap" hidden>Start time<input type="datetime-local" id="nAt" value="${local}"></label>
@@ -345,7 +361,7 @@ function wireLobby(){
   document.querySelectorAll('[data-range]').forEach(b => b.onclick = () => { boardRange = b.dataset.range; renderLobby(); });
   document.querySelectorAll('[data-kick]').forEach(b => b.onclick = () => send({ t: 'kick', uid: b.dataset.kick }));
   document.querySelectorAll('[data-revoke]').forEach(b => b.onclick = () => send({ t: 'revoke', code: b.dataset.revoke }));
-  document.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => showInvite(b.dataset.copy));
+  document.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => showInvite(b.dataset.copy, !!b.dataset.group));
   document.querySelectorAll('[data-home]').forEach(b => b.onclick = async () => {
     const uid = b.dataset.home, others = club.members.filter(m => m.id !== uid);
     let pick = club.households && club.households[uid] ? (others.find(m => club.households[m.id] === club.households[uid]) || {}).id || '' : '';
@@ -358,14 +374,20 @@ function wireLobby(){
     const name = nameOf(b.dataset.remove);
     if(await modal(`<h2>Remove ${esc(name)}?</h2><p>They are signed out and can't come back without a new invite.</p>`, [{ label: 'Keep', value: false }, { label: 'Remove', value: true, primary: true }])) send({ t: 'remove', uid: b.dataset.remove });
   });
-  on('inviteBtn', () => send({ t: 'invite' }));
+  on('inviteBtn', askInvite);
+  on('againBtn', () => {
+    const T = club.tourney, d = new Date();
+    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20 });
+    send({ t: 'join' }); tab = 'event';
+  });
+  on('newCustomBtn', () => { tab = 'director'; renderLobby(); });
   const nf = $('newForm');
   if(nf){
     $('nWhen').onchange = () => $('atWrap').hidden = $('nWhen').value !== 'at';
     nf.onsubmit = e => {
       e.preventDefault();
       const at = $('nWhen').value === 'at' ? new Date($('nAt').value).getTime() : null;
-      send({ t: 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none' });
+      send({ t: 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value });
       tab = 'event';
     };
   }
@@ -375,11 +397,16 @@ function wireLobby(){
   on('resumeBtn', () => send({ t: 'resume' }));
   on('endBtn', async () => { if(await modal('<h2>End the tournament now?</h2><p>All tables close and no results are recorded.</p>', [{ label: 'Keep playing', value: false }, { label: 'End it', value: true, primary: true }])) send({ t: 'cancel' }); });
 }
-function showInvite(code){
+async function askInvite(){
+  const v = await modal('<h2>Invite people</h2><p>A <b>group link</b> can go in a WhatsApp or Telegram group: up to 20 people can join with it for 7 days. A <b>personal link</b> works once, for one friend.</p>',
+    [{ label: 'Cancel', value: null }, { label: 'Personal link', value: 'one' }, { label: 'Group link', value: 'group', primary: true }]);
+  if(v) send({ t: 'invite', group: v === 'group' });
+}
+function showInvite(code, group){
   const url = location.origin + '/join/' + code;
-  const text = `${club.me.name} invited you to the Stacked Live poker club. Tap to join:`;
+  const text = group ? `${club.me.name} invited you to the Stacked Live poker club. Tap to join (pick your own name and PIN):` : `${club.me.name} invited you to the Stacked Live poker club. Tap to join:`;
   const enc = encodeURIComponent;
-  modal(`<h2>Invite link</h2><p>Send this to one friend. It works once.</p>
+  modal(`<h2>${group ? 'Group invite link' : 'Invite link'}</h2><p>${group ? 'Post it in your group. Up to 20 people can join with it for the next 7 days. You can cancel it any time in Director.' : 'Send this to one friend. It works once.'}</p>
     ${navigator.share ? '<button class="btn-red" id="shareBtn" style="width:100%;margin-bottom:10px">Share invite</button>' : ''}
     <div class="share-row"><a class="btn-ghost" target="_blank" rel="noopener" href="https://wa.me/?text=${enc(text + ' ' + url)}">WhatsApp</a><a class="btn-ghost" target="_blank" rel="noopener" href="https://t.me/share/url?url=${enc(url)}&text=${enc(text)}">Telegram</a><a class="btn-ghost" href="sms:?&body=${enc(text + ' ' + url)}">Text</a></div>
     <div class="copy-row"><input id="invUrl" readonly value="${esc(url)}"><button class="btn-ghost" id="copyBtn" style="width:auto;padding:9px 12px">Copy</button></div>`, [{ label: 'Done', value: 1 }]);
@@ -484,19 +511,32 @@ function renderTable(){
   renderControls(d, mySeat, mine);
   tickClock();
 }
+// Pre-actions (like the big online rooms): pick Check/Fold, Check, Call or Call any before your turn.
+let preAct = null; // { kind: 'checkfold'|'check'|'call'|'callany', key, amt }
 function renderControls(d, mySeat, mine){
   const c = $('controls');
   const meSeat = mySeat >= 0 ? d.seats[mySeat] : null;
   const turnKey = d.tid + ':' + d.handNo + ':' + d.seq;
+  const streetKey = d.tid + ':' + d.handNo + ':' + d.street;
+  if(preAct && preAct.key !== streetKey) preAct = null;
   const myTurn = meSeat && d.acting === mySeat && d.actUid === club.me.id && d.legal && d.phase === 'hand';
   if(myTurn && lastSent !== turnKey){
     if(c.dataset.turn === turnKey) return;
+    // a pre-action fires by itself when it still fits the situation
+    if(preAct){
+      const L = d.legal, pa = preAct; preAct = null;
+      const a = pa.kind === 'checkfold' ? (L.canCheck ? { t: 'check' } : { t: 'fold' })
+        : pa.kind === 'check' ? (L.canCheck ? { t: 'check' } : null)
+        : pa.kind === 'call' ? (!L.canCheck && L.toCall === pa.amt ? { t: 'call' } : null)
+        : pa.kind === 'callany' ? (L.canCheck ? { t: 'check' } : { t: 'call' }) : null;
+      if(a){ c.dataset.turn = turnKey; return sendAction(d, a); }
+    }
     c.dataset.turn = turnKey;
     if(navigator.vibrate) try{ navigator.vibrate(60); }catch(e){}
     return drawActions(d, meSeat);
   }
   c.dataset.turn = '';
-  let line;
+  let line, pre = '';
   const T = club.tourney, out = T && (T.places || []).find(r => r.uid === club.me.id);
   if(!meSeat) line = out ? `You finished ${ord(out.place)}. Watching Table ${d.n}.` : `Watching Table ${d.n}.`;
   else if(meSeat.away) line = `You're sitting out, so your hands fold automatically. <button class="btn green" id="backBtn" style="margin-left:6px;padding:6px 12px">I'm back</button>`;
@@ -504,54 +544,97 @@ function renderControls(d, mySeat, mine){
   else if(meSeat.inHand && !meSeat.folded){
     if(mine && d.board.length) line = `${meSeat.allIn ? "You're all-in · " : 'You have '}<b>${esc(E.describe(E.evaluate(mine.concat(d.board.map(cs)))))}</b>`;
     else line = d.acting >= 0 ? `Waiting for ${esc((d.seats[d.acting] || {}).name || '')}…` : 'Dealing…';
+    if(!meSeat.allIn && d.acting >= 0 && !d.result){
+      const toCall = Math.min(Math.max(0, (d.cur || 0) - meSeat.bet), meSeat.stack);
+      if(preAct && preAct.kind === 'check' && toCall > 0) preAct = null;
+      if(preAct && preAct.kind === 'call' && preAct.amt !== toCall) preAct = null;
+      const opts = toCall === 0
+        ? [['checkfold', 'Check / Fold'], ['check', 'Check'], ['callany', 'Call any']]
+        : [['checkfold', 'Fold'], ['call', `Call ${fmt(toCall)}`], ['callany', 'Call any']];
+      pre = `<div class="preacts">${opts.map(([k, l]) => `<button data-pre="${k}" data-amt="${toCall}" aria-pressed="${!!(preAct && preAct.kind === k)}"><i></i>${l}</button>`).join('')}</div>`;
+    }
   }
   else if(meSeat.inHand && meSeat.folded) line = 'You folded. Next hand coming up…';
   else line = d.phase === 'hand' ? 'You play from the next hand.' : 'Shuffling up…';
-  c.innerHTML = `<div class="info-line">${line}</div>`;
+  c.innerHTML = `<div class="info-line">${line}</div>${pre}`;
   const bb = $('backBtn'); if(bb) bb.onclick = () => send({ t: 'back' });
+  c.querySelectorAll('[data-pre]').forEach(btn => btn.onclick = () => {
+    const k = btn.dataset.pre;
+    preAct = preAct && preAct.kind === k ? null : { kind: k, key: streetKey, amt: +btn.dataset.amt };
+    c.querySelectorAll('[data-pre]').forEach(x => x.setAttribute('aria-pressed', !!(preAct && preAct.kind === x.dataset.pre)));
+    if(navigator.vibrate) try{ navigator.vibrate(15); }catch(e){}
+  });
 }
 function sendAction(d, a){
   lastSent = d.tid + ':' + d.handNo + ':' + d.seq;
-  $('controls').innerHTML = '<div class="info-line">Sending your action…</div>';
+  const words = { fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' };
+  $('controls').innerHTML = `<div class="info-line">${words[a.t] || ''}${a.t === 'raise' ? ' to ' + fmt(a.to) : ''} · sending…</div>`;
+  if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){}
   send({ t: 'act', tid: d.tid, hand: d.handNo, seq: d.seq, a });
 }
 function drawActions(d, meSeat){
   const L = d.legal, c = $('controls');
   const allInOnly = L.canRaise && L.minTo >= L.maxTo;
-  const word = L.isBet ? 'Bet' : 'Raise to';
-  const potTo = f => Math.round((L.cur + f * (L.pot + L.toCall)) / 100) * 100;
-  let html = '';
-  if(L.canRaise && !allInOnly){
-    html += `<div class="presets"><button data-to="${L.minTo}">Min</button><button data-to="${potTo(.5)}">½ Pot</button><button data-to="${potTo(1)}">Pot</button><button data-to="${L.maxTo}">All-in</button></div>
-    <div class="slider-row"><button class="step" id="minus" aria-label="Smaller raise">−</button>
-      <input type="range" id="raiseRange" aria-label="Raise amount" min="${L.minTo}" max="${L.maxTo}" step="100" value="${L.minTo}">
-      <button class="step" id="plus" aria-label="Bigger raise">+</button><output id="raiseOut" class="num">${fmt(L.minTo)}</output></div>`;
-  }
-  html += `<div class="actions" style="--n:${(L.canCheck ? 1 : 2) + (L.canRaise ? 1 : 0)}">
-    ${L.canCheck ? '' : '<button class="a-fold" id="aFold">Fold</button>'}
-    <button class="a-call" id="aCall">${L.canCheck ? 'Check' : (L.toCall >= meSeat.stack ? `All-in<br>${fmt(L.toCall)}` : `Call<br>${fmt(L.toCall)}`)}</button>
-    ${L.canRaise ? `<button class="a-raise" id="aRaise">${allInOnly ? `All-in<br>${fmt(L.maxTo)}` : `${word}<br><span id="raiseLbl" class="num">${fmt(L.minTo)}</span>`}</button>` : ''}
+  const word = L.isBet ? 'Bet' : 'Raise';
+  const callAll = !L.canCheck && L.toCall >= meSeat.stack;
+  const bar = '<div class="turnbar"><i id="turnBar"></i><span id="turnSecs" class="num"></span></div>';
+  c.innerHTML = `${bar}<div class="act-main" style="--n:${(L.canCheck ? 1 : 2) + (L.canRaise ? 1 : 0)}">
+    ${L.canCheck ? '' : '<button class="act-btn fold" id="aFold"><b>Fold</b></button>'}
+    <button class="act-btn call" id="aCall"><b>${L.canCheck ? 'Check' : callAll ? 'All-in' : 'Call'}</b>${L.canCheck ? '' : `<span class="num">${fmt(L.toCall)}</span>`}</button>
+    ${L.canRaise ? `<button class="act-btn raise" id="aRaise"><b>${allInOnly ? 'All-in' : word}</b>${allInOnly ? `<span class="num">${fmt(L.maxTo)}</span>` : '<span>Choose amount</span>'}</button>` : ''}
   </div>`;
-  c.innerHTML = html;
   if($('aFold')) $('aFold').onclick = () => sendAction(d, { t: 'fold' });
   $('aCall').onclick = () => sendAction(d, L.canCheck ? { t: 'check' } : { t: 'call' });
   if(!L.canRaise) return;
   if(allInOnly){ $('aRaise').onclick = () => sendAction(d, { t: 'raise', to: L.maxTo }); return; }
-  const rr = $('raiseRange');
-  const set = v => { v = Math.max(L.minTo, Math.min(L.maxTo, v)); if(v < L.maxTo && v > L.minTo) v = Math.round(v / 100) * 100; rr.value = v; rr.dataset.v = v; $('raiseOut').textContent = fmt(v); $('raiseLbl').textContent = v >= L.maxTo ? 'All-in ' + fmt(v) : fmt(v); };
-  rr.oninput = () => set(+rr.value >= L.maxTo - 99 ? L.maxTo : +rr.value);
-  const stepAmt = Math.max(100, L.bb / 2);
-  $('minus').onclick = () => set(+rr.dataset.v - stepAmt);
-  $('plus').onclick = () => set(+rr.dataset.v + stepAmt);
+  $('aRaise').onclick = () => drawSizing(d, meSeat);
+  tickClock();
+}
+// Bet sizing panel: presets in big blinds before the flop and in pot fractions after it, a slider, then confirm.
+function drawSizing(d, meSeat){
+  const L = d.legal, c = $('controls'), bb = L.bb || d.blinds[1];
+  const word = L.isBet ? 'Bet' : 'Raise to';
+  const round = v => v >= L.maxTo ? L.maxTo : Math.round(v / 100) * 100;
+  const potTo = f => round(L.cur + f * (L.pot + L.toCall));
+  const raw = d.street === 0
+    ? [['2.5 BB', round(2.5 * bb)], ['3 BB', round(3 * bb)], ['4 BB', round(4 * bb)], ['Pot', potTo(1)]]
+    : [['⅓ Pot', potTo(1 / 3)], ['½ Pot', potTo(.5)], ['¾ Pot', potTo(.75)], ['Pot', potTo(1)]];
+  const seen = new Set(), presets = [];
+  for(const [l, v] of raw){ const x = Math.max(L.minTo, Math.min(L.maxTo, v)); if(x < L.maxTo && !seen.has(x)){ seen.add(x); presets.push([l, x]); } }
+  presets.push(['All-in', L.maxTo]);
+  c.innerHTML = `<div class="turnbar"><i id="turnBar"></i><span id="turnSecs" class="num"></span></div>
+    <div class="sizing">
+      <div class="amt"><small>${word === 'Bet' ? 'Bet' : 'Raise to'}</small><b id="szAmt" class="num"></b><span id="szBB" class="num"></span></div>
+      <div class="sz-presets">${presets.map(([l, v]) => `<button data-to="${v}">${l}</button>`).join('')}</div>
+      <div class="sz-slider"><button class="step" id="minus" aria-label="Less">−</button>
+        <input type="range" id="raiseRange" aria-label="Amount" min="${L.minTo}" max="${L.maxTo}" step="1" value="${L.minTo}">
+        <button class="step" id="plus" aria-label="More">+</button></div>
+    </div>
+    <div class="act-main" style="--n:2"><button class="act-btn back" id="szBack"><b>Back</b></button><button class="act-btn raise" id="szGo"><b id="szGoLbl"></b><span id="szGoAmt" class="num"></span></button></div>`;
+  const rr = $('raiseRange'); let v = L.minTo;
+  const set = x => {
+    v = Math.max(L.minTo, Math.min(L.maxTo, x)); if(v < L.maxTo && v > L.minTo) v = round(v);
+    rr.value = v; const allIn = v >= L.maxTo;
+    $('szAmt').textContent = fmt(v); $('szBB').textContent = (Math.round(v / bb * 10) / 10) + ' BB';
+    $('szGoLbl').textContent = allIn ? 'All-in' : word; $('szGoAmt').textContent = fmt(v);
+    $('szGo').classList.toggle('allin', allIn);
+    c.querySelectorAll('[data-to]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.to === v));
+  };
+  rr.oninput = () => set(+rr.value >= L.maxTo - 50 ? L.maxTo : +rr.value);
+  const stepAmt = Math.max(100, Math.round(bb / 2 / 100) * 100);
+  $('minus').onclick = () => set(v - stepAmt);
+  $('plus').onclick = () => set(v + stepAmt);
   c.querySelectorAll('[data-to]').forEach(btn => btn.onclick = () => set(+btn.dataset.to));
-  set(L.minTo);
-  $('aRaise').onclick = () => sendAction(d, { t: 'raise', to: +rr.dataset.v });
+  $('szBack').onclick = () => drawActions(d, meSeat);
+  $('szGo').onclick = () => sendAction(d, { t: 'raise', to: v });
+  set(d.street === 0 && presets.length > 2 ? presets[1][1] : presets[0][1]);
+  tickClock();
 }
 function tickClock(){
   const T = club && club.tourney;
   if(!T || T.status !== 'running' || view !== 'table') return;
   const now = Date.now() + clockSkew;
-  const [sb, bb, an] = E.levelAt(T.level), [nsb, nbb, nan] = E.levelAt(T.level + 1);
+  const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;
   $('cBlinds').textContent = `${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}`;
   $('cNext').textContent = `Next: ${fmt(nsb)}/${fmt(nbb)}${nan ? ' · ante ' + fmt(nan) : ''}`;
@@ -565,6 +648,8 @@ function tickClock(){
   $('sPos').textContent = me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching';
   const bar = document.querySelector('.shotBar');
   if(bar && d && d.deadline){ const left = Math.max(0, d.deadline - now); bar.style.transform = `scaleX(${Math.min(1, left / d.bank)})`; }
+  const tbar = $('turnBar');
+  if(tbar && d && d.deadline){ const left = Math.max(0, d.deadline - now), f = Math.min(1, left / d.bank); tbar.style.transform = `scaleX(${f})`; tbar.classList.toggle('low', !d.usingBank && left < 5000); tbar.classList.toggle('bank', !!d.usingBank); const ts = $('turnSecs'); if(ts) ts.textContent = (d.usingBank ? 'Time bank · ' : '') + Math.ceil(left / 1000) + 's'; }
 }
 setInterval(tickClock, 200);
 window.addEventListener('resize', () => { if(view === 'table') renderTable(); });
@@ -651,7 +736,7 @@ function bubble(msg){
   document.querySelectorAll(`.bubble[data-from="${CSS.escape(msg.from)}"]`).forEach(b => b.remove());
   const b = document.createElement('div'); b.className = 'bubble'; b.dataset.from = msg.from; b.textContent = msg.text;
   const [x, y] = pctToPx(pos), W = $('tableArea').clientWidth;
-  b.style.top = y + 'px'; $('fx').appendChild(b);
+  b.style.top = (msg.from === club.me.id ? y - 70 : y) + 'px'; $('fx').appendChild(b);
   const half = b.offsetWidth / 2, cx = Math.max(half + 6, Math.min(W - half - 6, x));
   b.style.left = cx + 'px'; b.style.setProperty('--tail', (x - cx) + 'px');
   setTimeout(() => b.remove(), 4500);

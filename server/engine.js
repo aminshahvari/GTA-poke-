@@ -118,6 +118,9 @@ function distribute(entries, dead, btn, seatsN = 9){
 // WSOP Main Event structure (2025): big blind ante from level 1
 const LEVELS = [[100,200,200],[200,300,300],[200,400,400],[300,500,500],[300,600,600],[400,800,800],[500,1000,1000],[600,1200,1200],[1000,1500,1500],[1000,2000,2000],[1000,2500,2500],[1500,3000,3000],[2000,4000,4000],[3000,5000,5000],[3000,6000,6000],[4000,8000,8000],[5000,10000,10000],[6000,12000,12000],[10000,15000,15000],[10000,20000,20000],[10000,25000,25000],[15000,30000,30000],[20000,40000,40000],[25000,50000,50000],[30000,60000,60000],[40000,80000,80000],[50000,100000,100000],[60000,120000,120000],[100000,150000,150000],[100000,200000,200000],[125000,250000,250000],[150000,300000,300000],[200000,400000,400000],[250000,500000,500000],[300000,600000,600000],[400000,800000,800000],[500000,1000000,1000000],[600000,1200000,1200000],[800000,1600000,1600000],[1000000,2000000,2000000],[1250000,2500000,2500000],[1500000,3000000,3000000],[2000000,4000000,4000000],[2500000,5000000,5000000],[3000000,6000000,6000000],[4000000,8000000,8000000],[5000000,10000000,10000000]];
 const levelAt = i => LEVELS[Math.min(i, LEVELS.length - 1)];
+// 'each': every player antes about 1/8 of the big blind (online style). Otherwise the big blind antes for the table (WSOP/WPT live).
+const niceAnte = bb => { const a = bb / 8, st = a < 50 ? 5 : a < 200 ? 25 : a < 2000 ? 100 : 1000; return Math.max(st, Math.round(a / st) * st); };
+const levelFor = (i, mode) => { const [sb, bb, an] = levelAt(i); return mode === 'each' && an ? [sb, bb, niceAnte(bb)] : [sb, bb, an]; };
 const PAYOUT = [0.5, 0.3, 0.2];
 const STYLES = {
   tight:    { label:'Tight',      open:.585, three:.69, callAdj:.04,  aggr:.6,  bluff:.07, push:0 },
@@ -219,17 +222,18 @@ async function playHand(g, io){
   let leveled = false;
   while(g.levelMsLeft <= 0){ g.level++; g.levelMsLeft += g.levelMs; leveled = true; }
   if(leveled) await io.event('level', {});
-  const [SB, BB, ANTE] = levelAt(g.level);
+  const [SB, BB, ANTE] = levelFor(g.level, g.anteMode);
   setPositions(g, rng);
   const players = [];
   for(let k = 1; k <= 9; k++){ const s = (g.btn + k) % 9, p = g.seats[s]; if(p && p.stack > 0) players.push(p); }
   players.forEach(p => Object.assign(p, { seat: g.seats.indexOf(p), cards: [], bet: 0, total: 0, folded: false, allIn: false, acted: false, facedBet: 0, act: '', start: p.stack, shown: false, best: null, val: 0, won: 0, ante: 0 }));
   const deck = (io.deck && await io.deck(g.handNo + 1)) || shuffled(rng);
   const h = g.hand = { no: g.handNo + 1, players, board: [], deck, currentBet: 0, minRaise: BB, bbAmt: BB, sbAmt: SB, anteAmt: ANTE, dead: 0, street: 0, raiseCount: 0, acting: -1, result: null };
+  if(ANTE && g.anteMode === 'each') for(const p of players){ const a = Math.min(ANTE, p.stack); p.stack -= a; p.ante = a; p.total += a; if(p.stack === 0) p.allIn = true; } // antes count toward side pots, not toward the bet to call
   const sbP = g.sb !== g.bb ? g.seats[g.sb] : null, bbP = g.seats[g.bb];
   if(sbP && sbP.stack > 0){ put(sbP, SB); sbP.act = 'SB'; }
   put(bbP, BB); bbP.act = 'BB';
-  if(ANTE){ const a = Math.min(ANTE, bbP.stack); bbP.stack -= a; bbP.ante = a; h.dead += a; if(bbP.stack === 0) bbP.allIn = true; } // blind takes priority over the ante
+  if(ANTE && g.anteMode !== 'each'){ const a = Math.min(ANTE, bbP.stack); bbP.stack -= a; bbP.ante = a; h.dead += a; if(bbP.stack === 0) bbP.allIn = true; } // blind takes priority over the ante
   h.currentBet = BB; h.minRaise = BB;
   for(let r = 0; r < 2; r++) for(const p of players) p.cards.push(h.deck.pop());
   await io.event('deal', {});
@@ -344,7 +348,7 @@ function botDecide(g, h, p, L){
 }
 
 const api = { RANKS, SUITS, rankOf, suitOf, cardStr, parse, evaluate, bestFive, describe, category, CAT, equity, preflopStrength, distribute,
-  LEVELS, levelAt, PAYOUT, STYLES, newGame, remaining, setPositions, nextLive, legal, normalize, applyAction, playHand, afterHand, potTotal, botDecide, canAct };
+  LEVELS, levelAt, levelFor, PAYOUT, STYLES, newGame, remaining, setPositions, nextLive, legal, normalize, applyAction, playHand, afterHand, potTotal, botDecide, canAct };
 if(typeof module !== 'undefined') module.exports = api;
 return api;
 })();

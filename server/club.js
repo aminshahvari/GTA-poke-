@@ -11,6 +11,9 @@ const coach = require('./coach');
 const FAST = process.env.FAST === '1';
 const SPEED = FAST ? 0.02 : 1;
 const TIME_BANK = +(process.env.TIME_BANK_MS || (FAST ? 3000 : 30000));
+const ACT_SECS = [10, 15, 20, 30];
+const actMs = () => process.env.TIME_BANK_MS || FAST ? TIME_BANK : (ACT_SECS.includes((T() || {}).actSec) ? T().actSec : 20) * 1000;
+const EXTRA_BANK = FAST ? 0 : 30000; // each player's one-off time bank for the whole tournament, like the online rooms
 const AWAY_BANK = FAST ? 300 : 2500;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -40,13 +43,14 @@ function payoutPcts(n){
 function pointsFor(n, place){ const pct = payoutPcts(n)[place - 1]; return pct ? Math.max(2, Math.round(pct * n / 10)) : 1; }
 
 // ---------- registration ----------
-function create({ name, stack, levelMin, startAt, repeat }){
+function create({ name, stack, levelMin, startAt, repeat, anteMode, actSec }){
   const t = T();
   if(t && (t.status === 'running')) throw new Error('A tournament is already running.');
   stack = [10000, 20000, 30000, 50000, 60000, 100000].includes(+stack) ? +stack : 30000;
   levelMin = Math.max(1, Math.min(60, Math.round(+levelMin || 20)));
   store.set('tourney', { id: 't' + Date.now(), status: 'registering', name: String(name || 'Club Tournament').slice(0, 60), stack, levelMin,
-    startAt: startAt ? +startAt : null, repeat: ['daily', 'weekly'].includes(repeat) ? repeat : 'none', regs: [], createdAt: Date.now() });
+    startAt: startAt ? +startAt : null, repeat: ['daily', 'weekly'].includes(repeat) ? repeat : 'none', regs: [], createdAt: Date.now(),
+    anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : 20 });
   hooks.onClub();
 }
 function join(uid){
@@ -88,6 +92,19 @@ function start(){
     const best = groups.filter(gp => gp.length < cap).sort((a, b) => conflicts(a, u) - conflicts(b, u) || a.length - b.length)[0];
     best.push(u);
   });
+  // repair pass: swap players between tables while that lowers the number of linked pairs sitting together
+  const cost = grp => grp.reduce((a, u, i) => a + grp.slice(i + 1).filter(v => linker(u, v)).length, 0);
+  for(let pass = 0, improved = true; improved && pass < 50; pass++){
+    improved = false;
+    for(let a = 0; a < groups.length; a++) for(let b = a + 1; b < groups.length; b++){
+      for(let i = 0; i < groups[a].length; i++) for(let j = 0; j < groups[b].length; j++){
+        const before = cost(groups[a]) + cost(groups[b]);
+        [groups[a][i], groups[b][j]] = [groups[b][j], groups[a][i]];
+        if(cost(groups[a]) + cost(groups[b]) < before) improved = true;
+        else [groups[a][i], groups[b][j]] = [groups[b][j], groups[a][i]];
+      }
+    }
+  }
   tables.clear();
   groups.forEach((grp, i) => {
     const tb = newTable(t.id + '-' + (i + 1), i + 1);
@@ -181,16 +198,23 @@ async function ask(tb, p, L){
   if(p.away){ await sleep(400 * SPEED); return { t: 'fold', dead: true }; } // TDA 32 / WSOP 82: an absent player's hand is dead
   tb.seq++;
   const h = tb.g.hand;
-  tb.acting = { seat: p.seat, uid: p.uid, seq: tb.seq, deadline: Date.now() + (p.away ? AWAY_BANK : TIME_BANK),
+  const ms = p.away ? AWAY_BANK : actMs();
+  if(p.bankLeft == null) p.bankLeft = EXTRA_BANK;
+  tb.acting = { seat: p.seat, uid: p.uid, seq: tb.seq, deadline: Date.now() + ms, ms, usingBank: false, bankLeft: p.bankLeft,
     legal: { ...L, pot: E.potTotal(h), cur: h.currentBet, bb: h.bbAmt } };
   publish(tb);
   const a = await new Promise(resolve => {
     const w = { tid: tb.tid, hand: h.no, seq: tb.seq, resolve: null };
     const timer = setInterval(() => {
       if(T() && T().paused){ tb.acting.deadline += 250; return; }
-      if(Date.now() > tb.acting.deadline){ done(null, true); }
+      if(Date.now() > tb.acting.deadline){
+        // the action clock ran out: dip into the player's time bank before folding them
+        if(!tb.acting.usingBank && p.bankLeft >= 1000){ tb.acting.usingBank = true; tb.acting.bankStart = Date.now(); tb.acting.deadline = Date.now() + p.bankLeft; tb.acting.ms = p.bankLeft; publish(tb); return; }
+        if(tb.acting.usingBank) p.bankLeft = 0;
+        done(null, true);
+      }
     }, 250);
-    const done = (v, timedOut) => { clearInterval(timer); if(waiters.get(p.uid) === w) waiters.delete(p.uid); if(timedOut){ p.away = true; } resolve(v); };
+    const done = (v, timedOut) => { if(tb.acting && tb.acting.usingBank && !timedOut) p.bankLeft = Math.max(0, p.bankLeft - (Date.now() - tb.acting.bankStart)); clearInterval(timer); if(waiters.get(p.uid) === w) waiters.delete(p.uid); if(timedOut){ p.away = true; } resolve(v); };
     w.resolve = v => done(v, false);
     waiters.set(p.uid, w);
   });
@@ -242,7 +266,7 @@ async function loop(tb){
     }
     const live = g.seats.filter(p => p && p.stack > 0);
     if(live.length < 2){ if(hfh.on){ hfh.done.add(tb.tid); hfhCheck(); } publish(tb); await sleep(1000 * Math.max(SPEED, .2)); continue; }
-    g.level = T().level; g.levelMsLeft = 1;
+    g.level = T().level; g.levelMsLeft = 1; g.anteMode = T().anteMode;
     tb.handStart = Object.fromEntries(live.map(p => [p.uid, p.stack]));
     tb.inHand = true;
     let out;
@@ -388,10 +412,10 @@ function snapshot(tb){
         act: inHand ? p.act : '', lastAmt: inHand ? (p.lastAmt || 0) : 0, won: inHand && res ? (p.won || 0) : 0,
         shown: inHand && p.shown && !p.folded ? p.cards.map(E.cardStr) : null, cat: inHand && res && res.showdown && !p.folded && p.shown ? E.CAT[E.category(p.val)] : '', away: !!p.away };
     }),
-    board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((s, p) => s + p.bet, 0) : 0,
-    btn: g.btn, blinds: E.levelAt(t.level || 0),
+    cur: live ? h.currentBet : 0, board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((s, p) => s + p.bet, 0) : 0,
+    btn: g.btn, blinds: E.levelFor(t.level || 0, t.anteMode),
     acting: live && tb.acting ? tb.acting.seat : -1, actUid: live && tb.acting ? tb.acting.uid : null, seq: tb.acting ? tb.acting.seq : tb.seq,
-    deadline: tb.acting ? tb.acting.deadline : 0, bank: TIME_BANK, legal: tb.acting ? tb.acting.legal : null,
+    deadline: tb.acting ? tb.acting.deadline : 0, bank: tb.acting ? tb.acting.ms : actMs(), usingBank: !!(tb.acting && tb.acting.usingBank), bankLeft: tb.acting ? tb.acting.bankLeft : 0, legal: tb.acting ? tb.acting.legal : null,
     result: res ? { lines: resultLines(g, h), winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null,
     note: tb.note || ''
   };

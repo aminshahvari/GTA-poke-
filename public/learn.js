@@ -32,7 +32,7 @@ lessons: [
 <p class="tipbox"><b>Kickers matter.</b> With A♠ K♦ against A♣ 9♥ on a board of A♥ 7♣ 4♠ 2♦ J♠, both have a pair of aces, but your king kicker wins. Suits never break a tie; equal hands split the pot.</p>` },
 
 { id: 'flow', title: 'How a hand works', mins: 3, body: `
-<ol class="steps"><li><b>Blinds and ante.</b> The two players left of the button post the small blind and big blind. From the first level the big blind also posts one ante for the whole table (the "big blind ante"), just like the WSOP.</li>
+<ol class="steps"><li><b>Blinds and ante.</b> The two players left of the button post the small blind and big blind. From the first level there is also an ante. Most of our games use the online style: every player posts a small ante each hand. The organizer can instead pick the WSOP/WPT live style, where the big blind posts one ante for the whole table (the "big blind ante").</li>
 <li><b>Preflop.</b> Everyone gets two cards. Action starts left of the big blind. You can fold, call, or raise.</li>
 <li><b>Flop, turn, river.</b> Three shared cards, then one, then one. Each street has a betting round, starting with the first player still in on the button's left.</li>
 <li><b>Showdown.</b> If two or more players are left after the river, the best hand wins. The app shows the winning hand and splits pots automatically.</li></ol>
@@ -132,7 +132,10 @@ rules: `
 <p>These are the tournament rules this club plays by. They follow the Tournament Directors Association (TDA) rules used by the WSOP and WPT, adapted for an online table where the software deals.</p>
 <h4>Blinds, antes and the button</h4>
 <ul><li>Blinds go up at the end of each level. A new level starts with the next hand.</li>
-<li>We use the WSOP Main Event blind structure: 100/200 with a 200 big blind ante, then 200/300/300, 200/400/400 and so on. The big blind posts one ante for the whole table from level 1. If the big blind can't cover both, the blind is posted first and the rest goes to the ante.</li>
+<li>We use the WSOP Main Event blind structure: 100/200, then 200/300, 200/400 and so on, with an ante from level 1.</li>
+<li><b>Ante, online style</b> (the default): every player posts an ante of about one eighth of the big blind before the cards are dealt (25 at 100/200). Antes go into the pot but don't count toward the bet you have to call. A player who can't cover the ante is all-in for what they have.</li>
+<li><b>Ante, WSOP/WPT live style</b> (if the organizer picks it): the big blind posts one ante for the whole table, equal to the big blind. If the big blind can't cover both, the blind is posted first and the rest goes to the ante.</li>
+<li><b>Time to act:</b> the organizer sets 10, 15, 20 or 30 seconds per decision. When it runs out you get your time bank (30 seconds for the whole tournament). When that's gone too, your hand is checked or folded.</li>
 <li>The button moves by the "dead button" rule, so nobody skips or pays the big blind twice when players bust.</li>
 <li>Heads-up, the button posts the small blind and acts first before the flop, last after it.</li></ul>
 <h4>Betting (no-limit)</h4>
