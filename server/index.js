@@ -297,5 +297,6 @@ setInterval(() => { for(const ws of sockets){ if(!ws.isAlive){ ws.terminate(); c
   await store.init();
   if(club.resume()) console.log('resumed running tournament');
   server.listen(PORT, () => console.log(`Stacked poker club on :${PORT}`));
+  if(!process.env.NO_BEACON) fair.probe();
 })();
 module.exports = { server };

@@ -70,4 +70,6 @@ function report(t){
   return { id: t.id, name: t.name, status: t.status, seal: t.fairSeal || null, seed: done ? t.fairSeed || null : null, chain: CHAIN, beaconUrl: BEACON_URL, hands };
 }
 
-module.exports = { deckFrom, newSeed, deckForHand, saveHand, prune, report, CHAIN, _setBeacon: f => { fetchBeacon = f; } };
+async function probe(){ const b = await fetchBeacon(); console.log(b ? `fair deal: drand beacon ok (round ${b.round})` : 'fair deal: drand beacon NOT reachable'); }
+
+module.exports = { probe, deckFrom, newSeed, deckForHand, saveHand, prune, report, CHAIN, _setBeacon: f => { fetchBeacon = f; } };
