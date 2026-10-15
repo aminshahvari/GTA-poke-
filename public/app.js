@@ -748,6 +748,35 @@ function seatPosOf(uid){
   const s = d.seats.findIndex(p => p && p.uid === uid); if(s < 0) return null;
   return layoutOf(d).posOf(s);
 }
+const seatName = uid => { const d = tables.get(curTid()); const p = d && d.seats.find(x => x && x.uid === uid); return p ? p.name : nameOf(uid); };
+const isDemo = () => curTid() === 'demo' && !!demo;
+// Chat and throws at the demo table stay on this phone; the practice players sometimes answer back.
+function demoChat(m){
+  const now = Date.now(), base = { id: 'd' + now + Math.random(), tid: 'demo', from: club.me.id, name: club.me.name, ts: now };
+  onChat(m.t === 'chat' ? { ...base, kind: 'text', text: String(m.text).slice(0, 140) } : { ...base, kind: 'throw', item: m.item, to: m.to });
+  const d = tables.get('demo'), bots = d ? d.seats.filter(p => p && p.uid !== club.me.id) : [];
+  const who = m.t === 'throw' ? bots.find(p => p.uid === m.to) : bots[Math.floor(Math.random() * bots.length)];
+  if(!who || Math.random() < .35) return;
+  setTimeout(() => {
+    if(!isDemo()) return;
+    const b = { id: 'd' + Date.now() + Math.random(), tid: 'demo', from: who.uid, name: who.name, ts: Date.now() };
+    if(m.t === 'throw' && Math.random() < .6) onChat({ ...b, kind: 'throw', item: ['tomato', 'egg', 'fish', 'rose'][Math.floor(Math.random() * 4)], to: club.me.id });
+    else onChat({ ...b, kind: 'text', text: ['😂', 'hey!', 'gl', 'nh', 'lol', '😎', 'ty'][Math.floor(Math.random() * 7)] });
+  }, 900 + Math.random() * 1200);
+}
+const sendChat = m => isDemo() ? demoChat(m) : send(m);
+async function pickThrow(uid){
+  const pick = await modal(`<h2>Throw something at ${esc(seatName(uid))}</h2><div class="throw-grid">${Object.entries(THROW_ICONS).map(([k, v]) => `<button data-v="${k}">${v}</button>`).join('')}</div>`, [{ label: 'Cancel', value: null }]);
+  if(pick){ openChat(false); sendChat({ t: 'throw', item: pick, to: uid }); }
+}
+// Why a throw can't happen right now, or '' when it can.
+function throwBlock(){
+  if(isDemo()) return '';
+  if(!club.myTable || club.myTable !== curTid()) return 'Sit at this table to throw things.';
+  if(club.muted) return 'The organizer muted your chat.';
+  if(club.chatOff && !club.me.owner) return 'Table chat is off.';
+  return '';
+}
 function onChat(msg){
   const log = chatLogs.get(msg.tid) || []; log.push(msg); if(log.length > 40) log.shift(); chatLogs.set(msg.tid, log);
   if(view !== 'table' || msg.tid !== curTid()) return;
@@ -779,10 +808,10 @@ function flyThrow(msg){
 function renderChat(){
   const log = chatLogs.get(curTid()) || [];
   const muted = club.muted, off = club.chatOff && !club.me.owner;
-  $('chatLog').innerHTML = log.length ? log.map(m => `<div class="cm ${m.from === club.me.id ? 'me' : ''}"><b style="color:${colorOf(m.from)}">${esc(m.name)}</b> ${m.kind === 'text' ? esc(m.text) : `threw ${THROW_ICONS[m.item] || ''} at ${esc(nameOf(m.to))}`}</div>`).join('')
+  $('chatLog').innerHTML = log.length ? log.map(m => `<div class="cm ${m.from === club.me.id ? 'me' : ''}"><b style="color:${colorOf(m.from)}">${esc(m.name)}</b> ${m.kind === 'text' ? esc(m.text) : `threw ${THROW_ICONS[m.item] || ''} at ${esc(m.to === club.me.id ? 'you' : seatName(m.to))}`}</div>`).join('')
     : '<div class="note">Say hi to the table. Tap a player to throw something at them.</div>';
   $('chatLog').scrollTop = 1e9;
-  const seated = !!club.myTable && club.myTable === curTid();
+  const seated = isDemo() || (!!club.myTable && club.myTable === curTid());
   $('chatForm').hidden = !seated && !club.me.owner;
   $('chatQuick').hidden = $('chatForm').hidden;
   $('chatNote').textContent = off ? 'The organizer turned table chat off.' : muted ? 'The organizer muted your chat.' : !seated && !club.me.owner ? 'Only players at this table can chat. You can read along.' : 'Club rule (WSOP): never talk about a hand that is still being played, and never say what you folded.';
@@ -795,14 +824,21 @@ function openChat(open){
 $('chatBtn').onclick = () => openChat(!chatOpen);
 $('chatClose').onclick = () => openChat(false);
 $('chatQuick').innerHTML = QUICK.map(q => `<button type="button">${esc(q)}</button>`).join('');
-$('chatQuick').onclick = e => { const b = e.target.closest('button'); if(b) send({ t: 'chat', text: b.textContent }); };
-$('chatForm').onsubmit = e => { e.preventDefault(); const v = $('chatInput').value.trim(); if(v){ send({ t: 'chat', text: v }); $('chatInput').value = ''; } };
-$('seats').addEventListener('click', async e => {
+$('chatQuick').onclick = e => { const b = e.target.closest('button'); if(b) sendChat({ t: 'chat', text: b.textContent }); };
+$('chatForm').onsubmit = e => { e.preventDefault(); const v = $('chatInput').value.trim(); if(v){ sendChat({ t: 'chat', text: v }); $('chatInput').value = ''; } };
+$('throwBtn').onclick = async () => {
+  const why = throwBlock(); if(why) return toast(why);
+  const d = tables.get(curTid()), others = d ? d.seats.filter(p => p && p.uid !== club.me.id && !p.out) : [];
+  if(!others.length) return toast('Nobody else is at the table.');
+  const uid = others.length === 1 ? others[0].uid : await modal(`<h2>Who gets it?</h2><div class="throw-who">${others.map(p => `<button class="btn" data-v="${esc(p.uid)}">${esc(p.name)}</button>`).join('')}</div>`, [{ label: 'Cancel', value: null }]);
+  if(uid) pickThrow(uid);
+};
+$('seats').addEventListener('click', e => {
   const seat = e.target.closest('.seat[data-uid]'); if(!seat) return;
-  const uid = seat.dataset.uid; if(uid === club.me.id || !club.myTable || club.myTable !== curTid()) return;
-  if(club.muted || (club.chatOff && !club.me.owner)) return toast(club.muted ? 'The organizer muted your chat.' : 'Table chat is off.');
-  const pick = await modal(`<h2>Throw something at ${esc(nameOf(uid))}</h2><div class="throw-grid">${Object.entries(THROW_ICONS).map(([k, v]) => `<button data-v="${k}">${v}</button>`).join('')}</div>`, [{ label: 'Cancel', value: null }]);
-  if(pick) send({ t: 'throw', item: pick, to: uid });
+  const uid = seat.dataset.uid;
+  if(uid === club.me.id) return toast('Tap another player to throw something at them.');
+  const why = throwBlock(); if(why) return toast(why);
+  pickThrow(uid);
 });
 
 // ---------- hand helper: what you have, your chance to win and whether a call pays ----------
@@ -934,13 +970,13 @@ function startDemo(){
   g.seats = seats; g.anteMode = 'each';
   demo = { g, seq: 0, acting: null, inHand: false, stopped: false, note: 'Demo table: practice players, nothing is saved.',
     T: { status: 'running', level: 0, levelEndsAt: Date.now() + 3 * 60000, entrants: 6, stack: 30000, remaining: 6, anteMode: 'each', places: [] }, answer: () => {} };
-  watchTid = 'demo'; view = 'table'; seen = new Set(); showScreen('game'); $('chatBtn').hidden = true;
+  watchTid = 'demo'; view = 'table'; seen = new Set(); showScreen('game'); chatLogs.delete('demo');
   demoLoop(demo);
 }
 function stopDemo(){
   if(!demo) return;
   demo.stopped = true; demo.answer({ t: 'fold' }); demo = null; tables.delete('demo'); myCards.delete('demo');
-  $('chatBtn').hidden = false; if(watchTid === 'demo') watchTid = null;
+  chatLogs.delete('demo'); if(watchTid === 'demo') watchTid = null;
 }
 async function demoLoop(D){
   const g = D.g;

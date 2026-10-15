@@ -525,3 +525,5 @@ body{font-size:15px;letter-spacing:0}
 #results{background:radial-gradient(90% 55% at 50% 20%,#22385f 0%,#171d2a 55%,var(--ink) 100%)}
 .pod.p1{background:linear-gradient(rgba(242,169,59,.22),var(--panel))}
 .champ-sub{color:#cfd5e0}
+.throw-who{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chat-head .hdr-btns{display:flex;gap:6px}
