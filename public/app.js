@@ -89,7 +89,7 @@ function connect(){
     if(m.t === 'club'){ onClub(m.club); return; }
     if(m.t === 'table'){ tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
-    if(m.t === 'invite'){ showInvite(m.code, m.group); return; }
+    if(m.t === 'invite'){ showInvite(m.code, m.group, m.max); return; }
     if(m.t === 'skillq'){ askSkill(m.rid, m.q); return; }
     if(m.t === 'claimed'){ modal('<h2>Prize claimed 🎉</h2><p>The organizer has been told and will get it to you. You can follow it under Prizes.</p>', [{ label: 'Great', value: 1, primary: true }]); return; }
     if(m.t === 'hands'){ myHands = m.hands; if(view === 'lobby' && tab === 'learn') renderLobby(); return; }
@@ -135,9 +135,17 @@ function renderLobby(){
   if(!club) return;
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   const body = $('lobbyBody');
-  body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : picNudgeHTML() + eventHTML();
+  body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : picNudgeHTML() + eventHTML() + friendsHTML();
   wireLobby();
 }
+function friendsHTML(){
+  if(club.me.owner || !club.membersInvite) return '';
+  const n = club.invitedCount || 0, mi = club.myInvite;
+  return `<div class="card-box friends-box"><span class="eyebrow">Grow the club</span><h3>Invite your poker friends</h3>
+    <p>Share your own link on WhatsApp, Telegram or by text. Friends join free with their own name and PIN.${n ? ` <b>${n} ${n === 1 ? 'friend has' : 'friends have'} joined with your link.</b>` : ''}${mi ? ` Your link: ${mi.used} of ${mi.max} used.` : ''}</p>
+    <div class="btn-row"><button class="btn red big" data-invite>Invite friends</button></div></div>`;
+}
+document.addEventListener('click', e => { if(e.target.closest('[data-invite]')) askInvite(); });
 function picNudgeHTML(){
   const m = memberOf(club.me.id);
   if(!m || m.av || local.get('picNudge', 0) > 2) return '';
@@ -266,11 +274,11 @@ function directorHTML(){
 function directorMainHTML(){
   const T = club.tourney;
   const members = `<div class="card-box"><span class="eyebrow">Members · ${club.members.length}</span>
-    <div class="btn-row"><button class="btn red" id="inviteBtn">Create invite link</button></div>
+    <div class="btn-row"><button class="btn red" id="inviteBtn">Create invite link</button><button class="btn" id="memInvBtn">${club.membersInvite ? 'Members can invite: on' : 'Members can invite: off'}</button></div>
     <p class="note">Pick a <b>group link</b> for a WhatsApp or Telegram group (up to 20 people, 7 days), or a <b>personal link</b> for one friend. They open it, pick a name and PIN, and they're in.</p>
-    ${club.invites && club.invites.length ? `<div class="table-list">${club.invites.map(i => `<div class="trow"><b>${i.multi ? 'Group link' : 'Unused invite'}</b><small>${i.multi ? `${i.used} of ${i.max} joined · until ${new Date(i.expiresAt).toLocaleDateString()}` : new Date(i.createdAt).toLocaleDateString()}</small><button class="back" data-copy="${esc(i.code)}" data-group="${i.multi ? 1 : ''}">Copy</button><button class="back" data-revoke="${esc(i.code)}">Cancel</button></div>`).join('')}</div>` : ''}
+    ${club.invites && club.invites.length ? `<div class="table-list">${club.invites.map(i => `<div class="trow"><b>${i.multi ? (i.by && i.by !== club.me.id ? esc(nameOf(i.by)) + "'s link" : 'Group link') : 'Unused invite'}</b><small>${i.multi ? `${i.used} of ${i.max} joined · until ${new Date(i.expiresAt).toLocaleDateString()}` : new Date(i.createdAt).toLocaleDateString()}</small><button class="back" data-copy="${esc(i.code)}" data-group="${i.multi ? 1 : ''}">Copy</button><button class="back" data-revoke="${esc(i.code)}">Cancel</button></div>`).join('')}</div>` : ''}
     <div class="table-list">${club.members.map(m => { const hh = club.households && club.households[m.id], mates = hh ? club.members.filter(x => x.id !== m.id && club.households[x.id] === hh).map(x => x.name) : [];
-      return `<div class="trow"><b>${esc(m.name)}</b><small>${m.role === 'owner' ? 'Owner' : 'Member since ' + new Date(m.createdAt).toLocaleDateString()}${mates.length ? ` · Home with ${esc(mates.join(', '))}` : ''}</small><span class="row-btns">${m.role === 'owner' ? '' : `<button class="back" data-mute="${esc(m.id)}" data-on="${(club.mutedIds || []).includes(m.id) ? 1 : 0}">${(club.mutedIds || []).includes(m.id) ? 'Unmute' : 'Mute'}</button>`}<button class="back" data-home="${esc(m.id)}">Home</button>${m.role === 'owner' ? '' : `<button class="back" data-remove="${esc(m.id)}">Remove</button>`}</span></div>`; }).join('')}</div>
+      return `<div class="trow"><b>${esc(m.name)}</b><small>${m.role === 'owner' ? 'Owner' : 'Member since ' + new Date(m.createdAt).toLocaleDateString()}${m.invitedBy && m.invitedBy !== club.me.id ? ' · invited by ' + esc(nameOf(m.invitedBy)) : ''}${mates.length ? ` · Home with ${esc(mates.join(', '))}` : ''}</small><span class="row-btns">${m.role === 'owner' ? '' : `<button class="back" data-mute="${esc(m.id)}" data-on="${(club.mutedIds || []).includes(m.id) ? 1 : 0}">${(club.mutedIds || []).includes(m.id) ? 'Unmute' : 'Mute'}</button>`}<button class="back" data-home="${esc(m.id)}">Home</button>${m.role === 'owner' ? '' : `<button class="back" data-remove="${esc(m.id)}">Remove</button>`}</span></div>`; }).join('')}</div>
     <div class="btn-row"><button class="btn" id="chatOffBtn">${club.chatOff ? 'Turn table chat on' : 'Turn table chat off'}</button></div>
     <p class="note">Table chat is ${club.chatOff ? '<b>off</b>' : '<b>on</b>'}. <b>Mute</b> stops one person from chatting or throwing things.</p>
     <p class="note">Use <b>Home</b> to mark people who live together (for example a couple). They're never seated at the same table. Players on the same internet or the same phone are kept apart automatically.</p></div>`;
@@ -379,6 +387,7 @@ function wireLobby(){
   document.querySelectorAll('[data-sealinfo]').forEach(a => a.onclick = e => { e.preventDefault(); tab = 'learn'; learnSeg = 'fair'; renderLobby(); });
   document.querySelectorAll('[data-mute]').forEach(b => b.onclick = () => send({ t: 'mute', uid: b.dataset.mute, muted: b.dataset.on !== '1' }));
   on2('chatOffBtn', () => send({ t: 'chatOff', off: !club.chatOff }));
+  on2('memInvBtn', () => send({ t: 'membersInvite', on: !club.membersInvite }));
   document.querySelectorAll('[data-bseg]').forEach(b => b.onclick = () => { boardSeg = b.dataset.bseg; renderLobby(); });
   document.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => send({ t: 'skillq', rid: b.dataset.claim }));
   document.querySelectorAll('[data-rmrw]').forEach(b => b.onclick = async () => { if(await modal('<h2>Remove this prize?</h2><p>Claims already made stay on the list.</p>', [{ label: 'Keep', value: false }, { label: 'Remove', value: true, primary: true }])) send({ t: 'removeReward', id: b.dataset.rmrw }); });
@@ -430,15 +439,16 @@ function wireLobby(){
   on('endBtn', async () => { if(await modal('<h2>End the tournament now?</h2><p>All tables close and no results are recorded.</p>', [{ label: 'Keep playing', value: false }, { label: 'End it', value: true, primary: true }])) send({ t: 'cancel' }); });
 }
 async function askInvite(){
+  if(!club.me.owner) return send({ t: 'invite' });
   const v = await modal('<h2>Invite people</h2><p>A <b>group link</b> can go in a WhatsApp or Telegram group: up to 20 people can join with it for 7 days. A <b>personal link</b> works once, for one friend.</p>',
     [{ label: 'Cancel', value: null }, { label: 'Personal link', value: 'one' }, { label: 'Group link', value: 'group', primary: true }]);
   if(v) send({ t: 'invite', group: v === 'group' });
 }
-function showInvite(code, group){
+function showInvite(code, group, max){
   const url = location.origin + '/join/' + code;
   const text = group ? `${club.me.name} invited you to the Stacked Live poker club. Tap to join (pick your own name and PIN):` : `${club.me.name} invited you to the Stacked Live poker club. Tap to join:`;
   const enc = encodeURIComponent;
-  modal(`<h2>${group ? 'Group invite link' : 'Invite link'}</h2><p>${group ? 'Post it in your group. Up to 20 people can join with it for the next 7 days. You can cancel it any time in Director.' : 'Send this to one friend. It works once.'}</p>
+  modal(`<h2>${!club.me.owner ? 'Your invite link' : group ? 'Group invite link' : 'Invite link'}</h2><p>${!club.me.owner ? `Send it to friends who play poker, or post it in a group. Up to ${max || 10} people can join with your link for 7 days. It's free, and they pick their own name and PIN.` : group ? 'Post it in your group. Up to 20 people can join with it for the next 7 days. You can cancel it any time in Director.' : 'Send this to one friend. It works once.'}</p>
     ${navigator.share ? '<button class="btn-red" id="shareBtn" style="width:100%;margin-bottom:10px">Share invite</button>' : ''}
     <div class="share-row"><a class="btn-ghost" target="_blank" rel="noopener" href="https://wa.me/?text=${enc(text + ' ' + url)}">WhatsApp</a><a class="btn-ghost" target="_blank" rel="noopener" href="https://t.me/share/url?url=${enc(url)}&text=${enc(text)}">Telegram</a><a class="btn-ghost" href="sms:?&body=${enc(text + ' ' + url)}">Text</a></div>
     <div class="copy-row"><input id="invUrl" readonly value="${esc(url)}"><button class="btn-ghost" id="copyBtn" style="width:auto;padding:9px 12px">Copy</button></div>`, [{ label: 'Done', value: 1 }]);
@@ -507,7 +517,7 @@ async function showProfile(p){
   const tier = TIER_INFO.find(t => t[0] === p.tier) || TIER_INFO[5];
   const html = `<div class="prof">
     <div class="prof-head">${avHTML(p.uid, p.name, 'big')}<div><h2>${esc(p.name)}</h2>${tierPill({ tier: p.tier, color: p.color, tierName: p.tierName })}
-      <small>${p.score != null ? `Skill rating <b>${p.score}</b>/100 · ` : ''}member since ${new Date(p.since).toLocaleDateString([], { month: 'short', year: 'numeric' })}</small></div></div>
+      <small>${p.score != null ? `Skill rating <b>${p.score}</b>/100 · ` : ''}member since ${new Date(p.since).toLocaleDateString([], { month: 'short', year: 'numeric' })}${(memberOf(p.uid) || {}).invitedBy ? ' · invited by ' + esc(nameOf(memberOf(p.uid).invitedBy)) : ''}</small></div></div>
     ${atTable ? `<div class="eyebrow">Throw something</div><div class="throw-grid">${throwChoices().map(([k, v]) => `<button data-v="t:${k}">${v}</button>`).join('')}</div>` : ''}
     <div class="eyebrow">Tournaments</div>
     <div class="statgrid">${st(p.played, 'Played')}${st(p.wins, 'Wins')}${st(p.cashes, 'Cashes')}${st(p.best ? ord(p.best) : '–', 'Best')}</div>

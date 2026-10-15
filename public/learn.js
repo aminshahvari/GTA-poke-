@@ -176,6 +176,7 @@ window.LEARN.rules = window.LEARN.rules.replace('%%TERMS%%', window.LEARN.terms)
 // Change log shown to the organizer in the Director tab, newest first.
 window.LEARN.news = [
   { date: 'Oct 15, 2026', items: [
+    'Members can invite friends: every member gets an Invite friends button on the Tournament tab with their own link (up to 10 friends, 7 days). Profiles show who invited whom. The organizer can switch member invites off in Director.',
     'Coach tips during play: after a hand, a short private tip pops up above your cards when the coach saw something: a mistake, a good play, a bad beat, or a run of patient folds. Turned off with the hand helper.',
     'Tilt and calm: the coach now flags a Tilt check when you make a mistake right after losing a big pot, and praises you when you stay calm. Your profile shows Patience and Calm after losses.',
     'Report card after every tournament: a grade with clean decisions, patience, tilt moments, what you did well and one thing to work on next time. Find it under the final results.',
