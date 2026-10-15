@@ -78,6 +78,15 @@ const api = {
     if(!u || u.removed || hashPin(pin, u.salt) !== u.pin) throw new Error('Name or PIN is not right.');
     return { token: newSession(u.id) };
   },
+  // the owner forgot their PIN: the setup code from the server settings proves it's them
+  resetOwner({ code, pin }){
+    const id = owner(), u = id && store.get('user:' + id);
+    if(!u || !process.env.OWNER_CODE || code !== process.env.OWNER_CODE) throw new Error('That setup code is not right.');
+    if(!validPin(pin)) throw new Error('Pick a PIN of 4 to 8 digits.');
+    const salt = crypto.randomBytes(12).toString('hex');
+    store.set('user:' + id, { ...u, salt, pin: hashPin(pin, salt) });
+    return { token: newSession(id), name: u.name };
+  },
   invite(_, u){ return { code: inviteCode(u) }; },
   status(){ return { hasOwner: !!owner() }; },
   pushKey(){ return { key: push.publicKey() }; },
@@ -141,7 +150,7 @@ const server = http.createServer((req, res) => {
         const data = body ? JSON.parse(body) : {};
         const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
         send(res, 200, fn(data, u));
-      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login'].includes(url.pathname)) recordFailure(ip); send(res, 400, { error: e.message || 'Something went wrong.' }); }
+      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)) recordFailure(ip); send(res, 400, { error: e.message || 'Something went wrong.' }); }
     });
     return;
   }

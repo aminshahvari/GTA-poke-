@@ -46,22 +46,29 @@ function authScreen(mode){
   const f = $('authForm');
   const invite = location.pathname.startsWith('/join/') ? location.pathname.slice(6) : null;
   if(invite && mode !== 'login') mode = 'join';
-  const titles = { join: "You're invited to the club", login: 'Welcome back', setup: 'Set up your club' };
-  const blurbs = { join: 'Pick the name your friends will see at the table, and a PIN to sign in with.', login: 'Sign in with your table name and PIN.', setup: 'Enter the setup code, then pick your name and PIN. You become the club owner.' };
+  const titles = { join: "You're invited to the club", login: 'Welcome back', setup: 'Set up your club', reset: 'Reset the owner PIN' };
+  const blurbs = { join: 'Pick the name your friends will see at the table, and a PIN to sign in with.', login: 'Sign in with your table name and PIN.', setup: 'Enter the setup code, then pick your name and PIN. You become the club owner.', reset: 'For the club owner: enter the setup code from when you created the club, then pick a new PIN. Members who forgot their PIN can ask the owner.' };
   f.innerHTML = `<h2>${titles[mode]}</h2><p>${blurbs[mode]}</p>
-    ${mode === 'setup' ? '<div class="field"><label for="aCode">Setup code</label><input id="aCode" autocomplete="off"></div>' : ''}
-    <div class="field"><label for="aName">Table name</label><input id="aName" maxlength="16" autocomplete="username" placeholder="e.g. Sean"></div>
-    <div class="field"><label for="aPin">PIN (4 to 8 digits)</label><input id="aPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></div>
-    ${mode !== 'login' ? '<label class="agree"><input type="checkbox" id="aAgree"> <span>I\'m 19 or older and agree to the <button type="button" class="linkbtn" id="termsLink">club rules and prize terms</button>. Free to play; chips and points have no cash value.</span></label>' : ''}
+    ${mode === 'setup' || mode === 'reset' ? '<div class="field"><label for="aCode">Setup code</label><input id="aCode" autocomplete="off"></div>' : ''}
+    ${mode === 'reset' ? '' : '<div class="field"><label for="aName">Table name</label><input id="aName" maxlength="16" autocomplete="username" placeholder="e.g. Sean"></div>'}
+    <div class="field"><label for="aPin">${mode === 'reset' ? 'New PIN' : 'PIN'} (4 to 8 digits)</label><input id="aPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></div>
+    ${mode === 'join' || mode === 'setup' ? '<label class="agree"><input type="checkbox" id="aAgree"> <span>I\'m 19 or older and agree to the <button type="button" class="linkbtn" id="termsLink">club rules and prize terms</button>. Free to play; chips and points have no cash value.</span></label>' : ''}
     <div class="err" id="aErr"></div>
-    <button class="btn-red" type="submit">${mode === 'join' ? 'Join the club' : mode === 'setup' ? 'Create my club' : 'Sign in'}</button>
-    ${mode === 'login' ? '<span class="fine">New here? Ask the club owner for an invite link.</span>' : '<button type="button" class="linkbtn" id="toLogin">I already have an account</button>'}`;
+    <button class="btn-red" type="submit">${mode === 'join' ? 'Join the club' : mode === 'setup' ? 'Create my club' : mode === 'reset' ? 'Save new PIN' : 'Sign in'}</button>
+    ${mode === 'login' ? '<button type="button" class="linkbtn" id="toReset">Forgot your PIN?</button><span class="fine">New here? Ask the club owner for an invite link.</span>' : '<button type="button" class="linkbtn" id="toLogin">I already have an account</button>'}`;
   const tl = $('toLogin'); if(tl) tl.onclick = () => authScreen('login');
+  const tr = $('toReset'); if(tr) tr.onclick = () => authScreen('reset');
   const tm = $('termsLink'); if(tm) tm.onclick = () => modal(`<h2>Club rules and prize terms</h2><div class="terms-modal">${window.LEARN.terms}</div>`, [{ label: 'Close', value: 1, primary: true }]);
   f.onsubmit = async e => {
     e.preventDefault();
     $('aErr').textContent = '';
     try{
+      if(mode === 'reset'){
+        const r = await post('/api/resetOwner', { code: $('aCode').value.trim(), pin: $('aPin').value });
+        local.set('token', r.token);
+        await modal(`<h2>New PIN saved</h2><p>Your table name is <b>${esc(r.name)}</b>. Sign in with it and your new PIN next time.</p>`, [{ label: 'OK', value: 1, primary: true }]);
+        connect(); return;
+      }
       const body = { name: $('aName').value, pin: $('aPin').value, agree: !!($('aAgree') && $('aAgree').checked) };
       if(mode === 'join') local.set('askRemind', 1);
       const r = mode === 'join' ? await post('/api/redeem', { ...body, code: invite }) : mode === 'setup' ? await post('/api/setup', { ...body, code: $('aCode').value.trim() }) : await post('/api/login', body);
