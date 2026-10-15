@@ -196,7 +196,7 @@ function eventMainHTML(){
     const mine = T.regs.includes(club.me.id);
     return `<div class="card-box"><span class="status-pill">Registration open</span><h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Starts</small><b>${T.startAt ? esc(when(T.startAt)) : 'When the owner starts it'}</b></div><div><small>Stack</small><b>${fmt(T.stack)}</b></div><div><small>Levels</small><b>${T.levelMin} min</b></div></div>
-      <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act, plus a 30-second time bank for the whole tournament.</p>
+      <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act. Every player has 3 extra-time cards (+30 seconds each) for the tournament, and a fresh 5 at the final table.</p>
       ${T.repeat !== 'none' ? `<p class="note">Repeats ${T.repeat === 'daily' ? 'every day' : 'every week'} at this time.</p>` : ''}
       <p>${T.regs.length} joined</p>
       <div class="plist">${T.regs.map(u => pchip(u, false)).join('') || '<span class="note">Nobody has joined yet.</span>'}</div>
@@ -790,13 +790,21 @@ function sendAction(d, a){
   if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){}
   send({ t: 'act', tid: d.tid, hand: d.handNo, seq: d.seq, a });
 }
+// the action clock, plus the extra-time button: 3 cards a tournament (5 more at the final table), +30 seconds each
+function turnBarHTML(d){
+  const x = d.extras || 0;
+  return `${demo ? '' : `<div class="xtime-row"><button type="button" class="xtime" data-xtime ${x ? '' : 'disabled'}>⏱ +30s<small>${x} left</small></button></div>`}<div class="turnbar"><i id="turnBar"></i><span id="turnSecs" class="num"></span></div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-xtime]'); if(!b || b.disabled) return;
+  send({ t: 'extend' }); b.disabled = true;
+});
 function drawActions(d, meSeat){
   const L = d.legal, c = $('controls');
   const allInOnly = L.canRaise && L.minTo >= L.maxTo;
   const word = L.isBet ? 'Bet' : 'Raise';
   const callAll = !L.canCheck && L.toCall >= meSeat.stack;
-  const bar = '<div class="turnbar"><i id="turnBar"></i><span id="turnSecs" class="num"></span></div>';
-  c.innerHTML = `${bar}<div class="act-main" style="--n:${(L.canCheck ? 1 : 2) + (L.canRaise ? 1 : 0)}">
+  c.innerHTML = `${turnBarHTML(d)}<div class="act-main" style="--n:${(L.canCheck ? 1 : 2) + (L.canRaise ? 1 : 0)}">
     ${L.canCheck ? '' : '<button class="act-btn fold" id="aFold"><b>Fold</b></button>'}
     <button class="act-btn call" id="aCall"><b>${L.canCheck ? 'Check' : callAll ? 'All-in' : 'Call'}</b>${L.canCheck ? '' : `<span class="num">${fmt(L.toCall)}</span>`}</button>
     ${L.canRaise ? `<button class="act-btn raise" id="aRaise"><b>${allInOnly ? 'All-in' : word}</b>${allInOnly ? `<span class="num">${fmt(L.maxTo)}</span>` : '<span>Choose amount</span>'}</button>` : ''}
@@ -820,7 +828,7 @@ function drawSizing(d, meSeat){
   const seen = new Set(), presets = [];
   for(const [l, v] of raw){ const x = Math.max(L.minTo, Math.min(L.maxTo, v)); if(x < L.maxTo && !seen.has(x)){ seen.add(x); presets.push([l, x]); } }
   presets.push(['All-in', L.maxTo]);
-  c.innerHTML = `<div class="turnbar"><i id="turnBar"></i><span id="turnSecs" class="num"></span></div>
+  c.innerHTML = `${turnBarHTML(d)}
     <div class="sizing">
       <div class="amt"><small>${word === 'Bet' ? 'Bet' : 'Raise to'}</small><b id="szAmt" class="num"></b><span id="szBB" class="num"></span></div>
       <div class="sz-presets">${presets.map(([l, v]) => `<button data-to="${v}">${l}</button>`).join('')}</div>
@@ -867,7 +875,7 @@ function tickClock(){
   const bar = document.querySelector('.shotBar');
   if(bar && d && d.deadline){ const left = Math.max(0, d.deadline - now); bar.style.transform = `scaleX(${Math.min(1, left / d.bank)})`; }
   const tbar = $('turnBar');
-  if(tbar && d && d.deadline){ const left = Math.max(0, d.deadline - now), f = Math.min(1, left / d.bank); tbar.style.transform = `scaleX(${f})`; tbar.classList.toggle('low', !d.usingBank && left < 5000); tbar.classList.toggle('bank', !!d.usingBank); const ts = $('turnSecs'); if(ts) ts.textContent = (d.usingBank ? 'Time bank · ' : '') + Math.ceil(left / 1000) + 's'; }
+  if(tbar && d && d.deadline){ const left = Math.max(0, d.deadline - now), f = Math.min(1, left / d.bank); tbar.style.transform = `scaleX(${f})`; tbar.classList.toggle('low', !d.usingBank && left < 5000); tbar.classList.toggle('bank', !!d.usingBank); const ts = $('turnSecs'); if(ts) ts.textContent = (d.usingBank ? 'Extra time · ' : '') + Math.ceil(left / 1000) + 's'; }
 }
 setInterval(tickClock, 200);
 window.addEventListener('resize', () => { if(view === 'table') renderTable(); });

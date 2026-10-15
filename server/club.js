@@ -14,7 +14,11 @@ const SPEED = FAST ? 0.02 : 1;
 const TIME_BANK = +(process.env.TIME_BANK_MS || (FAST ? 3000 : 30000));
 const ACT_SECS = [10, 15, 20, 30];
 const actMs = () => process.env.TIME_BANK_MS || FAST ? TIME_BANK : (ACT_SECS.includes((T() || {}).actSec) ? T().actSec : 20) * 1000;
-const EXTRA_BANK = FAST ? 0 : 30000; // each player's one-off time bank for the whole tournament, like the online rooms
+// extra-time cards (+30s each, used by tapping): 3 for the tournament, then a fresh 5 once play is down to the final table
+const EXTRAS = 3, FINAL_EXTRAS = 5, EXTRA_MS = 30000;
+const atFinal = () => [...tables.values()].filter(tb => !tb.broken).length === 1;
+const extrasKey = () => atFinal() ? 'extrasFinal' : 'extras';
+const extrasLeft = uid => { const t = T(), n = t && t[extrasKey()] && t[extrasKey()][uid]; return n == null ? (atFinal() ? FINAL_EXTRAS : EXTRAS) : n; };
 const AWAY_BANK = FAST ? 300 : 2500;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -217,22 +221,16 @@ async function ask(tb, p, L){
   tb.seq++;
   const h = tb.g.hand;
   const ms = p.away ? AWAY_BANK : actMs();
-  if(p.bankLeft == null) p.bankLeft = EXTRA_BANK;
-  tb.acting = { seat: p.seat, uid: p.uid, seq: tb.seq, deadline: Date.now() + ms, ms, usingBank: false, bankLeft: p.bankLeft,
+  tb.acting = { seat: p.seat, uid: p.uid, seq: tb.seq, deadline: Date.now() + ms, ms, usingBank: false,
     legal: { ...L, pot: E.potTotal(h), cur: h.currentBet, bb: h.bbAmt } };
   publish(tb);
   const a = await new Promise(resolve => {
     const w = { tid: tb.tid, hand: h.no, seq: tb.seq, resolve: null };
     const timer = setInterval(() => {
       if(T() && T().paused){ tb.acting.deadline += 250; return; }
-      if(Date.now() > tb.acting.deadline){
-        // the action clock ran out: dip into the player's time bank before folding them
-        if(!tb.acting.usingBank && p.bankLeft >= 1000){ tb.acting.usingBank = true; tb.acting.bankStart = Date.now(); tb.acting.deadline = Date.now() + p.bankLeft; tb.acting.ms = p.bankLeft; publish(tb); return; }
-        if(tb.acting.usingBank) p.bankLeft = 0;
-        done(null, true);
-      }
+      if(Date.now() > tb.acting.deadline) done(null, true);
     }, 250);
-    const done = (v, timedOut) => { if(tb.acting && tb.acting.usingBank && !timedOut) p.bankLeft = Math.max(0, p.bankLeft - (Date.now() - tb.acting.bankStart)); clearInterval(timer); if(waiters.get(p.uid) === w) waiters.delete(p.uid); if(timedOut){ p.away = true; } resolve(v); };
+    const done = (v, timedOut) => { clearInterval(timer); if(waiters.get(p.uid) === w) waiters.delete(p.uid); if(timedOut){ p.away = true; } resolve(v); };
     w.resolve = v => done(v, false);
     waiters.set(p.uid, w);
   });
@@ -247,6 +245,16 @@ function act(uid, msg){
   const a = msg.a || {};
   if(!['fold', 'check', 'call', 'raise'].includes(a.t)) return false;
   w.resolve({ t: a.t, to: Number(a.to) || 0 });
+  return true;
+}
+// the acting player spends one of their extra-time cards: 30 more seconds on this decision
+function extend(uid){
+  const w = waiters.get(uid), tb = w && tables.get(w.tid);
+  if(!tb || !tb.acting || tb.acting.uid !== uid) return false;
+  const left = extrasLeft(uid); if(left < 1) return false;
+  const k = extrasKey(); saveT({ [k]: { ...(T()[k] || {}), [uid]: left - 1 } });
+  const a = tb.acting; a.deadline = Math.max(a.deadline, Date.now()) + EXTRA_MS; a.ms = a.deadline - Date.now(); a.usingBank = true;
+  publish(tb);
   return true;
 }
 function back(uid){
@@ -458,7 +466,7 @@ function snapshot(tb){
     size: size(), allowed: allowedSeats(), cur: live ? h.currentBet : 0, board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((s, p) => s + p.bet, 0) : 0,
     btn: g.btn, blinds: E.levelFor(t.level || 0, t.anteMode),
     acting: live && tb.acting ? tb.acting.seat : -1, actUid: live && tb.acting ? tb.acting.uid : null, seq: tb.acting ? tb.acting.seq : tb.seq,
-    deadline: tb.acting ? tb.acting.deadline : 0, bank: tb.acting ? tb.acting.ms : actMs(), usingBank: !!(tb.acting && tb.acting.usingBank), bankLeft: tb.acting ? tb.acting.bankLeft : 0, legal: tb.acting ? tb.acting.legal : null,
+    deadline: tb.acting ? tb.acting.deadline : 0, bank: tb.acting ? tb.acting.ms : actMs(), usingBank: !!(tb.acting && tb.acting.usingBank), extras: tb.acting ? extrasLeft(tb.acting.uid) : 0, legal: tb.acting ? tb.acting.legal : null,
     result: res ? { lines: resultLines(g, h), winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null,
     note: tb.note || ''
   };
@@ -498,5 +506,5 @@ function totalChips(){
   return sum;
 }
 
-module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, join, leave, cancel, start, resume, pause, unpause, act, back,
+module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, join, leave, cancel, start, resume, pause, unpause, act, extend, back,
   snapshot, cardsFor, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, TIME_BANK };

@@ -95,7 +95,7 @@ lessons: [
 <li><b>Don't chase.</b> Calling bets with a weak draw "because it might hit" is how stacks disappear. Check the price first (see Pot odds).</li>
 <li><b>Survive the bad beat.</b> When you get it in as a favorite and lose, you did the right thing. The hand review tells you your equity when the money went in. Don't play the next hands angry ("tilt").</li>
 <li><b>Big pot, big hand.</b> One pair is rarely good enough to put your whole stack in after the flop.</li>
-<li><b>Take a breath.</b> You have a time bank. Use it on big decisions. Ask: what could they have? What do I beat?</li>
+<li><b>Take a breath.</b> You have extra-time cards (⏱ +30s). Save them for big decisions. Ask: what could they have? What do I beat?</li>
 <li><b>Stay at the table.</b> If you time out, you're marked away and every hand you're dealt is folded while you're gone, even in the big blind. Tap "I'm back" right away.</li></ul>` },
 
 { id: 'odds', title: 'Pot odds and outs', mins: 4, body: `
@@ -147,9 +147,9 @@ rules: `
 <li>We use the WSOP Main Event blind structure: 100/200, then 200/300, 200/400 and so on, with an ante from level 1.</li>
 <li><b>Ante, online style</b> (the default): every player posts an ante of about one eighth of the big blind before the cards are dealt (25 at 100/200). Antes go into the pot but don't count toward the bet you have to call. A player who can't cover the ante is all-in for what they have.</li>
 <li><b>Ante, WSOP/WPT live style</b> (if the organizer picks it): the big blind posts one ante for the whole table, equal to the big blind. If the big blind can't cover both, the blind is posted first and the rest goes to the ante.</li>
-<li><b>Tables:</b> the organizer picks 9-handed (WSOP/WPT), 8-handed or 6-max. A new table opens for every full table's worth of players. As players bust, tables are balanced and broken until everyone left plays at one final table.</li>
+<li><b>Tables:</b> tables are 9-handed, like WSOP and WPT. A new table opens for every full table's worth of players. As players bust, tables are balanced and broken until everyone left plays at one final table.</li>
 <li><b>Late registration:</b> if the organizer turns it on, new players can join after the start (until the end of level 2, 4 or 6) with a full starting stack. They're seated at the table with the fewest players, or at a new table when all are full. Once you're knocked out you can't join the same tournament again.</li>
-<li><b>Time to act:</b> the organizer sets 10, 15, 20 or 30 seconds per decision. When it runs out you get your time bank (30 seconds for the whole tournament). When that's gone too, your hand is checked or folded.</li>
+<li><b>Time to act:</b> the organizer sets 10, 15, 20 or 30 seconds per decision. Each player also has 3 extra-time cards for the tournament, and a fresh 5 once play reaches the final table: tap ⏱ +30s to add 30 seconds to a decision. If the clock runs out, your hand is checked or folded.</li>
 <li>The button moves by the "dead button" rule, so nobody skips or pays the big blind twice when players bust.</li>
 <li>Heads-up, the button posts the small blind and acts first before the flop, last after it.</li></ul>
 <h4>Betting (no-limit)</h4>
@@ -165,7 +165,7 @@ rules: `
 <h4>Tables</h4>
 <ul><li>Tables are kept balanced. When a table is 2 or more players short, the player who is next to be big blind at the bigger table moves, and takes the seat that will post the big blind soonest.</li><li>As players bust, tables break and players move to random seats. Nobody is seated between the small blind and the button, so nobody skips the blinds.</li></ul>
 <h4>Time and absence</h4>
-<ul><li>You have a time bank for each decision. If it runs out, you check if you can, otherwise fold, and you're marked away.</li>
+<ul><li>You have a clock for each decision, plus your extra-time cards. If the clock runs out, you check if you can, otherwise fold, and you're marked away.</li>
 <li>While away you're still dealt in and post blinds and antes, but your hand is dead (folded) every time, as at the WSOP. Tap "I'm back" to play again.</li>
 <li>The director can pause the clock for breaks.</li></ul>
 <h4>Etiquette</h4>
@@ -196,7 +196,7 @@ window.LEARN.news = [
     'Fixed: when two tables were breaking at the same time a moved player could lose their seat. Players are never dropped now.',
     'New action buttons like the big apps: Fold / Check-Call / Raise, a sizing panel (2.5-4 BB before the flop, ⅓-pot to all-in after), and pre-actions (Check/Fold, Check, Call any) while you wait.',
     'Every player posts an ante (online style). The WSOP big blind ante is still available in settings.',
-    'Time to act: 10, 15, 20 or 30 seconds, plus a 30-second time bank per player for the whole tournament.',
+    'Time to act: 10, 15, 20 or 30 seconds, plus 3 extra-time cards (+30 seconds each) per player, and 5 more at the final table.',
     'Play again: one tap on the Tournament tab opens the next tournament with the same settings. Invite and Start now are there too.',
     'Group invite links: one link for a WhatsApp or Telegram group, up to 20 people, 7 days. Personal one-time links still work.',
     'Table chat with quick phrases and bubbles. Tap a player to throw a tomato, rose, beer and more. You can turn chat off or mute someone in Director.',

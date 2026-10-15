@@ -600,3 +600,8 @@ body{font-size:15px;letter-spacing:0}
 .mini-logo{font-size:21px;letter-spacing:-.01em}
 .chip span{font-size:calc(var(--s)*.12);line-height:1}
 .mini-logo{gap:0}
+
+.xtime-row{display:flex;justify-content:flex-start;margin:0 0 6px}
+.xtime{background:rgba(240,195,90,.12);color:#f0c35a;border:1px solid rgba(240,195,90,.4);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:600;display:inline-flex;gap:6px;align-items:baseline}
+.xtime small{color:var(--muted);font-weight:500}
+.xtime:disabled{opacity:.45}

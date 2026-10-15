@@ -332,6 +332,7 @@ wss.on('connection', (ws, req) => {
       switch(m.t){
         case 'watch': ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(ws.watch); chatLogFor(ws, ws.watch); } break;
         case 'act': club.act(u.id, m); break;
+        case 'extend': club.extend(u.id); break;
         case 'chat': case 'throw': chat(ws, u, m); break;
         case 'fair': { const id = String(m.id || ''), cur = club.T(), h = store.get('history:' + id);
           const t = cur && cur.id === id ? cur : h ? { ...h, status: 'finished' } : null;
