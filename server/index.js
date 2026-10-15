@@ -372,7 +372,7 @@ setInterval(() => { for(const ws of sockets){ if(!ws.isAlive){ ws.terminate(); c
 (async () => {
   await store.init();
   if(club.resume()) console.log('resumed running tournament');
-  server.listen(PORT, () => console.log(`Stacked poker club on :${PORT}`));
+  server.listen(PORT, () => console.log(`Blindrise poker club on :${PORT}`));
   if(!process.env.NO_BEACON) fair.probe();
 })();
 module.exports = { server };

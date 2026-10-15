@@ -176,6 +176,7 @@ window.LEARN.rules = window.LEARN.rules.replace('%%TERMS%%', window.LEARN.terms)
 // Change log shown to the organizer in the Director tab, newest first.
 window.LEARN.news = [
   { date: 'Oct 15, 2026', items: [
+    'New name: the club is now Blindrise. New logo and app icon. If you added the app to your Home Screen, remove it and add it again to get the new icon.',
     'Schedule tonight\'s game in the morning: Play again now has a start time (Today 6 PM to 11 PM). The tournament opens for registration right away and starts by itself on time.',
     'The organizer\'s group link now lasts 30 days for up to 100 people and stays the same link. Anyone who joins with it is signed up for the open tournament automatically.',
     'Phone notifications: players can tap Notify me to get a notification when a tournament opens, 15 minutes before it starts, and when the cards are dealt. On iPhone, add the app to the Home Screen first. Add to calendar works as a backup reminder.',

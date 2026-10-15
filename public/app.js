@@ -460,14 +460,14 @@ function showInvite(code, group, max){
   const url = location.origin + '/join/' + code;
   const T = club.tourney, open = T && ['registering', 'running'].includes(T.status);
   const what = open ? ` for ${T.name}${T.status === 'registering' && T.startAt ? ', ' + new Date(T.startAt).toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : ''}` : '';
-  const text = `${club.me.name} invited you to the Stacked Live poker club${what}. Free to play. Tap to join${group ? ' (pick your own name and PIN)' : ''}:`;
+  const text = `${club.me.name} invited you to the Blindrise poker club${what}. Free to play. Tap to join${group ? ' (pick your own name and PIN)' : ''}:`;
   const enc = encodeURIComponent;
   modal(`<h2>${!club.me.owner ? 'Your invite link' : group ? 'Group invite link' : 'Invite link'}</h2><p>${!club.me.owner ? `Send it to friends who play poker, or post it in a group. Up to ${max || 10} people can join with your link for 7 days. It's free, and they pick their own name and PIN.` : group ? 'Post it in your group. Up to 100 people can join with it for 30 days, and anyone who joins is signed up for the open tournament. It stays the same link until you cancel it in Director.' : 'Send this to one friend. It works once.'}</p>
     ${navigator.share ? '<button class="btn-red" id="shareBtn" style="width:100%;margin-bottom:10px">Share invite</button>' : ''}
     <div class="share-row"><a class="btn-ghost" target="_blank" rel="noopener" href="https://wa.me/?text=${enc(text + ' ' + url)}">WhatsApp</a><a class="btn-ghost" target="_blank" rel="noopener" href="https://t.me/share/url?url=${enc(url)}&text=${enc(text)}">Telegram</a><a class="btn-ghost" href="sms:?&body=${enc(text + ' ' + url)}">Text</a></div>
     <div class="copy-row"><input id="invUrl" readonly value="${esc(url)}"><button class="btn-ghost" id="copyBtn" style="width:auto;padding:9px 12px">Copy</button></div>`, [{ label: 'Done', value: 1 }]);
   $('copyBtn').onclick = () => { const i = $('invUrl'); i.select(); (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => $('copyBtn').textContent = 'Copied').catch(() => { try{ document.execCommand('copy'); $('copyBtn').textContent = 'Copied'; }catch(e){} }); };
-  const sb = $('shareBtn'); if(sb) sb.onclick = () => navigator.share({ title: 'Stacked Live invite', text, url }).catch(() => {});
+  const sb = $('shareBtn'); if(sb) sb.onclick = () => navigator.share({ title: 'Blindrise invite', text, url }).catch(() => {});
 }
 function openTable(tid){ if(tid !== watchTid){ chatUnread = 0; $('chatDot').hidden = true; } watchTid = tid; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid }); renderTable(); }
 $('lobbyBtn').onclick = () => { openChat(false); stopDemo(); view = 'lobby'; send({ t: 'watch', tid: null }); showScreen('lobby'); renderLobby(); };
@@ -531,13 +531,13 @@ async function offerReminder(){
   } else if(pushSupported() && Notification.permission === 'granted') enablePush();
 }
 function iosNote(){
-  modal(`<h2>Notifications on iPhone</h2><ol class="terms"><li>Open this site in <b>Safari</b>.</li><li>Tap the <b>Share</b> button, then <b>Add to Home Screen</b>.</li><li>Open Stacked from your Home Screen, sign in, and tap <b>Notify me</b> again.</li></ol><p>Until then, use <b>Add to calendar</b> for a reminder.</p>`, [{ label: 'OK', value: 1, primary: true }]);
+  modal(`<h2>Notifications on iPhone</h2><ol class="terms"><li>Open this site in <b>Safari</b>.</li><li>Tap the <b>Share</b> button, then <b>Add to Home Screen</b>.</li><li>Open Blindrise from your Home Screen, sign in, and tap <b>Notify me</b> again.</li></ol><p>Until then, use <b>Add to calendar</b> for a reminder.</p>`, [{ label: 'OK', value: 1, primary: true }]);
 }
 // A calendar event with an alarm 15 minutes before; phones open .ics files in their calendar app.
 function addToCalendar(){
   const T = club.tourney; if(!T || !T.startAt) return;
   const z = ms => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
-  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Stacked Live//Club//EN', 'BEGIN:VEVENT', `UID:${T.id}@stacked`, `DTSTAMP:${z(Date.now())}`, `DTSTART:${z(T.startAt)}`, `DTEND:${z(T.startAt + 3 * 3600000)}`,
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Blindrise//Club//EN', 'BEGIN:VEVENT', `UID:${T.id}@blindrise`, `DTSTAMP:${z(Date.now())}`, `DTSTART:${z(T.startAt)}`, `DTEND:${z(T.startAt + 3 * 3600000)}`,
     `SUMMARY:${T.name.replace(/[,;\\]/g, ' ')} (poker)`, `DESCRIPTION:Open ${location.origin} a few minutes early to take your seat.`, `URL:${location.origin}`,
     'BEGIN:VALARM', 'TRIGGER:-PT15M', 'ACTION:DISPLAY', 'DESCRIPTION:Poker starts in 15 minutes', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' })); a.download = 'tournament.ics';

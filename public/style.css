@@ -71,7 +71,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .itm-tag{background:#1f6b4f}
 .table-area{position:relative;flex:1;min-height:0;margin:2px 4px}
 .felt{position:absolute;inset:11% 9% 15%;border-radius:999px;background:radial-gradient(ellipse at 50% 40%,var(--felt-hi),var(--felt) 68%);box-shadow:0 0 0 9px var(--rail),0 0 0 11px var(--trim),0 22px 50px rgba(0,0,0,.65),inset 0 0 50px rgba(0,0,0,.5)}
-.felt::after{content:"STACKED LIVE";position:absolute;left:50%;top:73%;transform:translate(-50%,-50%);font-family:var(--display);font-size:clamp(16px,5vw,30px);color:rgba(255,255,255,.07);letter-spacing:.08em;white-space:nowrap}
+.felt::after{content:"BLINDRISE";position:absolute;left:50%;top:73%;transform:translate(-50%,-50%);font-family:var(--display);font-size:clamp(16px,5vw,30px);color:rgba(255,255,255,.07);letter-spacing:.08em;white-space:nowrap}
 .center{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:6px;width:70%;z-index:4}
 .pot{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.45);padding:3px 12px 3px 5px;border-radius:99px;font-weight:700;font-size:14px;color:var(--gold);min-height:24px}
 .board{display:flex;gap:3px}
@@ -591,3 +591,12 @@ body{font-size:15px;letter-spacing:0}
 .start-pick{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)}
 .start-pick select{flex:1;font:inherit;font-size:16px;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:#151922;color:var(--text)}
 .btn-row .status-pill{display:flex;align-items:center;justify-content:center;flex:1;min-width:120px;font-size:13px;padding:10px}
+
+/* Blindrise brand */
+.logo b span,.mini-logo span{color:var(--gold)}
+.logo b{letter-spacing:-.03em;font-size:clamp(46px,14vw,80px)}
+.logo .tagline{color:#cfd5e0;font-size:15px;margin-top:6px;letter-spacing:.02em}
+.pill{font-size:clamp(13px,3.6vw,17px);letter-spacing:.24em}
+.mini-logo{font-size:21px;letter-spacing:-.01em}
+.chip span{font-size:calc(var(--s)*.12);line-height:1}
+.mini-logo{gap:0}
