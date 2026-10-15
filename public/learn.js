@@ -32,7 +32,7 @@ lessons: [
 <p class="tipbox"><b>Kickers matter.</b> With A♠ K♦ against A♣ 9♥ on a board of A♥ 7♣ 4♠ 2♦ J♠, both have a pair of aces, but your king kicker wins. Suits never break a tie; equal hands split the pot.</p>` },
 
 { id: 'flow', title: 'How a hand works', mins: 3, body: `
-<ol class="steps"><li><b>Blinds and ante.</b> The two players left of the button post the small blind and big blind. From level 3 the big blind also posts one ante for the whole table (the "big blind ante").</li>
+<ol class="steps"><li><b>Blinds and ante.</b> The two players left of the button post the small blind and big blind. From the first level the big blind also posts one ante for the whole table (the "big blind ante"), just like the WSOP.</li>
 <li><b>Preflop.</b> Everyone gets two cards. Action starts left of the big blind. You can fold, call, or raise.</li>
 <li><b>Flop, turn, river.</b> Three shared cards, then one, then one. Each street has a betting round, starting with the first player still in on the button's left.</li>
 <li><b>Showdown.</b> If two or more players are left after the river, the best hand wins. The app shows the winning hand and splits pots automatically.</li></ol>
@@ -84,7 +84,7 @@ lessons: [
 <li><b>Survive the bad beat.</b> When you get it in as a favorite and lose, you did the right thing. The hand review tells you your equity when the money went in. Don't play the next hands angry ("tilt").</li>
 <li><b>Big pot, big hand.</b> One pair is rarely good enough to put your whole stack in after the flop.</li>
 <li><b>Take a breath.</b> You have a time bank. Use it on big decisions. Ask: what could they have? What do I beat?</li>
-<li><b>Stay at the table.</b> If you time out, you're marked away and your hands fold. Tap "I'm back" right away.</li></ul>` },
+<li><b>Stay at the table.</b> If you time out, you're marked away and every hand you're dealt is folded while you're gone, even in the big blind. Tap "I'm back" right away.</li></ul>` },
 
 { id: 'odds', title: 'Pot odds and outs', mins: 4, body: `
 <p><b>Pot odds</b> tell you how often you need to win to call. Price = call ÷ (pot + call).</p>
@@ -132,7 +132,7 @@ rules: `
 <p>These are the tournament rules this club plays by. They follow the Tournament Directors Association (TDA) rules used by the WSOP and WPT, adapted for an online table where the software deals.</p>
 <h4>Blinds, antes and the button</h4>
 <ul><li>Blinds go up at the end of each level. A new level starts with the next hand.</li>
-<li>From level 3, the big blind posts one ante for the whole table ("big blind ante"). If the big blind can't cover both, the blind is posted first and the rest goes to the ante.</li>
+<li>We use the WSOP Main Event blind structure: 100/200 with a 200 big blind ante, then 200/300/300, 200/400/400 and so on. The big blind posts one ante for the whole table from level 1. If the big blind can't cover both, the blind is posted first and the rest goes to the ante.</li>
 <li>The button moves by the "dead button" rule, so nobody skips or pays the big blind twice when players bust.</li>
 <li>Heads-up, the button posts the small blind and acts first before the flop, last after it.</li></ul>
 <h4>Betting (no-limit)</h4>
@@ -140,16 +140,16 @@ rules: `
 <li>An all-in that's less than a full raise doesn't reopen the betting for players who already acted and aren't facing at least a full raise.</li>
 <li>There's no limit on the number of raises.</li></ul>
 <h4>Showdown and pots</h4>
-<ul><li>Cards speak: the best hand wins, whatever anyone says.</li><li>When a player is all-in and the betting is over, all hands are turned face up before the remaining cards are dealt.</li>
+<ul><li>Cards speak: the best hand wins.</li><li>At showdown the last player who bet or raised on the river shows first; if the river was checked, the first player left of the button shows first. Winning hands are always shown; losing hands are mucked automatically.</li><li>When a player is all-in and the betting is over, all hands are turned face up before the remaining cards are dealt.</li>
 <li>Side pots are built automatically. A player can only win the pots they put chips into.</li><li>Equal hands split the pot. An odd chip goes to the first player left of the button.</li></ul>
 <h4>Eliminations and prizes</h4>
-<ul><li>If two players bust in the same hand, the one who started the hand with more chips finishes higher.</li>
-<li>About the top 15% finish "in the money". Those places earn the most points.</li></ul>
+<ul><li>If two players bust in the same hand at the same table, the one who started the hand with more chips (after the big blind ante) finishes higher. Equal stacks tie and share the places.</li><li><b>Hand-for-hand:</b> when one more elimination reaches the money and there are 2 or more tables, every table plays one hand and waits for the others. Players who bust in the same hand-for-hand round at different tables tie and share those places.</li>
+<li>Like the WSOP, the top 15% of the field finish "in the money" (at least the winner). Those places earn the most points.</li></ul>
 <h4>Tables</h4>
-<ul><li>Tables are kept balanced. When a table is 2 or more players short, a player moves from the biggest table.</li><li>As players bust, tables break and players are moved to random empty seats.</li></ul>
+<ul><li>Tables are kept balanced. When a table is 2 or more players short, the player who is next to be big blind at the bigger table moves, and takes the seat that will post the big blind soonest.</li><li>As players bust, tables break and players move to random seats. Nobody is seated between the small blind and the button, so nobody skips the blinds.</li></ul>
 <h4>Time and absence</h4>
 <ul><li>You have a time bank for each decision. If it runs out, you check if you can, otherwise fold, and you're marked away.</li>
-<li>While away, you're still dealt in and post blinds and antes, but your hands are checked or folded. Tap "I'm back" to play again.</li>
+<li>While away you're still dealt in and post blinds and antes, but your hand is dead (folded) every time, as at the WSOP. Tap "I'm back" to play again.</li>
 <li>The director can pause the clock for breaks.</li></ul>
 <h4>Etiquette</h4>
 <ul><li>One player, one account. No sharing hands with others at the table, no outside help.</li><li>Be kind to each other. The director's decisions are final.</li></ul>`

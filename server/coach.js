@@ -75,7 +75,7 @@ function recorder(ctx){
         rp.end = p.stack; rp.won = p.won || 0; rp.folded = p.folded; rp.shown = !!(p.shown && !p.folded);
         rp.hand = rp.shown && p.val ? E.describe(p.val) : '';
       });
-      rec.pots = res.pots.map(q => ({ amt: q.amt, winners: q.winners.slice() }));
+      rec.pots = res.pots.map(q => ({ amt: q.amt, winners: q.winners.slice(), contested: (q.elig || []).length > 1 }));
       for(const rp of rec.players) if(rp.uid) ctx.save(rp.uid, personal(rec, rp.uid));
       rec = null;
     }

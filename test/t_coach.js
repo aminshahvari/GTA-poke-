@@ -38,6 +38,7 @@ eq(C.allInEquity(E.parse('Ah Kh'), E.parse('Qs Qd'), E.parse('2h 7h 9c Qc 3d')),
         if(h.cards.length !== 2) P('no hero cards');
         const seat = g.hand.players.find(q => q.uid === uid);
         if(seat && h.net !== seat.stack - seat.start) P('net mismatch');
+        if(h.showdown) for(const op of h.players) if(!op.folded && h.pots.some(q => q.contested && q.winners.includes(op.seat)) && !op.shown) P('winner not shown');
         h.notes.forEach(x => { notes++; kinds[x.title] = (kinds[x.title] || 0) + 1; if(!x.text || !x.title || x.text.includes('NaN') || x.text.includes('undefined')) P('bad note ' + JSON.stringify(x)); });
       }
     }

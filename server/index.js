@@ -91,7 +91,7 @@ function send(res, code, body, type = 'application/json'){
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if(req.method === 'GET' && url.pathname === '/healthz') return send(res, 200, { ok: true });
-  if(process.env.FAST === '1' && url.pathname === '/debug/chips'){ const t = club.T(); return send(res, 200, { chips: club.totalChips(), expected: t && t.status === 'running' ? t.stack * t.entrants : null, tables: club.tablesSummary() }); }
+  if(process.env.FAST === '1' && url.pathname === '/debug/chips'){ const t = club.T(); return send(res, 200, { chips: club.totalChips(), expected: t && t.status === 'running' ? t.stack * t.entrants : null, tables: club.tablesSummary(), hfh: club.hfhState() }); }
   if(req.method === 'POST' && url.pathname.startsWith('/api/')){
     const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
     let body = '';

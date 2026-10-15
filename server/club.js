@@ -24,14 +24,14 @@ const T = () => store.get('tourney') || null;
 function saveT(patch){ return store.set('tourney', { ...(T() || {}), ...patch }); }
 const userName = uid => (store.get('user:' + uid) || {}).name || 'Player';
 
+// WSOP pays about 15% of the field. Weights follow the 2025 Main Event final table relative to 1st.
+const PAY_W = [1, .60, .40, .30, .24, .19, .15, .125, .10];
 function payoutPcts(n){
-  if(n <= 3) return [100];
-  if(n <= 6) return [65, 35];
-  if(n <= 10) return [50, 30, 20];
-  if(n <= 20) return [40, 25, 15, 12, 8];
-  if(n <= 40) return [30, 20, 14, 10, 8, 6, 5, 4, 3];
-  const paid = Math.round(n * 0.15), w = Array.from({ length: paid }, (_, i) => 1 / Math.pow(i + 1, 0.9)), s = w.reduce((a, b) => a + b, 0);
-  return w.map(x => Math.round(x / s * 1000) / 10);
+  const paid = Math.max(1, Math.ceil(n * 0.15));
+  const w = Array.from({ length: paid }, (_, i) => i < PAY_W.length ? PAY_W[i] : Math.max(.035, .10 * Math.pow(.93, i - 8)));
+  const s = w.reduce((a, b) => a + b, 0), out = w.map(x => Math.round(x / s * 1000) / 10);
+  out[0] = Math.round((out[0] + 100 - out.reduce((a, b) => a + b, 0)) * 10) / 10;
+  return out;
 }
 // Points reward winning: places in the money earn payout % × players ÷ 10 (min 2); everyone else gets 1 for playing.
 function pointsFor(n, place){ const pct = payoutPcts(n)[place - 1]; return pct ? Math.max(2, Math.round(pct * n / 10)) : 1; }
@@ -40,7 +40,7 @@ function pointsFor(n, place){ const pct = payoutPcts(n)[place - 1]; return pct ?
 function create({ name, stack, levelMin, startAt, repeat }){
   const t = T();
   if(t && (t.status === 'running')) throw new Error('A tournament is already running.');
-  stack = [10000, 20000, 30000, 50000, 100000].includes(+stack) ? +stack : 30000;
+  stack = [10000, 20000, 30000, 50000, 60000, 100000].includes(+stack) ? +stack : 30000;
   levelMin = Math.max(1, Math.min(60, Math.round(+levelMin || 20)));
   store.set('tourney', { id: 't' + Date.now(), status: 'registering', name: String(name || 'Club Tournament').slice(0, 60), stack, levelMin,
     startAt: startAt ? +startAt : null, repeat: ['daily', 'weekly'].includes(repeat) ? repeat : 'none', regs: [], createdAt: Date.now() });
@@ -169,6 +169,7 @@ function tableIO(tb){
 async function ask(tb, p, L){
   await waitUnpaused();
   if(!running) return { t: 'fold' };
+  if(p.away){ await sleep(400 * SPEED); return { t: 'fold', dead: true }; } // TDA 32 / WSOP 82: an absent player's hand is dead
   tb.seq++;
   const h = tb.g.hand;
   tb.acting = { seat: p.seat, uid: p.uid, seq: tb.seq, deadline: Date.now() + (p.away ? AWAY_BANK : TIME_BANK),
@@ -201,22 +202,48 @@ function back(uid){
   for(const tb of tables.values()){ const p = tb.g.seats.find(x => x && x.uid === uid); if(p && p.away){ p.away = false; publish(tb); } }
 }
 
+// ---------- hand-for-hand (WSOP 126, TDA RP-8) ----------
+// When one elimination from the money with 2+ tables, every table plays one hand and waits for the others.
+// Players busted in the same hand-for-hand round at different tables tie and share those places.
+const hfh = { on: false, round: 0, done: new Set() };
+function hfhNeeded(){ const t = T(); return !!t && t.status === 'running' && active().length > 1 && seated().length === payoutPcts(t.entrants).length + 1; }
+function hfhCheck(){
+  if(!hfh.on) return;
+  const playing = active().filter(x => count(x) >= 2);
+  if(!playing.every(x => hfh.done.has(x.tid))) return;
+  const t = T(), places = [...(t.places || [])], mine = places.filter(r => r.hfh === hfh.round);
+  if(new Set(mine.map(r => r.tid)).size > 1) mine.forEach(r => r.tie = 'h' + t.id + '-' + hfh.round);
+  saveT({ places });
+  hfh.round++; hfh.done.clear();
+  if(!hfhNeeded()){ hfh.on = false; active().forEach(x => { x.note = ''; publish(x); }); }
+}
 async function loop(tb){
   const g = tb.g;
   while(running && !tb.broken && T() && T().status === 'running'){
     await waitUnpaused();
     if(!running || tb.broken) return;
+    if(hfhNeeded() && !hfh.on){ hfh.on = true; hfh.round = 1; hfh.done.clear(); }
+    if(hfh.on){
+      if(!hfhNeeded()){ hfh.on = false; }
+      else {
+        tb.note = 'Hand-for-hand: one elimination from the money. Each table plays one hand at a time.';
+        while(running && !tb.broken && hfh.on && hfh.done.has(tb.tid)) await sleep(150);
+        if(!running || tb.broken) return;
+      }
+    }
     const live = g.seats.filter(p => p && p.stack > 0);
-    if(live.length < 2){ publish(tb); await sleep(1000 * Math.max(SPEED, .2)); continue; }
+    if(live.length < 2){ if(hfh.on){ hfh.done.add(tb.tid); hfhCheck(); } publish(tb); await sleep(1000 * Math.max(SPEED, .2)); continue; }
     g.level = T().level; g.levelMsLeft = 1;
     tb.handStart = Object.fromEntries(live.map(p => [p.uid, p.stack]));
     tb.inHand = true;
     let out;
     try{ out = await E.playHand(g, tableIO(tb)); }
     catch(e){ console.error('hand failed', tb.tid, e); tb.inHand = false; await sleep(1000); continue; }
-    tb.inHand = false; tb.note = '';
+    tb.inHand = false; if(!hfh.on) tb.note = '';
     if(!running) return;
+    const inRound = hfh.on;
     afterHand(tb, out || []);
+    if(inRound && hfh.on){ hfh.done.add(tb.tid); hfhCheck(); }
     if(!T() || T().status !== 'running') return;
     await sleep(2300 * SPEED);
   }
@@ -230,7 +257,11 @@ function afterHand(tb, out){
   const remainingAfter = seated().length;
   const places = [...(t.places || [])];
   const base = remainingAfter + out.length;
-  out.forEach((p, k) => places.push({ uid: p.uid, place: base - k }));
+  out.forEach((p, k) => {
+    const eqPrev = k > 0 && out[k - 1].eff === p.eff, eqNext = k < out.length - 1 && out[k + 1].eff === p.eff;
+    const tie = eqPrev || eqNext ? `s${tb.tid}-${p.hand}-${p.eff}` : null;
+    places.push({ uid: p.uid, place: base - k, tie, hfh: hfh.on ? hfh.round : null, tid: tb.tid });
+  });
   saveT({ places, remaining: remainingAfter });
   if(remainingAfter <= 1){
     const w = seated()[0];
@@ -244,9 +275,13 @@ function afterHand(tb, out){
   saveLive();
   hooks.onClub();
 }
-function seatInto(dest, p){
-  const free = dest.g.seats.map((x, i) => x ? -1 : i).filter(i => i >= 0);
-  const s = free[Math.floor(Math.random() * free.length)];
+function seatInto(dest, p, mode){
+  const g = dest.g, free = g.seats.map((x, i) => x ? -1 : i).filter(i => i >= 0);
+  // TDA 9 / WSOP 14: never seat a player between the small blind and the button (they'd skip the blinds)
+  const inGap = s => { if(g.btn < 0 || g.sb < 0 || g.sb === g.btn) return false; for(let k = 1; k < 9; k++){ const j = (g.btn + k) % 9; if(j === g.sb) return false; if(j === s) return true; } return false; };
+  let cands = free.filter(s => !inGap(s)); if(!cands.length) cands = free;
+  // TDA 12-A / WSOP 67: a player moved to balance tables takes the worst position, the seat that posts the big blind soonest
+  const s = mode === 'balance' && g.bb >= 0 ? cands.slice().sort((a, b) => ((a - g.bb + 9) % 9) - ((b - g.bb + 9) % 9))[0] : cands[Math.floor(Math.random() * cands.length)];
   Object.assign(p, { seat: s, cards: [], bet: 0, total: 0, folded: false, allIn: false, act: '' });
   dest.g.seats[s] = p;
   publish(dest);
@@ -288,7 +323,7 @@ function balance(tb){
     for(let k = 0, c = s; k < 9; k++, c = E.nextLive(tb.g, c)){ const q = tb.g.seats[c]; if(q && !linkedAt(shortest, q.uid)){ s = c; break; } }
     const p = tb.g.seats[s];
     if(!p) break;
-    tb.g.seats[s] = null; seatInto(shortest, p);
+    tb.g.seats[s] = null; seatInto(shortest, p, 'balance');
   }
 }
 function finish(){
@@ -296,7 +331,14 @@ function finish(){
   const t = T();
   const places = (t.places || []).slice().sort((a, b) => a.place - b.place);
   const n = t.entrants;
-  const results = places.map(r => ({ uid: r.uid, name: userName(r.uid), place: r.place, pts: pointsFor(n, r.place) }));
+  // tied players (same-hand busts at different tables during hand-for-hand, or equal stacks) share the places they occupy
+  const groups = new Map(); places.forEach(r => { if(r.tie){ if(!groups.has(r.tie)) groups.set(r.tie, []); groups.get(r.tie).push(r); } });
+  const results = places.map(r => {
+    const grp = r.tie && groups.get(r.tie).length > 1 ? groups.get(r.tie) : null;
+    if(!grp) return { uid: r.uid, name: userName(r.uid), place: r.place, pts: pointsFor(n, r.place) };
+    const ps = grp.map(x => x.place), pts = Math.round(ps.reduce((a, pl) => a + pointsFor(n, pl), 0) / ps.length);
+    return { uid: r.uid, name: userName(r.uid), place: Math.min(...ps), pts, tie: ps.length };
+  });
   store.set('history:' + t.id, { id: t.id, name: t.name, startedAt: t.startedAt, endedAt: Date.now(), entrants: n, results, payouts: payoutPcts(n) });
   saveT({ status: 'finished', endedAt: Date.now() });
   store.del('live');
@@ -334,7 +376,7 @@ function snapshot(tb){
       const inHand = live && h.players.includes(p);
       return { uid: p.uid, name: p.name, stack: p.stack, inHand, bet: inHand ? p.bet : 0, folded: inHand && p.folded, allIn: inHand && p.allIn,
         act: inHand ? p.act : '', lastAmt: inHand ? (p.lastAmt || 0) : 0, won: inHand && res ? (p.won || 0) : 0,
-        shown: inHand && p.shown && !p.folded ? p.cards.map(E.cardStr) : null, cat: inHand && res && res.showdown && !p.folded ? E.CAT[E.category(p.val)] : '', away: !!p.away };
+        shown: inHand && p.shown && !p.folded ? p.cards.map(E.cardStr) : null, cat: inHand && res && res.showdown && !p.folded && p.shown ? E.CAT[E.category(p.val)] : '', away: !!p.away };
     }),
     board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((s, p) => s + p.bet, 0) : 0,
     btn: g.btn, blinds: E.levelAt(t.level || 0),
@@ -380,4 +422,4 @@ function totalChips(){
 }
 
 module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, create, join, leave, cancel, start, resume, pause, unpause, act, back,
-  snapshot, cardsFor, tableOf, handsFor, setLinker, tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, TIME_BANK };
+  snapshot, cardsFor, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, TIME_BANK };

@@ -115,7 +115,8 @@ function distribute(entries, dead, btn, seatsN = 9){
 }
 
 // ---------- structure ----------
-const LEVELS = [[100,200,0],[100,300,0],[200,400,400],[300,600,600],[400,800,800],[500,1000,1000],[600,1200,1200],[800,1600,1600],[1000,2000,2000],[1200,2400,2400],[1500,3000,3000],[2000,4000,4000],[2500,5000,5000],[3000,6000,6000],[4000,8000,8000],[5000,10000,10000],[6000,12000,12000],[8000,16000,16000],[10000,20000,20000],[15000,30000,30000],[20000,40000,40000],[25000,50000,50000],[30000,60000,60000],[40000,80000,80000],[50000,100000,100000],[60000,120000,120000],[80000,160000,160000],[100000,200000,200000]];
+// WSOP Main Event structure (2025): big blind ante from level 1
+const LEVELS = [[100,200,200],[200,300,300],[200,400,400],[300,500,500],[300,600,600],[400,800,800],[500,1000,1000],[600,1200,1200],[1000,1500,1500],[1000,2000,2000],[1000,2500,2500],[1500,3000,3000],[2000,4000,4000],[3000,5000,5000],[3000,6000,6000],[4000,8000,8000],[5000,10000,10000],[6000,12000,12000],[10000,15000,15000],[10000,20000,20000],[10000,25000,25000],[15000,30000,30000],[20000,40000,40000],[25000,50000,50000],[30000,60000,60000],[40000,80000,80000],[50000,100000,100000],[60000,120000,120000],[100000,150000,150000],[100000,200000,200000],[125000,250000,250000],[150000,300000,300000],[200000,400000,400000],[250000,500000,500000],[300000,600000,600000],[400000,800000,800000],[500000,1000000,1000000],[600000,1200000,1200000],[800000,1600000,1600000],[1000000,2000000,2000000],[1250000,2500000,2500000],[1500000,3000000,3000000],[2000000,4000000,4000000],[2500000,5000000,5000000],[3000000,6000000,6000000],[4000000,8000000,8000000],[5000000,10000000,10000000]];
 const levelAt = i => LEVELS[Math.min(i, LEVELS.length - 1)];
 const PAYOUT = [0.5, 0.3, 0.2];
 const STYLES = {
@@ -164,6 +165,7 @@ function legal(h, p){
   return { toCall, canCheck: owe <= 0, canRaise, minTo, maxTo, isBet: h.currentBet === 0 };
 }
 function normalize(a, L, h){
+  if(a && a.t === 'fold' && a.dead) return { t:'fold' }; // dead hand (player away): TDA 32
   if(!a || a.t === 'fold') return L.canCheck ? { t:'check' } : { t:'fold' };
   if(a.t === 'check') return L.canCheck ? a : { t:'fold' };
   if(a.t === 'call') return L.canCheck ? { t:'check' } : a;
@@ -181,6 +183,7 @@ function applyAction(h, p, a){
     if(a.to - prev >= h.minRaise) h.minRaise = a.to - prev; // full raise sets the new minimum; a short all-in does not
     h.currentBet = a.to; h.raiseCount++;
     p.act = p.allIn ? 'All-in' : prev === 0 ? 'Bet' : 'Raise';
+    h.lastAggr = p.seat;
   }
   p.acted = true; p.facedBet = h.currentBet; p.lastAmt = p.bet;
 }
@@ -234,11 +237,11 @@ async function playHand(g, io){
     if(live(h).length <= 1) break;
     await io.event('collect', {});
     players.forEach(p => { p.bet = 0; p.acted = false; p.facedBet = 0; if(!p.folded && !p.allIn) p.act = ''; });
-    h.currentBet = 0; h.minRaise = BB; h.raiseCount = 0;
+    h.currentBet = 0; h.minRaise = BB; h.raiseCount = 0; h.lastAggr = -1;
     h.deck.pop(); // burn
     const n = st === 1 ? 3 : 1; for(let i = 0; i < n; i++) h.board.push(h.deck.pop());
     h.street = st;
-    if(live(h).filter(canAct).length <= 1) live(h).forEach(p => p.shown = true); // all-in: hands are tabled
+    if(live(h).filter(canAct).length <= 1){ live(h).forEach(p => p.shown = true); h.tabled = true; } // all-in: hands are tabled
     await io.event('board', {});
     if(live(h).filter(canAct).length >= 2) await bettingRound(g, h, io, nextIn(h, g.btn));
   }
@@ -246,8 +249,18 @@ async function playHand(g, io){
   await io.event('collect', {});
   players.forEach(p => p.bet = 0);
   const cont = live(h);
-  if(cont.length > 1) cont.forEach(p => { const b = bestFive(p.cards.concat(h.board)); p.val = b.val; p.best = b.cards; p.shown = true; });
+  if(cont.length > 1){
+    cont.forEach(p => { const b = bestFive(p.cards.concat(h.board)); p.val = b.val; p.best = b.cards; });
+    if(h.tabled) cont.forEach(p => p.shown = true);
+  }
   const { awards, pots } = distribute(players.map(p => ({ seat: p.seat, total: p.total, folded: p.folded, val: p.val })), h.dead, g.btn);
+  if(cont.length > 1 && !h.tabled){
+    // TDA 18 / WSOP 70: the last river aggressor shows first (else the first live seat left of the button).
+    // Winners of a contested pot always show; other losing hands are mucked automatically.
+    const first = h.lastAggr >= 0 && cont.some(p => p.seat === h.lastAggr) ? h.lastAggr : (nextIn(h, g.btn) || cont[0]).seat;
+    const winners = new Set(pots.filter(q => q.elig.length > 1).flatMap(q => q.winners));
+    cont.forEach(p => p.shown = p.seat === first || winners.has(p.seat));
+  }
   awards.forEach((amt, seat) => { const p = g.seats[seat]; p.stack += amt; p.won = amt; });
   h.result = { pots, awards, showdown: cont.length > 1 };
   await io.event('showdown', {});
@@ -256,8 +269,9 @@ async function playHand(g, io){
 
 function afterHand(g){
   const h = g.hand, rem = remaining(g);
-  const busted = g.seats.filter(p => p && p.stack <= 0).sort((a, b) => a.start - b.start || a.seat - b.seat);
-  const out = busted.map((p, k) => { const place = rem - k; const b = { name: p.name, uid: p.uid, start: p.start, isHero: p.isHero, place, hand: h.no, style: p.style }; g.busts.push(b); g.seats[p.seat] = null; return b; });
+  const eff = p => p.start - (p.ante || 0); // TDA 22: stack at the start of the hand, after the big blind ante
+  const busted = g.seats.filter(p => p && p.stack <= 0).sort((a, b) => eff(a) - eff(b) || a.seat - b.seat);
+  const out = busted.map((p, k) => { const place = rem - k; const b = { name: p.name, uid: p.uid, start: p.start, eff: eff(p), isHero: p.isHero, place, hand: h.no, style: p.style }; g.busts.push(b); g.seats[p.seat] = null; return b; });
   g.handNo++;
   if(remaining(g) === 1 && !g.multi){ const w = g.seats.find(Boolean); g.busts.push({ name: w.name, isHero: w.isHero, place: 1, hand: h.no, style: w.style }); g.over = true; }
   return out;
