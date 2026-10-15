@@ -159,7 +159,9 @@ function tableIO(tb){
       if(!running) return;
       publish(tb);
       const h = tb.g.hand;
-      const wait = { deal: 1300, action: 350, collect: 450, board: 1000, showdown: h && h.result && h.result.showdown ? 4500 : 1700 }[type] || 0;
+      // Pacing close to the big online rooms: quick between actions, a beat longer on an all-in run-out.
+      const runout = h && h.players.filter(E.canAct).length < 2;
+      const wait = { deal: 900, action: 250, collect: 300, board: runout ? 1100 : 650, showdown: h && h.result && h.result.showdown ? 3000 : 1000 }[type] || 0;
       if(wait) await sleep(wait * SPEED);
     },
     async think(){},
@@ -245,7 +247,7 @@ async function loop(tb){
     afterHand(tb, out || []);
     if(inRound && hfh.on){ hfh.done.add(tb.tid); hfhCheck(); }
     if(!T() || T().status !== 'running') return;
-    await sleep(2300 * SPEED);
+    await sleep(1200 * SPEED);
   }
 }
 const active = () => [...tables.values()].filter(x => !x.broken);
