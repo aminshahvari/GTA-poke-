@@ -43,18 +43,21 @@ function payoutPcts(n){
 function pointsFor(n, place){ const pct = payoutPcts(n)[place - 1]; return pct ? Math.max(2, Math.round(pct * n / 10)) : 1; }
 
 // ---------- registration ----------
-function create({ name, stack, levelMin, startAt, repeat, anteMode, actSec }){
+function create({ name, stack, levelMin, startAt, repeat, anteMode, actSec, tableSize, lateLevels }){
   const t = T();
   if(t && (t.status === 'running')) throw new Error('A tournament is already running.');
   stack = [10000, 20000, 30000, 50000, 60000, 100000].includes(+stack) ? +stack : 30000;
   levelMin = Math.max(1, Math.min(60, Math.round(+levelMin || 20)));
   store.set('tourney', { id: 't' + Date.now(), status: 'registering', name: String(name || 'Club Tournament').slice(0, 60), stack, levelMin,
     startAt: startAt ? +startAt : null, repeat: ['daily', 'weekly'].includes(repeat) ? repeat : 'none', regs: [], createdAt: Date.now(),
-    anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : 20 });
+    anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : 20,
+    tableSize: SIZES.includes(+tableSize) ? +tableSize : 9, lateLevels: LATE.includes(+lateLevels) ? +lateLevels : 0 });
   hooks.onClub();
 }
 function join(uid){
-  const t = T(); if(!t || t.status !== 'registering') throw new Error('Registration is closed.');
+  const t = T();
+  if(t && t.status === 'running') return lateJoin(uid);
+  if(!t || t.status !== 'registering') throw new Error('Registration is closed.');
   if(!t.regs.includes(uid)) saveT({ regs: [...t.regs, uid] });
   hooks.onClub();
 }
@@ -73,6 +76,12 @@ function cancel(){
 // ---------- start / resume ----------
 function mkPlayer(uid, stack){ return { id: uid, uid, name: userName(uid), isHero: true, style: null, stack, away: false }; }
 function spread(k){ const out = []; for(let i = 0; i < k; i++) out.push(Math.floor(i * 9 / k)); return out; }
+// Table size: 9-handed (WSOP/WPT), 8-handed or 6-max. Seats live in a 9-slot ring; a smaller table uses an evenly spaced subset.
+const SIZES = [6, 8, 9];
+const size = () => { const t = T(); return t && SIZES.includes(t.tableSize) ? t.tableSize : 9; };
+const allowedSeats = () => spread(size());
+const LATE = [0, 2, 4, 6];
+function lateOpen(){ const t = T(); return !!t && t.status === 'running' && !t.paused && (t.lateLevels || 0) > 0 && t.level < t.lateLevels && !hfh.on; }
 function newTable(tid, n){
   const g = E.newGame({ players: [] }); g.seats = Array(9).fill(null); g.multi = true;
   const t = { tid, n, g, seq: 0, broken: false, inHand: false, acting: null, handStart: {}, note: '' };
@@ -84,7 +93,7 @@ function start(){
   const regs = t.regs.filter(u => { const us = store.get('user:' + u); return us && !us.removed; });
   if(regs.length < 2) throw new Error('At least 2 players need to join.');
   for(let i = regs.length - 1; i > 0; i--){ const j = crypto.randomInt(i + 1); [regs[i], regs[j]] = [regs[j], regs[i]]; }
-  const nT = Math.ceil(regs.length / 9), groups = Array.from({ length: nT }, () => []), cap = Math.ceil(regs.length / nT);
+  const nT = Math.ceil(regs.length / size()), groups = Array.from({ length: nT }, () => []), cap = Math.ceil(regs.length / nT);
   // random seating, but players from the same household / internet / device go to different tables when possible
   const conflicts = (grp, u) => grp.filter(v => linker(u, v)).length;
   const order = regs.slice().sort((a, b) => regs.filter(v => linker(b, v)).length - regs.filter(v => linker(a, v)).length);
@@ -108,7 +117,7 @@ function start(){
   tables.clear();
   groups.forEach((grp, i) => {
     const tb = newTable(t.id + '-' + (i + 1), i + 1);
-    spread(grp.length).forEach((s, k) => { const p = mkPlayer(grp[k], t.stack); p.seat = s; tb.g.seats[s] = p; });
+    const al = allowedSeats(); grp.forEach((u, k) => { const s = al[Math.floor(k * al.length / grp.length)]; const p = mkPlayer(u, t.stack); p.seat = s; tb.g.seats[s] = p; });
   });
   const { seed, seal } = fair.newSeed(); fair.prune();
   saveT({ fairSeed: seed, fairSeal: seal });
@@ -310,7 +319,7 @@ function afterHand(tb, out){
   hooks.onClub();
 }
 function seatInto(dest, p, mode){
-  const g = dest.g, free = g.seats.map((x, i) => x ? -1 : i).filter(i => i >= 0);
+  const g = dest.g, free = allowedSeats().filter(i => !g.seats[i]);
   // TDA 9 / WSOP 14: never seat a player between the small blind and the button (they'd skip the blinds)
   const inGap = s => { if(g.btn < 0 || g.sb < 0 || g.sb === g.btn) return false; for(let k = 1; k < 9; k++){ const j = (g.btn + k) % 9; if(j === g.sb) return false; if(j === s) return true; } return false; };
   let cands = free.filter(s => !inGap(s)); if(!cands.length) cands = free;
@@ -329,10 +338,13 @@ function breakTable(x){
   const movers = x.g.seats.filter(Boolean);
   x.g.seats = Array(9).fill(null);
   for(const p of movers){
-    const open = active().filter(t => count(t) < 9 && !t.toBreak), low = Math.min(...open.map(count));
+    const open = active().filter(t => count(t) < size() && !t.toBreak), low = Math.min(...open.map(count));
     // fewest players first; among those (and the next size up), avoid tables with a linked player
-    const dest = open.filter(t => count(t) <= low + 1).sort((a, b) => (linkedAt(a, p.uid) > 0) - (linkedAt(b, p.uid) > 0) || count(a) - count(b))[0];
-    if(dest) seatInto(dest, p);
+    let dest = open.filter(t => count(t) <= low + 1).sort((a, b) => (linkedAt(a, p.uid) > 0) - (linkedAt(b, p.uid) > 0) || count(a) - count(b))[0];
+    // never drop a player: fall back to any table with a free seat, or open a new one
+    if(!dest) dest = active().filter(t => t !== x && count(t) < size()).sort((a, b) => count(a) - count(b))[0];
+    if(!dest){ const n = Math.max(0, ...[...tables.values()].map(t => t.n)) + 1; dest = newTable(T().id + '-' + n, n); if(running) loop(dest); console.error('breakTable: no room, opened table', n); }
+    seatInto(dest, p);
   }
   closeTable(x.tid);
 }
@@ -342,8 +354,9 @@ function balance(tb){
   let act = active();
   if(act.length <= 1) return;
   if(tb.toBreak){ breakTable(tb); return; }
-  const need = Math.ceil(seated().length / 9);
-  if(act.length > need){
+  const need = Math.ceil(seated().length / size());
+  // only one table is set to break at a time; a second one could leave the movers with nowhere to sit
+  if(act.filter(x => !x.toBreak).length > need && !act.some(x => x.toBreak && x !== tb)){
     const smallest = act.slice().sort((a, b) => count(a) - count(b) || (a === tb ? -1 : 1))[0];
     if(smallest === tb || !smallest.inHand) breakTable(smallest); else smallest.toBreak = true;
     if(smallest === tb) return;
@@ -359,6 +372,24 @@ function balance(tb){
     if(!p) break;
     tb.g.seats[s] = null; seatInto(shortest, p, 'balance');
   }
+}
+// Late registration: a new player gets a starting stack and a seat at the emptiest table, or a new table when all are full.
+function lateJoin(uid){
+  const t = T();
+  if(!lateOpen()) throw new Error('Late registration is closed for this tournament.');
+  if((t.regs || []).includes(uid) || (t.places || []).some(r => r.uid === uid)) throw new Error("You're already in this tournament.");
+  const us = store.get('user:' + uid); if(!us || us.removed) throw new Error('Unknown player.');
+  const p = mkPlayer(uid, t.stack);
+  const open = active().filter(x => count(x) < size() && !x.toBreak);
+  let dest = open.sort((a, b) => (linkedAt(a, uid) > 0) - (linkedAt(b, uid) > 0) || count(a) - count(b))[0];
+  let fresh = false;
+  if(!dest){ const n = Math.max(0, ...[...tables.values()].map(x => x.n)) + 1; dest = newTable(t.id + '-' + n, n); fresh = true; }
+  // everyone already knocked out now finishes one place lower
+  saveT({ regs: [...t.regs, uid], entrants: t.entrants + 1, remaining: (t.remaining || 0) + 1, places: (t.places || []).map(r => ({ ...r, place: r.place + 1 })) });
+  seatInto(dest, p, 'late');
+  if(fresh && running) loop(dest);
+  saveLive();
+  hooks.onClub();
 }
 function finish(){
   stopAll();
@@ -412,7 +443,7 @@ function snapshot(tb){
         act: inHand ? p.act : '', lastAmt: inHand ? (p.lastAmt || 0) : 0, won: inHand && res ? (p.won || 0) : 0,
         shown: inHand && p.shown && !p.folded ? p.cards.map(E.cardStr) : null, cat: inHand && res && res.showdown && !p.folded && p.shown ? E.CAT[E.category(p.val)] : '', away: !!p.away };
     }),
-    cur: live ? h.currentBet : 0, board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((s, p) => s + p.bet, 0) : 0,
+    size: size(), allowed: allowedSeats(), cur: live ? h.currentBet : 0, board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((s, p) => s + p.bet, 0) : 0,
     btn: g.btn, blinds: E.levelFor(t.level || 0, t.anteMode),
     acting: live && tb.acting ? tb.acting.seat : -1, actUid: live && tb.acting ? tb.acting.uid : null, seq: tb.acting ? tb.acting.seq : tb.seq,
     deadline: tb.acting ? tb.acting.deadline : 0, bank: tb.acting ? tb.acting.ms : actMs(), usingBank: !!(tb.acting && tb.acting.usingBank), bankLeft: tb.acting ? tb.acting.bankLeft : 0, legal: tb.acting ? tb.acting.legal : null,
@@ -455,5 +486,5 @@ function totalChips(){
   return sum;
 }
 
-module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, create, join, leave, cancel, start, resume, pause, unpause, act, back,
+module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, join, leave, cancel, start, resume, pause, unpause, act, back,
   snapshot, cardsFor, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, TIME_BANK };

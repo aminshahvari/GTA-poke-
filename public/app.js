@@ -136,7 +136,7 @@ function ownerNextHTML(){
   if(!club.me.owner || (T && ['registering', 'running'].includes(T.status))) return '';
   const name = T ? T.name : `${new Date().toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`;
   return `<div class="card-box next-box"><span class="eyebrow">Organizer</span><h3>Start the next tournament</h3>
-    <p>${T ? `Same settings as last time: ${fmt(T.stack)} chips, ${T.levelMin}-minute levels, ${T.actSec || 20} seconds to act, ${T.anteMode === 'each' ? 'every player antes' : 'big blind ante'}.` : 'Opens registration so your friends can join.'}</p>
+    <p>${T ? `Same settings as last time: ${fmt(T.stack)} chips, ${T.levelMin}-minute levels, ${T.tableSize === 6 ? '6-max tables' : (T.tableSize || 9) + '-handed tables'}, ${T.actSec || 20} seconds to act, ${T.anteMode === 'each' ? 'every player antes' : 'big blind ante'}${T.lateLevels ? `, late registration to level ${T.lateLevels}` : ''}.` : 'Opens registration so your friends can join.'}</p>
     <div class="btn-row"><button class="btn red big" id="againBtn">${T ? 'Play again' : 'Open a tournament'}</button><button class="btn" id="newCustomBtn">Change settings</button></div></div>`;
 }
 function eventHTML(){
@@ -152,7 +152,7 @@ function eventMainHTML(){
     const mine = T.regs.includes(club.me.id);
     return `<div class="card-box"><span class="status-pill">Registration open</span><h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Starts</small><b>${T.startAt ? esc(when(T.startAt)) : 'When the owner starts it'}</b></div><div><small>Stack</small><b>${fmt(T.stack)}</b></div><div><small>Levels</small><b>${T.levelMin} min</b></div></div>
-      <p class="note">${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act, plus a 30-second time bank for the whole tournament.</p>
+      <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act, plus a 30-second time bank for the whole tournament.</p>
       ${T.repeat !== 'none' ? `<p class="note">Repeats ${T.repeat === 'daily' ? 'every day' : 'every week'} at this time.</p>` : ''}
       <p>${T.regs.length} joined</p>
       <div class="plist">${T.regs.map(u => pchip(u, false)).join('') || '<span class="note">Nobody has joined yet.</span>'}</div>
@@ -166,7 +166,9 @@ function eventMainHTML(){
     const [sb, bb] = E.levelFor(T.level, T.anteMode);
     return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Players left</small><b>${T.remaining} of ${T.entrants}</b></div><div><small>Level</small><b>${T.level + 1}</b></div><div><small>Blinds</small><b>${fmt(sb)}/${fmt(bb)}</b></div></div>
-      ${club.myTable ? `<button class="btn red" data-watch="${esc(club.myTable)}">Go to my table</button>` : out ? `<p>You finished ${ord(out.place)}. You can still watch.</p>` : '<p>You are not playing in this one. You can watch any table.</p>'}
+      ${club.myTable ? `<button class="btn red" data-watch="${esc(club.myTable)}">Go to my table</button>` : out ? `<p>You finished ${ord(out.place)}. You can still watch.</p>`
+        : T.lateOpen ? `<p>Late registration is open until the end of level ${T.lateLevels}. You start with ${fmt(T.stack)} chips.</p><button class="btn red" id="joinBtn">Join now</button>` : '<p>You are not playing in this one. You can watch any table.</p>'}
+      ${T.lateOpen && club.me.owner ? `<p class="note">Late registration open until the end of level ${T.lateLevels}. <a href="#" id="lateInvite">Invite more players</a></p>` : ''}
       <div class="table-list">${club.tables.map(t => `<div class="trow"><b>Table ${t.n}</b><small>${t.players} players</small><button class="back" data-watch="${esc(t.tid)}">Watch</button></div>`).join('')}</div>
       ${T.seal ? `<p class="note seal">🔒 Shuffle seal <code>${esc(T.seal.slice(0, 16))}</code> · <a href="#" data-sealinfo>what's this?</a></p>` : ''}</div>`;
   }
@@ -255,6 +257,8 @@ function directorMainHTML(){
         <label>Name<input id="nName" maxlength="40" value="${esc(new Date().toLocaleDateString('en-US', { weekday: 'long' }))} Night Tournament"></label>
         <div class="two"><label>Starting stack<select id="nStack"><option>10000</option><option>20000</option><option selected>30000</option><option>50000</option><option value="60000">60000 (WSOP Main Event)</option></select></label>
         <label>Level length<select id="nLevel"><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20" selected>20 min</option><option value="30">30 min</option></select></label></div>
+        <div class="two"><label>Players per table<select id="nSize"><option value="9">9 (WSOP/WPT)</option><option value="8">8</option><option value="6" selected>6-max</option></select></label>
+        <label>Late registration<select id="nLate"><option value="0">Off</option><option value="2">Until end of level 2</option><option value="4" selected>Until end of level 4</option><option value="6">Until end of level 6</option></select></label></div>
         <div class="two"><label>Ante<select id="nAnte"><option value="each" selected>Every player (online style)</option><option value="bb">Big blind ante (WSOP/WPT live)</option></select></label>
         <label>Time to act<select id="nAct"><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="20" selected>20 seconds</option><option value="30">30 seconds</option></select></label></div>
         <div class="two"><label>Start<select id="nWhen"><option value="manual">When I press Start</option><option value="at">At a set time</option></select></label>
@@ -375,9 +379,10 @@ function wireLobby(){
     if(await modal(`<h2>Remove ${esc(name)}?</h2><p>They are signed out and can't come back without a new invite.</p>`, [{ label: 'Keep', value: false }, { label: 'Remove', value: true, primary: true }])) send({ t: 'remove', uid: b.dataset.remove });
   });
   on('inviteBtn', askInvite);
+  on('lateInvite', e => { e.preventDefault(); askInvite(); });
   on('againBtn', () => {
     const T = club.tourney, d = new Date();
-    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20 });
+    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: T && T.tableSize ? T.tableSize : 6, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4 });
     send({ t: 'join' }); tab = 'event';
   });
   on('newCustomBtn', () => { tab = 'director'; renderLobby(); });
@@ -387,7 +392,7 @@ function wireLobby(){
     nf.onsubmit = e => {
       e.preventDefault();
       const at = $('nWhen').value === 'at' ? new Date($('nAt').value).getTime() : null;
-      send({ t: 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value });
+      send({ t: 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value });
       tab = 'event';
     };
   }
@@ -417,8 +422,16 @@ function openTable(tid){ if(tid !== watchTid){ chatUnread = 0; $('chatDot').hidd
 $('lobbyBtn').onclick = () => { openChat(false); view = 'lobby'; send({ t: 'watch', tid: null }); showScreen('lobby'); renderLobby(); };
 
 // ---------- table ----------
-const POS = Array.from({ length: 9 }, (_, k) => { const a = (90 + k * 40) * Math.PI / 180; return [50 + 40 * Math.cos(a), 46 + 39.5 * Math.sin(a)]; });
-POS[0] = [50, 83];
+// Seat ring layouts for 6, 8 and 9 players; position 0 is the bottom seat (you).
+const RING = n => { const r = Array.from({ length: n }, (_, k) => { const a = (90 + k * 360 / n) * Math.PI / 180; return [50 + 40 * Math.cos(a), 46 + 39.5 * Math.sin(a)]; }); r[0] = [50, 83]; return r; };
+const RINGS = { 6: RING(6), 8: RING(8), 9: RING(9) };
+// Maps a table's seat numbers to screen positions, turned so you sit at the bottom.
+function layoutOf(d){
+  const allowed = d.allowed || [0, 1, 2, 3, 4, 5, 6, 7, 8], n = allowed.length, ring = RINGS[n] || RING(n);
+  const mySeat = d.seats.findIndex(p => p && club && p.uid === club.me.id), base = Math.max(0, allowed.indexOf(mySeat));
+  const rel = s => (allowed.indexOf(s) - base + n) % n;
+  return { allowed, rel, posOf: s => ring[rel(s)] };
+}
 const CENTER = [50, 45];
 const pctToPx = ([x, y]) => { const a = $('tableArea'); return [a.clientWidth * x / 100, a.clientHeight * y / 100]; };
 const toward = ([x, y], f) => [x + (CENTER[0] - x) * f, y + (CENTER[1] - y) * f];
@@ -447,12 +460,12 @@ function renderTable(){
   area.style.setProperty('--cw', Math.max(30, Math.min(46, area.clientWidth * .1)) + 'px');
   area.style.setProperty('--bw', Math.max(30, Math.min(50, area.clientWidth * .105)) + 'px');
   const mySeat = d.seats.findIndex(s => s && s.uid === club.me.id);
-  const rot = mySeat >= 0 ? mySeat : 0, posOf = s => POS[(s - rot + 9) % 9];
+  const LY = layoutOf(d), posOf = LY.posOf;
   const res = d.result, winCards = new Set((res && res.showdown ? res.winCards : []).map(cs));
   const handKey = d.tid + ':' + d.handNo;
   const mc = myCards.get(d.tid), mine = mc && mc.hand === d.handNo ? mc.cards.map(cs) : null;
   let html = '';
-  for(let s = 0; s < 9; s++){
+  for(const s of LY.allowed){
     const p = d.seats[s], pos = posOf(s);
     if(!p){ html += `<div class="empty-seat" style="left:${pos[0]}%;top:${pos[1]}%">OPEN</div>`; continue; }
     const isMe = p.uid === club.me.id;
@@ -483,13 +496,13 @@ function renderTable(){
       ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
       : `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%"><div class="hole">${hole}</div>${av}<div class="plate"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`;
     if(p.inHand && p.bet > 0){
-      const bp = toward(pos, (s - rot + 9) % 9 === 0 ? .36 : .4), [bx, by] = pctToPx(bp), [sx, sy] = pctToPx(pos);
+      const bp = toward(pos, LY.rel(s) === 0 ? .36 : .4), [bx, by] = pctToPx(bp), [sx, sy] = pctToPx(pos);
       const key = `b${handKey}-${d.street}-${s}-${p.bet}`, isNew = !seen.has(key); seen.add(key);
       html += `<div class="bet num ${isNew ? 'chipin' : ''}" style="left:${bp[0]}%;top:${bp[1]}%;--fx:${sx - bx}px;--fy:${sy - by}px">${chipsIcon(Math.min(3, 1 + Math.floor(p.bet / (d.blinds[1] * 3))))}${fmt(p.bet)}</div>`;
     }
   }
   if(d.btn >= 0 && d.phase === 'hand'){
-    const pos = posOf(d.btn), dd = toward(pos, .2), atMe = (d.btn - rot + 9) % 9 === 0, side = atMe ? 17 : (pos[0] < 50 ? 4 : pos[0] > 50 ? -4 : 9);
+    const pos = posOf(d.btn), dd = toward(pos, .2), atMe = LY.rel(d.btn) === 0, side = atMe ? 17 : (pos[0] < 50 ? 4 : pos[0] > 50 ? -4 : 9);
     html += `<div class="dealer" style="left:${dd[0] + side}%;top:${dd[1] + (atMe ? -2 : 5)}%">D</div>`;
   }
   $('seats').innerHTML = html;
@@ -721,8 +734,7 @@ const curTid = () => watchTid || (club && club.myTable);
 function seatPosOf(uid){
   const d = tables.get(curTid()); if(!d) return null;
   const s = d.seats.findIndex(p => p && p.uid === uid); if(s < 0) return null;
-  const mySeat = d.seats.findIndex(p => p && p.uid === club.me.id), rot = mySeat >= 0 ? mySeat : 0;
-  return POS[(s - rot + 9) % 9];
+  return layoutOf(d).posOf(s);
 }
 function onChat(msg){
   const log = chatLogs.get(msg.tid) || []; log.push(msg); if(log.length > 40) log.shift(); chatLogs.set(msg.tid, log);

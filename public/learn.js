@@ -135,6 +135,8 @@ rules: `
 <li>We use the WSOP Main Event blind structure: 100/200, then 200/300, 200/400 and so on, with an ante from level 1.</li>
 <li><b>Ante, online style</b> (the default): every player posts an ante of about one eighth of the big blind before the cards are dealt (25 at 100/200). Antes go into the pot but don't count toward the bet you have to call. A player who can't cover the ante is all-in for what they have.</li>
 <li><b>Ante, WSOP/WPT live style</b> (if the organizer picks it): the big blind posts one ante for the whole table, equal to the big blind. If the big blind can't cover both, the blind is posted first and the rest goes to the ante.</li>
+<li><b>Tables:</b> the organizer picks 9-handed (WSOP/WPT), 8-handed or 6-max. A new table opens for every full table's worth of players. As players bust, tables are balanced and broken until everyone left plays at one final table.</li>
+<li><b>Late registration:</b> if the organizer turns it on, new players can join after the start (until the end of level 2, 4 or 6) with a full starting stack. They're seated at the table with the fewest players, or at a new table when all are full. Once you're knocked out you can't join the same tournament again.</li>
 <li><b>Time to act:</b> the organizer sets 10, 15, 20 or 30 seconds per decision. When it runs out you get your time bank (30 seconds for the whole tournament). When that's gone too, your hand is checked or folded.</li>
 <li>The button moves by the "dead button" rule, so nobody skips or pays the big blind twice when players bust.</li>
 <li>Heads-up, the button posts the small blind and acts first before the flop, last after it.</li></ul>
