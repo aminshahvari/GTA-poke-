@@ -3,6 +3,7 @@
 // server except to the player who holds them.
 const E = require('./engine');
 const store = require('./store');
+const coach = require('./coach');
 
 const FAST = process.env.FAST === '1';
 const SPEED = FAST ? 0.02 : 1;
@@ -15,6 +16,9 @@ let hooks = { onClub(){}, onTable(){}, onTableClosed(){} };
 const tables = new Map();   // tid -> live table
 const waiters = new Map();  // uid -> pending decision
 let running = false, clockTimer = null;
+let linker = () => null; // (uidA, uidB) -> reason they must not share a table, or null
+function setLinker(f){ linker = f; }
+const linkedAt = (tb, uid) => tb.g.seats.filter(q => q && q.uid !== uid && linker(uid, q.uid)).length;
 
 const T = () => store.get('tourney') || null;
 function saveT(patch){ return store.set('tourney', { ...(T() || {}), ...patch }); }
@@ -29,7 +33,8 @@ function payoutPcts(n){
   const paid = Math.round(n * 0.15), w = Array.from({ length: paid }, (_, i) => 1 / Math.pow(i + 1, 0.9)), s = w.reduce((a, b) => a + b, 0);
   return w.map(x => Math.round(x / s * 1000) / 10);
 }
-const pointsFor = (n, place) => n - place + 1 + (place === 1 ? 3 : 0);
+// Points reward winning: places in the money earn payout % × players ÷ 10 (min 2); everyone else gets 1 for playing.
+function pointsFor(n, place){ const pct = payoutPcts(n)[place - 1]; return pct ? Math.max(2, Math.round(pct * n / 10)) : 1; }
 
 // ---------- registration ----------
 function create({ name, stack, levelMin, startAt, repeat }){
@@ -72,8 +77,14 @@ function start(){
   const regs = t.regs.filter(u => { const us = store.get('user:' + u); return us && !us.removed; });
   if(regs.length < 2) throw new Error('At least 2 players need to join.');
   for(let i = regs.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [regs[i], regs[j]] = [regs[j], regs[i]]; }
-  const nT = Math.ceil(regs.length / 9), groups = Array.from({ length: nT }, () => []);
-  regs.forEach((u, i) => groups[i % nT].push(u));
+  const nT = Math.ceil(regs.length / 9), groups = Array.from({ length: nT }, () => []), cap = Math.ceil(regs.length / nT);
+  // random seating, but players from the same household / internet / device go to different tables when possible
+  const conflicts = (grp, u) => grp.filter(v => linker(u, v)).length;
+  const order = regs.slice().sort((a, b) => regs.filter(v => linker(b, v)).length - regs.filter(v => linker(a, v)).length);
+  order.forEach(u => {
+    const best = groups.filter(gp => gp.length < cap).sort((a, b) => conflicts(a, u) - conflicts(b, u) || a.length - b.length)[0];
+    best.push(u);
+  });
   tables.clear();
   groups.forEach((grp, i) => {
     const tb = newTable(t.id + '-' + (i + 1), i + 1);
@@ -130,10 +141,21 @@ function unpause(){ const t = T(); if(!t || !t.paused) return; saveT({ paused: f
 async function waitUnpaused(){ while(running && T() && T().paused) await sleep(300); }
 
 // ---------- table loop ----------
+function saveHand(uid, hand){
+  store.set(`hand:${uid}:${hand.id}`, hand);
+  const ks = store.keys(`hand:${uid}:`);
+  if(ks.length > coach.KEEP) ks.map(k => [k, store.get(k).ts]).sort((a, b) => a[1] - b[1]).slice(0, ks.length - coach.KEEP).forEach(([k]) => store.del(k));
+}
+function handsFor(uid){ return store.values(`hand:${uid}:`).sort((a, b) => b.ts - a.ts); }
 function tableIO(tb){
+  if(!tb.record) tb.record = coach.recorder({
+    tourneyInfo: () => { const t = T() || {}; return { left: seated().length, paid: payoutPcts(t.entrants || 0).length, name: t.name || '' }; },
+    save: saveHand
+  });
   return {
     rng: Math.random,
-    async event(type){
+    async event(type, data){
+      try{ tb.record(type, tb.g, data); }catch(e){ console.error('hand record failed', e); }
       if(!running) return;
       publish(tb);
       const h = tb.g.hand;
@@ -238,7 +260,9 @@ function breakTable(x){
   const movers = x.g.seats.filter(Boolean);
   x.g.seats = Array(9).fill(null);
   for(const p of movers){
-    const dest = active().filter(t => count(t) < 9).sort((a, b) => count(a) - count(b))[0];
+    const open = active().filter(t => count(t) < 9 && !t.toBreak), low = Math.min(...open.map(count));
+    // fewest players first; among those (and the next size up), avoid tables with a linked player
+    const dest = open.filter(t => count(t) <= low + 1).sort((a, b) => (linkedAt(a, p.uid) > 0) - (linkedAt(b, p.uid) > 0) || count(a) - count(b))[0];
     if(dest) seatInto(dest, p);
   }
   closeTable(x.tid);
@@ -259,7 +283,10 @@ function balance(tb){
   if(!others.length) return;
   const shortest = others.sort((a, b) => count(a) - count(b))[0];
   while(count(tb) - count(shortest) >= 2){
-    const s = E.nextLive(tb.g, tb.g.bb), p = tb.g.seats[s];
+    // TDA: move the player who will be big blind next; skip anyone linked to a player at the destination
+    let s = E.nextLive(tb.g, tb.g.bb);
+    for(let k = 0, c = s; k < 9; k++, c = E.nextLive(tb.g, c)){ const q = tb.g.seats[c]; if(q && !linkedAt(shortest, q.uid)){ s = c; break; } }
+    const p = tb.g.seats[s];
     if(!p) break;
     tb.g.seats[s] = null; seatInto(shortest, p);
   }
@@ -353,4 +380,4 @@ function totalChips(){
 }
 
 module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, create, join, leave, cancel, start, resume, pause, unpause, act, back,
-  snapshot, cardsFor, tableOf, tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, TIME_BANK };
+  snapshot, cardsFor, tableOf, handsFor, setLinker, tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, TIME_BANK };

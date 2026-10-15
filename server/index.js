@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const store = require('./store');
+const rewards = require('./rewards');
 const club = require('./club');
 const E = require('./engine');
 
@@ -19,7 +20,7 @@ const validPin = s => /^\d{4,8}$/.test(String(s || ''));
 const owner = () => store.get('owner');
 function createUser(name, pin, role){
   const id = 'u' + crypto.randomBytes(6).toString('hex'), salt = crypto.randomBytes(12).toString('hex');
-  const u = { id, name, salt, pin: hashPin(pin, salt), role, createdAt: Date.now() };
+  const u = { id, name, salt, pin: hashPin(pin, salt), role, createdAt: Date.now(), agreedAt: Date.now() };
   store.set('user:' + id, u); store.set('name:' + name.toLowerCase(), id);
   return u;
 }
@@ -39,7 +40,8 @@ const recordFailure = ip => attempts.set(ip, [...failures(ip), Date.now()]);
 
 const api = {
   // first-time setup of the club owner, guarded by OWNER_CODE from the environment
-  setup({ code, name, pin }){
+  setup({ code, name, pin, agree }){
+    if(agree !== true) throw new Error('Please confirm you are 19 or older and agree to the club rules.');
     if(owner()) throw new Error('This club already has an owner.');
     if(!process.env.OWNER_CODE || code !== process.env.OWNER_CODE) throw new Error('That setup code is not right.');
     name = cleanName(name);
@@ -48,13 +50,14 @@ const api = {
     const u = createUser(name, pin, 'owner'); store.set('owner', u.id);
     return { token: newSession(u.id) };
   },
-  redeem({ code, name, pin }){
+  redeem({ code, name, pin, agree }){
     const inv = store.get('invite:' + code);
     if(!inv || inv.usedBy || inv.revoked) throw new Error('This invite link has already been used or was cancelled. Ask for a new one.');
     name = cleanName(name);
     if(!validName(name)) throw new Error('Pick a name with 2 to 16 letters or numbers.');
     if(store.get('name:' + name.toLowerCase())) throw new Error('That name is taken. Try another.');
     if(!validPin(pin)) throw new Error('Pick a PIN of 4 to 8 digits.');
+    if(agree !== true) throw new Error('Please confirm you are 19 or older and agree to the club rules.');
     const u = createUser(name, pin, 'member');
     store.set('invite:' + code, { ...inv, usedBy: u.id, usedAt: Date.now() });
     broadcastClub();
@@ -118,6 +121,41 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
 const sockets = new Set();
 function sendWS(ws, msg){ if(ws.readyState === 1) ws.send(JSON.stringify(msg)); }
 
+// ---------- keeping players who share a home, internet connection or device apart ----------
+const ipOf = req => String(req.headers['cf-connecting-ip'] || req.headers['true-client-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0]).trim() || req.socket.remoteAddress || '';
+function remember(u, ip, dev){
+  const x = store.get('user:' + u.id); if(!x) return;
+  const now = Date.now(), seen = x.seen || { ips: {}, devs: {} };
+  const keep = o => Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 6));
+  if(ip) seen.ips = keep({ ...seen.ips, [ip]: now });
+  if(dev) seen.devs = keep({ ...seen.devs, [dev]: now });
+  store.set('user:' + u.id, { ...x, seen });
+}
+const linkCache = new Map();
+function linkReason(a, b){
+  if(a === b) return null;
+  const k = a < b ? a + '|' + b : b + '|' + a, c = linkCache.get(k);
+  if(c && Date.now() - c.at < 5000) return c.r;
+  const ua = store.get('user:' + a), ub = store.get('user:' + b);
+  let r = null;
+  if(ua && ub){
+    const now = Date.now(), recent = (o, days) => Object.entries(o || {}).filter(([, t]) => now - t < days * 864e5).map(([v]) => v);
+    const share = (x, y) => x.some(v => y.includes(v));
+    if(ua.household && ua.household === ub.household) r = 'same household';
+    else if(share(recent(ua.seen && ua.seen.devs, 60), recent(ub.seen && ub.seen.devs, 60))) r = 'same device';
+    else if(share(recent(ua.seen && ua.seen.ips, 14), recent(ub.seen && ub.seen.ips, 14))) r = 'same internet';
+  }
+  linkCache.set(k, { r, at: Date.now() });
+  return r;
+}
+club.setLinker(linkReason);
+function conflictPairs(){
+  const t = club.T(), out = [], pairs = groups => groups.forEach(([where, us]) => { for(let i = 0; i < us.length; i++) for(let j = i + 1; j < us.length; j++){ const r = linkReason(us[i], us[j]); if(r) out.push({ a: us[i], b: us[j], reason: r, where }); } });
+  if(t && t.status === 'registering') pairs([['registered', t.regs]]);
+  else if(t && t.status === 'running') pairs([...club.tables.values()].filter(x => !x.broken).map(x => ['Table ' + x.n, x.g.seats.filter(Boolean).map(p => p.uid)]));
+  return out;
+}
+
 function clubView(u){
   const t = club.T();
   const members = store.values('user:').filter(x => !x.removed).map(x => ({ id: x.id, name: x.name, role: x.role, createdAt: x.createdAt }));
@@ -128,9 +166,14 @@ function clubView(u){
       level: t.level, levelEndsAt: t.levelEndsAt, paused: t.paused, pausedLeft: t.pausedLeft, entrants: t.entrants, remaining: t.remaining,
       places: t.places, note: t.note, payouts: t.entrants ? club.payoutPcts(t.entrants) : null } : null,
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
-    members, history, now: Date.now()
+    members, history, now: Date.now(), shop: rewards.view(u.id, isOwner(u))
   };
-  if(isOwner(u)) view.invites = store.values('invite:').filter(i => !i.usedBy && !i.revoked).map(i => ({ code: i.code, createdAt: i.createdAt }));
+  if(isOwner(u)){
+    view.invites = store.values('invite:').filter(i => !i.usedBy && !i.revoked).map(i => ({ code: i.code, createdAt: i.createdAt }));
+    view.conflicts = conflictPairs();
+    const hh = Object.fromEntries(store.values('user:').filter(x => !x.removed && x.household).map(x => [x.id, x.household]));
+    view.households = hh;
+  }
   return view;
 }
 let clubTimer = null;
@@ -154,6 +197,7 @@ wss.on('connection', (ws, req) => {
   const origin = req.headers.origin;
   if(origin && new URL(origin).host !== req.headers.host){ ws.close(1008, 'origin'); return; }
   sockets.add(ws);
+  ws.ip = ipOf(req);
   ws.isAlive = true;
   ws.on('pong', () => ws.isAlive = true);
   ws.on('close', () => sockets.delete(ws));
@@ -163,7 +207,7 @@ wss.on('connection', (ws, req) => {
     if(m.t === 'hello'){
       const u = userByToken(m.token);
       if(!u) return sendWS(ws, { t: 'auth', ok: false });
-      ws.user = u; sendWS(ws, { t: 'auth', ok: true });
+      ws.user = u; remember(u, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); sendWS(ws, { t: 'auth', ok: true });
       sendWS(ws, { t: 'club', club: clubView(u) });
       const mine = club.tableOf(u.id); if(mine) pushTable(mine);
       return;
@@ -177,6 +221,7 @@ wss.on('connection', (ws, req) => {
         case 'act': club.act(u.id, m); break;
         case 'back': club.back(u.id); break;
         case 'join': club.join(u.id); break;
+        case 'hands': sendWS(ws, { t: 'hands', hands: club.handsFor(u.id) }); break;
         case 'leave': club.leave(u.id); break;
         // owner controls
         case 'create': own(u); club.create(m); break;
@@ -185,6 +230,18 @@ wss.on('connection', (ws, req) => {
         case 'pause': own(u); club.pause(); break;
         case 'resume': own(u); club.unpause(); break;
         case 'kick': own(u); { const t = club.T(); if(t && t.status === 'registering') store.set('tourney', { ...t, regs: t.regs.filter(x => x !== m.uid) }); broadcastClub(); } break;
+        case 'household': own(u); {
+          const x = store.get('user:' + m.uid), y = m.with ? store.get('user:' + m.with) : null;
+          if(!x) break;
+          if(!y){ store.set('user:' + x.id, { ...x, household: null }); }
+          else { const gid = y.household || x.household || ('h' + Date.now().toString(36)); store.set('user:' + x.id, { ...x, household: gid }); store.set('user:' + y.id, { ...store.get('user:' + y.id), household: gid }); }
+          linkCache.clear(); broadcastClub();
+        } break;
+        case 'skillq': sendWS(ws, { t: 'skillq', rid: m.rid, q: rewards.question(u.id, String(m.rid || '')) }); break;
+        case 'claim': rewards.claim(u.id, String(m.rid || ''), m.answer); sendWS(ws, { t: 'claimed' }); broadcastClub(); break;
+        case 'addReward': own(u); rewards.addReward(m); broadcastClub(); break;
+        case 'removeReward': own(u); rewards.removeReward(String(m.id || '')); broadcastClub(); break;
+        case 'redeemStatus': own(u); rewards.setStatus(String(m.id || ''), m.status); broadcastClub(); break;
         case 'invite': own(u); sendWS(ws, { t: 'invite', code: inviteCode(u) }); broadcastClub(); break;
         case 'revoke': own(u); { const inv = store.get('invite:' + m.code); if(inv) store.set('invite:' + m.code, { ...inv, revoked: true }); broadcastClub(); } break;
         case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); for(const k of store.keys('session:')) if(store.get(k).uid === x.id) store.del(k); club.leave(x.id); } broadcastClub(); } break;

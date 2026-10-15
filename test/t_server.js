@@ -13,29 +13,32 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   srv.stdout.on('data', d => process.env.VERBOSE && process.stdout.write(d));
   await sleep(700);
   // setup + negative auth checks
-  if(!(await post('/api/setup', { code: 'nope', name: 'Sean', pin: '1234' })).error) fail('bad setup code accepted');
-  const own = await post('/api/setup', { code: 'secret', name: 'Sean', pin: '1234' });
+  if(!(await post('/api/setup', { code: 'nope', name: 'Sean', pin: '1234', agree: true })).error) fail('bad setup code accepted');
+  if(!(await post('/api/setup', { code: 'secret', name: 'Sean', pin: '1234' })).error) fail('setup without agreeing accepted');
+  const own = await post('/api/setup', { code: 'secret', name: 'Sean', pin: '1234', agree: true });
   if(!own.token) fail('owner setup ' + JSON.stringify(own));
-  if(!(await post('/api/setup', { code: 'secret', name: 'Other', pin: '1234' })).error) fail('second owner allowed');
+  if(!(await post('/api/setup', { code: 'secret', name: 'Other', pin: '1234', agree: true })).error) fail('second owner allowed');
   if(!(await post('/api/login', { name: 'Sean', pin: '9999' })).error) fail('wrong pin accepted');
   if(!(await post('/api/login', { name: 'sean', pin: '1234' })).token) fail('login failed');
   if(!(await post('/api/invite', {}, 'garbage')).error) fail('invite without auth allowed');
   const tokens = [own.token];
   for(let i = 1; i < N; i++){
     const { code } = await post('/api/invite', {}, own.token);
-    const r = await post('/api/redeem', { code, name: 'Friend ' + i, pin: '4321' });
+    const r = await post('/api/redeem', { code, name: 'Friend ' + i, pin: '4321', agree: true });
     if(!r.token) fail('redeem ' + JSON.stringify(r));
     tokens.push(r.token);
-    if(i === 1 && !(await post('/api/redeem', { code, name: 'Again', pin: '4321' })).error) fail('invite reused');
+    if(i === 1 && !(await post('/api/redeem', { code, name: 'Again', pin: '4321', agree: true })).error) fail('invite reused');
   }
   // members cannot run owner actions
   const clients = await Promise.all(tokens.map((tok, i) => new Promise(res => {
-    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`), c = { i, ws, id: null, club: null, tables: {}, acted: 0, cardsSeen: new Set() };
-    ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', token: tok })));
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { 'x-forwarded-for': '10.0.0.' + (i === 0 ? 200 : Math.ceil(i / 2)) } }), c = { i, ws, id: null, club: null, tables: {}, acted: 0, cardsSeen: new Set() };
+    ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', token: tok, device: 'dev' + i })));
     ws.on('message', raw => {
       const m = JSON.parse(raw);
       if(m.t === 'club'){ c.club = m.club; c.id = m.club.me.id; if(!c.ready){ c.ready = true; res(c); } }
       if(m.t === 'error') c.lastError = m.error;
+      if(m.t === 'skillq') c.q = m.q;
+      if(m.t === 'claimed') c.claimed = (c.claimed || 0) + 1;
       if(m.t === 'table'){
         const tb = m.table; c.tables[tb.tid] = tb;
         const seated = tb.seats.some(s => s && s.uid === c.id);
@@ -65,7 +68,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   clients.forEach(c => c.ws.send(JSON.stringify({ t: 'join' })));
   await sleep(300);
   if(owner.club.tourney.regs.length !== N) fail('regs ' + owner.club.tourney.regs.length);
+  // manual household: owner and Friend 3 live together
+  owner.ws.send(JSON.stringify({ t: 'household', uid: owner.id, with: clients[3].id })); await sleep(200);
+  const conf = owner.club.conflicts || [];
+  const expectPairs = Math.floor((N - 1) / 2) + 1;
+  if(conf.length !== expectPairs) fail(`expected ${expectPairs} linked pairs before start, got ${conf.length}`);
+  if(m1.club.conflicts) fail('members can see link info');
   owner.ws.send(JSON.stringify({ t: 'start' }));
+  await sleep(400);
+  if(N > 9 && (owner.club.conflicts || []).length) fail('linked players seated together at start: ' + JSON.stringify(owner.club.conflicts));
   const t0 = Date.now(); let maxTables = 0, checks = 0;
   while(Date.now() - t0 < 600000){
     await sleep(250);
@@ -80,6 +91,28 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   if(places !== Array.from({ length: N }, (_, i) => i + 1).join()) fail('places ' + places);
   const h = owner.club.history[0];
   if(!h || h.results.length !== N) fail('history');
+  // points + rewards shop
+  const win = clients.find(c => c.id === h.results[0].uid), loser = clients.find(c => c.id === h.results[N - 1].uid);
+  const pct1 = h.payouts[0];
+  if(h.results[0].pts !== Math.max(2, Math.round(pct1 * N / 10))) fail('winner points ' + h.results[0].pts);
+  if(h.results[N - 1].pts !== 1) fail('last place points');
+  loser.ws.send(JSON.stringify({ t: 'addReward', name: 'x', cost: 1, qty: 1 })); await sleep(150);
+  if(!loser.lastError) fail('member could add a reward');
+  owner.ws.send(JSON.stringify({ t: 'addReward', name: 'Gift card', cost: h.results[0].pts, qty: 1, value: '$25' })); await sleep(250);
+  const rw = win.club.shop.rewards[0];
+  if(!rw || rw.left !== 1) fail('reward not listed');
+  const bal0 = win.club.shop.balance;
+  win.ws.send(JSON.stringify({ t: 'skillq', rid: rw.id })); await sleep(150);
+  win.lastError = null; win.ws.send(JSON.stringify({ t: 'claim', rid: rw.id, answer: '-1' })); await sleep(150);
+  if(!win.lastError) fail('wrong skill answer accepted');
+  win.ws.send(JSON.stringify({ t: 'skillq', rid: rw.id })); await sleep(150);
+  const ans = Function('return ' + win.q.replace('×', '*').replace('÷', '/').replace('−', '-'))();
+  win.ws.send(JSON.stringify({ t: 'claim', rid: rw.id, answer: String(ans) })); await sleep(300);
+  if(win.claimed !== 1) fail('claim failed ' + win.lastError);
+  if(win.club.shop.balance !== bal0 - rw.cost) fail('balance not reduced');
+  loser.lastError = null; loser.ws.send(JSON.stringify({ t: 'skillq', rid: rw.id })); await sleep(150);
+  if(!loser.lastError) fail('could claim without enough points / sold out');
+  if(!(owner.club.shop.requests || []).length) fail('owner cannot see requests');
   console.log(`server test: ${N} players, max ${maxTables} tables, ${checks} chip checks, ${clients.reduce((a, c) => a + c.acted, 0)} actions, ${Math.round((Date.now() - t0) / 1000)}s, champion ${h && h.results[0].name}`);
   console.log(fails ? `${fails} FAILURES` : 'server test passed');
   clients.forEach(c => c.ws.close()); srv.kill();
