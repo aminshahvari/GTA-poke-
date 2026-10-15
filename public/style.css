@@ -397,3 +397,10 @@ details.terms-d summary{cursor:pointer;color:var(--gold);font-weight:600;margin:
 .btn.big{padding:14px 22px;font-size:17px}
 .owner-row{display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-top:6px}
 .turnbar i.bank{background:linear-gradient(90deg,#c48a1c,#f0c35a)}
+
+.news summary{cursor:pointer;display:grid;gap:4px;list-style:none}
+.news summary::-webkit-details-marker{display:none}
+.news summary b::after{content:' ▾';color:var(--muted)}
+.news[open] summary b::after{content:' ▴'}
+.news h4{margin:14px 0 6px;color:var(--gold);font-family:var(--cond);letter-spacing:.06em}
+.news ul{margin:0;padding-left:18px;display:grid;gap:6px;line-height:1.45;font-size:14px}

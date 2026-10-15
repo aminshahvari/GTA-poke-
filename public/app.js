@@ -235,8 +235,13 @@ function conflictsHTML(){
     <p>${cs.length === 1 ? 'These players' : 'These pairs'} share a home, an internet connection or a phone. ${club.tourney && club.tourney.status === 'running' ? 'There are not enough tables to split them.' : 'They will be seated at different tables when there are 2 or more tables; with one table they will sit together.'}</p>
     <ul class="acts">${cs.map(c => `<li>${esc(nameOf(c.a))} & ${esc(nameOf(c.b))} <small>${esc(c.reason)} · ${esc(c.where)}</small></li>`).join('')}</ul></div>`;
 }
+function newsHTML(){
+  const news = (window.LEARN && window.LEARN.news) || []; if(!news.length) return '';
+  return `<details class="card-box news"><summary><span class="eyebrow">What's new</span><b>Latest changes · ${esc(news[0].date)}</b></summary>
+    ${news.map(n => `<h4>${esc(n.date)}</h4><ul>${n.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}</details>`;
+}
 function directorHTML(){
-  return conflictsHTML() + directorMainHTML() + prizeAdminHTML();
+  return newsHTML() + conflictsHTML() + directorMainHTML() + prizeAdminHTML();
 }
 function directorMainHTML(){
   const T = club.tourney;
@@ -259,14 +264,14 @@ function directorMainHTML(){
         <label>Level length<select id="nLevel"><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20" selected>20 min</option><option value="30">30 min</option></select></label></div>
         <div class="two"><label>Players per table<select id="nSize"><option value="9">9 (WSOP/WPT)</option><option value="8">8</option><option value="6" selected>6-max</option></select></label>
         <label>Late registration<select id="nLate"><option value="0">Off</option><option value="2">Until end of level 2</option><option value="4" selected>Until end of level 4</option><option value="6">Until end of level 6</option></select></label></div>
-        <div class="two"><label>Ante<select id="nAnte"><option value="each" selected>Every player (online style)</option><option value="bb">Big blind ante (WSOP/WPT live)</option></select></label>
+        <div class="two"><label>Ante<select id="nAnte"><option value="each" selected>Every player</option><option value="bb">Big blind (WSOP)</option></select></label>
         <label>Time to act<select id="nAct"><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="20" selected>20 seconds</option><option value="30">30 seconds</option></select></label></div>
         <div class="two"><label>Start<select id="nWhen"><option value="manual">When I press Start</option><option value="at">At a set time</option></select></label>
         <label>Repeat<select id="nRepeat"><option value="none">Just once</option><option value="daily">Every day</option><option value="weekly">Every week</option></select></label></div>
         <label id="atWrap" hidden>Start time<input type="datetime-local" id="nAt" value="${local}"></label>
         <button class="btn red" type="submit">Open registration</button>
       </form>
-      <p class="note">Tables of up to 9 are made automatically: 1 table for up to 9 players, 2 for up to 18, and so on. Players are moved to keep tables even, and tables merge as people bust, down to one final table. A repeating tournament opens again by itself at the same time.</p></div>${members}`;
+      <p class="note">Tables are made automatically from the table size you pick: with 6-max, 1 table for up to 6 players, 2 for up to 12, and so on. Players are moved to keep tables even, and tables merge as people bust, down to one final table. A repeating tournament opens again by itself at the same time.</p></div>${members}`;
   }
   if(T.status === 'registering'){
     return `<div class="card-box"><span class="status-pill">Registration open</span><h3>${esc(T.name)}</h3>

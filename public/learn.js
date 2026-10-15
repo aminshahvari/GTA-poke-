@@ -160,3 +160,28 @@ rules: `
 <ul><li>One player, one account. No sharing hands with others at the table, no outside help.</li><li>Be kind to each other. The director's decisions are final.</li></ul>`
 };
 window.LEARN.rules = window.LEARN.rules.replace('%%TERMS%%', window.LEARN.terms);
+
+// Change log shown to the organizer in the Director tab, newest first.
+window.LEARN.news = [
+  { date: 'Oct 15, 2026', items: [
+    'Tables can be 6-max, 8-handed or 9-handed (Change settings). 6-max is the default.',
+    'Late registration: players can join after the start, until the end of level 2, 4 or 6. They get a full stack and the emptiest seat; a new table opens when all are full.',
+    'Fixed: when two tables were breaking at the same time a moved player could lose their seat. Players are never dropped now.',
+    'New action buttons like the big apps: Fold / Check-Call / Raise, a sizing panel (2.5-4 BB before the flop, ⅓-pot to all-in after), and pre-actions (Check/Fold, Check, Call any) while you wait.',
+    'Every player posts an ante (online style). The WSOP big blind ante is still available in settings.',
+    'Time to act: 10, 15, 20 or 30 seconds, plus a 30-second time bank per player for the whole tournament.',
+    'Play again: one tap on the Tournament tab opens the next tournament with the same settings. Invite and Start now are there too.',
+    'Group invite links: one link for a WhatsApp or Telegram group, up to 20 people, 7 days. Personal one-time links still work.',
+    'Table chat with quick phrases and bubbles. Tap a player to throw a tomato, rose, beer and more. You can turn chat off or mute someone in Director.',
+    'Provably fair shuffle: a sealed secret plus a public random number (drand) for every hand. After a tournament anyone can tap "Check the shuffle" to verify every deck.',
+    'Faster pace between actions and hands.',
+    'Start now is greyed out until at least 2 players have joined.'
+  ] },
+  { date: 'Oct 14, 2026', items: [
+    'WSOP/WPT tournament rules: levels, dead button, showdown order, hand-for-hand at the bubble, tie rules.',
+    'Hand review with a coach, poker lessons, club rules and the Learn tab.',
+    'Points for every finish and a prize shop you stock yourself.',
+    'People in the same home, on the same internet or on the same phone are seated at different tables.',
+    'Install on your phone and share invites in one tap.'
+  ] }
+];
