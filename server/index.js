@@ -8,6 +8,7 @@ const rewards = require('./rewards');
 const club = require('./club');
 const E = require('./engine');
 const fair = require('./fair');
+const players = require('./players');
 
 const PORT = +process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -71,7 +72,14 @@ const api = {
     return { token: newSession(u.id) };
   },
   invite(_, u){ return { code: inviteCode(u) }; },
-  status(){ return { hasOwner: !!owner() }; }
+  status(){ return { hasOwner: !!owner() }; },
+  // your own picture: a gallery avatar or a small photo the phone has already shrunk
+  avatar(a, u){
+    if(!u) throw new Error('Sign in first.');
+    store.set('user:' + u.id, players.setAvatar(store.get('user:' + u.id), a));
+    broadcastClub();
+    return { ok: true };
+  }
 };
 const GROUP_MAX = 20, GROUP_DAYS = 7;
 function inviteCode(u, group){
@@ -85,7 +93,7 @@ function inviteCode(u, group){
 // ---------- HTTP ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
 const SECURITY = {
-  'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer'
 };
 function send(res, code, body, type = 'application/json'){
@@ -99,7 +107,8 @@ const server = http.createServer((req, res) => {
   if(req.method === 'POST' && url.pathname.startsWith('/api/')){
     const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
     let body = '';
-    req.on('data', c => { body += c; if(body.length > 10000) req.destroy(); });
+    const limit = url.pathname === '/api/avatar' ? 70000 : 10000;
+    req.on('data', c => { body += c; if(body.length > limit) req.destroy(); });
     req.on('end', () => {
       try{
         const fn = api[url.pathname.slice(5)];
@@ -108,11 +117,16 @@ const server = http.createServer((req, res) => {
         const data = body ? JSON.parse(body) : {};
         const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
         send(res, 200, fn(data, u));
-      }catch(e){ recordFailure(ip); send(res, 400, { error: e.message || 'Something went wrong.' }); }
+      }catch(e){ if(url.pathname !== '/api/avatar') recordFailure(ip); send(res, 400, { error: e.message || 'Something went wrong.' }); }
     });
     return;
   }
   if(req.method !== 'GET') return send(res, 405, { error: 'Method not allowed' });
+  const av = /^\/avatar\/(u[0-9a-f]{12})$/.exec(url.pathname);
+  if(av){
+    const buf = players.photo(av[1]); if(!buf) return send(res, 404, 'Not found', 'text/plain');
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=604800, immutable', ...SECURITY }); return res.end(buf);
+  }
   let file = url.pathname === '/' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
   if(file === 'engine.js') return fs.readFile(path.join(__dirname, 'engine.js'), (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES['.js']));
   const full = path.join(PUBLIC, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
@@ -160,10 +174,20 @@ function conflictPairs(){
   return out;
 }
 
+let memo = null;
+function membersView(){
+  if(memo && Date.now() - memo.at < 200) return memo;
+  const history = store.values('history:').sort((a, b) => b.endedAt - a.endedAt);
+  const members = store.values('user:').filter(x => !x.removed).map(x => {
+    const pr = players.profile(x.id, history);
+    return { id: x.id, name: x.name, role: x.role, createdAt: x.createdAt, av: x.av || null, tier: pr.tier, color: pr.color, score: pr.score };
+  });
+  memo = { at: Date.now(), members, history: history.slice(0, 200), all: history };
+  return memo;
+}
 function clubView(u){
   const t = club.T();
-  const members = store.values('user:').filter(x => !x.removed).map(x => ({ id: x.id, name: x.name, role: x.role, createdAt: x.createdAt }));
-  const history = store.values('history:').sort((a, b) => b.endedAt - a.endedAt).slice(0, 200);
+  const { members, history } = membersView();
   const view = {
     me: { id: u.id, name: u.name, owner: isOwner(u) },
     tourney: t ? { id: t.id, status: t.status, name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: t.startAt, repeat: t.repeat, regs: t.regs,
@@ -205,7 +229,8 @@ function chat(ws, u, m){
     if(!text) return;
     body = { kind: 'text', text };
   } else {
-    if(!THROWS.includes(m.item) || typeof m.to !== 'string' || m.to === u.id || club.tableOf(m.to) !== tid) return;
+    const allowed = THROWS.includes(m.item) || players.perksFor(players.profile(u.id, membersView().all).tier).includes(m.item);
+    if(!allowed || typeof m.to !== 'string' || m.to === u.id || club.tableOf(m.to) !== tid) return;
     body = { kind: 'throw', item: m.item, to: m.to };
   }
   r.push(now); chatRate.set(u.id, r);
@@ -217,6 +242,7 @@ const chatLogFor = (ws, tid) => { if(tid) sendWS(ws, { t: 'chatlog', tid, log: c
 
 let clubTimer = null;
 function broadcastClub(){
+  memo = null;
   if(clubTimer) return;
   clubTimer = setTimeout(() => { clubTimer = null; for(const ws of sockets) if(ws.user) sendWS(ws, { t: 'club', club: clubView(ws.user) }); }, 60);
 }
@@ -267,6 +293,8 @@ wss.on('connection', (ws, req) => {
         case 'back': club.back(u.id); break;
         case 'join': club.join(u.id); break;
         case 'hands': sendWS(ws, { t: 'hands', hands: club.handsFor(u.id) }); break;
+        case 'profile': { const x = store.get('user:' + m.uid); if(x && !x.removed) sendWS(ws, { t: 'profile', profile: { ...players.profile(x.id, membersView().all), name: x.name, av: x.av || null, since: x.createdAt, perks: players.perksFor(players.profile(x.id, membersView().all).tier) } }); } break;
+        case 'avatarClear': own(u); { const x = store.get('user:' + m.uid); if(x){ store.set('user:' + x.id, players.setAvatar(x, { kind: 'none' })); memo = null; broadcastClub(); } } break;
         case 'leave': club.leave(u.id); break;
         // owner controls
         case 'create': own(u); club.create(m); break;

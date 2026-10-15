@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const rand = () => crypto.randomInt(0x100000000) / 0x100000000;
 const store = require('./store');
 const coach = require('./coach');
+const players = require('./players');
 
 const FAST = process.env.FAST === '1';
 const SPEED = FAST ? 0.02 : 1;
@@ -175,6 +176,7 @@ async function waitUnpaused(){ while(running && T() && T().paused) await sleep(3
 // ---------- table loop ----------
 function saveHand(uid, hand){
   store.set(`hand:${uid}:${hand.id}`, hand);
+  try{ players.recordHand(uid, hand); }catch(e){ console.error('player stats failed', e); }
   const ks = store.keys(`hand:${uid}:`);
   if(ks.length > coach.KEEP) ks.map(k => [k, store.get(k).ts]).sort((a, b) => a[1] - b[1]).slice(0, ks.length - coach.KEEP).forEach(([k]) => store.del(k));
 }

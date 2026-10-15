@@ -94,6 +94,7 @@ function connect(){
     if(m.t === 'claimed'){ modal('<h2>Prize claimed 🎉</h2><p>The organizer has been told and will get it to you. You can follow it under Prizes.</p>', [{ label: 'Great', value: 1, primary: true }]); return; }
     if(m.t === 'hands'){ myHands = m.hands; if(view === 'lobby' && tab === 'learn') renderLobby(); return; }
     if(m.t === 'chat'){ onChat(m.msg); return; }
+    if(m.t === 'profile'){ showProfile(m.profile); return; }
     if(m.t === 'chatlog'){ chatLogs.set(m.tid, m.log); if(chatOpen) renderChat(); return; }
     if(m.t === 'chaterr'){ toast(m.error); return; }
     if(m.t === 'fair'){ showFair(m.report); return; }
@@ -105,8 +106,8 @@ const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
 
 function onClub(c){
   club = c; clockSkew = c.now - Date.now();
-  $('meChip').innerHTML = `<span></span><button class="back" id="outBtn">Sign out</button>`;
-  $('meChip').querySelector('span').textContent = c.me.name;
+  $('meChip').innerHTML = `<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name)}</span></button><button class="back" id="outBtn">Sign out</button>`;
+  $('meBtn').onclick = () => openProfile(c.me.id);
   $('outBtn').onclick = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
   $('dirTab').hidden = !c.me.owner;
   const st = c.tourney && c.tourney.status;
@@ -120,17 +121,31 @@ function onClub(c){
 function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)) renderTable(); }
 
 // ---------- lobby ----------
+$('lobbyBody').addEventListener('click', e => {
+  if(e.target.closest('[data-kick]')) return;
+  const t = e.target.closest('[data-prof]'); if(t) openProfile(t.dataset.prof);
+});
 $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if(!b) return; tab = b.dataset.tab; if(tab === 'learn'){ openHand = null; send({ t: 'hands' }); } renderLobby(); $('lobbyBody').scrollTop = 0; });
 const nameOf = uid => { const m = club.members.find(x => x.id === uid); if(m) return m.name; for(const h of club.history) for(const r of h.results) if(r.uid === uid) return r.name; return 'Former member'; };
-const pchip = (uid, removable) => `<span class="pchip ${uid === club.me.id ? 'me' : ''}">${esc(nameOf(uid))}${removable ? `<button data-kick="${esc(uid)}" aria-label="Remove from tournament">×</button>` : ''}</span>`;
+const pchip = (uid, removable) => `<span class="pchip ${uid === club.me.id ? 'me' : ''}" data-prof="${esc(uid)}">${avHTML(uid, nameOf(uid), 'xs')}${esc(nameOf(uid))}${removable ? `<button data-kick="${esc(uid)}" aria-label="Remove from tournament">×</button>` : ''}</span>`;
 const when = ms => new Date(ms).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 function renderLobby(){
   if(!club) return;
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   const body = $('lobbyBody');
-  body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : eventHTML();
+  body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : picNudgeHTML() + eventHTML();
   wireLobby();
 }
+function picNudgeHTML(){
+  const m = memberOf(club.me.id);
+  if(!m || m.av || local.get('picNudge', 0) > 2) return '';
+  return `<div class="card-box pic-nudge">${avHTML(club.me.id, club.me.name, 'big')}<div><b>Add your picture</b><p>A photo or avatar shows at the table, so everyone knows who they're playing.</p>
+    <div class="btn-row"><button class="btn red" data-pic>Add picture</button><button class="btn" data-picno>Later</button></div></div></div>`;
+}
+document.addEventListener('click', e => {
+  if(e.target.closest('[data-pic]')) pickAvatar();
+  if(e.target.closest('[data-picno]')){ local.set('picNudge', local.get('picNudge', 0) + 1); renderLobby(); }
+});
 function ownerNextHTML(){
   const T = club.tourney;
   if(!club.me.owner || (T && ['registering', 'running'].includes(T.status))) return '';
@@ -224,9 +239,9 @@ function boardHTML(){
   return `<div class="seg2">${[['board','Leaderboard'],['prizes','Prizes']].map(([k, l]) => `<button data-bseg="${k}" aria-pressed="${boardSeg === k}">${l}</button>`).join('')}</div><div class="card-box"><span class="eyebrow">Club leaderboard</span>
     <div class="seg2 small">${[['week','This week'],['month','30 days'],['all','All time']].map(([k, l]) => `<button data-range="${k}" aria-pressed="${boardRange === k}">${l}</button>`).join('')}</div>
     ${rows.length ? `<table class="tbl dark"><thead><tr><th>#</th><th>Player</th><th>Played</th><th>Wins</th><th>Cashes</th><th>Points</th></tr></thead><tbody>
-      ${rows.map((r, i) => `<tr class="${r.uid === club.me.id ? 'me' : ''}"><td>${i + 1}</td><td>${esc(nameOf(r.uid))}</td><td class="num">${r.played}</td><td class="num">${r.wins}</td><td class="num">${r.cashes}</td><td class="num">${r.pts}</td></tr>`).join('')}</tbody></table>`
+      ${rows.map((r, i) => `<tr class="${r.uid === club.me.id ? 'me' : ''}"><td>${i + 1}</td><td><span class="lb-name" data-prof="${esc(r.uid)}">${avHTML(r.uid, nameOf(r.uid), 'xs')}${esc(nameOf(r.uid))}</span></td><td class="num">${r.played}</td><td class="num">${r.wins}</td><td class="num">${r.cashes}</td><td class="num">${r.pts}</td></tr>`).join('')}</tbody></table>`
       : '<div class="empty">No finished tournaments in this period yet.</div>'}
-    <p class="note">Points reward winning: places in the money earn payout % × players ÷ 10 (winning a 9-player tournament is 45 points), everyone else gets 1 for playing. Spend them on prizes under Prizes.</p></div>
+    <p class="note">Tap a player to see their profile: skill tier, results and how they play.</p><p class="note">Points reward winning: places in the money earn payout % × players ÷ 10 (winning a 9-player tournament is 45 points), everyone else gets 1 for playing. Spend them on prizes under Prizes.</p></div>
     ${club.history.length ? `<div class="card-box"><span class="eyebrow">Past tournaments</span><div class="table-list">${club.history.slice(0, 30).map(h => `<div class="trow"><b>${esc(h.name)}</b><small>${new Date(h.endedAt).toLocaleDateString()} · ${h.entrants} players · ${esc(h.results[0] ? h.results[0].name : '')}</small></div>`).join('')}</div></div>` : ''}`;
 }
 function conflictsHTML(){
@@ -456,6 +471,97 @@ const chipsIcon = (n = 3) => `<span class="chips">${'<i></i>'.repeat(n)}</span>`
 const COLORS = ['#3b6fb6','#7a5aa6','#2f8a8f','#3d8a62','#b07a2a','#5a6fc2','#4b6680','#8a6a5c','#b0505a'];
 const colorOf = uid => { let h = 0; for(const c of String(uid)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
 
+// ---------- avatars, skill tiers and profiles ----------
+const GALLERY = {
+  lion: ['🦁', '#c9822b'], wolf: ['🐺', '#55657d'], fox: ['🦊', '#c2562a'], tiger: ['🐯', '#d38b1f'], eagle: ['🦅', '#6b4f2e'],
+  bear: ['🐻', '#7a5236'], panda: ['🐼', '#4b5566'], shark: ['🦈', '#2e6bcf'], dragon: ['🐉', '#2f8a5f'], octopus: ['🐙', '#9b4f8f'],
+  owl: ['🦉', '#6d5a3e'], frog: ['🐸', '#3e8a3a'], cowboy: ['🤠', '#a0632a'], cool: ['😎', '#3a6fb6'], robot: ['🤖', '#5b6b85'],
+  alien: ['👽', '#3f8f7f'], ghost: ['👻', '#5d5f8f'], ninja: ['🥷', '#2a2f3a'], crown: ['👑', '#b8862a'], spade: ['♠️', '#d9dee8'],
+  heart: ['♥️', '#8f2a35'], diamond: ['♦️', '#2a4f8f'], club: ['♣️', '#a9d8bd'], dice: ['🎲', '#6a3fa0']
+};
+const TIER_ICON = { shark: '🦈', pro: '💎' };
+const TIER_INFO = [['pro', 'Pro', '#b57cff', 'Rating 82+, at least 150 hands and 3 tournaments'], ['shark', 'Shark', '#f2a93b', 'Rating 70+, at least 80 hands and 2 tournaments'],
+  ['solid', 'Solid', '#4a90f5', 'Rating 56+'], ['regular', 'Regular', '#38b2ac', 'Rating 40+'], ['rookie', 'Rookie', '#8b95a8', 'Still learning'], ['new', 'New', '#6b7385', 'Fewer than 30 hands so far']];
+const memberOf = uid => club && club.members.find(m => m.id === uid);
+// A player's picture: their photo, a gallery avatar, or their initials. The ring shows their skill tier.
+function avHTML(uid, name, cls = ''){
+  const m = memberOf(uid), av = m && m.av, ring = m && m.tier && m.tier !== 'new' ? `--ring:${m.color};` : '';
+  const icon = m && TIER_ICON[m.tier] ? `<i class="tier-ic" title="${esc(m.tier)}">${TIER_ICON[m.tier]}</i>` : '';
+  let inner = esc(initials(name)), bg = colorOf(uid);
+  if(av && av.startsWith('p:')) inner = `<img src="/avatar/${esc(uid)}?v=${esc(av.slice(2))}" alt="" loading="lazy">`;
+  else if(av && av.startsWith('g:') && GALLERY[av.slice(2)]){ inner = `<span class="emo">${GALLERY[av.slice(2)][0]}</span>`; bg = GALLERY[av.slice(2)][1]; }
+  return `<div class="av ${ring ? 'tiered' : ''} ${cls}" style="--c:${bg};${ring}">${inner}${icon}</div>`;
+}
+const tierPill = m => m && m.tier ? `<span class="tier-pill" style="--tc:${m.color}">${TIER_ICON[m.tier] || ''}${esc(m.tierName || TIER_INFO.find(t => t[0] === m.tier)[1])}</span>` : '';
+const myPerks = () => { const m = memberOf(club.me.id); return m ? ({ shark: ['shark'], pro: ['shark', 'crown', 'diamond'] }[m.tier] || []) : []; };
+const throwChoices = () => Object.entries(THROW_ICONS).filter(([k]) => !PERK_THROWS.includes(k) || myPerks().includes(k));
+
+function openProfile(uid){ send({ t: 'profile', uid }); }
+async function showProfile(p){
+  const me = p.uid === club.me.id, d = tables.get(curTid());
+  const atTable = view === 'table' && !me && d && d.seats.some(x => x && x.uid === p.uid) && !throwBlock();
+  const st = (v, l) => `<div><b>${v}</b><small>${l}</small></div>`;
+  const recent = p.recent.length ? `<div class="prof-list">${p.recent.map(r => `<div><span>${esc(r.name)}<small>${new Date(r.at).toLocaleDateString()}</small></span><b class="${r.place === 1 ? 'gold' : r.cashed ? 'cash' : ''}">${ord(r.place)} of ${r.of}</b></div>`).join('')}</div>` : '<p class="note">No finished tournaments yet.</p>';
+  const tier = TIER_INFO.find(t => t[0] === p.tier) || TIER_INFO[5];
+  const html = `<div class="prof">
+    <div class="prof-head">${avHTML(p.uid, p.name, 'big')}<div><h2>${esc(p.name)}</h2>${tierPill({ tier: p.tier, color: p.color, tierName: p.tierName })}
+      <small>${p.score != null ? `Skill rating <b>${p.score}</b>/100 · ` : ''}member since ${new Date(p.since).toLocaleDateString([], { month: 'short', year: 'numeric' })}</small></div></div>
+    ${atTable ? `<div class="eyebrow">Throw something</div><div class="throw-grid">${throwChoices().map(([k, v]) => `<button data-v="t:${k}">${v}</button>`).join('')}</div>` : ''}
+    <div class="eyebrow">Tournaments</div>
+    <div class="statgrid">${st(p.played, 'Played')}${st(p.wins, 'Wins')}${st(p.cashes, 'Cashes')}${st(p.best ? ord(p.best) : '–', 'Best')}</div>
+    <div class="eyebrow">How they play</div>
+    <div class="statgrid">${st(fmt(p.hands), 'Hands')}${st(p.clean + '%', 'Clean hands')}${st(p.vpip + '%', 'Played (VPIP)')}${st(p.pfr + '%', 'Raised (PFR)')}</div>
+    <p class="note">${p.hands < 30 ? 'Not enough hands yet for a fair rating.' : p.clean >= 90 ? 'Makes very few mistakes: folds the right hands and raises when it counts.' : p.clean >= 80 ? 'Mostly solid decisions, with the odd leak.' : 'Still makes some costly mistakes; the coach under Learn helps.'} "Clean hands" are hands the coach found no mistake in.</p>
+    <div class="eyebrow">Recent results</div>${recent}
+    <details class="tiers-d"><summary>How tiers work</summary><div class="tier-list">${TIER_INFO.map(t => `<div><span class="tier-pill" style="--tc:${t[2]}">${TIER_ICON[t[0]] || ''}${t[1]}</span><small>${t[3]}</small></div>`).join('')}</div>
+      <p class="note">The rating comes mostly from decisions the coach checks every hand (folding weak hands, raising instead of limping, not paying off with nothing), and partly from tournament finishes. Sharks unlock 🦈 to throw; Pros also get 👑 and 💎.</p></details>
+  </div>`;
+  const btns = [{ label: 'Close', value: null }];
+  if(me) btns.push({ label: 'Change picture', value: 'pic', primary: true });
+  else if(club.me.owner && p.av) btns.push({ label: 'Remove photo', value: 'rmpic' });
+  const v = await modal(html, btns);
+  if(v === 'pic') pickAvatar();
+  else if(v === 'rmpic') send({ t: 'avatarClear', uid: p.uid });
+  else if(v && v.startsWith('t:')){ openChat(false); sendChat({ t: 'throw', item: v.slice(2), to: p.uid }); }
+}
+async function pickAvatar(){
+  const cur = (memberOf(club.me.id) || {}).av || '';
+  const v = await modal(`<h2>Your picture</h2><p>Players see it at the table, so they know who they're playing.</p>
+    <label class="btn-red upload">📷 Upload a photo<input type="file" accept="image/*" id="avFile" hidden></label>
+    <div class="eyebrow">Or pick an avatar</div>
+    <div class="av-grid">${Object.entries(GALLERY).map(([k, [e, c]]) => `<button data-v="g:${k}" style="--c:${c}" aria-pressed="${cur === 'g:' + k}">${e}</button>`).join('')}</div>`,
+    [{ label: 'Cancel', value: null }, ...(cur ? [{ label: 'Remove picture', value: 'none' }] : [])]);
+  if(v === 'none') return saveAvatar({ kind: 'none' });
+  if(v && v.startsWith('g:')) return saveAvatar({ kind: 'gallery', id: v.slice(2) });
+}
+// The file input lives inside the modal, so listen for it at the document level.
+document.addEventListener('change', async e => {
+  if(e.target.id !== 'avFile' || !e.target.files[0]) return;
+  $('modalRoot').innerHTML = '';
+  try{ saveAvatar({ kind: 'photo', data: await shrinkPhoto(e.target.files[0]) }); }
+  catch(err){ toast('That photo could not be opened. Try another one.'); }
+});
+// Center-crop to a square and shrink to 192px, so a photo is a few KB.
+function shrinkPhoto(file){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const n = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas'); c.width = c.height = 192;
+      c.getContext('2d').drawImage(img, (img.naturalWidth - n) / 2, (img.naturalHeight - n) / 2, n, n, 0, 0, 192, 192);
+      URL.revokeObjectURL(url);
+      let q = .85, out = c.toDataURL('image/jpeg', q);
+      while(out.length > 55000 && q > .4){ q -= .15; out = c.toDataURL('image/jpeg', q); }
+      res(out);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('bad image')); };
+    img.src = url;
+  });
+}
+async function saveAvatar(a){
+  try{ await post('/api/avatar', a); toast(a.kind === 'none' ? 'Picture removed.' : 'Picture saved.'); }
+  catch(err){ toast(err.message); }
+}
+
 function renderTable(){
   if(view !== 'table' || !club) return;
   const tid = watchTid || club.myTable, d = tables.get(tid);
@@ -500,7 +606,7 @@ function renderTable(){
     const acting = d.acting === s;
     const stackTxt = p.inHand && p.allIn && !res ? 'All-in' : fmt(p.stack);
     const cls = `seat ${isMe ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
-    const av = `<div class="av" style="--c:${colorOf(p.uid)}">${esc(initials(p.name))}</div>`;
+    const av = avHTML(p.uid, p.name);
     const shot = acting ? '<div class="shot"><i class="shotBar"></i></div>' : '';
     html += isMe
       ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
@@ -740,7 +846,8 @@ async function showFair(rep){
 // ---------- table chat ----------
 const chatLogs = new Map();
 let chatOpen = false, chatUnread = 0;
-const THROW_ICONS = { tomato: '🍅', rose: '🌹', beer: '🍺', egg: '🥚', fish: '🐟', clap: '👏', cake: '🎂', fire: '🔥' };
+const THROW_ICONS = { tomato: '🍅', rose: '🌹', beer: '🍺', egg: '🥚', fish: '🐟', clap: '👏', cake: '🎂', fire: '🔥', shark: '🦈', crown: '👑', diamond: '💎' };
+const PERK_THROWS = ['shark', 'crown', 'diamond'];
 const QUICK = ['gl', 'gg', 'nh', 'ty', 'wp', 'Nice hand!', 'Ship it!', 'So close!', '😂', '😮', '😎', '🙏', '🔥', '😭'];
 const curTid = () => watchTid || (club && club.myTable);
 function seatPosOf(uid){
@@ -766,7 +873,7 @@ function demoChat(m){
 }
 const sendChat = m => isDemo() ? demoChat(m) : send(m);
 async function pickThrow(uid){
-  const pick = await modal(`<h2>Throw something at ${esc(seatName(uid))}</h2><div class="throw-grid">${Object.entries(THROW_ICONS).map(([k, v]) => `<button data-v="${k}">${v}</button>`).join('')}</div>`, [{ label: 'Cancel', value: null }]);
+  const pick = await modal(`<h2>Throw something at ${esc(seatName(uid))}</h2><div class="throw-grid">${throwChoices().map(([k, v]) => `<button data-v="${k}">${v}</button>`).join('')}</div>`, [{ label: 'Cancel', value: null }]);
   if(pick){ openChat(false); sendChat({ t: 'throw', item: pick, to: uid }); }
 }
 // Why a throw can't happen right now, or '' when it can.
@@ -837,6 +944,7 @@ $('seats').addEventListener('click', e => {
   const seat = e.target.closest('.seat[data-uid]'); if(!seat) return;
   const uid = seat.dataset.uid;
   if(uid === club.me.id) return toast('Tap another player to throw something at them.');
+  if(memberOf(uid)) return openProfile(uid);
   const why = throwBlock(); if(why) return toast(why);
   pickThrow(uid);
 });

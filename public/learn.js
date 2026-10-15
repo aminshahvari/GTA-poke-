@@ -164,6 +164,9 @@ window.LEARN.rules = window.LEARN.rules.replace('%%TERMS%%', window.LEARN.terms)
 // Change log shown to the organizer in the Director tab, newest first.
 window.LEARN.news = [
   { date: 'Oct 15, 2026', items: [
+    'Player pictures: upload a photo or pick an avatar (tap your name at the top). It shows at the table, in the players list and on the leaderboard.',
+    'Skill tiers: every player gets a rating from how they play (the coach checks each hand) and their tournament finishes: New, Rookie, Regular, Solid, Shark 🦈 or Pro 💎. The tier color rings their picture. Sharks and Pros unlock extra things to throw.',
+    'Player profiles: tap any player (at the table, in the joined list or on the leaderboard) to see their tier, tournaments played, wins, cashes, best finish, recent results and how they play.',
     'Throwing works everywhere: tap a player, or use the new 🍅 Throw button in table chat to pick who gets it. It also works at the demo table, where the practice players throw back. If you can\'t throw right now (not seated, muted), a message says why.',
     'New look: calm dark slate with lapis-blue tables and buttons, orange for the numbers that matter, and the IBM Plex Sans font, in the style of the big tournament apps. Easier on the eyes at night.',
     'Hand helper under the table: on every street it names your hand (set, two pair, full house...), shows your chance to win against the players still in, your draws and outs, and whether the price is right to call or bet. Tap it to shrink it. The organizer can turn it off under Change settings.',
