@@ -235,9 +235,14 @@ function wireLobby(){
 }
 function showInvite(code){
   const url = location.origin + '/join/' + code;
-  modal(`<h2>Invite link</h2><p>Send this to one friend. It works once.</p><div class="copy-row"><input id="invUrl" readonly value="${esc(url)}"><button class="btn-ghost" id="copyBtn" style="width:auto;padding:9px 12px">Copy</button></div>`, [{ label: 'Done', value: 1, primary: true }]);
+  const text = `${club.me.name} invited you to the Stacked Live poker club. Tap to join:`;
+  const enc = encodeURIComponent;
+  modal(`<h2>Invite link</h2><p>Send this to one friend. It works once.</p>
+    ${navigator.share ? '<button class="btn-red" id="shareBtn" style="width:100%;margin-bottom:10px">Share invite</button>' : ''}
+    <div class="share-row"><a class="btn-ghost" target="_blank" rel="noopener" href="https://wa.me/?text=${enc(text + ' ' + url)}">WhatsApp</a><a class="btn-ghost" target="_blank" rel="noopener" href="https://t.me/share/url?url=${enc(url)}&text=${enc(text)}">Telegram</a><a class="btn-ghost" href="sms:?&body=${enc(text + ' ' + url)}">Text</a></div>
+    <div class="copy-row"><input id="invUrl" readonly value="${esc(url)}"><button class="btn-ghost" id="copyBtn" style="width:auto;padding:9px 12px">Copy</button></div>`, [{ label: 'Done', value: 1 }]);
   $('copyBtn').onclick = () => { const i = $('invUrl'); i.select(); (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => $('copyBtn').textContent = 'Copied').catch(() => { try{ document.execCommand('copy'); $('copyBtn').textContent = 'Copied'; }catch(e){} }); };
-  if(navigator.share) { /* the copy button covers it; sharing sheets vary by phone */ }
+  const sb = $('shareBtn'); if(sb) sb.onclick = () => navigator.share({ title: 'Stacked Live invite', text, url }).catch(() => {});
 }
 function openTable(tid){ watchTid = tid; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid }); renderTable(); }
 $('lobbyBtn').onclick = () => { view = 'lobby'; send({ t: 'watch', tid: null }); showScreen('lobby'); renderLobby(); };

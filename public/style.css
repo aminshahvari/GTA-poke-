@@ -243,3 +243,5 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .copy-row{display:flex;gap:8px;align-items:center}
 .copy-row input{flex:1;min-width:0;font:inherit;font-size:13px;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#141113;color:var(--text)}
 .offline{position:fixed;left:50%;top:8px;transform:translateX(-50%);background:var(--red);color:#fff;padding:6px 14px;border-radius:99px;font-size:13px;font-weight:600;z-index:80}
+.share-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.share-row a{display:flex;align-items:center;justify-content:center;text-decoration:none;padding:10px 6px;font-size:14px}
