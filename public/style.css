@@ -404,3 +404,4 @@ details.terms-d summary{cursor:pointer;color:var(--gold);font-weight:600;margin:
 .news[open] summary b::after{content:' ▴'}
 .news h4{margin:14px 0 6px;color:var(--gold);font-family:var(--cond);letter-spacing:.06em}
 .news ul{margin:0;padding-left:18px;display:grid;gap:6px;line-height:1.45;font-size:14px}
+.demo-box{border-color:rgba(63,174,122,.45);background:linear-gradient(160deg,rgba(29,107,75,.25),rgba(20,16,19,.9))}

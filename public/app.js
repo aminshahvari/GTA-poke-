@@ -240,8 +240,11 @@ function newsHTML(){
   return `<details class="card-box news"><summary><span class="eyebrow">What's new</span><b>Latest changes · ${esc(news[0].date)}</b></summary>
     ${news.map(n => `<h4>${esc(n.date)}</h4><ul>${n.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}</details>`;
 }
+const demoCard = () => `<div class="card-box demo-box"><span class="eyebrow">Demo</span><h3>Try a practice table</h3>
+  <p>Play a real game at a 6-max table against 5 practice players, with the same buttons, chat bubbles, antes and clock as a club tournament. It runs only on your phone: nothing is saved and no points are given.</p>
+  <div class="btn-row"><button class="btn red big" data-demo>Open demo table</button></div></div>`;
 function directorHTML(){
-  return newsHTML() + conflictsHTML() + directorMainHTML() + prizeAdminHTML();
+  return newsHTML() + demoCard() + conflictsHTML() + directorMainHTML() + prizeAdminHTML();
 }
 function directorMainHTML(){
   const T = club.tourney;
@@ -304,7 +307,7 @@ function handStats(hs){
 }
 function learnHTML(){
   const seg = `<div class="seg2">${[['hands','My hands'],['lessons','Lessons'],['rules','Rules'],['fair','Fair deal']].map(([k, l]) => `<button data-seg="${k}" aria-pressed="${learnSeg === k}">${l}</button>`).join('')}</div>`;
-  if(learnSeg === 'lessons') return `<div class="card-box"><span class="eyebrow">Poker school</span>${seg}<p>Short lessons for tournament players. Start at the top.</p></div>
+  if(learnSeg === 'lessons') return `<div class="card-box"><span class="eyebrow">Poker school</span>${seg}<p>Short lessons for tournament players. Start at the top.</p></div>${demoCard()}
     ${window.LEARN.lessons.map((l, i) => `<details class="lesson card-box"><summary><span class="ln">${i + 1}</span><b>${esc(l.title)}</b><small>${l.mins} min</small></summary><div class="lbody">${l.body}</div></details>`).join('')}`;
   if(learnSeg === 'fair') return fairHTML(seg);
   if(learnSeg === 'rules') return `<div class="card-box"><span class="eyebrow">Club rules</span>${seg}</div><div class="card-box lbody">${window.LEARN.rules}</div>`;
@@ -353,6 +356,7 @@ function wireLearn(){
 
 function wireLobby(){
   wireLearn();
+  document.querySelectorAll('[data-demo]').forEach(b => b.onclick = startDemo);
   document.querySelectorAll('[data-fair]').forEach(b => b.onclick = () => { b.disabled = true; b.textContent = 'Checking…'; send({ t: 'fair', id: b.dataset.fair }); });
   document.querySelectorAll('[data-sealinfo]').forEach(a => a.onclick = e => { e.preventDefault(); tab = 'learn'; learnSeg = 'fair'; renderLobby(); });
   document.querySelectorAll('[data-mute]').forEach(b => b.onclick = () => send({ t: 'mute', uid: b.dataset.mute, muted: b.dataset.on !== '1' }));
@@ -424,7 +428,7 @@ function showInvite(code, group){
   const sb = $('shareBtn'); if(sb) sb.onclick = () => navigator.share({ title: 'Stacked Live invite', text, url }).catch(() => {});
 }
 function openTable(tid){ if(tid !== watchTid){ chatUnread = 0; $('chatDot').hidden = true; } watchTid = tid; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid }); renderTable(); }
-$('lobbyBtn').onclick = () => { openChat(false); view = 'lobby'; send({ t: 'watch', tid: null }); showScreen('lobby'); renderLobby(); };
+$('lobbyBtn').onclick = () => { openChat(false); stopDemo(); view = 'lobby'; send({ t: 'watch', tid: null }); showScreen('lobby'); renderLobby(); };
 
 // ---------- table ----------
 // Seat ring layouts for 6, 8 and 9 players; position 0 is the bottom seat (you).
@@ -585,6 +589,7 @@ function renderControls(d, mySeat, mine){
 }
 function sendAction(d, a){
   lastSent = d.tid + ':' + d.handNo + ':' + d.seq;
+  if(d.tid === 'demo' && demo){ if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){} $('controls').innerHTML = '<div class="info-line">…</div>'; return demo.answer(a); }
   const words = { fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' };
   $('controls').innerHTML = `<div class="info-line">${words[a.t] || ''}${a.t === 'raise' ? ' to ' + fmt(a.to) : ''} · sending…</div>`;
   if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){}
@@ -649,7 +654,7 @@ function drawSizing(d, meSeat){
   tickClock();
 }
 function tickClock(){
-  const T = club && club.tourney;
+  const T = demo ? demo.T : club && club.tourney;
   if(!T || T.status !== 'running' || view !== 'table') return;
   const now = Date.now() + clockSkew;
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
@@ -797,6 +802,105 @@ $('seats').addEventListener('click', async e => {
   const pick = await modal(`<h2>Throw something at ${esc(nameOf(uid))}</h2><div class="throw-grid">${Object.entries(THROW_ICONS).map(([k, v]) => `<button data-v="${k}">${v}</button>`).join('')}</div>`, [{ label: 'Cancel', value: null }]);
   if(pick) send({ t: 'throw', item: pick, to: uid });
 });
+
+// ---------- demo table: a practice game that runs only in this browser ----------
+let demo = null;
+const DEMO_NAMES = ['Ana', 'Ben', 'Carla', 'Dev', 'Eli'];
+function demoSnap(){
+  const g = demo.g, h = g.hand, live = !!(demo.inHand && h), res = live && h.result;
+  const winSeat = res && res.showdown && res.pots.length ? res.pots[0].winners[0] : -1, winP = winSeat >= 0 ? g.seats[winSeat] : null;
+  const name = s => g.seats[s] ? g.seats[s].name : '';
+  let lines = null;
+  if(res){
+    const contested = res.pots.filter(q => q.elig.length > 1);
+    lines = !res.showdown ? [`${name(res.pots[0].winners[0])} wins ${fmt(res.pots[0].amt)}`]
+      : contested.map((q, i) => `${contested.length > 1 ? (i ? `Side pot ${i}: ` : 'Main pot: ') : ''}${q.winners.map(name).join(' & ')} ${q.winners.length > 1 ? 'split' : 'wins'} ${fmt(q.amt)} · ${E.describe(g.seats[q.winners[0]].val)}`);
+  }
+  return {
+    tid: 'demo', n: 1, phase: live ? 'hand' : 'idle', handNo: live ? h.no : g.handNo, street: live ? h.street : 0, size: 6, allowed: [0, 1, 3, 4, 6, 7],
+    seats: g.seats.map(p => {
+      if(!p) return null;
+      const inHand = live && h.players.includes(p);
+      return { uid: p.uid, name: p.name, stack: p.stack, inHand, bet: inHand ? p.bet : 0, folded: inHand && p.folded, allIn: inHand && p.allIn, act: inHand ? p.act : '', lastAmt: inHand ? (p.lastAmt || 0) : 0,
+        won: inHand && res ? (p.won || 0) : 0, shown: inHand && p.shown && !p.folded ? p.cards.map(E.cardStr) : null, cat: inHand && res && res.showdown && !p.folded && p.shown ? E.CAT[E.category(p.val)] : '', away: false };
+    }),
+    cur: live ? h.currentBet : 0, board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((a, p) => a + p.bet, 0) : 0,
+    btn: g.btn, blinds: E.levelFor(g.level, 'each'), acting: demo.acting ? demo.acting.seat : -1, actUid: demo.acting ? demo.acting.uid : null, seq: demo.seq,
+    deadline: demo.acting ? demo.acting.deadline : 0, bank: 20000, usingBank: false, legal: demo.acting ? demo.acting.legal : null,
+    result: res ? { lines, winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null, note: demo.note || ''
+  };
+}
+function demoPublish(){
+  if(!demo) return;
+  const snap = demoSnap(); tables.set('demo', snap);
+  const me = demo.g.hand && demo.inHand && demo.g.hand.players.find(p => p.uid === club.me.id);
+  if(me) myCards.set('demo', { hand: demo.g.hand.no, cards: me.cards.map(E.cardStr) });
+  if(view === 'table' && watchTid === 'demo') renderTable();
+}
+const dsleep = ms => new Promise(r => setTimeout(r, ms));
+function startDemo(){
+  stopDemo();
+  const styles = Object.keys(E.STYLES);
+  const players = [{ name: club.me.name, isHero: true }].concat(DEMO_NAMES.map((n, i) => ({ name: n, style: styles[i % styles.length] })));
+  const g = E.newGame({ players, stack: 30000, levelMs: 3 * 60000 });
+  const seats = Array(9).fill(null), al = [0, 1, 3, 4, 6, 7];
+  g.seats.filter(Boolean).forEach((p, i) => { p.uid = i === 0 ? club.me.id : 'demo-' + i; seats[al[i]] = p; });
+  g.seats = seats; g.anteMode = 'each';
+  demo = { g, seq: 0, acting: null, inHand: false, stopped: false, note: 'Demo table: practice players, nothing is saved.',
+    T: { status: 'running', level: 0, levelEndsAt: Date.now() + 3 * 60000, entrants: 6, stack: 30000, remaining: 6, anteMode: 'each', places: [] }, answer: () => {} };
+  watchTid = 'demo'; view = 'table'; seen = new Set(); showScreen('game'); $('chatBtn').hidden = true;
+  demoLoop(demo);
+}
+function stopDemo(){
+  if(!demo) return;
+  demo.stopped = true; demo.answer({ t: 'fold' }); demo = null; tables.delete('demo'); myCards.delete('demo');
+  $('chatBtn').hidden = false; if(watchTid === 'demo') watchTid = null;
+}
+async function demoLoop(D){
+  const g = D.g;
+  const io = {
+    rng: Math.random,
+    async event(type){
+      if(D.stopped) throw new Error('demo stopped');
+      demoPublish();
+      const h = g.hand, wait = { deal: 900, action: 250, collect: 300, board: 700, showdown: h && h.result && h.result.showdown ? 3000 : 1200 }[type] || 0;
+      if(wait) await dsleep(wait);
+    },
+    async think(){ await dsleep(350 + Math.random() * 450); },
+    heroAction: (p, L) => new Promise(res => {
+      D.seq++;
+      const h = g.hand;
+      D.acting = { seat: p.seat, uid: p.uid, deadline: Date.now() + 20000, legal: { ...L, pot: E.potTotal(h), cur: h.currentBet, bb: h.bbAmt } };
+      let done = false;
+      const finish = a => { if(done) return; done = true; clearTimeout(timer); D.acting = null; res(a); };
+      const timer = setTimeout(() => finish(L.canCheck ? { t: 'check' } : { t: 'fold' }), 20000);
+      D.answer = finish;
+      demoPublish();
+    })
+  };
+  try{
+    while(!D.stopped && !g.over){
+      g.levelMsLeft = D.T.levelEndsAt - Date.now();
+      D.inHand = true;
+      await E.playHand(g, io);
+      if(g.level !== D.T.level){ D.T.level = g.level; D.T.levelEndsAt = Date.now() + g.levelMsLeft; }
+      D.inHand = false;
+      D.T.remaining = g.seats.filter(Boolean).length;
+      const heroIn = g.seats.some(p => p && p.uid === club.me.id);
+      if(!heroIn || g.over){
+        demoPublish();
+        const won = heroIn && g.over;
+        const again = await modal(`<h2>${won ? 'You won the demo 🏆' : 'You busted from the demo'}</h2><p>${won ? 'That is how a club tournament ends: one player takes every chip.' : `You finished ${ord(D.T.remaining + 1)} of 6.`} Nothing was saved.</p>`,
+          [{ label: 'Back to lobby', value: false }, { label: 'Play again', value: true, primary: true }]);
+        if(D.stopped) return;
+        if(again) return startDemo();
+        stopDemo(); view = 'lobby'; showScreen('lobby'); renderLobby(); return;
+      }
+      demoPublish();
+      await dsleep(1200);
+    }
+  }catch(e){ if(!D.stopped) console.error(e); }
+}
 
 connect();
 })();
