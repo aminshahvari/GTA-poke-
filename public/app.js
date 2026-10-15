@@ -179,7 +179,7 @@ function ownerNextHTML(){
   if(!club.me.owner || (T && ['registering', 'running'].includes(T.status))) return '';
   const name = T ? T.name : `${new Date().toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`;
   return `<div class="card-box next-box"><span class="eyebrow">Organizer</span><h3>Start the next tournament</h3>
-    <p>${T ? `Same settings as last time: ${fmt(T.stack)} chips, ${T.levelMin}-minute levels, ${T.tableSize === 6 ? '6-max tables' : (T.tableSize || 9) + '-handed tables'}, ${T.actSec || 20} seconds to act, ${T.anteMode === 'each' ? 'every player antes' : 'big blind ante'}${T.lateLevels ? `, late registration to level ${T.lateLevels}` : ''}.` : 'Opens registration so your friends can join.'}</p>
+    <p>${T ? `Same settings as last time: ${fmt(T.stack)} chips, ${T.levelMin}-minute levels, ${T.actSec || 20} seconds to act, ${T.anteMode === 'each' ? 'every player antes' : 'big blind ante'}${T.lateLevels ? `, late registration to level ${T.lateLevels}` : ''}.` : 'Opens registration so your friends can join.'}</p>
     <label class="start-pick">Starts<select id="againAt">${startChoices().map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
     <div class="btn-row"><button class="btn red big" id="againBtn">${T ? 'Play again' : 'Open a tournament'}</button><button class="btn" id="newCustomBtn">Change settings</button></div></div>`;
 }
@@ -309,7 +309,7 @@ function directorMainHTML(){
         <label>Name<input id="nName" maxlength="40" value="${esc(new Date().toLocaleDateString('en-US', { weekday: 'long' }))} Night Tournament"></label>
         <div class="two"><label>Starting stack<select id="nStack"><option>10000</option><option>20000</option><option selected>30000</option><option>50000</option><option value="60000">60000 (WSOP Main Event)</option></select></label>
         <label>Level length<select id="nLevel"><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20" selected>20 min</option><option value="30">30 min</option></select></label></div>
-        <div class="two"><label>Players per table<select id="nSize"><option value="9">9 (WSOP/WPT)</option><option value="8">8</option><option value="6" selected>6-max</option></select></label>
+        <div class="two"><label>Players per table<select id="nSize"><option value="9" selected>9 (WSOP/WPT)</option></select></label>
         <label>Late registration<select id="nLate"><option value="0">Off</option><option value="2">Until end of level 2</option><option value="4" selected>Until end of level 4</option><option value="6">Until end of level 6</option></select></label></div>
         <div class="two"><label>Ante<select id="nAnte"><option value="each" selected>Every player</option><option value="bb">Big blind (WSOP)</option></select></label>
         <label>Time to act<select id="nAct"><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="20" selected>20 seconds</option><option value="30">30 seconds</option></select></label></div>
@@ -323,7 +323,7 @@ function directorMainHTML(){
   }
   if(T.status === 'registering'){
     return `<div class="card-box"><span class="status-pill">Registration open</span><h3>${esc(T.name)}</h3>
-      <p>${T.regs.length} joined · ${Math.max(1, Math.ceil(T.regs.length / 9))} table${T.regs.length > 9 ? 's' : ''}${T.startAt ? ' · starts ' + esc(when(T.startAt)) : ''}</p>
+      <p>${T.regs.length} joined · ${Math.max(1, Math.ceil(T.regs.length / (T.tableSize || 9)))} table${T.regs.length > (T.tableSize || 9) ? 's' : ''}${T.startAt ? ' · starts ' + esc(when(T.startAt)) : ''}</p>
       <div class="plist">${T.regs.map(u => pchip(u, true)).join('') || '<span class="note">Waiting for players to join.</span>'}</div>
       ${T.regs.length < 2 ? `<p class="warn-note">You need at least 2 players to start. Send an invite, and ask your friend to tap <b>Join tournament</b> on the Tournament tab.</p>` : ''}
       <div class="btn-row"><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button><button class="btn" id="cancelBtn">Cancel</button></div></div>${members}`;
@@ -437,7 +437,7 @@ function wireLobby(){
   on('lateInvite', e => { e.preventDefault(); askInvite(); });
   on('againBtn', () => {
     const T = club.tourney, d = new Date();
-    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: $('againAt') && $('againAt').value ? +$('againAt').value : null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: T && T.tableSize ? T.tableSize : 6, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true });
+    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: $('againAt') && $('againAt').value ? +$('againAt').value : null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: 9, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true });
     send({ t: 'join' }); tab = 'event';
   });
   on('newCustomBtn', () => { tab = 'director'; renderLobby(); });
