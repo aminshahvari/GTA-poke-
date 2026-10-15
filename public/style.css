@@ -569,3 +569,21 @@ body{font-size:15px;letter-spacing:0}
 .pic-nudge{display:flex;gap:14px;align-items:flex-start}
 .pic-nudge p{margin:4px 0 10px}
 .prof p,.prof .note{text-align:left}
+
+/* coach tip, report card */
+.coachtip{margin:0 12px 6px;padding:9px 10px 9px 12px;border-radius:12px;background:rgba(27,32,43,.97);border:1px solid var(--line);border-left:4px solid var(--blue);display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.4;cursor:pointer;animation:bubIn .2s ease-out}
+.coachtip[hidden]{display:none}
+.coachtip.mistake{border-left-color:var(--red)}.coachtip.mind{border-left-color:#b57cff}.coachtip.good{border-left-color:var(--good)}.coachtip.luck{border-left-color:var(--gold)}
+.coachtip .ct-ic{font-size:18px;line-height:1.2}
+.coachtip b{font-size:14px}.coachtip p{margin:2px 0 0;color:#cfd5e0}
+.coachtip button{background:none;color:var(--muted);font-size:18px;line-height:1;padding:0 2px;margin-left:auto}
+.statgrid.three{grid-template-columns:repeat(3,1fr)}
+.rc-head{display:flex;gap:14px;align-items:center}
+.rc-head h2{margin:0;text-align:left}.rc-head small{color:var(--muted)}
+.rc-grade{width:64px;height:64px;border-radius:16px;display:grid;place-items:center;font-size:38px;font-weight:700;color:var(--g);background:color-mix(in srgb,var(--g) 15%,transparent);border:2px solid var(--g);flex:none}
+.rc-list{display:grid;gap:4px}
+.rc-row{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel2);border-radius:8px;padding:8px 10px}
+.rc-row small{display:block;color:var(--muted);font-size:12px}
+.rc-row b{font-size:16px;white-space:nowrap}
+.rc-row .bad{color:#ff7b7f}.rc-row .ok{color:var(--good)}
+.rc-ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14px;line-height:1.4;text-align:left}

@@ -17,6 +17,18 @@ terms: `
 <li><b>Questions.</b> Ask the organizer. Their decisions on rules and prizes are final.</li>
 </ol>`,
 lessons: [
+{ id: 'mindset', title: 'Mindset: play like a pro', mins: 3, body: `
+<p>Pros and recreational players see the same cards. The difference is how they decide, especially after something goes wrong.</p>
+<h4>Decisions, not results</h4>
+<p>You can play a hand perfectly and lose it, or play it badly and win. Over hundreds of hands, good decisions win. Judge yourself on whether the decision was right with what you knew, never on how the cards fell. The report card after each tournament does exactly this.</p>
+<h4>Tilt</h4>
+<p>Tilt is when a bad beat or a big loss changes how you play: calling too much, shoving to "get it back", playing hands you would normally fold. The coach marks a <b>Tilt check</b> when you make a mistake right after losing a big pot, and a <b>Stayed calm</b> when you keep playing well.</p>
+<ul><li>After a big loss, fold the next two or three marginal hands on purpose.</li><li>Take a breath before you act. The time to act is there to use.</li><li>The chips are gone. Only the next decision matters.</li></ul>
+<h4>Patience</h4>
+<p>Most hands should be folded. Folding weak hands from early position is not boring, it is how tournaments are won. Your <b>Patience</b> score is the share of weak hands you folded.</p>
+<h4>Be realistic</h4>
+<p>Even aces lose about one time in five against one opponent. Expect it, so it does not knock you off your game when it happens.</p>
+<p class="tipbox"><b>One habit to start with:</b> before every call, ask "what hands would my opponent do this with, and am I ahead of them?"</p>` },
 { id: 'rankings', title: 'Hand rankings', mins: 2, body: `
 <p>You make the best five-card hand from your two cards plus the five on the board. You can use both, one or none of your own cards.</p>
 <table class="ltable"><tr><th>Hand</th><th>Example</th><th>What it is</th></tr>
@@ -164,6 +176,10 @@ window.LEARN.rules = window.LEARN.rules.replace('%%TERMS%%', window.LEARN.terms)
 // Change log shown to the organizer in the Director tab, newest first.
 window.LEARN.news = [
   { date: 'Oct 15, 2026', items: [
+    'Coach tips during play: after a hand, a short private tip pops up above your cards when the coach saw something: a mistake, a good play, a bad beat, or a run of patient folds. Turned off with the hand helper.',
+    'Tilt and calm: the coach now flags a Tilt check when you make a mistake right after losing a big pot, and praises you when you stay calm. Your profile shows Patience and Calm after losses.',
+    'Report card after every tournament: a grade with clean decisions, patience, tilt moments, what you did well and one thing to work on next time. Find it under the final results.',
+    'New lesson: Mindset, play like a pro.',
     'Player pictures: upload a photo or pick an avatar (tap your name at the top). It shows at the table, in the players list and on the leaderboard.',
     'Skill tiers: every player gets a rating from how they play (the coach checks each hand) and their tournament finishes: New, Rookie, Regular, Solid, Shark 🦈 or Pro 💎. The tier color rings their picture. Sharks and Pros unlock extra things to throw.',
     'Player profiles: tap any player (at the table, in the joined list or on the leaderboard) to see their tier, tournaments played, wins, cashes, best finish, recent results and how they play.',

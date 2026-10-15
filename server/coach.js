@@ -195,4 +195,58 @@ function analyze(rec, me){
   return notes;
 }
 
-module.exports = { KEEP, chen, handName, positions, recorder, analyze, allInEquity, personal };
+// ---------- mindset: tilt, patience and staying calm ----------
+// Looks at a finished hand together with the player's previous hands in the same tournament (newest first).
+const voluntary = h => h.actions.some(a => a.seat === h.seat && a.st === 0 && (a.t === 'raise' || (a.t === 'call' && !(h.pos === 'BB' && a.toCall === 0))));
+const lostBig = h => h.net <= -20 * h.bb || h.notes.some(n => n.title === 'Bad beat');
+const hasMistake = h => h.notes.some(n => n.kind === 'mistake');
+function mind(h, prev){
+  const notes = [], add = (kind, title, text) => notes.push({ st: 0, kind, title, text });
+  const loss = prev.slice(0, 2).find(lostBig);
+  if(loss && hasMistake(h)){
+    const what = h.notes.find(n => n.kind === 'mistake').title.toLowerCase();
+    add('mind', 'Tilt check', `${prev[0] === loss ? 'Last hand' : 'Two hands ago'} you lost a big pot, and right after that: ${what}. That's how tilt starts: a loss pushes you into a play you'd normally skip. Pros let the last hand go and judge every hand on its own.`);
+  } else if(prev.length >= 3 && lostBig(prev[2]) && !hasMistake(prev[1]) && !hasMistake(prev[0]) && !hasMistake(h)){
+    add('good', 'Stayed calm', 'Three hands ago you lost a big pot, and you kept making good decisions since. Not chasing your losses is the hardest skill in poker. Well done.');
+  } else if(lostBig(h) && !hasMistake(h) && !h.notes.some(n => n.title === 'Bad beat')){
+    add('mind', 'Reset', `That was a big pot to lose. The next hand is a fresh start: don't try to win the chips back right away. Wait for a good hand and a good spot.`);
+  }
+  return notes;
+}
+// Was this a weak hand that patience says to fold? (not the big blind, which already paid)
+const weakHand = h => h.pos !== 'BB' && !!h.cards && h.cards.length === 2 && chen(h.cards.map(E.parse)) <= 5;
+
+// What a player did well and what to work on, over one tournament.
+const GOALS = {
+  'Limped in': 'Never just call the big blind. Raise or fold.',
+  'Opened a weak hand': 'Be patient early: fold weak hands from early position and wait.',
+  'Called off with a weak hand': 'Only call an all-in with a hand that is ahead of what your opponent shoves.',
+  'Risky call near the bubble': 'Near the money, fold medium hands to big bets and let short stacks bust first.',
+  'Called a raise with a weak hand': 'Against a raise, fold weak hands or re-raise strong ones. Avoid calling.',
+  'Small raise with a short stack': 'With 12 big blinds or less, go all-in or fold.',
+  'Paid off with nothing': 'On the river, only call if you beat a bluff.',
+  'Folded for a small price': 'When the price is small and you have a pair or better, call.',
+  'Tilt check': 'After losing a big pot, take a breath and play the next hands like it never happened.'
+};
+function reportCard(hands){
+  const n = hands.length;
+  if(!n) return null;
+  const clean = hands.filter(h => !hasMistake(h)).length, weak = hands.filter(weakHand), weakFolds = weak.filter(h => !voluntary(h)).length;
+  const vp = hands.filter(voluntary).length, pfr = hands.filter(h => h.actions.some(a => a.seat === h.seat && a.st === 0 && a.t === 'raise')).length;
+  const tilts = hands.filter(h => h.notes.some(x => x.title === 'Tilt check')).length, calm = hands.filter(h => h.notes.some(x => x.title === 'Stayed calm')).length;
+  const leaks = {}; hands.forEach(h => h.notes.forEach(x => { if(x.kind === 'mistake' || x.title === 'Tilt check') leaks[x.title] = (leaks[x.title] || 0) + 1; }));
+  const top = Object.entries(leaks).sort((a, b) => b[1] - a[1])[0];
+  const cleanP = Math.round(clean / n * 100), patience = weak.length ? Math.round(weakFolds / weak.length * 100) : null;
+  const score = Math.round(cleanP * .6 + (patience ?? cleanP) * .3 + (tilts ? 0 : 10) - tilts * 5);
+  const grade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 68 ? 'C' : score >= 55 ? 'D' : 'E';
+  const good = [];
+  if(cleanP >= 85) good.push('Very few mistakes: most of your decisions were right.');
+  if(patience != null && patience >= 85 && weak.length >= 4) good.push(`Patient: you folded ${weakFolds} of ${weak.length} weak hands.`);
+  if(vp >= 4 && pfr / vp >= .6) good.push('Aggressive in a good way: when you played a hand, you usually raised.');
+  if(calm) good.push(`You stayed calm after a big loss ${calm === 1 ? 'once' : calm + ' times'}.`);
+  if(!tilts && hands.some(lostBig)) good.push('No tilt: big losses did not change how you played.');
+  return { hands: n, clean: cleanP, patience, weak: weak.length, weakFolds, vpip: Math.round(vp / n * 100), pfr: Math.round(pfr / n * 100), tilts, calm, score: Math.max(0, Math.min(100, score)), grade,
+    good: good.slice(0, 3), leak: top ? { title: top[0], count: top[1] } : null, goal: top ? GOALS[top[0]] || 'Review your hands marked with a mistake under Learn.' : 'Keep doing exactly this. Next step: study the Lessons under Learn.' };
+}
+
+module.exports = { KEEP, chen, handName, positions, recorder, analyze, allInEquity, personal, mind, reportCard, weakHand, voluntary, hasMistake };

@@ -95,6 +95,8 @@ function connect(){
     if(m.t === 'hands'){ myHands = m.hands; if(view === 'lobby' && tab === 'learn') renderLobby(); return; }
     if(m.t === 'chat'){ onChat(m.msg); return; }
     if(m.t === 'profile'){ showProfile(m.profile); return; }
+    if(m.t === 'coach'){ onCoach(m.hand); return; }
+    if(m.t === 'report'){ showReport(m.report); return; }
     if(m.t === 'chatlog'){ chatLogs.set(m.tid, m.log); if(chatOpen) renderChat(); return; }
     if(m.t === 'chaterr'){ toast(m.error); return; }
     if(m.t === 'fair'){ showFair(m.report); return; }
@@ -195,7 +197,7 @@ function lastResultHTML(primary){
     <p>${h.entrants} players · ${new Date(h.endedAt).toLocaleDateString()} · Champion: ${esc(h.results[0] ? h.results[0].name : '')}</p>
     <table class="tbl dark"><thead><tr><th>Place</th><th>Player</th><th>Payout</th><th>Points</th></tr></thead><tbody>
     ${h.results.map(r => `<tr class="${r.uid === club.me.id ? 'me' : ''}"><td>${ord(r.place)}${r.tie ? ' <small>tie</small>' : ''}</td><td>${esc(r.name)}</td><td>${r.tie ? (() => { const s = Array.from({ length: r.tie }, (_, k) => (h.payouts && h.payouts[r.place - 1 + k]) || 0).reduce((a, b) => a + b, 0); return s ? Math.round(s / r.tie * 10) / 10 + '%' : '–'; })() : h.payouts && h.payouts[r.place - 1] ? h.payouts[r.place - 1] + '%' : '–'}</td><td class="num">${r.pts}</td></tr>`).join('')}</tbody></table>
-    ${h.fairSeed ? `<div class="btn-row"><button class="btn" data-fair="${esc(h.id)}">🔒 Check the shuffle</button></div>` : ''}</div>`;
+    <div class="btn-row">${h.results.some(r => r.uid === club.me.id) ? `<button class="btn red" data-report="${esc(h.id)}">📋 Your report card</button>` : ''}${h.fairSeed ? `<button class="btn" data-fair="${esc(h.id)}">🔒 Check the shuffle</button>` : ''}</div></div>`;
 }
 let boardRange = 'all', boardSeg = 'board';
 function prizesHTML(){
@@ -511,6 +513,8 @@ async function showProfile(p){
     <div class="statgrid">${st(p.played, 'Played')}${st(p.wins, 'Wins')}${st(p.cashes, 'Cashes')}${st(p.best ? ord(p.best) : '–', 'Best')}</div>
     <div class="eyebrow">How they play</div>
     <div class="statgrid">${st(fmt(p.hands), 'Hands')}${st(p.clean + '%', 'Clean hands')}${st(p.vpip + '%', 'Played (VPIP)')}${st(p.pfr + '%', 'Raised (PFR)')}</div>
+    <div class="eyebrow">Mindset</div>
+    <div class="statgrid three">${st(p.patience != null ? p.patience + '%' : '–', 'Patience')}${st(p.bigLosses ? Math.max(0, Math.round((1 - p.tilts / p.bigLosses) * 100)) + '%' : '–', 'Calm after losses')}${st(p.tilts, 'Tilt moments')}</div>
     <p class="note">${p.hands < 30 ? 'Not enough hands yet for a fair rating.' : p.clean >= 90 ? 'Makes very few mistakes: folds the right hands and raises when it counts.' : p.clean >= 80 ? 'Mostly solid decisions, with the odd leak.' : 'Still makes some costly mistakes; the coach under Learn helps.'} "Clean hands" are hands the coach found no mistake in.</p>
     <div class="eyebrow">Recent results</div>${recent}
     <details class="tiers-d"><summary>How tiers work</summary><div class="tier-list">${TIER_INFO.map(t => `<div><span class="tier-pill" style="--tc:${t[2]}">${TIER_ICON[t[0]] || ''}${t[1]}</span><small>${t[3]}</small></div>`).join('')}</div>
@@ -948,6 +952,56 @@ $('seats').addEventListener('click', e => {
   const why = throwBlock(); if(why) return toast(why);
   pickThrow(uid);
 });
+
+
+// ---------- coach: a private tip after each hand, tilt and patience coaching, report cards ----------
+const NOTE_ICON = { mind: '🧘', mistake: '⚠️', good: '✅', luck: '🍀', tip: '💡' };
+let weakStreak = 0, tipTimer = null;
+const firstSentences = (t, n = 2) => (t.match(/.+?[.!?](?=\s|$)/g) || [t]).slice(0, n).join('').trim();
+function onCoach(h){
+  const T = club && club.tourney;
+  if(!T || T.helper === false || view !== 'table') return;
+  const order = ['mind', 'mistake', 'luck', 'good', 'tip'];
+  const note = h.notes.slice().sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))[0];
+  if(note) return showTip(note.kind, note.title, firstSentences(note.text, note.kind === 'mind' ? 3 : 2));
+  // patience: praise a run of good folds, the habit that separates pros from everyone else
+  if(h.weakFold){ weakStreak++; if(weakStreak % 5 === 0) showTip('good', 'Patience', `You've folded ${weakStreak} weak hands in a row. Waiting for good spots is exactly what pros do.`); }
+  else if(h.played) weakStreak = 0;
+}
+function showTip(kind, title, text){
+  const el = $('coachTip'); clearTimeout(tipTimer);
+  el.className = 'coachtip ' + kind; el.hidden = false;
+  el.innerHTML = `<span class="ct-ic">${NOTE_ICON[kind] || '💡'}</span><div><b>${esc(title)}</b><p>${esc(text)}</p></div><button aria-label="Close">×</button>`;
+  tipTimer = setTimeout(() => { el.hidden = true; }, kind === 'mind' ? 14000 : 10000);
+}
+$('coachTip').onclick = () => { $('coachTip').hidden = true; clearTimeout(tipTimer); };
+const MINDSET = [
+  'Judge yourself on decisions, not results. A good fold that would have won is still a good fold.',
+  'You will lose with the best hand about one time in five. That is the game, not bad luck aimed at you.',
+  'Feeling angry or rushed? Fold the next couple of marginal hands and let it pass.',
+  'Patience wins tournaments: most hands should be folded, and that is fine.',
+  'Never play a hand to get even. The chips you lost are gone; only the next decision matters.',
+  'Short stack? Stay calm and wait for one good all-in spot. Panic shoves cost more than the blinds.'
+];
+async function showReport(r){
+  if(!r.hands) return modal(`<h2>Report card</h2><p>No hands were recorded for you in ${esc(r.name)}.</p>`, [{ label: 'OK', value: 1, primary: true }]);
+  const gc = { A: 'var(--good)', B: '#4a90f5', C: 'var(--gold)', D: '#e58a4d', E: 'var(--red)' }[r.grade];
+  const row = (l, v, sub) => `<div class="rc-row"><span>${l}${sub ? `<small>${sub}</small>` : ''}</span><b>${v}</b></div>`;
+  await modal(`<div class="prof rc"><div class="rc-head"><div class="rc-grade" style="--g:${gc}">${r.grade}</div><div><h2>Report card</h2><small>${esc(r.name)} · ${r.place ? ord(r.place) + ' of ' + r.entrants : ''} · ${r.hands} hands</small></div></div>
+    <div class="rc-list">
+      ${row('Clean decisions', r.clean + '%', 'Hands where the coach found no mistake')}
+      ${r.patience != null ? row('Patience', r.patience + '%', `Folded ${r.weakFolds} of ${r.weak} weak hands`) : ''}
+      ${row('Tilt moments', r.tilts ? `<span class="bad">${r.tilts}</span>` : '<span class="ok">None</span>', 'Mistakes right after losing a big pot')}
+      ${r.calm ? row('Stayed calm', r.calm + '×', 'Kept playing well after a big loss') : ''}
+      ${row('Played / raised', `${r.vpip}% / ${r.pfr}%`, 'Pros: play about 18 to 28%, raise most of them')}
+    </div>
+    ${r.good.length ? `<div class="eyebrow">What you did well</div><ul class="rc-ul">${r.good.map(g => `<li>${esc(g)}</li>`).join('')}</ul>` : ''}
+    <div class="eyebrow">Work on next time</div>
+    <p class="tipbox">${r.leak ? `<b>${esc(r.leak.title)}</b> (${r.leak.count}×). ` : ''}${esc(r.goal)}</p>
+    <p class="note">🧘 ${esc(MINDSET[Math.floor(Math.random() * MINDSET.length)])}</p></div>`,
+    [{ label: 'Review my hands', value: 'hands' }, { label: 'Done', value: null, primary: true }]).then(v => { if(v === 'hands'){ tab = 'learn'; learnSeg = 'hands'; openHand = null; send({ t: 'hands' }); renderLobby(); } });
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-report]'); if(b) send({ t: 'report', id: b.dataset.report }); });
 
 // ---------- hand helper: what you have, your chance to win and whether a call pays ----------
 const eqCache = new Map();

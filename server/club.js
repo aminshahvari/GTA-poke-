@@ -19,7 +19,7 @@ const AWAY_BANK = FAST ? 300 : 2500;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fmt = n => Math.round(n).toLocaleString('en-US');
 
-let hooks = { onClub(){}, onTable(){}, onTableClosed(){} };
+let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){} };
 const tables = new Map();   // tid -> live table
 const waiters = new Map();  // uid -> pending decision
 let running = false, clockTimer = null;
@@ -175,7 +175,12 @@ async function waitUnpaused(){ while(running && T() && T().paused) await sleep(3
 
 // ---------- table loop ----------
 function saveHand(uid, hand){
+  // tilt, patience and calm: judged against this player's previous hands in the same tournament
+  const prev = handsFor(uid).filter(x => x.tourney === hand.tourney && hand.ts - x.ts < 12 * 3600000).slice(0, 3);
+  try{ hand.notes.push(...coach.mind(hand, prev)); }catch(e){ console.error('mind notes failed', e); }
   store.set(`hand:${uid}:${hand.id}`, hand);
+  const t = T();
+  if(!t || t.helper !== false) hooks.onCoach(uid, hand);
   try{ players.recordHand(uid, hand); }catch(e){ console.error('player stats failed', e); }
   const ks = store.keys(`hand:${uid}:`);
   if(ks.length > coach.KEEP) ks.map(k => [k, store.get(k).ts]).sort((a, b) => a[1] - b[1]).slice(0, ks.length - coach.KEEP).forEach(([k]) => store.del(k));

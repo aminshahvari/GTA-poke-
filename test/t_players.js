@@ -37,6 +37,17 @@ const P = require('../server/players');
   assert.deepStrictEqual([r3.played, r3.wins, r3.cashes, r3.best], [3, 3, 3, 1]);
   assert.strictEqual(P.tierFor(P.rating(good, r3), good, r3).id, 'pro');
   assert.strictEqual(P.tierFor(P.rating(bad, r3), bad, r3).id === 'pro', false);
+  // mindset: tilt after a big loss, staying calm, report card
+  const coach = require('../server/coach');
+  const H = (net, notes = [], pre = ['fold'], cards = ['7c', '2d'], pos = 'CO') => ({ seat: 1, pos, bb: 100, net, cards, notes: notes.map(k => ({ kind: k, title: k === 'mistake' ? 'Called off with a weak hand' : k })), actions: pre.map(t => ({ seat: 1, st: 0, t, toCall: 100 })) });
+  const big = H(-3000);
+  assert.strictEqual(coach.mind(H(-200, ['mistake'], ['call']), [big])[0].title, 'Tilt check');
+  assert.strictEqual(coach.mind(H(0), [H(0), H(0), big])[0].title, 'Stayed calm');
+  assert.strictEqual(coach.mind(H(-3000), [])[0].title, 'Reset');
+  assert.strictEqual(coach.mind(H(-100, ['mistake'], ['call']), [H(0)]).length, 0, 'no tilt without a big loss');
+  const rc = coach.reportCard([H(0), H(0), H(0), H(-200, ['mistake'], ['call']), H(0, [], ['raise'], ['As', 'Ks'])]);
+  assert.strictEqual(rc.hands, 5); assert.strictEqual(rc.clean, 80); assert.strictEqual(rc.weak, 4); assert.strictEqual(rc.weakFolds, 3);
+  assert.strictEqual(rc.leak.title, 'Called off with a weak hand'); assert.ok(rc.goal && rc.grade);
   console.log('players test passed');
   process.exit(0);
 })().catch(e => { console.error(e); process.exit(1); });

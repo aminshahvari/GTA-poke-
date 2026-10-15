@@ -9,6 +9,7 @@ const club = require('./club');
 const E = require('./engine');
 const fair = require('./fair');
 const players = require('./players');
+const coach = require('./coach');
 
 const PORT = +process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -256,7 +257,7 @@ function pushTable(tid){
     sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null });
   }
 }
-club.setHooks({ onClub: broadcastClub, onTable: pushTable, onTableClosed: tid => { chatLogs.delete(tid); for(const ws of sockets) sendWS(ws, { t: 'closed', tid }); broadcastClub(); } });
+club.setHooks({ onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.user.id === uid) sendWS(ws, msg); }, onClub: broadcastClub, onTable: pushTable, onTableClosed: tid => { chatLogs.delete(tid); for(const ws of sockets) sendWS(ws, { t: 'closed', tid }); broadcastClub(); } });
 
 wss.on('connection', (ws, req) => {
   const origin = req.headers.origin;
@@ -293,6 +294,10 @@ wss.on('connection', (ws, req) => {
         case 'back': club.back(u.id); break;
         case 'join': club.join(u.id); break;
         case 'hands': sendWS(ws, { t: 'hands', hands: club.handsFor(u.id) }); break;
+        case 'report': { const h = store.get('history:' + String(m.id || '')); if(!h) break;
+          const me = h.results.find(r => r.uid === u.id);
+          const hands = club.handsFor(u.id).filter(x => x.ts >= (h.startedAt || 0) - 60000 && x.ts <= h.endedAt + 60000);
+          sendWS(ws, { t: 'report', report: { id: h.id, name: h.name, at: h.endedAt, entrants: h.entrants, place: me ? me.place : null, pts: me ? me.pts : 0, ...(coach.reportCard(hands) || { hands: 0 }) } }); } break;
         case 'profile': { const x = store.get('user:' + m.uid); if(x && !x.removed) sendWS(ws, { t: 'profile', profile: { ...players.profile(x.id, membersView().all), name: x.name, av: x.av || null, since: x.createdAt, perks: players.perksFor(players.profile(x.id, membersView().all).tier) } }); } break;
         case 'avatarClear': own(u); { const x = store.get('user:' + m.uid); if(x){ store.set('user:' + x.id, players.setAvatar(x, { kind: 'none' })); memo = null; broadcastClub(); } } break;
         case 'leave': club.leave(u.id); break;

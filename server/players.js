@@ -1,6 +1,7 @@
 // Player profiles: avatars, lifetime play stats and a skill rating everyone at the club can see.
 // Stats are counted from every hand a player finishes, so they outlive the 80 hands kept for review.
 const store = require('./store');
+const coach = require('./coach');
 
 // Gallery avatars: an emoji on a colored disc. Ids are what gets stored on the user.
 const GALLERY = {
@@ -34,6 +35,10 @@ function recordHand(uid, h){
   const m = h.notes.filter(n => n.kind === 'mistake').length;
   s.mistakes += m; if(m) s.mhands++;
   s.good += h.notes.filter(n => n.kind === 'good').length;
+  if(coach.weakHand(h)){ s.weak = (s.weak || 0) + 1; if(!coach.voluntary(h)) s.weakFolds = (s.weakFolds || 0) + 1; }
+  if(h.notes.some(n => n.title === 'Tilt check')) s.tilts = (s.tilts || 0) + 1;
+  if(h.notes.some(n => n.title === 'Stayed calm')) s.calm = (s.calm || 0) + 1;
+  if(h.notes.some(n => n.title === 'Reset' || n.title === 'Bad beat')) s.bigLosses = (s.bigLosses || 0) + 1;
   store.set('pstat:' + uid, s);
 }
 
@@ -65,6 +70,7 @@ function rating(s, r){
     play -= Math.min(25, Math.max(0, 14 - vp, vp - 34) * 1.4); // too tight or too loose
     if(s.vpip >= 5 && ratio < .5) play -= Math.min(15, (.5 - ratio) * 40); // calls a lot, raises little
     play += Math.min(8, s.good / s.hands * 150);
+    play -= Math.min(15, (s.tilts || 0) / s.hands * 400);   // mistakes right after a big loss count extra
   } else play = 55;
   const res = r.played ? r.pctl * 70 + (r.cashes / r.played) * 30 : 50;
   const w = Math.min(r.played, 10) / 10 * .4;
@@ -82,7 +88,8 @@ function profile(uid, history){
   const r = results(uid, history), score = rating(s, r), t = tierFor(score, s, r);
   return { uid, score, tier: t.id, tierName: t.name, color: t.color,
     hands: s.hands, vpip: s.hands ? Math.round(s.vpip / s.hands * 100) : 0, pfr: s.hands ? Math.round(s.pfr / s.hands * 100) : 0,
-    clean: s.hands ? Math.round((1 - s.mhands / s.hands) * 100) : 0, good: s.good, ...r, pctl: Math.round(r.pctl * 100) };
+    clean: s.hands ? Math.round((1 - s.mhands / s.hands) * 100) : 0, good: s.good,
+    patience: s.weak >= 5 ? Math.round(s.weakFolds / s.weak * 100) : null, tilts: s.tilts || 0, calm: s.calm || 0, bigLosses: s.bigLosses || 0, ...r, pctl: Math.round(r.pctl * 100) };
 }
 const perksFor = tier => PERKS[tier] || [];
 
