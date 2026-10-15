@@ -2,6 +2,9 @@
 // balances and breaks tables, and records results. Hole cards never leave the
 // server except to the player who holds them.
 const E = require('./engine');
+const fair = require('./fair');
+const crypto = require('crypto');
+const rand = () => crypto.randomInt(0x100000000) / 0x100000000;
 const store = require('./store');
 const coach = require('./coach');
 
@@ -76,7 +79,7 @@ function start(){
   if(!t || t.status !== 'registering') throw new Error('No tournament is open.');
   const regs = t.regs.filter(u => { const us = store.get('user:' + u); return us && !us.removed; });
   if(regs.length < 2) throw new Error('At least 2 players need to join.');
-  for(let i = regs.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [regs[i], regs[j]] = [regs[j], regs[i]]; }
+  for(let i = regs.length - 1; i > 0; i--){ const j = crypto.randomInt(i + 1); [regs[i], regs[j]] = [regs[j], regs[i]]; }
   const nT = Math.ceil(regs.length / 9), groups = Array.from({ length: nT }, () => []), cap = Math.ceil(regs.length / nT);
   // random seating, but players from the same household / internet / device go to different tables when possible
   const conflicts = (grp, u) => grp.filter(v => linker(u, v)).length;
@@ -90,6 +93,8 @@ function start(){
     const tb = newTable(t.id + '-' + (i + 1), i + 1);
     spread(grp.length).forEach((s, k) => { const p = mkPlayer(grp[k], t.stack); p.seat = s; tb.g.seats[s] = p; });
   });
+  const { seed, seal } = fair.newSeed(); fair.prune();
+  saveT({ fairSeed: seed, fairSeal: seal });
   saveT({ status: 'running', startedAt: Date.now(), level: 0, levelEndsAt: Date.now() + t.levelMin * 60000, paused: false, pausedLeft: 0,
     entrants: regs.length, remaining: regs.length, places: [], regs });
   saveLive();
@@ -98,6 +103,7 @@ function start(){
 function resume(){
   const t = T(), live = store.get('live');
   if(!t || t.status !== 'running' || !live) return false;
+  if(!t.fairSeed){ const { seed, seal } = fair.newSeed(); saveT({ fairSeed: seed, fairSeal: seal }); }
   tables.clear();
   for(const lt of live.tables){
     const tb = newTable(lt.tid, lt.n);
@@ -153,7 +159,8 @@ function tableIO(tb){
     save: saveHand
   });
   return {
-    rng: Math.random,
+    rng: rand,
+    async deck(handNo){ const t = T(); if(!t || !t.fairSeed) return null; const r = await fair.deckForHand(t, tb.tid, handNo); tb.fairRec = r.rec; return r.deck; },
     async event(type, data){
       try{ tb.record(type, tb.g, data); }catch(e){ console.error('hand record failed', e); }
       if(!running) return;
@@ -241,6 +248,7 @@ async function loop(tb){
     let out;
     try{ out = await E.playHand(g, tableIO(tb)); }
     catch(e){ console.error('hand failed', tb.tid, e); tb.inHand = false; await sleep(1000); continue; }
+    if(tb.fairRec && g.hand && T()){ try{ fair.saveHand(T().id, tb.fairRec, g.hand); }catch(e){ console.error('fair record failed', e); } tb.fairRec = null; }
     tb.inHand = false; if(!hfh.on) tb.note = '';
     if(!running) return;
     const inRound = hfh.on;
@@ -283,7 +291,7 @@ function seatInto(dest, p, mode){
   const inGap = s => { if(g.btn < 0 || g.sb < 0 || g.sb === g.btn) return false; for(let k = 1; k < 9; k++){ const j = (g.btn + k) % 9; if(j === g.sb) return false; if(j === s) return true; } return false; };
   let cands = free.filter(s => !inGap(s)); if(!cands.length) cands = free;
   // TDA 12-A / WSOP 67: a player moved to balance tables takes the worst position, the seat that posts the big blind soonest
-  const s = mode === 'balance' && g.bb >= 0 ? cands.slice().sort((a, b) => ((a - g.bb + 9) % 9) - ((b - g.bb + 9) % 9))[0] : cands[Math.floor(Math.random() * cands.length)];
+  const s = mode === 'balance' && g.bb >= 0 ? cands.slice().sort((a, b) => ((a - g.bb + 9) % 9) - ((b - g.bb + 9) % 9))[0] : cands[crypto.randomInt(cands.length)];
   Object.assign(p, { seat: s, cards: [], bet: 0, total: 0, folded: false, allIn: false, act: '' });
   dest.g.seats[s] = p;
   publish(dest);
@@ -341,7 +349,7 @@ function finish(){
     const ps = grp.map(x => x.place), pts = Math.round(ps.reduce((a, pl) => a + pointsFor(n, pl), 0) / ps.length);
     return { uid: r.uid, name: userName(r.uid), place: Math.min(...ps), pts, tie: ps.length };
   });
-  store.set('history:' + t.id, { id: t.id, name: t.name, startedAt: t.startedAt, endedAt: Date.now(), entrants: n, results, payouts: payoutPcts(n) });
+  store.set('history:' + t.id, { id: t.id, name: t.name, startedAt: t.startedAt, endedAt: Date.now(), entrants: n, results, payouts: payoutPcts(n), fairSeal: t.fairSeal, fairSeed: t.fairSeed });
   saveT({ status: 'finished', endedAt: Date.now() });
   store.del('live');
   for(const tid of [...tables.keys()]) closeTable(tid);

@@ -224,7 +224,8 @@ async function playHand(g, io){
   const players = [];
   for(let k = 1; k <= 9; k++){ const s = (g.btn + k) % 9, p = g.seats[s]; if(p && p.stack > 0) players.push(p); }
   players.forEach(p => Object.assign(p, { seat: g.seats.indexOf(p), cards: [], bet: 0, total: 0, folded: false, allIn: false, acted: false, facedBet: 0, act: '', start: p.stack, shown: false, best: null, val: 0, won: 0, ante: 0 }));
-  const h = g.hand = { no: g.handNo + 1, players, board: [], deck: shuffled(rng), currentBet: 0, minRaise: BB, bbAmt: BB, sbAmt: SB, anteAmt: ANTE, dead: 0, street: 0, raiseCount: 0, acting: -1, result: null };
+  const deck = (io.deck && await io.deck(g.handNo + 1)) || shuffled(rng);
+  const h = g.hand = { no: g.handNo + 1, players, board: [], deck, currentBet: 0, minRaise: BB, bbAmt: BB, sbAmt: SB, anteAmt: ANTE, dead: 0, street: 0, raiseCount: 0, acting: -1, result: null };
   const sbP = g.sb !== g.bb ? g.seats[g.sb] : null, bbP = g.seats[g.bb];
   if(sbP && sbP.stack > 0){ put(sbP, SB); sbP.act = 'SB'; }
   put(bbP, BB); bbP.act = 'BB';

@@ -30,6 +30,7 @@ function modal(html, buttons){
     const root = $('modalRoot');
     root.innerHTML = `<div class="modal"><div class="glass">${html}<div class="row">${buttons.map((b, i) => `<button class="${b.primary ? 'btn-red' : 'btn-ghost'}" data-i="${i}">${b.label}</button>`).join('')}</div></div></div>`;
     root.querySelectorAll('[data-i]').forEach(btn => btn.onclick = () => { root.innerHTML = ''; res(buttons[+btn.dataset.i].value); });
+    root.querySelectorAll('[data-v]').forEach(btn => btn.onclick = () => { root.innerHTML = ''; res(btn.dataset.v); });
   });
 }
 
@@ -92,6 +93,10 @@ function connect(){
     if(m.t === 'skillq'){ askSkill(m.rid, m.q); return; }
     if(m.t === 'claimed'){ modal('<h2>Prize claimed 🎉</h2><p>The organizer has been told and will get it to you. You can follow it under Prizes.</p>', [{ label: 'Great', value: 1, primary: true }]); return; }
     if(m.t === 'hands'){ myHands = m.hands; if(view === 'lobby' && tab === 'learn') renderLobby(); return; }
+    if(m.t === 'chat'){ onChat(m.msg); return; }
+    if(m.t === 'chatlog'){ chatLogs.set(m.tid, m.log); if(chatOpen) renderChat(); return; }
+    if(m.t === 'chaterr'){ toast(m.error); return; }
+    if(m.t === 'fair'){ showFair(m.report); return; }
     if(m.t === 'error'){ modal(`<h2>That didn't work</h2><p>${esc(m.error)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
   };
   ws.onclose = () => { $('offline').hidden = false; setTimeout(connect, Math.min(8000, 500 * 2 ** retry++)); };
@@ -148,7 +153,8 @@ function eventHTML(){
     return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Players left</small><b>${T.remaining} of ${T.entrants}</b></div><div><small>Level</small><b>${T.level + 1}</b></div><div><small>Blinds</small><b>${fmt(sb)}/${fmt(bb)}</b></div></div>
       ${club.myTable ? `<button class="btn red" data-watch="${esc(club.myTable)}">Go to my table</button>` : out ? `<p>You finished ${ord(out.place)}. You can still watch.</p>` : '<p>You are not playing in this one. You can watch any table.</p>'}
-      <div class="table-list">${club.tables.map(t => `<div class="trow"><b>Table ${t.n}</b><small>${t.players} players</small><button class="back" data-watch="${esc(t.tid)}">Watch</button></div>`).join('')}</div></div>`;
+      <div class="table-list">${club.tables.map(t => `<div class="trow"><b>Table ${t.n}</b><small>${t.players} players</small><button class="back" data-watch="${esc(t.tid)}">Watch</button></div>`).join('')}</div>
+      ${T.seal ? `<p class="note seal">🔒 Shuffle seal <code>${esc(T.seal.slice(0, 16))}</code> · <a href="#" data-sealinfo>what's this?</a></p>` : ''}</div>`;
   }
   return `${T.status === 'cancelled' ? `<div class="card-box"><span class="status-pill idle">Cancelled</span><h3>${esc(T.name)}</h3><p>${esc(T.note || 'The owner cancelled this tournament.')}</p></div>` : ''}${lastResultHTML(T.status === 'finished')}`;
 }
@@ -157,7 +163,8 @@ function lastResultHTML(primary){
   return `<div class="card-box"><span class="eyebrow">${primary ? 'Final results' : 'Last tournament'}</span><h3>${esc(h.name)}</h3>
     <p>${h.entrants} players · ${new Date(h.endedAt).toLocaleDateString()} · Champion: ${esc(h.results[0] ? h.results[0].name : '')}</p>
     <table class="tbl dark"><thead><tr><th>Place</th><th>Player</th><th>Payout</th><th>Points</th></tr></thead><tbody>
-    ${h.results.map(r => `<tr class="${r.uid === club.me.id ? 'me' : ''}"><td>${ord(r.place)}${r.tie ? ' <small>tie</small>' : ''}</td><td>${esc(r.name)}</td><td>${r.tie ? (() => { const s = Array.from({ length: r.tie }, (_, k) => (h.payouts && h.payouts[r.place - 1 + k]) || 0).reduce((a, b) => a + b, 0); return s ? Math.round(s / r.tie * 10) / 10 + '%' : '–'; })() : h.payouts && h.payouts[r.place - 1] ? h.payouts[r.place - 1] + '%' : '–'}</td><td class="num">${r.pts}</td></tr>`).join('')}</tbody></table></div>`;
+    ${h.results.map(r => `<tr class="${r.uid === club.me.id ? 'me' : ''}"><td>${ord(r.place)}${r.tie ? ' <small>tie</small>' : ''}</td><td>${esc(r.name)}</td><td>${r.tie ? (() => { const s = Array.from({ length: r.tie }, (_, k) => (h.payouts && h.payouts[r.place - 1 + k]) || 0).reduce((a, b) => a + b, 0); return s ? Math.round(s / r.tie * 10) / 10 + '%' : '–'; })() : h.payouts && h.payouts[r.place - 1] ? h.payouts[r.place - 1] + '%' : '–'}</td><td class="num">${r.pts}</td></tr>`).join('')}</tbody></table>
+    ${h.fairSeed ? `<div class="btn-row"><button class="btn" data-fair="${esc(h.id)}">🔒 Check the shuffle</button></div>` : ''}</div>`;
 }
 let boardRange = 'all', boardSeg = 'board';
 function prizesHTML(){
@@ -222,7 +229,9 @@ function directorMainHTML(){
     <p class="note">Each link works once. Send it to one friend in WhatsApp or Telegram. They open it, pick a name and PIN, and they're in.</p>
     ${club.invites && club.invites.length ? `<div class="table-list">${club.invites.map(i => `<div class="trow"><b>Unused invite</b><small>${new Date(i.createdAt).toLocaleDateString()}</small><button class="back" data-copy="${esc(i.code)}">Copy</button><button class="back" data-revoke="${esc(i.code)}">Cancel</button></div>`).join('')}</div>` : ''}
     <div class="table-list">${club.members.map(m => { const hh = club.households && club.households[m.id], mates = hh ? club.members.filter(x => x.id !== m.id && club.households[x.id] === hh).map(x => x.name) : [];
-      return `<div class="trow"><b>${esc(m.name)}</b><small>${m.role === 'owner' ? 'Owner' : 'Member since ' + new Date(m.createdAt).toLocaleDateString()}${mates.length ? ` · Home with ${esc(mates.join(', '))}` : ''}</small><span class="row-btns"><button class="back" data-home="${esc(m.id)}">Home</button>${m.role === 'owner' ? '' : `<button class="back" data-remove="${esc(m.id)}">Remove</button>`}</span></div>`; }).join('')}</div>
+      return `<div class="trow"><b>${esc(m.name)}</b><small>${m.role === 'owner' ? 'Owner' : 'Member since ' + new Date(m.createdAt).toLocaleDateString()}${mates.length ? ` · Home with ${esc(mates.join(', '))}` : ''}</small><span class="row-btns">${m.role === 'owner' ? '' : `<button class="back" data-mute="${esc(m.id)}" data-on="${(club.mutedIds || []).includes(m.id) ? 1 : 0}">${(club.mutedIds || []).includes(m.id) ? 'Unmute' : 'Mute'}</button>`}<button class="back" data-home="${esc(m.id)}">Home</button>${m.role === 'owner' ? '' : `<button class="back" data-remove="${esc(m.id)}">Remove</button>`}</span></div>`; }).join('')}</div>
+    <div class="btn-row"><button class="btn" id="chatOffBtn">${club.chatOff ? 'Turn table chat on' : 'Turn table chat off'}</button></div>
+    <p class="note">Table chat is ${club.chatOff ? '<b>off</b>' : '<b>on</b>'}. <b>Mute</b> stops one person from chatting or throwing things.</p>
     <p class="note">Use <b>Home</b> to mark people who live together (for example a couple). They're never seated at the same table. Players on the same internet or the same phone are kept apart automatically.</p></div>`;
   if(!T || ['finished', 'cancelled'].includes(T.status)){
     const d = new Date(Date.now() + 864e5); d.setHours(20, 0, 0, 0);
@@ -269,9 +278,10 @@ function handStats(hs){
   return { n: hs.length, vpip: hs.length ? Math.round(vpip / hs.length * 100) : 0, pfr: hs.length ? Math.round(pfr / hs.length * 100) : 0, mistakes, top };
 }
 function learnHTML(){
-  const seg = `<div class="seg2">${[['hands','My hands'],['lessons','Lessons'],['rules','Rules']].map(([k, l]) => `<button data-seg="${k}" aria-pressed="${learnSeg === k}">${l}</button>`).join('')}</div>`;
+  const seg = `<div class="seg2">${[['hands','My hands'],['lessons','Lessons'],['rules','Rules'],['fair','Fair deal']].map(([k, l]) => `<button data-seg="${k}" aria-pressed="${learnSeg === k}">${l}</button>`).join('')}</div>`;
   if(learnSeg === 'lessons') return `<div class="card-box"><span class="eyebrow">Poker school</span>${seg}<p>Short lessons for tournament players. Start at the top.</p></div>
     ${window.LEARN.lessons.map((l, i) => `<details class="lesson card-box"><summary><span class="ln">${i + 1}</span><b>${esc(l.title)}</b><small>${l.mins} min</small></summary><div class="lbody">${l.body}</div></details>`).join('')}`;
+  if(learnSeg === 'fair') return fairHTML(seg);
   if(learnSeg === 'rules') return `<div class="card-box"><span class="eyebrow">Club rules</span>${seg}</div><div class="card-box lbody">${window.LEARN.rules}</div>`;
   if(openHand){ const h = (myHands || []).find(x => x.id === openHand); if(h) return handReviewHTML(h); openHand = null; }
   if(!myHands) return `<div class="card-box"><span class="eyebrow">Hand review</span>${seg}<div class="empty">Loading your hands…</div></div>`;
@@ -318,6 +328,10 @@ function wireLearn(){
 
 function wireLobby(){
   wireLearn();
+  document.querySelectorAll('[data-fair]').forEach(b => b.onclick = () => { b.disabled = true; b.textContent = 'Checking…'; send({ t: 'fair', id: b.dataset.fair }); });
+  document.querySelectorAll('[data-sealinfo]').forEach(a => a.onclick = e => { e.preventDefault(); tab = 'learn'; learnSeg = 'fair'; renderLobby(); });
+  document.querySelectorAll('[data-mute]').forEach(b => b.onclick = () => send({ t: 'mute', uid: b.dataset.mute, muted: b.dataset.on !== '1' }));
+  on2('chatOffBtn', () => send({ t: 'chatOff', off: !club.chatOff }));
   document.querySelectorAll('[data-bseg]').forEach(b => b.onclick = () => { boardSeg = b.dataset.bseg; renderLobby(); });
   document.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => send({ t: 'skillq', rid: b.dataset.claim }));
   document.querySelectorAll('[data-rmrw]').forEach(b => b.onclick = async () => { if(await modal('<h2>Remove this prize?</h2><p>Claims already made stay on the list.</p>', [{ label: 'Keep', value: false }, { label: 'Remove', value: true, primary: true }])) send({ t: 'removeReward', id: b.dataset.rmrw }); });
@@ -372,8 +386,8 @@ function showInvite(code){
   $('copyBtn').onclick = () => { const i = $('invUrl'); i.select(); (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => $('copyBtn').textContent = 'Copied').catch(() => { try{ document.execCommand('copy'); $('copyBtn').textContent = 'Copied'; }catch(e){} }); };
   const sb = $('shareBtn'); if(sb) sb.onclick = () => navigator.share({ title: 'Stacked Live invite', text, url }).catch(() => {});
 }
-function openTable(tid){ watchTid = tid; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid }); renderTable(); }
-$('lobbyBtn').onclick = () => { view = 'lobby'; send({ t: 'watch', tid: null }); showScreen('lobby'); renderLobby(); };
+function openTable(tid){ if(tid !== watchTid){ chatUnread = 0; $('chatDot').hidden = true; } watchTid = tid; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid }); renderTable(); }
+$('lobbyBtn').onclick = () => { openChat(false); view = 'lobby'; send({ t: 'watch', tid: null }); showScreen('lobby'); renderLobby(); };
 
 // ---------- table ----------
 const POS = Array.from({ length: 9 }, (_, k) => { const a = (90 + k * 40) * Math.PI / 180; return [50 + 40 * Math.cos(a), 46 + 39.5 * Math.sin(a)]; });
@@ -439,8 +453,8 @@ function renderTable(){
     const av = `<div class="av" style="--c:${colorOf(p.uid)}">${esc(initials(p.name))}</div>`;
     const shot = acting ? '<div class="shot"><i class="shotBar"></i></div>' : '';
     html += isMe
-      ? `<div class="${cls}" style="left:${pos[0]}%;top:${pos[1]}%"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
-      : `<div class="${cls}" style="left:${pos[0]}%;top:${pos[1]}%"><div class="hole">${hole}</div>${av}<div class="plate"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`;
+      ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
+      : `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%"><div class="hole">${hole}</div>${av}<div class="plate"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`;
     if(p.inHand && p.bet > 0){
       const bp = toward(pos, (s - rot + 9) % 9 === 0 ? .36 : .4), [bx, by] = pctToPx(bp), [sx, sy] = pctToPx(pos);
       const key = `b${handKey}-${d.street}-${s}-${p.bet}`, isNew = !seen.has(key); seen.add(key);
@@ -563,6 +577,124 @@ function celebrate(){
   const t0 = performance.now();
   (function frame(t){ x.clearRect(0, 0, c.width, c.height); ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.r += .1; x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.fillStyle = p.col; x.fillRect(-p.w/2, -p.w/4, p.w, p.w/2); x.restore(); }); if(t - t0 < 4500) requestAnimationFrame(frame); else c.hidden = true; })(t0);
 }
+
+
+const on2 = (id, f) => { const el = $(id); if(el) el.onclick = f; };
+function toast(text){
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = text;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2600);
+}
+
+// ---------- fair deal ----------
+function fairHTML(seg){
+  const T = club.tourney, past = club.history.filter(h => h.fairSeed).slice(0, 10);
+  return `<div class="card-box"><span class="eyebrow">Fair deal</span>${seg}
+    <h3>Nobody can set up a deck here. Not even the owner.</h3>
+    <ol class="fair-steps">
+      <li><b>Sealed before the first hand.</b> When a tournament starts, the server picks a secret number and shows everyone its fingerprint (the <i>shuffle seal</i>). The secret can't be swapped later without the fingerprint changing.</li>
+      <li><b>A public lottery number for every hand.</b> Each deck is also mixed with a random number from <a href="https://drand.love" target="_blank" rel="noopener">drand</a>, a public randomness service run by universities and companies around the world. A new number comes out every 3 seconds and nobody can know it in advance, so nobody can choose which cards come.</li>
+      <li><b>Check it yourself.</b> When the tournament ends the secret is revealed. Tap <b>Check the shuffle</b> and your own phone rebuilds every deck and compares it with the cards that were really dealt. One wrong card in one hand and it says so.</li>
+    </ol>
+    ${T && T.status === 'running' && T.seal ? `<p class="note">Seal for <b>${esc(T.name)}</b> (playing now):<br><code class="sealcode">${esc(T.seal)}</code><br>Take a screenshot. After the tournament, the check proves the revealed secret matches this seal.</p>` : ''}
+    <p class="note">After a check you can also see every player's cards for every hand of that tournament, including folded hands. That's how you know nothing was hidden.${club.version ? ` Running code version <code>${esc(club.version)}</code>.` : ''}</p></div>
+    <div class="card-box"><span class="eyebrow">Check a tournament</span>
+    ${past.length ? `<div class="table-list">${past.map(h => `<div class="trow"><b>${esc(h.name)}</b><small>${new Date(h.endedAt).toLocaleDateString()} · ${h.entrants} players</small><button class="back" data-fair="${esc(h.id)}">Check</button></div>`).join('')}</div>`
+      : '<div class="empty">Tournaments show up here after they finish.</div>'}</div>`;
+}
+const cardTxt = c => { const r = E.RANKS[E.rankOf(c) - 2], st = E.suitOf(c); return `<span class="mc ${st === 1 || st === 2 ? 'red' : ''}">${r === 'T' ? '10' : r}${E.SUITS[st]}</span>`; };
+async function showFair(rep){
+  document.querySelectorAll('[data-fair]').forEach(b => { b.disabled = false; b.textContent = b.closest('.trow') ? 'Check' : '🔒 Check the shuffle'; });
+  if(!rep) return modal('<h2>Not found</h2><p>That tournament has no shuffle record.</p>', [{ label: 'OK', value: 1, primary: true }]);
+  if(!rep.seed) return modal('<h2>Still sealed</h2><p>The secret is revealed when the tournament ends. Then you can check every hand.</p>', [{ label: 'OK', value: 1, primary: true }]);
+  modal('<h2>Checking every hand…</h2><p id="fairProg">Rebuilding the decks on your phone.</p>', []);
+  const r = await window.FAIR.verify(rep, (k, n) => { const el = $('fairProg'); if(el) el.textContent = `Checked ${k} of ${n} hands…`; });
+  let beacons = '';
+  const withRound = rep.hands.filter(h => h.round);
+  if(withRound.length){
+    const sample = withRound.slice(-5), res = await Promise.all(sample.map(h => window.FAIR.checkBeacon(rep, h)));
+    const ok = res.filter(x => x === true).length, bad = res.filter(x => x === false).length;
+    beacons = bad ? `<p class="bad">⚠️ ${bad} public random number(s) didn't match drand.</p>` : ok ? `<p class="good">✓ Asked drand directly: the public random numbers match (${ok} checked).</p>` : '<p class="note">Couldn\'t reach drand from this phone to double-check the public numbers.</p>';
+  }
+  const allOk = r.sealOk && r.bad === 0 && r.hands.length > 0;
+  const list = r.hands.slice().reverse().map(h => `<details class="fh ${h.match ? '' : 'bad'}"><summary>${h.match ? '✓' : '✗'} Table ${esc(String(h.tid).split('-').pop())} · hand ${h.hand} <span>${h.board.map(cardTxt).join('')}</span></summary>
+    <div>${h.players.map(p => `<div>${esc(p.name)} ${p.cards.map(cardTxt).join('')}</div>`).join('')}
+    <small>${h.round ? `drand round <a href="${esc(rep.beaconUrl + h.round)}" target="_blank" rel="noopener">${h.round}</a>` : 'public number unavailable, local random used'}</small></div></details>`).join('');
+  modal(`<h2>${allOk ? '✅ Every hand was dealt fairly' : r.hands.length ? '⚠️ Something doesn\'t match' : 'No hands recorded'}</h2>
+    <p class="${r.sealOk ? 'good' : 'bad'}">${r.sealOk ? '✓' : '✗'} The revealed secret matches the seal shown before the first hand.</p>
+    <p class="${r.bad ? 'bad' : 'good'}">${r.bad ? '✗' : '✓'} ${r.ok} of ${r.hands.length} hands match their deck exactly${r.bad ? `, ${r.bad} don't` : ''}.</p>
+    ${beacons}${r.local ? `<p class="note">${r.local} hand(s) were dealt while the public randomness service couldn't be reached. Those still match the seal.</p>` : ''}
+    <p class="note">Seal <code>${esc(rep.seal.slice(0, 16))}…</code> · Secret <code>${esc(rep.seed.slice(0, 16))}…</code></p>
+    <div class="fair-list">${list}</div>`, [{ label: 'Done', value: 1, primary: true }]);
+}
+
+// ---------- table chat ----------
+const chatLogs = new Map();
+let chatOpen = false, chatUnread = 0;
+const THROW_ICONS = { tomato: '🍅', rose: '🌹', beer: '🍺', egg: '🥚', fish: '🐟', clap: '👏', cake: '🎂', fire: '🔥' };
+const QUICK = ['gl', 'gg', 'nh', 'ty', 'wp', 'Nice hand!', 'Ship it!', 'So close!', '😂', '😮', '😎', '🙏', '🔥', '😭'];
+const curTid = () => watchTid || (club && club.myTable);
+function seatPosOf(uid){
+  const d = tables.get(curTid()); if(!d) return null;
+  const s = d.seats.findIndex(p => p && p.uid === uid); if(s < 0) return null;
+  const mySeat = d.seats.findIndex(p => p && p.uid === club.me.id), rot = mySeat >= 0 ? mySeat : 0;
+  return POS[(s - rot + 9) % 9];
+}
+function onChat(msg){
+  const log = chatLogs.get(msg.tid) || []; log.push(msg); if(log.length > 40) log.shift(); chatLogs.set(msg.tid, log);
+  if(view !== 'table' || msg.tid !== curTid()) return;
+  if(chatOpen) renderChat(); else if(msg.from !== club.me.id){ chatUnread++; $('chatDot').hidden = false; }
+  if(msg.kind === 'text') bubble(msg);
+  else flyThrow(msg);
+}
+function bubble(msg){
+  const pos = seatPosOf(msg.from); if(!pos) return;
+  document.querySelectorAll(`.bubble[data-from="${CSS.escape(msg.from)}"]`).forEach(b => b.remove());
+  const b = document.createElement('div'); b.className = 'bubble'; b.dataset.from = msg.from; b.textContent = msg.text;
+  const [x, y] = pctToPx(pos), W = $('tableArea').clientWidth;
+  b.style.top = y + 'px'; $('fx').appendChild(b);
+  const half = b.offsetWidth / 2, cx = Math.max(half + 6, Math.min(W - half - 6, x));
+  b.style.left = cx + 'px'; b.style.setProperty('--tail', (x - cx) + 'px');
+  setTimeout(() => b.remove(), 4500);
+}
+function flyThrow(msg){
+  const a = seatPosOf(msg.from), z = seatPosOf(msg.to); if(!a || !z) return;
+  const el = document.createElement('div'); el.className = 'throw'; el.textContent = THROW_ICONS[msg.item] || '❓';
+  const [ax, ay] = pctToPx(a), [zx, zy] = pctToPx(z);
+  el.style.left = ax + 'px'; el.style.top = ay + 'px';
+  $('fx').appendChild(el);
+  el.animate([{ transform: 'translate(-50%,-50%) scale(.6) rotate(0)', offset: 0 },
+    { transform: `translate(calc(-50% + ${(zx - ax) / 2}px), calc(-50% + ${(zy - ay) / 2 - 60}px)) scale(1.4) rotate(200deg)`, offset: .5 },
+    { transform: `translate(calc(-50% + ${zx - ax}px), calc(-50% + ${zy - ay}px)) scale(1.1) rotate(400deg)`, offset: 1 }], { duration: 750, easing: 'ease-in-out', fill: 'forwards' })
+    .finished.then(() => { el.classList.add('splat'); setTimeout(() => el.remove(), 1400); });
+}
+function renderChat(){
+  const log = chatLogs.get(curTid()) || [];
+  const muted = club.muted, off = club.chatOff && !club.me.owner;
+  $('chatLog').innerHTML = log.length ? log.map(m => `<div class="cm ${m.from === club.me.id ? 'me' : ''}"><b style="color:${colorOf(m.from)}">${esc(m.name)}</b> ${m.kind === 'text' ? esc(m.text) : `threw ${THROW_ICONS[m.item] || ''} at ${esc(nameOf(m.to))}`}</div>`).join('')
+    : '<div class="note">Say hi to the table. Tap a player to throw something at them.</div>';
+  $('chatLog').scrollTop = 1e9;
+  const seated = !!club.myTable && club.myTable === curTid();
+  $('chatForm').hidden = !seated && !club.me.owner;
+  $('chatQuick').hidden = $('chatForm').hidden;
+  $('chatNote').textContent = off ? 'The organizer turned table chat off.' : muted ? 'The organizer muted your chat.' : !seated && !club.me.owner ? 'Only players at this table can chat. You can read along.' : 'Club rule (WSOP): never talk about a hand that is still being played, and never say what you folded.';
+  $('chatInput').disabled = off || muted;
+}
+function openChat(open){
+  chatOpen = open; $('chatSheet').hidden = !open;
+  if(open){ chatUnread = 0; $('chatDot').hidden = true; renderChat(); }
+}
+$('chatBtn').onclick = () => openChat(!chatOpen);
+$('chatClose').onclick = () => openChat(false);
+$('chatQuick').innerHTML = QUICK.map(q => `<button type="button">${esc(q)}</button>`).join('');
+$('chatQuick').onclick = e => { const b = e.target.closest('button'); if(b) send({ t: 'chat', text: b.textContent }); };
+$('chatForm').onsubmit = e => { e.preventDefault(); const v = $('chatInput').value.trim(); if(v){ send({ t: 'chat', text: v }); $('chatInput').value = ''; } };
+$('seats').addEventListener('click', async e => {
+  const seat = e.target.closest('.seat[data-uid]'); if(!seat) return;
+  const uid = seat.dataset.uid; if(uid === club.me.id || !club.myTable || club.myTable !== curTid()) return;
+  if(club.muted || (club.chatOff && !club.me.owner)) return toast(club.muted ? 'The organizer muted your chat.' : 'Table chat is off.');
+  const pick = await modal(`<h2>Throw something at ${esc(nameOf(uid))}</h2><div class="throw-grid">${Object.entries(THROW_ICONS).map(([k, v]) => `<button data-v="${k}">${v}</button>`).join('')}</div>`, [{ label: 'Cancel', value: null }]);
+  if(pick) send({ t: 'throw', item: pick, to: uid });
+});
 
 connect();
 })();

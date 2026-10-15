@@ -9,7 +9,7 @@ let fails = 0; const fail = m => { fails++; if(fails < 15) console.log('FAIL', m
 const post = async (p, body, token) => { const r = await fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body) }); return r.json(); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
-  const srv = spawn(process.execPath, ['server/index.js'], { env: { ...process.env, PORT, FAST: '1', OWNER_CODE: 'secret', DATA_FILE: dataFile }, stdio: ['ignore', 'pipe', 'inherit'] });
+  const srv = spawn(process.execPath, ['server/index.js'], { env: { ...process.env, PORT, FAST: '1', NO_BEACON: '1', OWNER_CODE: 'secret', DATA_FILE: dataFile }, stdio: ['ignore', 'pipe', 'inherit'] });
   srv.stdout.on('data', d => process.env.VERBOSE && process.stdout.write(d));
   await sleep(700);
   // setup + negative auth checks
@@ -38,13 +38,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       if(m.t === 'club'){ c.club = m.club; c.id = m.club.me.id; if(!c.ready){ c.ready = true; res(c); } }
       if(m.t === 'error') c.lastError = m.error;
       if(m.t === 'skillq') c.q = m.q;
-      if(m.t === 'claimed') c.claimed = (c.claimed || 0) + 1;
+      if(m.t === 'chat'){ (c.chats = c.chats || []).push(m.msg); }
+      if(m.t === 'chaterr') c.chatErr = m.error;
+      if(m.t === 'fair') c.fair = m.report;
+            if(m.t === 'claimed') c.claimed = (c.claimed || 0) + 1;
       if(m.t === 'table'){
         const tb = m.table; c.tables[tb.tid] = tb;
         const seated = tb.seats.some(s => s && s.uid === c.id);
         if(m.you && !seated) fail('cards sent to a player not at the table');
         if(!seated && m.you) fail('leak');
         if(m.you) c.cards = m.you;
+        if(m.you){ c.dealt = c.dealt || {}; c.dealt[tb.tid + '#' + m.you.hand] = m.you.cards.join(); }
         tb.seats.forEach(s => { if(s && s.shown && s.uid !== c.id && tb.phase === 'hand' && !tb.result && tb.legal && tb.legal.canRaise === undefined) fail('shown early'); });
         if(tb.actUid === c.id && tb.legal && c.lastSeq !== tb.tid + tb.seq){
           c.lastSeq = tb.tid + tb.seq;
@@ -77,6 +81,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   owner.ws.send(JSON.stringify({ t: 'start' }));
   await sleep(400);
   if(N > 9 && (owner.club.conflicts || []).length) fail('linked players seated together at start: ' + JSON.stringify(owner.club.conflicts));
+  // shuffle seal is public, the secret is not
+  if(!/^[0-9a-f]{64}$/.test(owner.club.tourney.seal || '')) fail('no shuffle seal');
+  if(JSON.stringify(m1.club).includes('fairSeed')) fail('shuffle secret leaked while running');
+  // table chat: only the sender's table hears it; mute works
+  { await sleep(300);
+    const tidOf = c => c.club.myTable, a = clients.find(c => c !== owner && tidOf(c));
+    const mates = clients.filter(c => c !== a && tidOf(c) === tidOf(a)), others = clients.filter(c => tidOf(c) && tidOf(c) !== tidOf(a));
+    a.ws.send(JSON.stringify({ t: 'chat', text: '  nice   hand <b>x</b> ' })); await sleep(200);
+    const got = mates.filter(c => (c.chats || []).some(x => x.text === 'nice hand <b>x</b>' && x.from === a.id));
+    if(!mates.length || got.length !== mates.length) fail('table chat not delivered to tablemates');
+    if(others.some(c => (c.chats || []).length)) fail('chat leaked to another table');
+    a.ws.send(JSON.stringify({ t: 'chat', text: 'spam' })); await sleep(100);
+    if(!a.chatErr) fail('chat rate limit missing');
+    const target = mates[0]; await sleep(900);
+    a.ws.send(JSON.stringify({ t: 'throw', item: 'tomato', to: target.id })); await sleep(200);
+    if(!(target.chats || []).some(x => x.kind === 'throw' && x.item === 'tomato')) fail('throw not delivered');
+    owner.ws.send(JSON.stringify({ t: 'mute', uid: a.id, muted: true })); await sleep(250); a.chatErr = null;
+    a.ws.send(JSON.stringify({ t: 'chat', text: 'muted?' })); await sleep(200);
+    if(!a.chatErr || (target.chats || []).some(x => x.text === 'muted?')) fail('muted player could chat');
+    owner.ws.send(JSON.stringify({ t: 'mute', uid: a.id, muted: false })); }
   const t0 = Date.now(); let maxTables = 0, checks = 0, hfhRounds = 0;
   while(Date.now() - t0 < 600000){
     await sleep(250);
@@ -95,6 +119,28 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const paidN = h.payouts.length;
   if(paidN !== Math.max(1, Math.ceil(N * 0.15))) fail('paid places ' + paidN);
   if(N >= 40 && !hfhRounds) fail('no hand-for-hand at the bubble');
+  // provably fair: the revealed secret rebuilds every deck, and matches the cards each player was actually sent
+  { m1.ws.send(JSON.stringify({ t: 'fair', id: h.id })); await sleep(1500);
+    const rep = m1.fair;
+    if(!rep || !rep.seed || !rep.hands.length) fail('no fairness report');
+    else {
+      global.window = {}; require('../public/fair-verify.js'); const r = await window.FAIR.verify(rep);
+      if(!r.sealOk) fail('seal does not match seed');
+      if(r.bad || r.ok !== rep.hands.length) fail(`fair check: ${r.bad} bad of ${rep.hands.length}`);
+      const E2 = require('../server/engine.js'); let compared = 0, wrong = 0;
+      for(const c of clients) for(const [k, cards] of Object.entries(c.dealt || {})){
+        const [tid, no] = k.split('#'), recs = rep.hands.filter(x => x.tid === tid && String(x.hand) === no);
+        const rec = recs[recs.length - 1]; if(!rec) continue;
+        const p = rec.players.find(x => x.uid === c.id); if(!p) continue;
+        compared++; if(p.cards.join() !== E2.parse(cards.split(',').join(' ')).join()) wrong++;
+      }
+      if(!compared || wrong) fail(`dealt cards vs fair record: ${wrong} wrong of ${compared}`);
+      // tamper: one changed card must be caught
+      const bad = JSON.parse(JSON.stringify(rep)); bad.hands[0].board = bad.hands[0].board.length ? [(bad.hands[0].board[0] + 1) % 52, ...bad.hands[0].board.slice(1)] : bad.hands[0].board;
+      bad.hands[0].players[0].cards[0] = (bad.hands[0].players[0].cards[0] + 1) % 52;
+      if((await window.FAIR.verify(bad)).bad !== 1) fail('tampered hand not detected');
+      console.log(`fair deal: ${r.ok} hands verified, ${compared} dealt hands cross-checked`);
+    } }
   // points + rewards shop
   const win = clients.find(c => c.id === h.results[0].uid), loser = clients.find(c => c.id === h.results.find(r => r.pts === 1 && r.uid !== owner.id).uid);
   if(process.env.VERBOSE_T) console.log(JSON.stringify(h.results.filter(r => r.tie)), JSON.stringify((t.places||[]).filter(r=>r.tie)));

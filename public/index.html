@@ -55,7 +55,7 @@
     <div><small id="tName">Table</small><b id="sPlayers">-</b></div>
     <div><small>Avg stack</small><b id="sAvg">-</b></div>
     <div><small>Your rank</small><b id="sPos">-</b></div>
-    <button class="menu-btn" id="lobbyBtn">Lobby</button>
+    <div class="hdr-btns"><button class="menu-btn chat-btn" id="chatBtn" aria-label="Table chat">💬<i id="chatDot" hidden></i></button><button class="menu-btn" id="lobbyBtn">Lobby</button></div>
   </div>
   <div class="table-area" id="tableArea">
     <div class="felt"></div>
@@ -65,6 +65,14 @@
       <div class="msg" id="msg"></div>
     </div>
     <div id="seats"></div>
+    <div id="fx"></div>
+  </div>
+  <div class="chat-sheet" id="chatSheet" hidden>
+    <div class="chat-head"><b>Table chat</b><button class="menu-btn" id="chatClose">Close</button></div>
+    <div class="chat-log" id="chatLog"></div>
+    <div class="chat-quick" id="chatQuick"></div>
+    <form class="chat-form" id="chatForm"><input id="chatInput" maxlength="140" placeholder="Message the table" autocomplete="off" enterkeyhint="send"><button class="btn red" type="submit">Send</button></form>
+    <p class="chat-note" id="chatNote"></p>
   </div>
   <div class="controls" id="controls"></div>
 </section>
@@ -74,6 +82,7 @@
 <canvas id="confetti" hidden></canvas>
 <script src="/engine.js"></script>
 <script src="/learn.js"></script>
+<script src="/fair-verify.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

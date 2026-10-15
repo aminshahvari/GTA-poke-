@@ -7,6 +7,7 @@ const store = require('./store');
 const rewards = require('./rewards');
 const club = require('./club');
 const E = require('./engine');
+const fair = require('./fair');
 
 const PORT = +process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -164,18 +165,52 @@ function clubView(u){
     me: { id: u.id, name: u.name, owner: isOwner(u) },
     tourney: t ? { id: t.id, status: t.status, name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: t.startAt, repeat: t.repeat, regs: t.regs,
       level: t.level, levelEndsAt: t.levelEndsAt, paused: t.paused, pausedLeft: t.pausedLeft, entrants: t.entrants, remaining: t.remaining,
-      places: t.places, note: t.note, payouts: t.entrants ? club.payoutPcts(t.entrants) : null } : null,
+      places: t.places, note: t.note, payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null } : null,
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
-    members, history, now: Date.now(), shop: rewards.view(u.id, isOwner(u))
+    members, history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
+    chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION
   };
   if(isOwner(u)){
     view.invites = store.values('invite:').filter(i => !i.usedBy && !i.revoked).map(i => ({ code: i.code, createdAt: i.createdAt }));
     view.conflicts = conflictPairs();
     const hh = Object.fromEntries(store.values('user:').filter(x => !x.removed && x.household).map(x => [x.id, x.household]));
     view.households = hh;
+    view.mutedIds = store.values('user:').filter(x => !x.removed && x.muted).map(x => x.id);
   }
   return view;
 }
+const VERSION = (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null;
+
+// ---------- table chat and throwables ----------
+const THROWS = ['tomato', 'rose', 'beer', 'egg', 'fish', 'clap', 'cake', 'fire'];
+const chatLogs = new Map(), chatRate = new Map();
+function chatTo(tid, msg){
+  for(const ws of sockets) if(ws.user && (ws.watch === tid || club.tableOf(ws.user.id) === tid)) sendWS(ws, msg);
+}
+function chat(ws, u, m){
+  const fail = error => sendWS(ws, { t: 'chaterr', error });
+  if((store.get('settings') || {}).chatOff && !isOwner(u)) return fail('The organizer has turned table chat off.');
+  if(u.muted) return fail('The organizer has muted your chat.');
+  const tid = club.tableOf(u.id) || (isOwner(u) && ws.watch && club.tables.has(ws.watch) ? ws.watch : null);
+  if(!tid) return fail('Sit at a table to chat.');
+  const now = Date.now(), r = (chatRate.get(u.id) || []).filter(x => now - x < 20000);
+  if(r.length >= 8 || (r.length && now - r[r.length - 1] < 800)) return fail('Slow down a little.');
+  let body;
+  if(m.t === 'chat'){
+    const text = String(m.text || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140);
+    if(!text) return;
+    body = { kind: 'text', text };
+  } else {
+    if(!THROWS.includes(m.item) || typeof m.to !== 'string' || m.to === u.id || club.tableOf(m.to) !== tid) return;
+    body = { kind: 'throw', item: m.item, to: m.to };
+  }
+  r.push(now); chatRate.set(u.id, r);
+  const entry = { id: crypto.randomBytes(6).toString('hex'), tid, from: u.id, name: u.name, ts: now, ...body };
+  const log = chatLogs.get(tid) || []; log.push(entry); if(log.length > 40) log.shift(); chatLogs.set(tid, log);
+  chatTo(tid, { t: 'chat', msg: entry });
+}
+const chatLogFor = (ws, tid) => { if(tid) sendWS(ws, { t: 'chatlog', tid, log: chatLogs.get(tid) || [] }); };
+
 let clubTimer = null;
 function broadcastClub(){
   if(clubTimer) return;
@@ -191,7 +226,7 @@ function pushTable(tid){
     sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null });
   }
 }
-club.setHooks({ onClub: broadcastClub, onTable: pushTable, onTableClosed: tid => { for(const ws of sockets) sendWS(ws, { t: 'closed', tid }); broadcastClub(); } });
+club.setHooks({ onClub: broadcastClub, onTable: pushTable, onTableClosed: tid => { chatLogs.delete(tid); for(const ws of sockets) sendWS(ws, { t: 'closed', tid }); broadcastClub(); } });
 
 wss.on('connection', (ws, req) => {
   const origin = req.headers.origin;
@@ -209,7 +244,7 @@ wss.on('connection', (ws, req) => {
       if(!u) return sendWS(ws, { t: 'auth', ok: false });
       ws.user = u; remember(u, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); sendWS(ws, { t: 'auth', ok: true });
       sendWS(ws, { t: 'club', club: clubView(u) });
-      const mine = club.tableOf(u.id); if(mine) pushTable(mine);
+      const mine = club.tableOf(u.id); if(mine){ pushTable(mine); chatLogFor(ws, mine); }
       return;
     }
     const u = ws.user && store.get('user:' + ws.user.id);
@@ -217,8 +252,14 @@ wss.on('connection', (ws, req) => {
     ws.user = u;
     try{
       switch(m.t){
-        case 'watch': ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch) pushTable(ws.watch); break;
+        case 'watch': ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(ws.watch); chatLogFor(ws, ws.watch); } break;
         case 'act': club.act(u.id, m); break;
+        case 'chat': case 'throw': chat(ws, u, m); break;
+        case 'fair': { const id = String(m.id || ''), cur = club.T(), h = store.get('history:' + id);
+          const t = cur && cur.id === id ? cur : h ? { ...h, status: 'finished' } : null;
+          sendWS(ws, { t: 'fair', report: t ? fair.report(t) : null }); } break;
+        case 'chatOff': own(u); store.set('settings', { ...(store.get('settings') || {}), chatOff: !!m.off }); broadcastClub(); break;
+        case 'mute': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner') store.set('user:' + x.id, { ...x, muted: !!m.muted }); broadcastClub(); } break;
         case 'back': club.back(u.id); break;
         case 'join': club.join(u.id); break;
         case 'hands': sendWS(ws, { t: 'hands', hands: club.handsFor(u.id) }); break;
