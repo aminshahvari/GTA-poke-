@@ -176,6 +176,9 @@ window.LEARN.rules = window.LEARN.rules.replace('%%TERMS%%', window.LEARN.terms)
 // Change log shown to the organizer in the Director tab, newest first.
 window.LEARN.news = [
   { date: 'Oct 15, 2026', items: [
+    'Schedule tonight\'s game in the morning: Play again now has a start time (Today 6 PM to 11 PM). The tournament opens for registration right away and starts by itself on time.',
+    'The organizer\'s group link now lasts 30 days for up to 100 people and stays the same link. Anyone who joins with it is signed up for the open tournament automatically.',
+    'Phone notifications: players can tap Notify me to get a notification when a tournament opens, 15 minutes before it starts, and when the cards are dealt. On iPhone, add the app to the Home Screen first. Add to calendar works as a backup reminder.',
     'Members can invite friends: every member gets an Invite friends button on the Tournament tab with their own link (up to 10 friends, 7 days). Profiles show who invited whom. The organizer can switch member invites off in Director.',
     'Coach tips during play: after a hand, a short private tip pops up above your cards when the coach saw something: a mistake, a good play, a bad beat, or a run of patient folds. Turned off with the hand helper.',
     'Tilt and calm: the coach now flags a Tilt check when you make a mistake right after losing a big pot, and praises you when you stay calm. Your profile shows Patience and Calm after losses.',

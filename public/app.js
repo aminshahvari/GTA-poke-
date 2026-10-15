@@ -63,6 +63,7 @@ function authScreen(mode){
     $('aErr').textContent = '';
     try{
       const body = { name: $('aName').value, pin: $('aPin').value, agree: !!($('aAgree') && $('aAgree').checked) };
+      if(mode === 'join') local.set('askRemind', 1);
       const r = mode === 'join' ? await post('/api/redeem', { ...body, code: invite }) : mode === 'setup' ? await post('/api/setup', { ...body, code: $('aCode').value.trim() }) : await post('/api/login', body);
       local.set('token', r.token);
       if(location.pathname !== '/') history.replaceState(null, '', '/');
@@ -108,6 +109,7 @@ const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
 
 function onClub(c){
   club = c; clockSkew = c.now - Date.now();
+  if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   $('meChip').innerHTML = `<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name)}</span></button><button class="back" id="outBtn">Sign out</button>`;
   $('meBtn').onclick = () => openProfile(c.me.id);
   $('outBtn').onclick = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
@@ -138,6 +140,15 @@ function renderLobby(){
   body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : picNudgeHTML() + eventHTML() + friendsHTML();
   wireLobby();
 }
+// Start times for a quick tournament: now, or a time later today (tomorrow if it has passed).
+function startChoices(){
+  const out = [['', 'When I press Start']], now = Date.now();
+  for(const h of [18, 19, 20, 21, 22, 23]){
+    const d = new Date(); d.setHours(h, 0, 0, 0); if(d.getTime() < now + 10 * 60000) d.setDate(d.getDate() + 1);
+    out.push([d.getTime(), `${d.getDate() === new Date().getDate() ? 'Today' : 'Tomorrow'} ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`]);
+  }
+  return out;
+}
 function friendsHTML(){
   if(club.me.owner || !club.membersInvite) return '';
   const n = club.invitedCount || 0, mi = club.myInvite;
@@ -162,6 +173,7 @@ function ownerNextHTML(){
   const name = T ? T.name : `${new Date().toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`;
   return `<div class="card-box next-box"><span class="eyebrow">Organizer</span><h3>Start the next tournament</h3>
     <p>${T ? `Same settings as last time: ${fmt(T.stack)} chips, ${T.levelMin}-minute levels, ${T.tableSize === 6 ? '6-max tables' : (T.tableSize || 9) + '-handed tables'}, ${T.actSec || 20} seconds to act, ${T.anteMode === 'each' ? 'every player antes' : 'big blind ante'}${T.lateLevels ? `, late registration to level ${T.lateLevels}` : ''}.` : 'Opens registration so your friends can join.'}</p>
+    <label class="start-pick">Starts<select id="againAt">${startChoices().map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
     <div class="btn-row"><button class="btn red big" id="againBtn">${T ? 'Play again' : 'Open a tournament'}</button><button class="btn" id="newCustomBtn">Change settings</button></div></div>`;
 }
 function eventHTML(){
@@ -182,7 +194,7 @@ function eventMainHTML(){
       <p>${T.regs.length} joined</p>
       <div class="plist">${T.regs.map(u => pchip(u, false)).join('') || '<span class="note">Nobody has joined yet.</span>'}</div>
       <div class="btn-row">${mine ? '<button class="btn" id="leaveBtn">Leave</button>' : '<button class="btn red" id="joinBtn">Join tournament</button>'}</div>
-      ${mine ? "<p>You're in. Your table opens by itself when the tournament starts.</p>" : ''}
+      ${mine ? `<p>You're in. Your table opens by itself when the tournament starts.</p>${remindHTML(T)}` : ''}
       ${club.me.owner ? `<div class="owner-row"><button class="btn" id="inviteBtn">Invite a friend</button><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button></div>
       ${T.regs.length < 2 ? '<p class="warn-note">You need at least 2 players to start. Send an invite, and ask your friend to tap <b>Join tournament</b>.</p>' : ''}` : ''}</div>${lastResultHTML()}`;
   }
@@ -275,7 +287,7 @@ function directorMainHTML(){
   const T = club.tourney;
   const members = `<div class="card-box"><span class="eyebrow">Members · ${club.members.length}</span>
     <div class="btn-row"><button class="btn red" id="inviteBtn">Create invite link</button><button class="btn" id="memInvBtn">${club.membersInvite ? 'Members can invite: on' : 'Members can invite: off'}</button></div>
-    <p class="note">Pick a <b>group link</b> for a WhatsApp or Telegram group (up to 20 people, 7 days), or a <b>personal link</b> for one friend. They open it, pick a name and PIN, and they're in.</p>
+    <p class="note">Pick a <b>group link</b> for a WhatsApp or Telegram group (up to 100 people, 30 days; it stays the same link until you cancel it), or a <b>personal link</b> for one friend. They open it, pick a name and PIN, and they're in.</p>
     ${club.invites && club.invites.length ? `<div class="table-list">${club.invites.map(i => `<div class="trow"><b>${i.multi ? (i.by && i.by !== club.me.id ? esc(nameOf(i.by)) + "'s link" : 'Group link') : 'Unused invite'}</b><small>${i.multi ? `${i.used} of ${i.max} joined · until ${new Date(i.expiresAt).toLocaleDateString()}` : new Date(i.createdAt).toLocaleDateString()}</small><button class="back" data-copy="${esc(i.code)}" data-group="${i.multi ? 1 : ''}">Copy</button><button class="back" data-revoke="${esc(i.code)}">Cancel</button></div>`).join('')}</div>` : ''}
     <div class="table-list">${club.members.map(m => { const hh = club.households && club.households[m.id], mates = hh ? club.members.filter(x => x.id !== m.id && club.households[x.id] === hh).map(x => x.name) : [];
       return `<div class="trow"><b>${esc(m.name)}</b><small>${m.role === 'owner' ? 'Owner' : 'Member since ' + new Date(m.createdAt).toLocaleDateString()}${m.invitedBy && m.invitedBy !== club.me.id ? ' · invited by ' + esc(nameOf(m.invitedBy)) : ''}${mates.length ? ` · Home with ${esc(mates.join(', '))}` : ''}</small><span class="row-btns">${m.role === 'owner' ? '' : `<button class="back" data-mute="${esc(m.id)}" data-on="${(club.mutedIds || []).includes(m.id) ? 1 : 0}">${(club.mutedIds || []).includes(m.id) ? 'Unmute' : 'Mute'}</button>`}<button class="back" data-home="${esc(m.id)}">Home</button>${m.role === 'owner' ? '' : `<button class="back" data-remove="${esc(m.id)}">Remove</button>`}</span></div>`; }).join('')}</div>
@@ -395,7 +407,7 @@ function wireLobby(){
   document.querySelectorAll('[data-rcancel]').forEach(b => b.onclick = async () => { if(await modal('<h2>Cancel this claim?</h2><p>The points go back to the player.</p>', [{ label: 'Keep', value: false }, { label: 'Cancel claim', value: true, primary: true }])) send({ t: 'redeemStatus', id: b.dataset.rcancel, status: 'cancelled' }); });
   const rf = $('rewardForm'); if(rf) rf.onsubmit = e => { e.preventDefault(); send({ t: 'addReward', name: $('rwName').value, cost: +$('rwCost').value, qty: +$('rwQty').value, value: $('rwValue').value }); };
   const on = (id, f) => { const el = $(id); if(el) el.onclick = f; };
-  on('joinBtn', () => send({ t: 'join' }));
+  on('joinBtn', () => { send({ t: 'join' }); setTimeout(offerReminder, 600); });
   on('leaveBtn', () => send({ t: 'leave' }));
   document.querySelectorAll('[data-watch]').forEach(b => b.onclick = () => openTable(b.dataset.watch));
   document.querySelectorAll('[data-range]').forEach(b => b.onclick = () => { boardRange = b.dataset.range; renderLobby(); });
@@ -418,7 +430,7 @@ function wireLobby(){
   on('lateInvite', e => { e.preventDefault(); askInvite(); });
   on('againBtn', () => {
     const T = club.tourney, d = new Date();
-    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: T && T.tableSize ? T.tableSize : 6, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true });
+    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: $('againAt') && $('againAt').value ? +$('againAt').value : null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: T && T.tableSize ? T.tableSize : 6, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true });
     send({ t: 'join' }); tab = 'event';
   });
   on('newCustomBtn', () => { tab = 'director'; renderLobby(); });
@@ -440,15 +452,17 @@ function wireLobby(){
 }
 async function askInvite(){
   if(!club.me.owner) return send({ t: 'invite' });
-  const v = await modal('<h2>Invite people</h2><p>A <b>group link</b> can go in a WhatsApp or Telegram group: up to 20 people can join with it for 7 days. A <b>personal link</b> works once, for one friend.</p>',
+  const v = await modal('<h2>Invite people</h2><p>A <b>group link</b> can go in a WhatsApp or Telegram group: up to 100 people can join with it for 30 days, and it stays the same link, so you can share it in the morning for a game at night. People who join with it are signed up for the open tournament. A <b>personal link</b> works once, for one friend.</p>',
     [{ label: 'Cancel', value: null }, { label: 'Personal link', value: 'one' }, { label: 'Group link', value: 'group', primary: true }]);
   if(v) send({ t: 'invite', group: v === 'group' });
 }
 function showInvite(code, group, max){
   const url = location.origin + '/join/' + code;
-  const text = group ? `${club.me.name} invited you to the Stacked Live poker club. Tap to join (pick your own name and PIN):` : `${club.me.name} invited you to the Stacked Live poker club. Tap to join:`;
+  const T = club.tourney, open = T && ['registering', 'running'].includes(T.status);
+  const what = open ? ` for ${T.name}${T.status === 'registering' && T.startAt ? ', ' + new Date(T.startAt).toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : ''}` : '';
+  const text = `${club.me.name} invited you to the Stacked Live poker club${what}. Free to play. Tap to join${group ? ' (pick your own name and PIN)' : ''}:`;
   const enc = encodeURIComponent;
-  modal(`<h2>${!club.me.owner ? 'Your invite link' : group ? 'Group invite link' : 'Invite link'}</h2><p>${!club.me.owner ? `Send it to friends who play poker, or post it in a group. Up to ${max || 10} people can join with your link for 7 days. It's free, and they pick their own name and PIN.` : group ? 'Post it in your group. Up to 20 people can join with it for the next 7 days. You can cancel it any time in Director.' : 'Send this to one friend. It works once.'}</p>
+  modal(`<h2>${!club.me.owner ? 'Your invite link' : group ? 'Group invite link' : 'Invite link'}</h2><p>${!club.me.owner ? `Send it to friends who play poker, or post it in a group. Up to ${max || 10} people can join with your link for 7 days. It's free, and they pick their own name and PIN.` : group ? 'Post it in your group. Up to 100 people can join with it for 30 days, and anyone who joins is signed up for the open tournament. It stays the same link until you cancel it in Director.' : 'Send this to one friend. It works once.'}</p>
     ${navigator.share ? '<button class="btn-red" id="shareBtn" style="width:100%;margin-bottom:10px">Share invite</button>' : ''}
     <div class="share-row"><a class="btn-ghost" target="_blank" rel="noopener" href="https://wa.me/?text=${enc(text + ' ' + url)}">WhatsApp</a><a class="btn-ghost" target="_blank" rel="noopener" href="https://t.me/share/url?url=${enc(url)}&text=${enc(text)}">Telegram</a><a class="btn-ghost" href="sms:?&body=${enc(text + ' ' + url)}">Text</a></div>
     <div class="copy-row"><input id="invUrl" readonly value="${esc(url)}"><button class="btn-ghost" id="copyBtn" style="width:auto;padding:9px 12px">Copy</button></div>`, [{ label: 'Done', value: 1 }]);
@@ -482,6 +496,58 @@ const initials = n => String(n || '?').split(' ').map(w => w[0]).join('').slice(
 const chipsIcon = (n = 3) => `<span class="chips">${'<i></i>'.repeat(n)}</span>`;
 const COLORS = ['#3b6fb6','#7a5aa6','#2f8a8f','#3d8a62','#b07a2a','#5a6fc2','#4b6680','#8a6a5c','#b0505a'];
 const colorOf = uid => { let h = 0; for(const c of String(uid)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
+
+
+// ---------- reminders: phone notifications and calendar ----------
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
+const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+function remindHTML(T){
+  const bell = club.pushOn ? '<span class="status-pill">🔔 Notifications on</span>'
+    : pushSupported() && Notification.permission !== 'denied' ? '<button class="btn" data-remind>🔔 Notify me when it starts</button>'
+    : isIOS() && !standalone() ? '<button class="btn" data-iosnote>🔔 Notifications on iPhone</button>' : '';
+  const cal = T.startAt ? '<button class="btn" data-cal>📅 Add to calendar</button>' : '';
+  return bell || cal ? `<div class="btn-row">${bell}${cal}</div>` : '';
+}
+async function enablePush(){
+  try{
+    if(!pushSupported()) throw new Error('unsupported');
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted') return toast('Notifications are blocked. You can allow them in your browser settings.');
+    const reg = await navigator.serviceWorker.ready;
+    const { key } = await post('/api/pushKey', {});
+    const raw = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - key.length % 4) % 4)), c => c.charCodeAt(0));
+    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: raw });
+    await post('/api/push', sub.toJSON());
+    toast("Done. We'll notify you 15 minutes before and when it starts.");
+  }catch(e){ toast(isIOS() && !standalone() ? 'On iPhone, add the app to your Home Screen first.' : 'Notifications could not be turned on on this device.'); }
+}
+async function offerReminder(){
+  const T = club.tourney; if(!T || T.status !== 'registering' || club.pushOn) return;
+  if(pushSupported() && Notification.permission === 'default'){
+    const v = await modal(`<h2>Get a reminder?</h2><p>We'll send a notification to this phone 15 minutes before ${esc(T.name)} starts, and again when the cards are dealt.</p>`, [{ label: 'No thanks', value: null }, { label: 'Notify me', value: 1, primary: true }]);
+    if(v) enablePush();
+  } else if(pushSupported() && Notification.permission === 'granted') enablePush();
+}
+function iosNote(){
+  modal(`<h2>Notifications on iPhone</h2><ol class="terms"><li>Open this site in <b>Safari</b>.</li><li>Tap the <b>Share</b> button, then <b>Add to Home Screen</b>.</li><li>Open Stacked from your Home Screen, sign in, and tap <b>Notify me</b> again.</li></ol><p>Until then, use <b>Add to calendar</b> for a reminder.</p>`, [{ label: 'OK', value: 1, primary: true }]);
+}
+// A calendar event with an alarm 15 minutes before; phones open .ics files in their calendar app.
+function addToCalendar(){
+  const T = club.tourney; if(!T || !T.startAt) return;
+  const z = ms => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Stacked Live//Club//EN', 'BEGIN:VEVENT', `UID:${T.id}@stacked`, `DTSTAMP:${z(Date.now())}`, `DTSTART:${z(T.startAt)}`, `DTEND:${z(T.startAt + 3 * 3600000)}`,
+    `SUMMARY:${T.name.replace(/[,;\\]/g, ' ')} (poker)`, `DESCRIPTION:Open ${location.origin} a few minutes early to take your seat.`, `URL:${location.origin}`,
+    'BEGIN:VALARM', 'TRIGGER:-PT15M', 'ACTION:DISPLAY', 'DESCRIPTION:Poker starts in 15 minutes', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' })); a.download = 'tournament.ics';
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+document.addEventListener('click', e => {
+  if(e.target.closest('[data-remind]')) enablePush();
+  if(e.target.closest('[data-iosnote]')) iosNote();
+  if(e.target.closest('[data-cal]')) addToCalendar();
+});
 
 // ---------- avatars, skill tiers and profiles ----------
 const GALLERY = {

@@ -587,3 +587,7 @@ body{font-size:15px;letter-spacing:0}
 .rc-row b{font-size:16px;white-space:nowrap}
 .rc-row .bad{color:#ff7b7f}.rc-row .ok{color:var(--good)}
 .rc-ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14px;line-height:1.4;text-align:left}
+
+.start-pick{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)}
+.start-pick select{flex:1;font:inherit;font-size:16px;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:#151922;color:var(--text)}
+.btn-row .status-pill{display:flex;align-items:center;justify-content:center;flex:1;min-width:120px;font-size:13px;padding:10px}

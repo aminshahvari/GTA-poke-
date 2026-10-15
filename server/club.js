@@ -19,7 +19,7 @@ const AWAY_BANK = FAST ? 300 : 2500;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fmt = n => Math.round(n).toLocaleString('en-US');
 
-let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){} };
+let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(){} };
 const tables = new Map();   // tid -> live table
 const waiters = new Map();  // uid -> pending decision
 let running = false, clockTimer = null;
@@ -54,6 +54,7 @@ function create({ name, stack, levelMin, startAt, repeat, anteMode, actSec, tabl
     anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : 20,
     tableSize: SIZES.includes(+tableSize) ? +tableSize : 9, lateLevels: LATE.includes(+lateLevels) ? +lateLevels : 0, helper: helper !== false && helper !== 'off' });
   hooks.onClub();
+  hooks.onNotice('open', T());
 }
 function join(uid){
   const t = T();
@@ -126,6 +127,7 @@ function start(){
     entrants: regs.length, remaining: regs.length, places: [], regs });
   saveLive();
   go();
+  hooks.onNotice('start', T());
 }
 function resume(){
   const t = T(), live = store.get('live');
@@ -424,13 +426,16 @@ function scheduleNext(t){
   let next = t.startAt + step; while(next < Date.now()) next += step;
   setTimeout(() => {
     const cur = T(); if(cur && (cur.status === 'running' || cur.status === 'registering')) return;
-    create({ name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat });
+    create({ name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat, anteMode: t.anteMode, actSec: t.actSec, tableSize: t.tableSize, lateLevels: t.lateLevels, helper: t.helper });
   }, FAST ? 50 : 15000);
 }
 // Starts a scheduled tournament on time.
 setInterval(() => {
   const t = T();
-  if(!t || t.status !== 'registering' || !t.startAt || Date.now() < t.startAt) return;
+  if(!t || t.status !== 'registering' || !t.startAt) return;
+  // a reminder 15 minutes before a scheduled start
+  if(!t.reminded && t.startAt - Date.now() <= 15 * 60000 && t.startAt - Date.now() > 60000){ saveT({ reminded: true }); hooks.onNotice('soon', T()); }
+  if(Date.now() < t.startAt) return;
   if(t.regs.length >= 2){ try{ start(); }catch(e){ console.error(e); } }
   else { saveT({ status: 'cancelled', endedAt: Date.now(), note: 'Not enough players joined.' }); scheduleNext(t); hooks.onClub(); }
 }, 5000);

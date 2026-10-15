@@ -10,6 +10,7 @@ const E = require('./engine');
 const fair = require('./fair');
 const players = require('./players');
 const coach = require('./coach');
+const push = require('./push');
 
 const PORT = +process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -65,6 +66,9 @@ const api = {
     if(agree !== true) throw new Error('Please confirm you are 19 or older and agree to the club rules.');
     const u = createUser(name, pin, 'member');
     if(inv.by) store.set('user:' + u.id, { ...u, invitedBy: inv.by });
+    // the link is usually sent for a tournament: sign the new player up for it straight away
+    const t = club.T();
+    if(t && (t.status === 'registering' || (t.status === 'running' && club.lateOpen()))) try{ club.join(u.id); }catch(e){}
     store.set('invite:' + code, inv.multi ? { ...inv, uses: [...(inv.uses || []), u.id] } : { ...inv, usedBy: u.id, usedAt: Date.now() });
     broadcastClub();
     return { token: newSession(u.id) };
@@ -76,6 +80,9 @@ const api = {
   },
   invite(_, u){ return { code: inviteCode(u) }; },
   status(){ return { hasOwner: !!owner() }; },
+  pushKey(){ return { key: push.publicKey() }; },
+  push(sub, u){ if(!u) throw new Error('Sign in first.'); push.subscribe(u.id, sub); broadcastClub(); return { ok: true }; },
+  unpush({ endpoint }, u){ if(u) push.unsubscribe(u.id, String(endpoint || '')); return { ok: true }; },
   // your own picture: a gallery avatar or a small photo the phone has already shrunk
   avatar(a, u){
     if(!u) throw new Error('Sign in first.');
@@ -84,7 +91,7 @@ const api = {
     return { ok: true };
   }
 };
-const GROUP_MAX = 20, GROUP_DAYS = 7;
+const GROUP_MAX = 100, GROUP_DAYS = 30, MEMBER_DAYS = 7;
 // Members can invite friends too (the owner can switch that off). A member's link joins at most MEMBER_MAX people,
 // and asking again hands back the member's open link instead of piling up new ones.
 const MEMBER_MAX = 10;
@@ -97,9 +104,11 @@ function inviteCode(u, group){
     if(mine) return mine.code;
     group = true;
   }
+  // the organizer's group link stays the same until it fills up, expires or is cancelled, so one link can be shared all day
+  if(group && isOwner(u)){ const cur = store.values('invite:').find(i => i.by === u.id && i.multi && openInvite(i)); if(cur) return cur.code; }
   const code = crypto.randomBytes(9).toString('base64url');
   const max = isOwner(u) ? GROUP_MAX : MEMBER_MAX;
-  store.set('invite:' + code, group ? { code, createdAt: Date.now(), by: u.id, multi: true, max, uses: [], expiresAt: Date.now() + GROUP_DAYS * 864e5 }
+  store.set('invite:' + code, group ? { code, createdAt: Date.now(), by: u.id, multi: true, max, uses: [], expiresAt: Date.now() + (isOwner(u) ? GROUP_DAYS : MEMBER_DAYS) * 864e5 }
     : { code, createdAt: Date.now(), by: u.id });
   return code;
 }
@@ -132,7 +141,7 @@ const server = http.createServer((req, res) => {
         const data = body ? JSON.parse(body) : {};
         const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
         send(res, 200, fn(data, u));
-      }catch(e){ if(url.pathname !== '/api/avatar') recordFailure(ip); send(res, 400, { error: e.message || 'Something went wrong.' }); }
+      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login'].includes(url.pathname)) recordFailure(ip); send(res, 400, { error: e.message || 'Something went wrong.' }); }
     });
     return;
   }
@@ -211,7 +220,7 @@ function clubView(u){
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
     members, history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
     chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
-    membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
+    pushOn: push.hasPush(u.id), membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
   };
   if(isOwner(u)){
     view.invites = store.values('invite:').filter(openInvite)
@@ -272,7 +281,21 @@ function pushTable(tid){
     sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null });
   }
 }
-club.setHooks({ onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.user.id === uid) sendWS(ws, msg); }, onClub: broadcastClub, onTable: pushTable, onTableClosed: tid => { chatLogs.delete(tid); for(const ws of sockets) sendWS(ws, { t: 'closed', tid }); broadcastClub(); } });
+const clock = ms => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: process.env.CLUB_TZ || 'America/Toronto' });
+const dayOf = ms => { const tz = process.env.CLUB_TZ || 'America/Toronto', f = d => new Date(d).toLocaleDateString('en-CA', { timeZone: tz });
+  const hour = +new Date(ms).toLocaleString('en-CA', { hour: 'numeric', hour12: false, timeZone: tz });
+  return f(ms) === f(Date.now()) ? (hour >= 17 ? 'tonight' : 'today') : 'on ' + new Date(ms).toLocaleDateString('en-CA', { weekday: 'long', timeZone: tz }); };
+function notice(kind, t){
+  if(!t) return;
+  const members = store.values('user:').filter(x => !x.removed).map(x => x.id);
+  if(kind === 'open') push.notify(members, { title: t.startAt ? `${t.name} ${dayOf(t.startAt)} at ${clock(t.startAt)}` : `${t.name} is open`, body: 'Registration is open. Tap to join.', tag: 'open-' + t.id, ttl: 6 * 3600 }).catch(() => {});
+  if(kind === 'soon'){
+    push.notify(t.regs, { title: `${t.name} starts in 15 minutes`, body: "You're registered. Open the app a few minutes early to take your seat.", tag: 'soon-' + t.id, ttl: 900 }).catch(() => {});
+    push.notify(members.filter(id => !t.regs.includes(id)), { title: `${t.name} starts in 15 minutes`, body: 'There is still time to join. Tap to register.', tag: 'soon-' + t.id, ttl: 900 }).catch(() => {});
+  }
+  if(kind === 'start') push.notify(t.regs, { title: `${t.name} is starting!`, body: 'Cards are in the air. Tap to take your seat.', tag: 'start-' + t.id, ttl: 600 }).catch(() => {});
+}
+club.setHooks({ onNotice: notice, onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.user.id === uid) sendWS(ws, msg); }, onClub: broadcastClub, onTable: pushTable, onTableClosed: tid => { chatLogs.delete(tid); for(const ws of sockets) sendWS(ws, { t: 'closed', tid }); broadcastClub(); } });
 
 wss.on('connection', (ws, req) => {
   const origin = req.headers.origin;

@@ -6,11 +6,14 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node test/t_eval.js && node test/t_rules.js && node test/t_sim.js 20 && node test/t_server.js && node test/t_coach.js && node test/t_players.js"
+    "test": "node test/t_eval.js && node test/t_rules.js && node test/t_sim.js 20 && node test/t_server.js && node test/t_coach.js && node test/t_players.js && node test/t_push.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "pg": "8.13.1",
+    "web-push": "3.6.7",
     "ws": "8.18.0"
   }
 }
