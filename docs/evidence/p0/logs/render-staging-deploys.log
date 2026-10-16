@@ -1,0 +1,23 @@
+# Render app logs, service srv-db8qnn6i0phs738m9ajg (gta-poker-staging), commit 9026503 (staging = p0-deploy-race 78fbfb0 merged)
+# Queried with Render list_logs, text filter *lease*|*shutting*|*SIGTERM*|*final save*|*live*. Timestamps UTC.
+
+## Deploy 1 (auto, push 20:52) - old instance asleep (free plan), no overlap
+2026-10-16T20:52Z  cgmzn  store: postgres, 73 keys, lease epoch 11
+
+## Deploy 2 dep-db98uagm7kps73bjkbmg (API redeploy 20:55:06)
+2026-10-16T20:55:39.160Z  6vf5h  store: postgres, 73 keys, lease epoch 12 (srv-db8qnn6i0phs738m9ajg-hibernate-7448b8977-6vf5h:82)
+2026-10-16T20:55:39.274Z  cgmzn  shutting down: lease lost: epoch 12 held by srv-db8qnn6i0phs738m9ajg-hibernate-7448b8977-6vf5h:82, ours was 11
+2026-10-16T20:55:39.274Z  cgmzn  final save skipped or incomplete {"mode":"postgres","epoch":11,"leaseLost":true,"dirty":0,"lastWriteError":null}
+2026-10-16T20:55:39.274Z  cgmzn  lease lost: staying up and answering 503 until SIGTERM; this process will not claim the lease again
+2026-10-16T20:55:39.274Z  cgmzn  store: lease lost: epoch 12 held by srv-db8qnn6i0phs738m9ajg-hibernate-7448b8977-6vf5h:82, ours was 11
+2026-10-16T20:55:41.137Z  ---    Your service is live
+# no further lease lines until deploy 3 (checked to 20:59:00); no log lines at all from cgmzn after 20:55:39
+
+## Deploy 3 dep-db99054s728c73ff95gg (API redeploy 20:59:00)
+2026-10-16T20:59:29.636Z  ld76p  store: postgres, 73 keys, lease epoch 13 (srv-db8qnn6i0phs738m9ajg-hibernate-5967d96978-ld76p:82)
+2026-10-16T20:59:30.275Z  6vf5h  store: lease lost: epoch 13 held by srv-db8qnn6i0phs738m9ajg-hibernate-5967d96978-ld76p:82, ours was 12
+2026-10-16T20:59:30.275Z  6vf5h  shutting down: lease lost: epoch 13 held by srv-db8qnn6i0phs738m9ajg-hibernate-5967d96978-ld76p:82, ours was 12
+2026-10-16T20:59:30.276Z  6vf5h  final save skipped or incomplete {"mode":"postgres","epoch":12,"leaseLost":true,"dirty":0,"lastWriteError":null}
+2026-10-16T20:59:30.276Z  6vf5h  lease lost: staying up and answering 503 until SIGTERM; this process will not claim the lease again
+2026-10-16T20:59:39.459Z  ---    Your service is live
+# no further lease lines checked to 21:01:58; no log lines from 6vf5h after 20:59:30

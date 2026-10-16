@@ -41,10 +41,21 @@ Race reproduction (`race-repro.js`, the evidence-package script pointed at this 
 
 `npm test` (`logs/npm-test.log`): exit 0, all suites passed (including the known flaky `t_server.js` on this run).
 
-## 3. Not yet verified
+## 3. Staging deploys (Render logs)
 
-- **Two staging deployments with one clean handover each (Render logs)**: NOT VERIFIED. Requires a merge into `staging`, which needs separate authorization.
-- **Risk 7.3**: whether Render always sends SIGTERM to a process that is alive but answering 503. If it did not, a fenced process would linger until the instance is removed (it writes nothing and serves only 503). To be checked in the staging deploys above.
+Raw lines: `logs/render-staging-deploys.log`. Staging ran commit `9026503` (this branch merged into `staging`).
+
+| Deploy | Old -> new instance | Lease epoch | Handovers | Old server after loss |
+|---|---|---|---|---|
+| 1 (push, 20:52) | old was asleep (free plan) | 11 | none, no overlap; not counted | n/a |
+| 2 (redeploy, 20:55) | cgmzn -> 6vf5h | 11 -> 12 | **exactly 1** | fenced, "staying up and answering 503", never reclaimed |
+| 3 (redeploy, 20:59) | 6vf5h -> ld76p | 12 -> 13 | **exactly 1** | fenced, "staying up and answering 503", never reclaimed |
+
+Deploys 2 and 3 are the two consecutive deploys where both old and new servers ran the fix. Before the fix, the same kind of overlap produced repeated takeovers (epoch climbing by several per deploy).
+
+### Still not verified
+
+- **Risk 7.3 (SIGTERM to the fenced process):** the line "SIGTERM after lease loss: exiting" did **not** appear for cgmzn or 6vf5h; neither logged anything after fencing. Render may have stopped the instance without a SIGTERM reaching the process, or the last lines were lost when the instance was removed. Either way neither process claimed the lease again or wrote to the database (no epoch beyond the next deploy's).
 - **Health check path** (`/healthz`) is not set on either Render service.
 
 ## 4. Re-run
