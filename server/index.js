@@ -41,9 +41,9 @@ const attempts = new Map();
 const failures = ip => (attempts.get(ip) || []).filter(t => Date.now() - t < 10 * 60000);
 const blocked = (key, max = 15) => process.env.FAST !== '1' && failures(key).length >= max;
 const recordFailure = key => { if(attempts.size > 5000) for(const k of attempts.keys()){ if(!failures(k).length) attempts.delete(k); } attempts.set(key, [...failures(key), Date.now()]); };
-// The proxy in front of us appends the real client address to the right of x-forwarded-for; anything to its left is
-// whatever the caller sent, so it can't be trusted for rate limiting.
-const clientIp = req => String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean).pop() || req.socket.remoteAddress || '';
+// On Render, traffic passes Cloudflare, which sets cf-connecting-ip to the caller's address and overwrites any value the
+// caller sent. x-forwarded-for there ends in Render's own internal proxy (same for every player), so it is only a local fallback.
+const clientIp = req => String(req.headers['cf-connecting-ip'] || '').trim() || String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean).pop() || req.socket.remoteAddress || '';
 // Per-account limit, which no header can get around: 10 wrong tries on one name locks that name for 10 minutes.
 const acctKey = (path, data) => path === '/api/login' ? 'acct:' + cleanName(data && data.name).toLowerCase() : path === '/api/resetOwner' ? 'acct:#owner' : null;
 
@@ -140,7 +140,6 @@ function send(res, code, body, type = 'application/json'){
 }
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
-  if(process.env.STAGING === '1' && url.pathname === '/api/status') console.log('staging xff:', JSON.stringify({ xff: req.headers['x-forwarded-for'] || null, tci: req.headers['true-client-ip'] || null, cf: req.headers['cf-connecting-ip'] || null, remote: req.socket.remoteAddress }));
   // 503 until the lease is held and state is loaded, and again while shutting down (Render routes only to 200s)
   if(req.method === 'GET' && url.pathname === '/healthz'){ const ok = ready && !stopping; return send(res, ok ? 200 : 503, { ok, ...store.health() }); }
   if(stopping) return send(res, 503, { error: 'Server is restarting. Try again in a moment.' });
