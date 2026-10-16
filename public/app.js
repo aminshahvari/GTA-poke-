@@ -10,7 +10,22 @@ const local = {
   set(k, v){ try{ localStorage.setItem('stacked:' + k, JSON.stringify(v)); }catch(e){} },
   del(k){ try{ localStorage.removeItem('stacked:' + k); }catch(e){} }
 };
-const showScreen = id => ['auth','lobby','game'].forEach(s => $(s).hidden = s !== id);
+const showScreen = id => { ['auth','lobby','game'].forEach(s => $(s).hidden = s !== id); keepAwake(id === 'game'); };
+// keep the phone screen on while a table is open, so it doesn't lock and sit you out between hands
+let wakeLock = null, wantAwake = false;
+async function keepAwake(on){
+  wantAwake = on;
+  try{
+    if(on && !wakeLock && 'wakeLock' in navigator && document.visibilityState === 'visible'){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    if(!on && wakeLock){ const w = wakeLock; wakeLock = null; await w.release(); }
+  }catch(e){ wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState !== 'visible') return;
+  if(wantAwake) keepAwake(true);
+  // coming back to the app counts as being back at the table
+  if(club) send({ t: 'back' });
+});
 
 // ---------- start-screen art ----------
 (function drawGlobe(){
@@ -93,7 +108,7 @@ function connect(){
   ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev })); };
   ws.onmessage = ev => {
     const m = JSON.parse(ev.data);
-    if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); } return; }
+    if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
     if(m.t === 'club'){ onClub(m.club); return; }
     if(m.t === 'table'){ tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
