@@ -164,6 +164,8 @@ function renderLobby(){
   if(!club) return;
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   const body = $('lobbyBody');
+  // Opportunity Club: a small count of requests waiting for my answer on the Business tab; never while seated in a running tournament
+  window.OppClub.badge(document.querySelector('#tabs [data-tab="biz"]'), !!(club.myTable && club.tourney && club.tourney.status === 'running'));
   document.querySelector('.app').classList.toggle('wide', tab === 'biz');
   if(tab === 'biz'){ body.replaceChildren(); window.BizClub.render(body); return; }
   body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : picNudgeHTML() + eventHTML() + friendsHTML();
@@ -175,7 +177,11 @@ function bizHome(body){
   const sec = document.createElement('div'); sec.className = 'bz-homewrap';
   const cards = [...body.children].filter(c => c.classList.contains('card-box') && !c.classList.contains('pic-nudge') && !c.classList.contains('next-box'));
   if(cards[0]) cards[0].after(sec); else body.append(sec);
-  window.BizClub.mountHome(sec, !!(club.myTable && club.tourney && club.tourney.status === 'running'));
+  const playing = !!(club.myTable && club.tourney && club.tourney.status === 'running');
+  window.BizClub.mountHome(sec, playing);
+  // Opportunity Club: "Community Opportunities" right under Meet the Members (also hidden while seated)
+  const opp = document.createElement('div'); opp.className = 'bz-homewrap'; sec.after(opp);
+  window.OppClub.mountHome(opp, playing);
 }
 // Start times for a quick tournament: now, or a time later today (tomorrow if it has passed).
 function startChoices(){

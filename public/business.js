@@ -4,7 +4,7 @@
 (function(){
 'use strict';
 const S = { view: 'list', detail: null, list: null, feed: null, feedAt: 0, mine: undefined, cats: [], canModerate: false,
-  q: '', cat: '', prefill: null, fromScan: false, scan: null, railX: 0, pendingLogo: undefined, back: 'list' };
+  q: '', cat: '', prefill: null, fromScan: false, scan: null, railX: 0, pendingLogo: undefined, back: 'list', seg: 'biz' };
 let C = null;
 const logos = new Map();
 const NEW_MS = 30 * 864e5;
@@ -67,6 +67,8 @@ function go(view, extra){
 function render(el){
   root = el; if(!el) return;
   const v = S.view;
+  // Opportunities (public/opportunity.js) shares the tab: its own views, under the same two entry buttons
+  if(v === 'list' && S.seg === 'opp') return window.OppClub.render(el);
   if(v === 'detail') return renderDetail(el);
   if(v === 'mine') return renderMine(el);
   if(v === 'edit') return renderEdit(el);
@@ -101,12 +103,12 @@ function filtered(){
 
 function renderList(el){
   if(!S.list){
-    el.replaceChildren(header(), h('div', { class: 'empty' }, 'Opening the Business Club…'));
-    Promise.all([loadList(), S.mine === undefined ? loadMine() : null]).then(() => { if(S.view === 'list' && root === el) renderList(el); }).catch(e => el.replaceChildren(header(), h('div', { class: 'empty' }, e.message)));
+    el.replaceChildren(window.OppClub.topBar('biz'), header(), h('div', { class: 'empty' }, 'Opening the Business Club…'));
+    Promise.all([loadList(), S.mine === undefined ? loadMine() : null]).then(() => { if(S.view === 'list' && S.seg === 'biz' && root === el) renderList(el); }).catch(e => el.replaceChildren(window.OppClub.topBar('biz'), header(), h('div', { class: 'empty' }, e.message)));
     return;
   }
   const L = S.list, items = L.items;
-  const kids = [header()];
+  const kids = [window.OppClub.topBar('biz'), header()];
   if(L.spotlight){
     const b = L.spotlight;
     kids.push(h('div', { class: 'card-box bz-spot' },
@@ -165,7 +167,7 @@ function miniCard(b, from){
 function openDetail(uid, from){ go('detail', { detail: { uid, data: null }, back: from || 'list' }); }
 function renderDetail(el){
   const d = S.detail;
-  const back = h('button', { class: 'bz-back', type: 'button', onclick: () => S.back === 'home' ? C.openTab('event') : go(S.back === 'mine' ? 'mine' : 'list') }, '‹ ' + (S.back === 'home' ? 'Home' : S.back === 'mine' ? 'My business' : 'Business Club'));
+  const back = h('button', { class: 'bz-back', type: 'button', onclick: () => S.back === 'home' ? C.openTab('event') : S.back === 'opp' ? go('list', { seg: 'opp' }) : go(S.back === 'mine' ? 'mine' : 'list') }, '‹ ' + (S.back === 'home' ? 'Home' : S.back === 'mine' ? 'My business' : S.back === 'opp' ? 'Back to the listing' : 'Business Club'));
   if(!d.data){
     el.replaceChildren(back, h('div', { class: 'empty' }, 'Opening…'));
     api('bizGet', { uid: d.uid }).then(r => { d.data = r; if(S.view === 'detail' && S.detail === d) renderDetail(el); })
@@ -446,7 +448,7 @@ function homeInto(sec){
     rail.addEventListener('scroll', () => { S.railX = rail.scrollLeft; }, { passive: true });
     kids.push(h('div', { class: 'card-box bz-home' },
       h('div', { class: 'bz-home-head' }, h('div', null, h('span', { class: 'eyebrow bz-eyebrow' }, 'Business Club'), h('h3', null, 'Meet the Members')),
-        h('button', { class: 'bz-link', type: 'button', onclick: () => go('list') }, 'See all ' + f.total + ' ›')),
+        h('button', { class: 'bz-link', type: 'button', onclick: () => go('list', { seg: 'biz' }) }, 'See all ' + f.total + ' ›')),
       rail,
       f.recent.length ? h('div', { class: 'bz-newlist' }, h('span', { class: 'eyebrow bz-eyebrow' }, 'New to the Club'),
         f.recent.slice(0, 3).map(b => h('button', { class: 'bz-row', type: 'button', onclick: () => openDetail(b.uid, 'home') }, logoEl(b, 'sm'), h('span', null, h('b', null, b.name), h('small', null, b.categoryLabel + ' · ' + b.member)), h('span', { class: 'bz-chev', 'aria-hidden': 'true' }, '›')))) : null));
@@ -466,10 +468,16 @@ function mountHome(sec, playing){
 }
 
 window.BizClub = {
-  init(ctx){ C = ctx; },
+  init(ctx){
+    C = ctx;
+    window.OppClub.init({ C, h, rerender: () => render(root),
+      showOpp: () => { S.view = 'list'; S.seg = 'opp'; if(C.tab() !== 'biz') return C.openTab('biz'); render(root); if(root) root.scrollTop = 0; },
+      showBiz: () => go('list', { seg: 'biz' }),
+      openBiz: uid => openDetail(uid, 'opp') });
+  },
   render, mountHome,
-  open(view){ S.view = view || 'list'; if(view === 'mine') S.mine = undefined; },
+  open(view){ S.view = view || 'list'; if(view === 'mine'){ S.mine = undefined; S.seg = 'biz'; } if(S.seg === 'opp') window.OppClub.open('feed'); },
   myStatus: () => S.feed ? S.feed.mine : null,
-  reset(){ S.list = null; S.feed = null; S.feedAt = 0; S.mine = undefined; S.view = 'list'; logos.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); logos.clear(); }
+  reset(){ window.OppClub.reset(); S.seg = 'biz'; S.list = null; S.feed = null; S.feedAt = 0; S.mine = undefined; S.view = 'list'; logos.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); logos.clear(); }
 };
 })();

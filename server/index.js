@@ -12,6 +12,7 @@ const players = require('./players');
 const coach = require('./coach');
 const push = require('./push');
 const business = require('./business');
+const opportunity = require('./opportunity');
 
 const PORT = +process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -106,7 +107,9 @@ const api = {
     return { ok: true };
   },
   // Business Club (members-only directory, separate from poker): see server/business.js
-  ...business.api
+  ...business.api,
+  // Opportunity Club ("I need help" / "I can help" listings inside Business Club): see server/opportunity.js
+  ...opportunity.api
 };
 const GROUP_MAX = 100, GROUP_DAYS = 30, MEMBER_DAYS = 7;
 // Members can invite friends too (the owner can switch that off). A member's link joins at most MEMBER_MAX people,
@@ -154,7 +157,7 @@ const server = http.createServer((req, res) => {
     const ip = 'ip:' + clientIp(req);
     let body = '';
     const limit = url.pathname === '/api/avatar' || url.pathname === '/api/bizSave' ? 70000 : 10000;
-    const extra = url.pathname.startsWith('/api/biz') ? NOINDEX : undefined;
+    const extra = url.pathname.startsWith('/api/biz') || url.pathname.startsWith('/api/opp') ? NOINDEX : undefined;
     req.on('data', c => { body += c; if(body.length > limit) req.destroy(); });
     req.on('end', () => {
       let acct = null;
@@ -398,7 +401,7 @@ wss.on('connection', (ws, req) => {
         case 'invite': { const code = inviteCode(u, !!m.group); sendWS(ws, { t: 'invite', code, group: !isOwner(u) || !!m.group, max: store.get('invite:' + code).max || 1 }); broadcastClub(); } break;
         case 'membersInvite': own(u); store.set('settings', { ...(store.get('settings') || {}), membersInvite: !!m.on }); broadcastClub(); break;
         case 'revoke': own(u); { const inv = store.get('invite:' + m.code); if(inv) store.set('invite:' + m.code, { ...inv, revoked: true }); broadcastClub(); } break;
-        case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); for(const k of store.keys('session:')) if(store.get(k).uid === x.id) store.del(k); club.leave(x.id); business.removeUser(x.id); } broadcastClub(); } break;
+        case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); for(const k of store.keys('session:')) if(store.get(k).uid === x.id) store.del(k); club.leave(x.id); business.removeUser(x.id); opportunity.removeUser(x.id); } broadcastClub(); } break;
       }
     }catch(e){ sendWS(ws, { t: 'error', error: e.message }); }
   });
@@ -442,7 +445,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
     }catch(e){ console.error('staging seed failed', e.message); }
   }
   // Staging only: a few fake demo businesses for the fake Test Player accounts (once; never in production)
-  if(process.env.STAGING === '1'){ const n = business.seedDemo(); if(n) console.log(`staging: seeded ${n} fake demo businesses`); }
+  if(process.env.STAGING === '1'){ const n = business.seedDemo(); if(n) console.log(`staging: seeded ${n} fake demo businesses`); const k = opportunity.seedDemo(); if(k) console.log(`staging: seeded ${k} fake demo opportunity listings`); }
   if(stopping) return;
   if(club.resume()) console.log('resumed running tournament');
   server.listen(PORT, () => { ready = true; console.log(`Blindrise poker club on :${PORT}`); });
