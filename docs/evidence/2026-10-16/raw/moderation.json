@@ -1,0 +1,1399 @@
+[
+  {
+    "step": "sign in as Test Director",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Director",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 07",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 07",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 08",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 08",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 09",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 09",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 10",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 10",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 11",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 11",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "Player 07 posts a listing",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppSave",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "type": "offer",
+        "title": "Can help you earn fast cash from home",
+        "details": "Message me for details. (Fake spam listing for the moderation test.)",
+        "category": "finance"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "item": {
+          "id": "oe7da093eefde3875",
+          "type": "offer",
+          "typeLabel": "I can help",
+          "title": "Can help you earn fast cash from home",
+          "details": "Message me for details. (Fake spam listing for the moderation test.)",
+          "category": "finance",
+          "categoryLabel": "Finance & insurance",
+          "area": "",
+          "member": "Test Player 07",
+          "business": null,
+          "createdAt": 1792181243224,
+          "updatedAt": 1792181243224,
+          "expiresAt": 1794773243224,
+          "state": "open",
+          "mine": true
+        }
+      }
+    }
+  },
+  {
+    "step": "Player 11 sends a contact request",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppRequest",
+      "auth": "Bearer <token of Test Player 11>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "message": "What is this about?"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "request": {
+          "id": "of73ae9e551485ef7",
+          "oppId": "oe7da093eefde3875",
+          "listing": {
+            "id": "oe7da093eefde3875",
+            "type": "offer",
+            "title": "Can help you earn fast cash from home",
+            "member": "Test Player 07",
+            "state": "open"
+          },
+          "message": "What is this about?",
+          "status": "sent",
+          "shared": null,
+          "createdAt": 1792181243227,
+          "answeredAt": null
+        }
+      }
+    }
+  },
+  {
+    "step": "member opens the reports queue",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReports",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {}
+    },
+    "response": {
+      "status": 403,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Only the club director can do that."
+      }
+    }
+  },
+  {
+    "step": "member tries to hide",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppModerate",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "action": "hide"
+      }
+    },
+    "response": {
+      "status": 403,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Only the club director can do that."
+      }
+    }
+  },
+  {
+    "step": "poster tries the director delete",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppModerate",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "action": "delete"
+      }
+    },
+    "response": {
+      "status": 403,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Only the club director can do that."
+      }
+    }
+  },
+  {
+    "step": "Player 8 reports (spam)",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReport",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "reason": "spam",
+        "note": "Looks like a pitch"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "step": "Player 9 reports (scam)",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReport",
+      "auth": "Bearer <token of Test Player 09>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "reason": "scam",
+        "note": ""
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "step": "after 2 reports: still visible to members",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 11>",
+      "body": {
+        "id": "oe7da093eefde3875"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "item": {
+          "id": "oe7da093eefde3875",
+          "type": "offer",
+          "typeLabel": "I can help",
+          "title": "Can help you earn fast cash from home",
+          "details": "Message me for details. (Fake spam listing for the moderation test.)",
+          "category": "finance",
+          "categoryLabel": "Finance & insurance",
+          "area": "",
+          "member": "Test Player 07",
+          "business": null,
+          "createdAt": 1792181243224,
+          "updatedAt": 1792181243224,
+          "expiresAt": 1794773243224,
+          "state": "open",
+          "mine": false,
+          "myRequest": {
+            "id": "of73ae9e551485ef7",
+            "status": "sent"
+          }
+        },
+        "canModerate": false,
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ],
+        "reported": false
+      }
+    }
+  },
+  {
+    "step": "Player 10 reports (spam)",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReport",
+      "auth": "Bearer <token of Test Player 10>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "reason": "spam",
+        "note": "Posted in two chats too"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "step": "after 3 reports: member opens it",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 11>",
+      "body": {
+        "id": "oe7da093eefde3875"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "This listing is not available any more."
+      }
+    }
+  },
+  {
+    "step": "after 3 reports: member feed",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppList",
+      "auth": "Bearer <token of Test Player 11>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "items": [
+          {
+            "id": "o7e25220ee560a611",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Need help moving my website to a new host",
+            "details": "Small WordPress site for a bakery. Looking for someone to move it this month. (Demo listing, not real.)",
+            "category": "tech",
+            "categoryLabel": "Tech & IT",
+            "area": "Remote",
+            "member": "Test Player 03",
+            "business": {
+              "uid": "ue7f0d608421b",
+              "name": "Bluefin Studio"
+            },
+            "createdAt": 1792156040922,
+            "updatedAt": 1792156040922,
+            "expiresAt": 1794748040922,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "o3f1beca47056470d",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Looking for a reliable electrician",
+            "details": "Need two pot lights and a dimmer installed in a condo. Happy to get a quote first. (Demo listing, not real.)",
+            "category": "trades",
+            "categoryLabel": "Construction & trades",
+            "area": "Midtown Toronto",
+            "member": "Test Player 02",
+            "business": {
+              "uid": "u5995b824ba64",
+              "name": "Maple & Main Realty"
+            },
+            "createdAt": 1792130840922,
+            "updatedAt": 1792130840922,
+            "expiresAt": 1794722840922,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "oaffd5b98380807c8",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Recommend a DJ for a 40th birthday?",
+            "details": "About 60 guests in December. Looking for someone a member has used before. (Demo listing, not real.)",
+            "category": "events",
+            "categoryLabel": "Events & entertainment",
+            "area": "Leslieville",
+            "member": "Test Player 04",
+            "business": {
+              "uid": "u9deccdcddc4f",
+              "name": "Kettle & Crumb Bakery"
+            },
+            "createdAt": 1792105640922,
+            "updatedAt": 1792105640922,
+            "expiresAt": 1794697640922,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "o50f0d1ecbd3258d9",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Free plumbing advice for members",
+            "details": "Not sure if that drip is a big deal? Ask me before you call anyone. (Demo listing, not real.)",
+            "category": "trades",
+            "categoryLabel": "Construction & trades",
+            "area": "Toronto & GTA",
+            "member": "Test Player 01",
+            "business": {
+              "uid": "u49e32c388054",
+              "name": "Northline Plumbing Co."
+            },
+            "createdAt": 1792055240922,
+            "updatedAt": 1792055240922,
+            "expiresAt": 1794647240922,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "o0002a755db690614",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Can review your small-business books",
+            "details": "Happy to look over a year of bookkeeping and point out what to fix before tax time. (Demo listing, not real.)",
+            "category": "professional",
+            "categoryLabel": "Legal & accounting",
+            "area": "Ontario",
+            "member": "Test Player 05",
+            "business": {
+              "uid": "u9771733d5836",
+              "name": "Steady Ledger Bookkeeping"
+            },
+            "createdAt": 1791979640922,
+            "updatedAt": 1791979640922,
+            "expiresAt": 1794571640922,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          }
+        ],
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ],
+        "canModerate": false,
+        "pending": 0,
+        "limits": {
+          "open": 5,
+          "openNow": 0,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  },
+  {
+    "step": "after 3 reports: poster opens own listing",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "oe7da093eefde3875"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "item": {
+          "id": "oe7da093eefde3875",
+          "type": "offer",
+          "typeLabel": "I can help",
+          "title": "Can help you earn fast cash from home",
+          "details": "Message me for details. (Fake spam listing for the moderation test.)",
+          "category": "finance",
+          "categoryLabel": "Finance & insurance",
+          "area": "",
+          "member": "Test Player 07",
+          "business": null,
+          "createdAt": 1792181243224,
+          "updatedAt": 1792181243224,
+          "expiresAt": 1794773243224,
+          "state": "review",
+          "mine": true
+        },
+        "canModerate": false,
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "step": "a 4th member tries to report the hidden listing",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReport",
+      "auth": "Bearer <token of Test Player 11>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "reason": "spam"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "This listing is not available any more."
+      }
+    }
+  },
+  {
+    "step": "director: reports queue (before)",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReports",
+      "auth": "Bearer <token of Test Director>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "items": [
+          {
+            "id": "oe7da093eefde3875",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Can help you earn fast cash from home",
+            "details": "Message me for details. (Fake spam listing for the moderation test.)",
+            "categoryLabel": "Finance & insurance",
+            "member": "Test Player 07",
+            "state": "review",
+            "createdAt": 1792181243224,
+            "reports": [
+              {
+                "reason": "spam",
+                "reasonLabel": "Spam or advertising",
+                "note": "Looks like a pitch",
+                "by": "Test Player 08",
+                "at": 1792181243237
+              },
+              {
+                "reason": "scam",
+                "reasonLabel": "Scam or misleading",
+                "note": "",
+                "by": "Test Player 09",
+                "at": 1792181243239
+              },
+              {
+                "reason": "spam",
+                "reasonLabel": "Spam or advertising",
+                "note": "Posted in two chats too",
+                "by": "Test Player 10",
+                "at": 1792181243243
+              }
+            ]
+          }
+        ],
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "step": "director dismisses the reports",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppModerate",
+      "auth": "Bearer <token of Test Director>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "action": "dismiss"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "queue": 0
+      }
+    }
+  },
+  {
+    "step": "after dismiss: member opens it",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 11>",
+      "body": {
+        "id": "oe7da093eefde3875"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "item": {
+          "id": "oe7da093eefde3875",
+          "type": "offer",
+          "typeLabel": "I can help",
+          "title": "Can help you earn fast cash from home",
+          "details": "Message me for details. (Fake spam listing for the moderation test.)",
+          "category": "finance",
+          "categoryLabel": "Finance & insurance",
+          "area": "",
+          "member": "Test Player 07",
+          "business": null,
+          "createdAt": 1792181243224,
+          "updatedAt": 1792181243224,
+          "expiresAt": 1794773243224,
+          "state": "open",
+          "mine": false,
+          "myRequest": {
+            "id": "of73ae9e551485ef7",
+            "status": "sent"
+          }
+        },
+        "canModerate": false,
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ],
+        "reported": false
+      }
+    }
+  },
+  {
+    "step": "director: reports queue (after dismiss)",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReports",
+      "auth": "Bearer <token of Test Director>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "items": [],
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "step": "after dismiss: an earlier reporter reports again",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReport",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "reason": "spam"
+      }
+    },
+    "response": {
+      "status": 400,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "You already reported this listing. Thank you."
+      }
+    }
+  },
+  {
+    "step": "director hides",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppModerate",
+      "auth": "Bearer <token of Test Director>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "action": "hide"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "queue": 1
+      }
+    }
+  },
+  {
+    "step": "after hide: member opens it",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 11>",
+      "body": {
+        "id": "oe7da093eefde3875"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "This listing is not available any more."
+      }
+    }
+  },
+  {
+    "step": "after hide: poster opens it",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "oe7da093eefde3875"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "item": {
+          "id": "oe7da093eefde3875",
+          "type": "offer",
+          "typeLabel": "I can help",
+          "title": "Can help you earn fast cash from home",
+          "details": "Message me for details. (Fake spam listing for the moderation test.)",
+          "category": "finance",
+          "categoryLabel": "Finance & insurance",
+          "area": "",
+          "member": "Test Player 07",
+          "business": null,
+          "createdAt": 1792181243224,
+          "updatedAt": 1792181243224,
+          "expiresAt": 1794773243224,
+          "state": "hidden",
+          "mine": true
+        },
+        "canModerate": false,
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "step": "director: queue after hide",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReports",
+      "auth": "Bearer <token of Test Director>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "items": [
+          {
+            "id": "oe7da093eefde3875",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Can help you earn fast cash from home",
+            "details": "Message me for details. (Fake spam listing for the moderation test.)",
+            "categoryLabel": "Finance & insurance",
+            "member": "Test Player 07",
+            "state": "hidden",
+            "createdAt": 1792181243224,
+            "reports": []
+          }
+        ],
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "step": "poster edits while hidden",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppSave",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "type": "offer",
+        "title": "Edited while hidden",
+        "category": "finance"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "item": {
+          "id": "oe7da093eefde3875",
+          "type": "offer",
+          "typeLabel": "I can help",
+          "title": "Edited while hidden",
+          "details": "",
+          "category": "finance",
+          "categoryLabel": "Finance & insurance",
+          "area": "",
+          "member": "Test Player 07",
+          "business": null,
+          "createdAt": 1792181243224,
+          "updatedAt": 1792181269006,
+          "expiresAt": 1794773243224,
+          "state": "hidden",
+          "mine": true
+        }
+      }
+    }
+  },
+  {
+    "step": "after poster edit: still hidden for members",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 11>",
+      "body": {
+        "id": "oe7da093eefde3875"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "This listing is not available any more."
+      }
+    }
+  },
+  {
+    "step": "director shows it again",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppModerate",
+      "auth": "Bearer <token of Test Director>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "action": "unhide"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "queue": 0
+      }
+    }
+  },
+  {
+    "step": "after unhide: member opens it",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 11>",
+      "body": {
+        "id": "oe7da093eefde3875"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "item": {
+          "id": "oe7da093eefde3875",
+          "type": "offer",
+          "typeLabel": "I can help",
+          "title": "Edited while hidden",
+          "details": "",
+          "category": "finance",
+          "categoryLabel": "Finance & insurance",
+          "area": "",
+          "member": "Test Player 07",
+          "business": null,
+          "createdAt": 1792181243224,
+          "updatedAt": 1792181269006,
+          "expiresAt": 1794773243224,
+          "state": "open",
+          "mine": false,
+          "myRequest": {
+            "id": "of73ae9e551485ef7",
+            "status": "sent"
+          }
+        },
+        "canModerate": false,
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ],
+        "reported": false
+      }
+    }
+  },
+  {
+    "step": "unknown action",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppModerate",
+      "auth": "Bearer <token of Test Director>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "action": "nuke"
+      }
+    },
+    "response": {
+      "status": 400,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Unknown action."
+      }
+    }
+  },
+  {
+    "step": "director deletes",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppModerate",
+      "auth": "Bearer <token of Test Director>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "action": "delete"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "queue": 0
+      }
+    }
+  },
+  {
+    "step": "after delete: poster opens it",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "oe7da093eefde3875"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "This listing is not available any more."
+      }
+    }
+  },
+  {
+    "step": "after delete: requester sent list",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppMine",
+      "auth": "Bearer <token of Test Player 11>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "listings": [],
+        "sent": [],
+        "suggest": {
+          "email": "",
+          "phone": ""
+        },
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "limits": {
+          "open": 5,
+          "openNow": 0,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  },
+  {
+    "step": "delete again",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppModerate",
+      "auth": "Bearer <token of Test Director>",
+      "body": {
+        "id": "oe7da093eefde3875",
+        "action": "delete"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "That listing was not found."
+      }
+    }
+  }
+]

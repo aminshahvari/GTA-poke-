@@ -1,0 +1,35 @@
+code: {"head":"a3c67e9","auditedRef":"a3c67e9","appCodeIdenticalToRef":true}
+| Input | oppSave.title | oppSave.details | oppRequest.message | oppReply.note | bizSave.description | bizSave.services |
+|---|---|---|---|---|---|---|
+| url: `https://x.com` | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | accepted | accepted |
+| url: `http:// (scheme, nothing after)` | accepted | accepted | accepted | accepted | accepted | accepted |
+| url: `http://example.org/page` | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | accepted | accepted |
+| url: `www.example.com` | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | accepted | accepted |
+| url: `example.com` | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | accepted | accepted |
+| url: `example.fr` | accepted | accepted | accepted | accepted | accepted | accepted |
+| url: `example.de` | accepted | accepted | accepted | accepted | accepted | accepted |
+| url: `example.ai` | accepted | accepted | accepted | accepted | accepted | accepted |
+| url: `EXAMPLE.CA` | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | accepted | accepted |
+| url: `bit.ly/abc` | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | accepted | accepted |
+| url: `hxxp://example[.]com` | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | accepted | accepted |
+| url: `hxxps://example.com` | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | accepted | accepted |
+| url: `example[.]com` | accepted | accepted | accepted | accepted | accepted | accepted |
+| url: `example . com (spaces)` | accepted | accepted | accepted | accepted | accepted | accepted |
+| url: `example。com (U+3002 ideographic full stop)` | accepted | accepted | accepted | accepted | accepted | accepted |
+| url: `example․com (U+2024 one dot leader)` | accepted | accepted | accepted | accepted | accepted | accepted |
+| url: `example．com (U+FF0E fullwidth full stop)` | accepted | accepted | accepted | accepted | accepted | accepted |
+| url: `example dot com` | accepted | accepted | accepted | accepted | accepted | accepted |
+| email: `a@b.com` | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | BLOCKED (400 link) | accepted | accepted |
+| email: `a@b.fr` | accepted | accepted | accepted | accepted | accepted | accepted |
+| email: `a@b.de` | accepted | accepted | accepted | accepted | accepted | accepted |
+| email: `a at b dot com` | accepted | accepted | accepted | accepted | accepted | accepted |
+| email: `a(at)b.fr` | accepted | accepted | accepted | accepted | accepted | accepted |
+| phone: `416-555-0100` | accepted | accepted | accepted | accepted | accepted | accepted |
+| phone: `(416) 555 0100` | accepted | accepted | accepted | accepted | accepted | accepted |
+| phone: `+1 416 555 0100` | accepted | accepted | accepted | accepted | accepted | accepted |
+| phone: `4165550100` | accepted | accepted | accepted | accepted | accepted | accepted |
+| phone: `four one six five five five zero one zero zero` | accepted | accepted | accepted | accepted | accepted | accepted |
+| control: `plain text (control)` | accepted | accepted | accepted | accepted | accepted | accepted |
+
+29 inputs x 6 fields = 174 probes; 36 rejected.
+inputs rejected by at least one field: https://x.com | http://example.org/page | www.example.com | example.com | EXAMPLE.CA | bit.ly/abc | hxxp://example[.]com | hxxps://example.com | a@b.com

@@ -1,0 +1,336 @@
+[
+  {
+    "step": "S2 another member filters \"I can help\"",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppList",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {
+        "type": "offer"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "items": [
+          {
+            "id": "o38bf754063d9f878",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Can help with resumes and cover letters",
+            "details": "Happy to review a resume or cover letter for any member. Evenings only.",
+            "category": "education",
+            "categoryLabel": "Education & tutoring",
+            "area": "Remote",
+            "member": "Test Player 07",
+            "business": null,
+            "createdAt": 1792181189472,
+            "updatedAt": 1792181189472,
+            "expiresAt": 1794773189472,
+            "state": "open",
+            "mine": false,
+            "myRequest": null
+          },
+          {
+            "id": "o9b2d67c5199083b6",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Free plumbing advice for members",
+            "details": "Not sure if that drip is a big deal? Ask me before you call anyone. (Demo listing, not real.)",
+            "category": "trades",
+            "categoryLabel": "Construction & trades",
+            "area": "Toronto & GTA",
+            "member": "Test Player 01",
+            "business": {
+              "uid": "u492d383e0904",
+              "name": "Northline Plumbing Co."
+            },
+            "createdAt": 1792055176795,
+            "updatedAt": 1792055176795,
+            "expiresAt": 1794647176795,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "ob84712c38ceaabb6",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Can review your small-business books",
+            "details": "Happy to look over a year of bookkeeping and point out what to fix before tax time. (Demo listing, not real.)",
+            "category": "professional",
+            "categoryLabel": "Legal & accounting",
+            "area": "Ontario",
+            "member": "Test Player 05",
+            "business": {
+              "uid": "u9b1ef9ddaf19",
+              "name": "Steady Ledger Bookkeeping"
+            },
+            "createdAt": 1791979576795,
+            "updatedAt": 1791979576795,
+            "expiresAt": 1794571576795,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          }
+        ],
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ],
+        "canModerate": false,
+        "pending": 0,
+        "limits": {
+          "open": 5,
+          "openNow": 0,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  },
+  {
+    "step": "S2 search finds it",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppList",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {
+        "q": "resumes"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "items": [
+          {
+            "id": "o38bf754063d9f878",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Can help with resumes and cover letters",
+            "details": "Happy to review a resume or cover letter for any member. Evenings only.",
+            "category": "education",
+            "categoryLabel": "Education & tutoring",
+            "area": "Remote",
+            "member": "Test Player 07",
+            "business": null,
+            "createdAt": 1792181189472,
+            "updatedAt": 1792181189472,
+            "expiresAt": 1794773189472,
+            "state": "open",
+            "mine": false,
+            "myRequest": null
+          }
+        ],
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ],
+        "canModerate": false,
+        "pending": 0,
+        "limits": {
+          "open": 5,
+          "openNow": 0,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  }
+]

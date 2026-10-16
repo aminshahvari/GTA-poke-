@@ -1,0 +1,253 @@
+[
+  {
+    "step": "S1 another member lists \"I need help\" listings",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppList",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "type": "need"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "items": [
+          {
+            "id": "obf3c94b651c061da",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Looking for a reliable mover in March",
+            "details": "Moving a one-bedroom across town in March. Looking for a mover a member has used and trusts.",
+            "category": "home",
+            "categoryLabel": "Home services",
+            "area": "East end",
+            "member": "Test Player 06",
+            "business": null,
+            "createdAt": 1792181184470,
+            "updatedAt": 1792181184470,
+            "expiresAt": 1794773184470,
+            "state": "open",
+            "mine": false,
+            "myRequest": null
+          },
+          {
+            "id": "o9ee80fb971497a75",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Need help moving my website to a new host",
+            "details": "Small WordPress site for a bakery. Looking for someone to move it this month. (Demo listing, not real.)",
+            "category": "tech",
+            "categoryLabel": "Tech & IT",
+            "area": "Remote",
+            "member": "Test Player 03",
+            "business": {
+              "uid": "u14371507c8a6",
+              "name": "Bluefin Studio"
+            },
+            "createdAt": 1792155976795,
+            "updatedAt": 1792155976795,
+            "expiresAt": 1794747976795,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "o0a02c9675dc8a128",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Looking for a reliable electrician",
+            "details": "Need two pot lights and a dimmer installed in a condo. Happy to get a quote first. (Demo listing, not real.)",
+            "category": "trades",
+            "categoryLabel": "Construction & trades",
+            "area": "Midtown Toronto",
+            "member": "Test Player 02",
+            "business": {
+              "uid": "u066ca0326395",
+              "name": "Maple & Main Realty"
+            },
+            "createdAt": 1792130776795,
+            "updatedAt": 1792130776795,
+            "expiresAt": 1794722776795,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "od32f0ede28975715",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Recommend a DJ for a 40th birthday?",
+            "details": "About 60 guests in December. Looking for someone a member has used before. (Demo listing, not real.)",
+            "category": "events",
+            "categoryLabel": "Events & entertainment",
+            "area": "Leslieville",
+            "member": "Test Player 04",
+            "business": {
+              "uid": "ub590b77ad111",
+              "name": "Kettle & Crumb Bakery"
+            },
+            "createdAt": 1792105576795,
+            "updatedAt": 1792105576795,
+            "expiresAt": 1794697576795,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          }
+        ],
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ],
+        "canModerate": false,
+        "pending": 0,
+        "limits": {
+          "open": 5,
+          "openNow": 0,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  },
+  {
+    "step": "S1 validation: title too short",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppSave",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {
+        "type": "need",
+        "title": "x",
+        "category": "home"
+      }
+    },
+    "response": {
+      "status": 400,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Add a short title (at least 3 characters)."
+      }
+    }
+  },
+  {
+    "step": "S1 validation: unknown category",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppSave",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {
+        "type": "need",
+        "title": "Need a mover",
+        "category": "nope"
+      }
+    },
+    "response": {
+      "status": 400,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Pick a category from the list."
+      }
+    }
+  }
+]

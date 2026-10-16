@@ -1,0 +1,135 @@
+[
+  {
+    "step": "sign in as Test Director",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Director",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 06",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 06",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 07",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 07",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 08",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 08",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 09",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 09",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 10",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 10",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  },
+  {
+    "step": "sign in as Test Player 12",
+    "request": {
+      "method": "POST",
+      "path": "/api/login",
+      "auth": "none",
+      "body": {
+        "name": "Test Player 12",
+        "pin": "<redacted>"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": null,
+      "body": {
+        "token": "<redacted>"
+      }
+    }
+  }
+]

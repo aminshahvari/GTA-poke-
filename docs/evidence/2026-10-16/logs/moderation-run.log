@@ -1,0 +1,38 @@
+code: {"head":"a3c67e9","auditedRef":"a3c67e9","appCodeIdenticalToRef":true}
+PASS M1 members get 403 on oppReports and oppModerate (incl. the poster)
+PASS M2 after 2 reports the listing is still visible
+PASS M3 three reports accepted
+PASS M4 auto-hidden at 3 reports: 404 for members, gone from feed, poster sees state "review"
+PASS M5 kv: listing has autoHidden=true, 3 open (unreviewed) reports
+note: reporting a hidden listing returns 404 This listing is not available any more.
+PASS M6 director queue: listing first, state review, 3 reports with reason/note/reporter name
+PASS M7 queue entries do not expose reporter user ids
+PASS M8 dismiss: visible again (200, open), queue empty
+PASS M9 kv: the 3 reports are kept and marked reviewed=true; autoHidden=false
+note: an earlier reporter reporting again after dismiss returns 400 You already reported this listing. Thank you.
+PASS M10 hide: 404 for members, poster sees "hidden", listed in queue as hidden
+PASS M11 poster editing does not lift a director hide
+PASS M12 unhide: visible again
+PASS M13 unknown moderation action is 400
+PASS M14 delete: 404 even for the poster; listing, its request and its reports removed from kv
+PASS M15 moderating a deleted listing is 404
+
+ID   | Check                                                                                 | Result
+---------------------------------------------------------------------------------------------------------
+M1   | members get 403 on oppReports and oppModerate (incl. the poster)                      | PASS
+M2   | after 2 reports the listing is still visible                                          | PASS
+M3   | three reports accepted                                                                | PASS
+M4   | auto-hidden at 3 reports: 404 for members, gone from feed, poster sees state "review" | PASS
+M5   | kv: listing has autoHidden=true, 3 open (unreviewed) reports                          | PASS
+M6   | director queue: listing first, state review, 3 reports with reason/note/reporter name | PASS
+M7   | queue entries do not expose reporter user ids                                         | PASS
+M8   | dismiss: visible again (200, open), queue empty                                       | PASS
+M9   | kv: the 3 reports are kept and marked reviewed=true; autoHidden=false                 | PASS
+M10  | hide: 404 for members, poster sees "hidden", listed in queue as hidden                | PASS
+M11  | poster editing does not lift a director hide                                          | PASS
+M12  | unhide: visible again                                                                 | PASS
+M13  | unknown moderation action is 400                                                      | PASS
+M14  | delete: 404 even for the poster; listing, its request and its reports removed from kv | PASS
+M15  | moderating a deleted listing is 404                                                   | PASS
+
+15 passed, 0 failed. Raw: raw/moderation.json, raw/moderation-kv.json. Screens: screens/moderation/M-01-director-queue-before-auto-hidden.png, screens/moderation/M-02-poster-sees-waiting-for-review.png, screens/moderation/M-03-director-listing-controls.png, screens/moderation/M-04-director-queue-after-dismiss-all-clear.png, screens/moderation/M-05-member-feed-listing-visible-again.png, screens/moderation/M-06-director-queue-hidden.png

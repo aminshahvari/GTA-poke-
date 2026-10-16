@@ -1,0 +1,16 @@
+$ npm test
+Fri Oct 16 19:39:27 UTC 2026
+
+> stacked-poker@1.0.0 test
+> node test/t_eval.js && node test/t_rules.js && node test/t_sim.js 20 && node test/t_server.js && node test/t_coach.js && node test/t_players.js && node test/t_push.js && node test/t_extra.js && node test/t_security.js && node test/t_bizunit.js && node test/t_business.js && node test/t_opportunity.js && node test/t_csp.js
+
+random 7-card hands checked: 200000 category counts: High Card:34753, Pair:87817, Two Pair:46908, Three of a Kind:9571, Straight:9305, Flush:6028, Full House:5215, Four of a Kind:340, Straight Flush:63
+evaluator: all passed
+42 passed, 0 failed
+random-action stress: 3000 tournaments, 30307 hands, 1.001s, problems 0
+AI tournaments: 20, avg 145 hands, 3.417s, wins by style { tight: 7, cautious: 5, aggro: 5, loose: 3 } top-3 by style { tight: 21, cautious: 17, aggro: 10, loose: 12 } problems 0
+FAIL table chat not delivered to tablemates
+fair deal: 452 hands verified, 1789 dealt hands cross-checked
+server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 5 tied, 275 chip checks, 692 actions, 73s, champion Friend 5
+1 FAILURES
+exit code: 1

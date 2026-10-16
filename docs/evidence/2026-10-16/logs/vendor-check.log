@@ -1,0 +1,53 @@
+$ ls -l public/vendor/*/
+public/vendor/tessdata-eng-1.0.0/:
+total 2884
+-rw-r--r-- 1 root root 2952873 Oct 16 19:37 eng.traineddata.gz
+
+public/vendor/tesseract-5.1.1/:
+total 6056
+-rw-r--r-- 1 root root   11358 Oct 16 19:37 LICENSE-core
+-rw-r--r-- 1 root root   11357 Oct 16 19:37 LICENSE.md
+-rw-r--r-- 1 root root  124391 Oct 16 19:37 tesseract-core-lstm.js
+-rw-r--r-- 1 root root 2859424 Oct 16 19:37 tesseract-core-lstm.wasm
+-rw-r--r-- 1 root root  124396 Oct 16 19:37 tesseract-core-simd-lstm.js
+-rw-r--r-- 1 root root 2859709 Oct 16 19:37 tesseract-core-simd-lstm.wasm
+-rw-r--r-- 1 root root   66695 Oct 16 19:37 tesseract.min.js
+-rw-r--r-- 1 root root  123724 Oct 16 19:37 worker.min.js
+
+$ (cd public/vendor && sha256sum -c SHA256SUMS)
+tesseract-5.1.1/tesseract.min.js: OK
+tesseract-5.1.1/worker.min.js: OK
+tesseract-5.1.1/LICENSE.md: OK
+tesseract-5.1.1/tesseract-core-simd-lstm.js: OK
+tesseract-5.1.1/tesseract-core-simd-lstm.wasm: OK
+tesseract-5.1.1/tesseract-core-lstm.js: OK
+tesseract-5.1.1/tesseract-core-lstm.wasm: OK
+tesseract-5.1.1/LICENSE-core: OK
+tessdata-eng-1.0.0/eng.traineddata.gz: OK
+exit 0
+
+$ (cd public/vendor && sha256sum */*)  # recomputed now
+45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91  tessdata-eng-1.0.0/eng.traineddata.gz
+c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08  tesseract-5.1.1/LICENSE-core
+b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1  tesseract-5.1.1/LICENSE.md
+fc54a973687325599214294ec90ea9665309cbdf6ca727c43a64651f24e923f7  tesseract-5.1.1/tesseract-core-lstm.js
+5db58ea4d1bd4256be81e8ae3b4fa226c4625dfba1850b1b3308dbf3700e9929  tesseract-5.1.1/tesseract-core-lstm.wasm
+4135a3f6f1cccf3bc92058c1273c49bb4cff6356e1ba15d1b8b4e76e9890526b  tesseract-5.1.1/tesseract-core-simd-lstm.js
+66b601224a0c4a8977bc9d92dd39841189f9ca22cc4122fcd7208cdb0961eeef  tesseract-5.1.1/tesseract-core-simd-lstm.wasm
+a8e29918d098b2b06e1012bdaeffb4aec0445c5d5654709023e0bd1f442a80e8  tesseract-5.1.1/tesseract.min.js
+aca1229639fc9907d86f96e825955a2b7c5716d17f3bc3acd71f9c7ab66181fc  tesseract-5.1.1/worker.min.js
+
+$ node scripts/vendor-tesseract.js --check
+ok tesseract-5.1.1/tesseract.min.js
+ok tesseract-5.1.1/worker.min.js
+ok tesseract-5.1.1/LICENSE.md
+ok tesseract-5.1.1/tesseract-core-simd-lstm.js
+ok tesseract-5.1.1/tesseract-core-simd-lstm.wasm
+ok tesseract-5.1.1/tesseract-core-lstm.js
+ok tesseract-5.1.1/tesseract-core-lstm.wasm
+ok tesseract-5.1.1/LICENSE-core
+ok tessdata-eng-1.0.0/eng.traineddata.gz
+exit 0
+
+$ git log --oneline -1 -- public/vendor
+7e946e3 BC1 security closure: self-host the card reader, tighten the CSP

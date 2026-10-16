@@ -1,0 +1,663 @@
+[
+  {
+    "step": "S5 owner edits",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppSave",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {
+        "id": "obf3c94b651c061da",
+        "type": "need",
+        "title": "Looking for a reliable mover in early March",
+        "details": "Moving a one-bedroom across town in March. Looking for a mover a member has used and trusts.",
+        "category": "home",
+        "area": "East end"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "item": {
+          "id": "obf3c94b651c061da",
+          "type": "need",
+          "typeLabel": "I need help",
+          "title": "Looking for a reliable mover in early March",
+          "details": "Moving a one-bedroom across town in March. Looking for a mover a member has used and trusts.",
+          "category": "home",
+          "categoryLabel": "Home services",
+          "area": "East end",
+          "member": "Test Player 06",
+          "business": null,
+          "createdAt": 1792181184470,
+          "updatedAt": 1792181209712,
+          "expiresAt": 1794773184470,
+          "state": "open",
+          "mine": true
+        }
+      }
+    }
+  },
+  {
+    "step": "S5 another member tries to edit",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppSave",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "obf3c94b651c061da",
+        "type": "need",
+        "title": "Hijacked",
+        "category": "home"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "That listing was not found."
+      }
+    }
+  },
+  {
+    "step": "S5 another member tries to close",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppClose",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "obf3c94b651c061da"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "That listing was not found."
+      }
+    }
+  },
+  {
+    "step": "S5 another member tries to delete",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppDelete",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "obf3c94b651c061da"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "That listing was not found."
+      }
+    }
+  },
+  {
+    "step": "S5 forged uid in the body",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppSave",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "obf3c94b651c061da",
+        "uid": "u82a49aa0f90c",
+        "type": "need",
+        "title": "Hijacked",
+        "category": "home"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "That listing was not found."
+      }
+    }
+  },
+  {
+    "step": "S5 owner closes",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppClose",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {
+        "id": "obf3c94b651c061da",
+        "closed": true
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "item": {
+          "id": "obf3c94b651c061da",
+          "type": "need",
+          "typeLabel": "I need help",
+          "title": "Looking for a reliable mover in early March",
+          "details": "Moving a one-bedroom across town in March. Looking for a mover a member has used and trusts.",
+          "category": "home",
+          "categoryLabel": "Home services",
+          "area": "East end",
+          "member": "Test Player 06",
+          "business": null,
+          "createdAt": 1792181184470,
+          "updatedAt": 1792181209723,
+          "expiresAt": 1794773184470,
+          "state": "closed",
+          "mine": true
+        }
+      }
+    }
+  },
+  {
+    "step": "S5 others cannot open a closed listing",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "obf3c94b651c061da"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "This listing is not available any more."
+      }
+    }
+  },
+  {
+    "step": "S5 feed after close",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppList",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "items": [
+          {
+            "id": "o38bf754063d9f878",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Can help with resumes and cover letters",
+            "details": "Happy to review a resume or cover letter for any member. Evenings only.",
+            "category": "education",
+            "categoryLabel": "Education & tutoring",
+            "area": "Remote",
+            "member": "Test Player 07",
+            "business": null,
+            "createdAt": 1792181189472,
+            "updatedAt": 1792181189472,
+            "expiresAt": 1794773189472,
+            "state": "open",
+            "mine": true
+          },
+          {
+            "id": "o9ee80fb971497a75",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Need help moving my website to a new host",
+            "details": "Small WordPress site for a bakery. Looking for someone to move it this month. (Demo listing, not real.)",
+            "category": "tech",
+            "categoryLabel": "Tech & IT",
+            "area": "Remote",
+            "member": "Test Player 03",
+            "business": {
+              "uid": "u14371507c8a6",
+              "name": "Bluefin Studio"
+            },
+            "createdAt": 1792155976795,
+            "updatedAt": 1792155976795,
+            "expiresAt": 1794747976795,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "o0a02c9675dc8a128",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Looking for a reliable electrician",
+            "details": "Need two pot lights and a dimmer installed in a condo. Happy to get a quote first. (Demo listing, not real.)",
+            "category": "trades",
+            "categoryLabel": "Construction & trades",
+            "area": "Midtown Toronto",
+            "member": "Test Player 02",
+            "business": {
+              "uid": "u066ca0326395",
+              "name": "Maple & Main Realty"
+            },
+            "createdAt": 1792130776795,
+            "updatedAt": 1792130776795,
+            "expiresAt": 1794722776795,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "od32f0ede28975715",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Recommend a DJ for a 40th birthday?",
+            "details": "About 60 guests in December. Looking for someone a member has used before. (Demo listing, not real.)",
+            "category": "events",
+            "categoryLabel": "Events & entertainment",
+            "area": "Leslieville",
+            "member": "Test Player 04",
+            "business": {
+              "uid": "ub590b77ad111",
+              "name": "Kettle & Crumb Bakery"
+            },
+            "createdAt": 1792105576795,
+            "updatedAt": 1792105576795,
+            "expiresAt": 1794697576795,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "o9b2d67c5199083b6",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Free plumbing advice for members",
+            "details": "Not sure if that drip is a big deal? Ask me before you call anyone. (Demo listing, not real.)",
+            "category": "trades",
+            "categoryLabel": "Construction & trades",
+            "area": "Toronto & GTA",
+            "member": "Test Player 01",
+            "business": {
+              "uid": "u492d383e0904",
+              "name": "Northline Plumbing Co."
+            },
+            "createdAt": 1792055176795,
+            "updatedAt": 1792055176795,
+            "expiresAt": 1794647176795,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          },
+          {
+            "id": "ob84712c38ceaabb6",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Can review your small-business books",
+            "details": "Happy to look over a year of bookkeeping and point out what to fix before tax time. (Demo listing, not real.)",
+            "category": "professional",
+            "categoryLabel": "Legal & accounting",
+            "area": "Ontario",
+            "member": "Test Player 05",
+            "business": {
+              "uid": "u9b1ef9ddaf19",
+              "name": "Steady Ledger Bookkeeping"
+            },
+            "createdAt": 1791979576795,
+            "updatedAt": 1791979576795,
+            "expiresAt": 1794571576795,
+            "state": "open",
+            "mine": false,
+            "myRequest": null,
+            "demo": true
+          }
+        ],
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ],
+        "canModerate": false,
+        "pending": 0,
+        "limits": {
+          "open": 5,
+          "openNow": 1,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  },
+  {
+    "step": "S5 owner reopens",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppClose",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {
+        "id": "obf3c94b651c061da",
+        "closed": false
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "item": {
+          "id": "obf3c94b651c061da",
+          "type": "need",
+          "typeLabel": "I need help",
+          "title": "Looking for a reliable mover in early March",
+          "details": "Moving a one-bedroom across town in March. Looking for a mover a member has used and trusts.",
+          "category": "home",
+          "categoryLabel": "Home services",
+          "area": "East end",
+          "member": "Test Player 06",
+          "business": null,
+          "createdAt": 1792181184470,
+          "updatedAt": 1792181214258,
+          "expiresAt": 1794773184470,
+          "state": "open",
+          "mine": true
+        }
+      }
+    }
+  },
+  {
+    "step": "S5 others can open it again",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "obf3c94b651c061da"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "item": {
+          "id": "obf3c94b651c061da",
+          "type": "need",
+          "typeLabel": "I need help",
+          "title": "Looking for a reliable mover in early March",
+          "details": "Moving a one-bedroom across town in March. Looking for a mover a member has used and trusts.",
+          "category": "home",
+          "categoryLabel": "Home services",
+          "area": "East end",
+          "member": "Test Player 06",
+          "business": null,
+          "createdAt": 1792181184470,
+          "updatedAt": 1792181214258,
+          "expiresAt": 1794773184470,
+          "state": "open",
+          "mine": false,
+          "myRequest": null
+        },
+        "canModerate": false,
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ],
+        "reported": false
+      }
+    }
+  },
+  {
+    "step": "S5 owner deletes",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppDelete",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {
+        "id": "obf3c94b651c061da"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "step": "S5 owner opens deleted listing",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {
+        "id": "obf3c94b651c061da"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "This listing is not available any more."
+      }
+    }
+  },
+  {
+    "step": "S5 sender: request removed with the listing",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppMine",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "listings": [],
+        "sent": [],
+        "suggest": {
+          "email": "",
+          "phone": ""
+        },
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "limits": {
+          "open": 5,
+          "openNow": 0,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,630 @@
+[
+  {
+    "step": "S4 sender: requests I sent (before reply)",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppMine",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "listings": [],
+        "sent": [
+          {
+            "id": "o22e7ee4d1c355668",
+            "oppId": "obf3c94b651c061da",
+            "listing": {
+              "id": "obf3c94b651c061da",
+              "type": "need",
+              "title": "Looking for a reliable mover in March",
+              "member": "Test Player 06",
+              "state": "open"
+            },
+            "message": "Hi! My cousin runs a two-person moving crew and moved me last year. Happy to connect you.",
+            "status": "sent",
+            "shared": null,
+            "createdAt": 1792181195852,
+            "answeredAt": null
+          }
+        ],
+        "suggest": {
+          "email": "",
+          "phone": ""
+        },
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "limits": {
+          "open": 5,
+          "openNow": 0,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  },
+  {
+    "step": "S4 poster: incoming requests",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppMine",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "listings": [
+          {
+            "id": "obf3c94b651c061da",
+            "type": "need",
+            "typeLabel": "I need help",
+            "title": "Looking for a reliable mover in March",
+            "details": "Moving a one-bedroom across town in March. Looking for a mover a member has used and trusts.",
+            "category": "home",
+            "categoryLabel": "Home services",
+            "area": "East end",
+            "member": "Test Player 06",
+            "business": null,
+            "createdAt": 1792181184470,
+            "updatedAt": 1792181184470,
+            "expiresAt": 1794773184470,
+            "state": "open",
+            "mine": true,
+            "requests": [
+              {
+                "id": "o22e7ee4d1c355668",
+                "from": "Test Player 08",
+                "message": "Hi! My cousin runs a two-person moving crew and moved me last year. Happy to connect you.",
+                "status": "sent",
+                "shared": null,
+                "createdAt": 1792181195852,
+                "answeredAt": null
+              }
+            ]
+          }
+        ],
+        "sent": [],
+        "suggest": {
+          "email": "",
+          "phone": ""
+        },
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "limits": {
+          "open": 5,
+          "openNow": 1,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  },
+  {
+    "step": "S4 duplicate request",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppRequest",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {
+        "id": "obf3c94b651c061da",
+        "message": "again"
+      }
+    },
+    "response": {
+      "status": 400,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "You already sent a request for this listing."
+      }
+    }
+  },
+  {
+    "step": "S4 request on own listing",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppRequest",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {
+        "id": "obf3c94b651c061da",
+        "message": "me"
+      }
+    },
+    "response": {
+      "status": 400,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "This is your own listing."
+      }
+    }
+  },
+  {
+    "step": "S4 a third member tries to answer the request",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReply",
+      "auth": "Bearer <token of Test Player 09>",
+      "body": {
+        "id": "o22e7ee4d1c355668",
+        "action": "share",
+        "phone": "416-555-0199"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "That request was not found."
+      }
+    }
+  },
+  {
+    "step": "S4 sender: requests I sent (after reply)",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppMine",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "listings": [],
+        "sent": [
+          {
+            "id": "o22e7ee4d1c355668",
+            "oppId": "obf3c94b651c061da",
+            "listing": {
+              "id": "obf3c94b651c061da",
+              "type": "need",
+              "title": "Looking for a reliable mover in March",
+              "member": "Test Player 06",
+              "state": "open"
+            },
+            "message": "Hi! My cousin runs a two-person moving crew and moved me last year. Happy to connect you.",
+            "status": "shared",
+            "shared": {
+              "phone": "416-555-0142",
+              "note": "Text me after 6"
+            },
+            "createdAt": 1792181195852,
+            "answeredAt": 1792181203234
+          }
+        ],
+        "suggest": {
+          "email": "",
+          "phone": ""
+        },
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "limits": {
+          "open": 5,
+          "openNow": 0,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  },
+  {
+    "step": "S4 poster tries to answer twice",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReply",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {
+        "id": "o22e7ee4d1c355668",
+        "action": "share",
+        "email": "x@example.com"
+      }
+    },
+    "response": {
+      "status": 400,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "You already answered this request."
+      }
+    }
+  },
+  {
+    "step": "S4 Player 09 sends a request",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppRequest",
+      "auth": "Bearer <token of Test Player 09>",
+      "body": {
+        "id": "obf3c94b651c061da",
+        "message": "I have a van and two free Saturdays."
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "request": {
+          "id": "o2b8d98bf8b69f74b",
+          "oppId": "obf3c94b651c061da",
+          "listing": {
+            "id": "obf3c94b651c061da",
+            "type": "need",
+            "title": "Looking for a reliable mover in March",
+            "member": "Test Player 06",
+            "state": "open"
+          },
+          "message": "I have a van and two free Saturdays.",
+          "status": "sent",
+          "shared": null,
+          "createdAt": 1792181205160,
+          "answeredAt": null
+        }
+      }
+    }
+  },
+  {
+    "step": "S4 poster declines Player 09",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReply",
+      "auth": "Bearer <token of Test Player 06>",
+      "body": {
+        "id": "o2b8d98bf8b69f74b",
+        "action": "decline"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "request": {
+          "id": "o2b8d98bf8b69f74b",
+          "from": "Test Player 09",
+          "message": "I have a van and two free Saturdays.",
+          "status": "declined",
+          "shared": null,
+          "createdAt": 1792181205160,
+          "answeredAt": 1792181205161
+        }
+      }
+    }
+  },
+  {
+    "step": "S4 Player 09 sees the decline",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppMine",
+      "auth": "Bearer <token of Test Player 09>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "listings": [],
+        "sent": [
+          {
+            "id": "o2b8d98bf8b69f74b",
+            "oppId": "obf3c94b651c061da",
+            "listing": {
+              "id": "obf3c94b651c061da",
+              "type": "need",
+              "title": "Looking for a reliable mover in March",
+              "member": "Test Player 06",
+              "state": "open"
+            },
+            "message": "I have a van and two free Saturdays.",
+            "status": "declined",
+            "shared": null,
+            "createdAt": 1792181205160,
+            "answeredAt": 1792181205161
+          }
+        ],
+        "suggest": {
+          "email": "",
+          "phone": ""
+        },
+        "categories": [
+          [
+            "realestate",
+            "Real estate"
+          ],
+          [
+            "trades",
+            "Construction & trades"
+          ],
+          [
+            "home",
+            "Home services"
+          ],
+          [
+            "food",
+            "Food & drink"
+          ],
+          [
+            "health",
+            "Health & wellness"
+          ],
+          [
+            "beauty",
+            "Beauty & personal care"
+          ],
+          [
+            "fitness",
+            "Fitness & sports"
+          ],
+          [
+            "professional",
+            "Legal & accounting"
+          ],
+          [
+            "finance",
+            "Finance & insurance"
+          ],
+          [
+            "tech",
+            "Tech & IT"
+          ],
+          [
+            "creative",
+            "Marketing & design"
+          ],
+          [
+            "retail",
+            "Retail & shopping"
+          ],
+          [
+            "auto",
+            "Automotive"
+          ],
+          [
+            "events",
+            "Events & entertainment"
+          ],
+          [
+            "education",
+            "Education & tutoring"
+          ],
+          [
+            "travel",
+            "Travel & hospitality"
+          ],
+          [
+            "other",
+            "Other"
+          ]
+        ],
+        "types": {
+          "need": "I need help",
+          "offer": "I can help"
+        },
+        "limits": {
+          "open": 5,
+          "openNow": 0,
+          "maxDays": 90,
+          "defaultDays": 30
+        }
+      }
+    }
+  }
+]

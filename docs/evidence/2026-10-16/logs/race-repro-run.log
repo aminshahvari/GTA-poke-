@@ -1,0 +1,30 @@
+  0.10s  OLD  boot pid 1857: "store: postgres, 0 keys, lease epoch 1 (srv-hibernate-6d7675c4d4-ckzdq:1857)"
+  0.22s  OLD  a member is connected to OLD over the websocket
+  0.72s  NEW  deploy: NEW instance boots while OLD is still running
+  0.81s  NEW  boot pid 1864: "store: postgres, 8 keys, lease epoch 2 (srv-hibernate-6dd5c78cb7-9mhp7:1864)"
+  0.87s  db   lease row: epoch 2 held by srv-hibernate-6dd5c78cb7-9mhp7:1864
+  3.39s  OLD  exit {"code":1,"signal":null} | shutting down: lease lost: epoch 2 held by srv-hibernate-6dd5c78cb7-9mhp7:1864, ours was 1 | final save skipped or incomplete {"mode":"postgres","epoch":1,"leaseLost":true,"dirty":0,"lastWriteError":null}
+  4.89s  OLD  supervisor restarts OLD in the same instance (restart #1)
+  4.98s  db   lease row: epoch 3 held by srv-hibernate-6d7675c4d4-ckzdq:1871
+  4.99s  OLD  boot pid 1871: "store: postgres, 8 keys, lease epoch 3 (srv-hibernate-6d7675c4d4-ckzdq:1871)"
+  7.11s  NEW  exit {"code":1,"signal":null} | shutting down: lease lost: epoch 3 held by srv-hibernate-6d7675c4d4-ckzdq:1871, ours was 2 | final save skipped or incomplete {"mode":"postgres","epoch":2,"leaseLost":true,"dirty":0,"lastWriteError":null}
+  8.61s  NEW  supervisor restarts NEW in the same instance (restart #1)
+  8.70s  db   lease row: epoch 4 held by srv-hibernate-6dd5c78cb7-9mhp7:1878
+  8.70s  NEW  boot pid 1878: "store: postgres, 8 keys, lease epoch 4 (srv-hibernate-6dd5c78cb7-9mhp7:1878)"
+ 11.29s  OLD  exit {"code":1,"signal":null} | shutting down: lease lost: epoch 4 held by srv-hibernate-6dd5c78cb7-9mhp7:1878, ours was 3 | final save skipped or incomplete {"mode":"postgres","epoch":3,"leaseLost":true,"dirty":0,"lastWriteError":null}
+ 12.79s  OLD  supervisor restarts OLD in the same instance (restart #2)
+ 12.85s  db   lease row: epoch 5 held by srv-hibernate-6d7675c4d4-ckzdq:1885
+ 12.88s  OLD  boot pid 1885: "store: postgres, 8 keys, lease epoch 5 (srv-hibernate-6d7675c4d4-ckzdq:1885)"
+ 14.82s  OLD  end of overlap: supervisor sends SIGTERM to OLD and stops restarting it
+ 15.00s  NEW  exit {"code":1,"signal":null} | shutting down: lease lost: epoch 5 held by srv-hibernate-6d7675c4d4-ckzdq:1885, ours was 4 | final save skipped or incomplete {"mode":"postgres","epoch":4,"leaseLost":true,"dirty":0,"lastWriteError":null}
+ 15.12s  OLD  exit {"code":0,"signal":null} | shutting down: SIGTERM | final save done {"mode":"postgres","epoch":5,"leaseLost":false,"dirty":0,"lastWriteError":null}
+ 16.50s  NEW  supervisor restarts NEW in the same instance (restart #2)
+ 16.59s  NEW  boot pid 1892: "store: postgres, 8 keys, lease epoch 6 (srv-hibernate-6dd5c78cb7-9mhp7:1892)"
+ 16.61s  db   lease row: epoch 6 held by srv-hibernate-6dd5c78cb7-9mhp7:1892
+ 19.82s  NEW  final /healthz: {"ok":true,"mode":"postgres","epoch":6,"leaseLost":false,"dirty":0,"lastWriteError":null}
+ 19.82s  cli  the member connected to the first OLD process was closed with code 4001 "server moved"
+
+summary: lease epoch went from 1 to 6 (5 handovers for what should have been 1); restarts OLD=2 NEW=2
+REPRODUCED: a restarted OLD process re-claimed the lease during the overlap (ping-pong).
+(test cleanup: the script now SIGKILLs its own servers)
+ 19.83s  NEW  exit {"code":null,"signal":"SIGKILL"} |  | 

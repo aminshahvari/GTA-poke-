@@ -1,0 +1,50 @@
+# production app code at 4d1be3b (temporary detached worktree, node_modules symlinked) + test/phase1 copied unchanged from a3c67e9
+# Fri Oct 16 19:53:54 UTC 2026
+$ node test/phase1/run.js
+FAIL db_failure: in places AND seated with chips: u6400120bebb8,u6d27dbc99247,ud8c2b2757ab7,uc21ae73e308e,u019eca6238ca,u434336c76994; tourney.remaining=2 but 8 seated in live; final history has 14 rows for 8 entrants (6 duplicate uids)
+  note: writes that failed while db was down: live
+  note: persisted tourney.places=["u6400120bebb8","u6d27dbc99247","ud8c2b2757ab7","uc21ae73e308e","u019eca6238ca","u434336c76994"] remaining=2; live seated=["u6400120bebb8","u6d27dbc99247","uc11b180cf609","ud8c2b2757ab7","u3244a59e1389","uc21ae73e308e","u019eca6238ca","u434336c76994"] (sum 80000)
+  note: restarted server resumed=true; seated now=8 chips=80000/80000
+  note: final results rows=14 for entrants=8, duplicate uids=6
+  note: cause: per-key async upserts with no transaction (server/store.js:39-47); tourney and live written separately (server/club.js:337 then :347)
+FAIL finish_crash: A: history for t1792180437145 exists 0 times (tourney.status=finished)
+  note: A: died {"code":null,"signal":"SIGKILL"}; db had tourney.status=finished, history row=false, live row=true; restart resumed=false; history rows after=0
+  note: B: died {"code":null,"signal":"SIGKILL"}; db had tourney.status=finished, history row=true, live row=true; restart resumed=false; history rows after=1
+  note: flush order = Set insertion order of dirty keys (server/store.js:41); no transaction across history:/tourney/live (server/club.js:436-438)
+FAIL sigterm_mid_hand: A(at bust): bust shown to clients but not persisted (ucec3022d87b3); A(at bust): busted player seated again after restart
+  note: A(at bust): SIGTERM 0 ms after bust shown; exit={"code":null,"signal":"SIGTERM"}; persisted places=0/1; restart chips 40000/40000
+  note: B(next hand): SIGTERM 25 ms after bust shown; exit={"code":null,"signal":"SIGTERM"}; persisted places=1/1; restart chips 40000/40000
+  note: server flushes before exit: NO - no SIGTERM/SIGINT handler in server/index.js, process dies on the signal and queued writes (server/store.js:39-48) are dropped
+  note: an interrupted hand is replayed from starting stacks by design (server/club.js:157); only state not yet flushed is lost
+PASS duplicate_actions: 9 decisions, 18 duplicate sends + stale acts all ignored; points = history pts for all 5 members
+  note: total pts awarded 54 across 5 results; a rejected act gets no reply from the server (club.act returns false silently, server/index.js:309)
+FAIL two_instances: both instances dealt hands for the same tournament; persisted live.handNo went backwards 8 times (instances overwrite each other); old instance A still running after B took over
+  note: B resumed the running tournament on boot: true; A exit=null, A said: (no lease message)
+  note: hand numbers seen: A {"t1792180443473-1":2} -> {"t1792180443473-1":19}; B {"t1792180443473-1":23}
+  note: both report live tables: A 1 tables 600000 chips, B 1 tables 600000 chips; 113 db samples
+  note: before B1, players on A kept playing while B timed them out (away -> folds) and both wrote tourney/live rows
+FAIL lease_fencing: test error: Cannot read properties of undefined (reading 'epoch')
+PASS reconnect: server re-sent turn (same seq, legal, deadline) and cards on reconnect; act on new socket applied
+  note: send on dead socket: returned without error and the act went nowhere; deadline kept (not reset): true
+  note: server reply to a rejected act: none - no ack/nack for act (server/index.js:309), so a client cannot tell a lost act from a slow one
+FAIL fair_after_interrupt: interrupted deal (hand 3, cards players saw before the crash) is not in the report; hand 3 has 1 record(s) with different cards
+  note: verifier: sealOk=true ok=4 bad=0 (all beacons local: NO_BEACON); 4 hand records
+  note: killed on t1792180460251-1 hand 3 after board Ts 3h 8d; restart replays it as hand 3 with a new deck
+FAIL sessions_owner_reset: owner tokens from before resetOwner still valid (setup token=true, login token=true); removed member's open socket got 1 club broadcast(s) after removal (sees tourney "After removal")
+  note: wrong codes: statuses 400,400,400,400,400,400,400,400,400,400,429,429 (limited from attempt 11)
+  note: after the lockout the real owner with the correct code gets 429 Too many tries. Wait a few minutes. - anyone can lock the owner out of recovery for 10 min
+
+test                   | result | expected  | verdict          | secs   | reason
+------------------------------------------------------------------------------------------------------------------------
+db_failure             | FAIL   | FAIL      | known bug        | 2.1    | in places AND seated with chips: u6400120bebb8,u6d27dbc99247,ud8c2b2757ab7,uc21ae73e308e,u019eca6238ca,u434336c76994; tourney.remaining=2 but 8 seated in live; 
+finish_crash           | FAIL   | FAIL      | known bug        | 2.1    | A: history for t1792180437145 exists 0 times (tourney.status=finished)
+sigterm_mid_hand       | FAIL   | PASS      | REGRESSION       | 2.4    | A(at bust): bust shown to clients but not persisted (ucec3022d87b3); A(at bust): busted player seated again after restart
+duplicate_actions      | PASS   | PASS      | ok               | 1.8    | 9 decisions, 18 duplicate sends + stale acts all ignored; points = history pts for all 5 members
+two_instances          | FAIL   | PASS      | REGRESSION       | 7.2    | both instances dealt hands for the same tournament; persisted live.handNo went backwards 8 times (instances overwrite each other); old instance A still running 
+lease_fencing          | FAIL   | PASS      | REGRESSION       | 8.6    | test error: Cannot read properties of undefined (reading 'epoch')
+reconnect              | PASS   | PASS      | ok               | 1.1    | server re-sent turn (same seq, legal, deadline) and cards on reconnect; act on new socket applied
+fair_after_interrupt   | FAIL   | FAIL      | known bug        | 1.8    | interrupted deal (hand 3, cards players saw before the crash) is not in the report; hand 3 has 1 record(s) with different cards
+sessions_owner_reset   | FAIL   | FAIL      | known bug        | 1.0    | owner tokens from before resetOwner still valid (setup token=true, login token=true); removed member's open socket got 1 club broadcast(s) after removal (sees t
+
+9 tests: 2 pass, 7 fail (4 expected), 3 unexpected failures
+exit code: 1

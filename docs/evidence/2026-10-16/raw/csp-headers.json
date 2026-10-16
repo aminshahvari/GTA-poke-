@@ -1,0 +1,41 @@
+[
+  {
+    "commit": "1e6953f",
+    "label": "before BC1 (B0 on staging)",
+    "csp": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
+    "xContentTypeOptions": "nosniff",
+    "referrerPolicy": "no-referrer",
+    "apiCsp": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
+    "externalTagsInIndexHtml": [
+      "link https://fonts.googleapis.com",
+      "link https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap"
+    ],
+    "vendorDir": false
+  },
+  {
+    "commit": "18bb929",
+    "label": "BC1 app commit",
+    "csp": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; frame-ancestors 'none'",
+    "xContentTypeOptions": "nosniff",
+    "referrerPolicy": "no-referrer",
+    "apiCsp": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; frame-ancestors 'none'",
+    "externalTagsInIndexHtml": [
+      "link https://fonts.googleapis.com",
+      "link https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap"
+    ],
+    "vendorDir": false
+  },
+  {
+    "commit": "a3c67e9",
+    "label": "staging tip (audited)",
+    "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "xContentTypeOptions": "nosniff",
+    "referrerPolicy": "no-referrer",
+    "apiCsp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "externalTagsInIndexHtml": [
+      "link https://fonts.googleapis.com",
+      "link https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap"
+    ],
+    "vendorDir": true
+  }
+]

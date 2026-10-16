@@ -1,0 +1,23 @@
+code: {"head":"a3c67e9","auditedRef":"a3c67e9","appCodeIdenticalToRef":true}
+screens visited:
+  member (Test Player 06): Home with Community Opportunities
+  member (Test Player 06): Business tab -> Opportunities feed
+  member (Test Player 06): feed filtered (Needs help + search)
+  member (Test Player 06): listing detail
+  member (Test Player 06): contact request sheet
+  member (Test Player 06): report sheet
+  member (Test Player 06): create form (I need help)
+  member (Test Player 06): My opportunities
+  member (Test Player 06): Requests I sent
+  poster (Test Player 02): My opportunities with an incoming request
+  poster (Test Player 02): share-contact sheet
+  director: Opportunities feed (director)
+  director: Director view: show closed, expired and hidden
+  director: Reports queue
+  director: listing detail with director controls
+member (Test Player 06): CSP violations 0; page errors 0; blocked non-origin requests (excluding Google Fonts) 0
+poster (Test Player 02): CSP violations 0; page errors 0; blocked non-origin requests (excluding Google Fonts) 0
+director: CSP violations 0; page errors 0; blocked non-origin requests (excluding Google Fonts) 0
+Google Fonts requests (pre-existing since before BC1; served locally only when FONTS_DIR is set, else aborted): 13
+negative control (cdn.jsdelivr.net script injected): blocked and reported: script-src-elem https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js
+PASS: 15 Opportunity Club screens, 0 CSP violations, 0 page errors, 0 third-party requests; control blocked

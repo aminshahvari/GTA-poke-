@@ -1,0 +1,561 @@
+[
+  {
+    "step": "S6 no token: oppList",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppList",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppGet",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppSave",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppSave",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppClose",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppClose",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppDelete",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppDelete",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppMine",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppMine",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppBadge",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppBadge",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppRequest",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppRequest",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppReply",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReply",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppRequestDelete",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppRequestDelete",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppReport",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReport",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppReports",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReports",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 no token: oppModerate",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppModerate",
+      "auth": "none",
+      "body": {
+        "id": "o0000000000000000"
+      }
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 bad token",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppList",
+      "auth": "Bearer <token of unknown>",
+      "body": {}
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 member opens the director queue",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReports",
+      "auth": "Bearer <token of Test Player 09>",
+      "body": {}
+    },
+    "response": {
+      "status": 403,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Only the club director can do that."
+      }
+    }
+  },
+  {
+    "step": "S6 member tries to moderate",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppModerate",
+      "auth": "Bearer <token of Test Player 09>",
+      "body": {
+        "id": "o38bf754063d9f878",
+        "action": "hide"
+      }
+    },
+    "response": {
+      "status": 403,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Only the club director can do that."
+      }
+    }
+  },
+  {
+    "step": "S6 Player 09 reports a listing",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReport",
+      "auth": "Bearer <token of Test Player 09>",
+      "body": {
+        "id": "o38bf754063d9f878",
+        "reason": "spam",
+        "note": "Looks like an ad"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "step": "S6 same member reports again",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReport",
+      "auth": "Bearer <token of Test Player 09>",
+      "body": {
+        "id": "o38bf754063d9f878",
+        "reason": "spam"
+      }
+    },
+    "response": {
+      "status": 400,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "You already reported this listing. Thank you."
+      }
+    }
+  },
+  {
+    "step": "S6 poster reports own listing",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReport",
+      "auth": "Bearer <token of Test Player 07>",
+      "body": {
+        "id": "o38bf754063d9f878",
+        "reason": "spam"
+      }
+    },
+    "response": {
+      "status": 400,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "This is your own listing."
+      }
+    }
+  },
+  {
+    "step": "S6 report with an unknown reason",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReport",
+      "auth": "Bearer <token of Test Player 10>",
+      "body": {
+        "id": "o38bf754063d9f878",
+        "reason": "because"
+      }
+    },
+    "response": {
+      "status": 400,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Pick a reason."
+      }
+    }
+  },
+  {
+    "step": "S6 director queue",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppReports",
+      "auth": "Bearer <token of Test Director>",
+      "body": {}
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "items": [
+          {
+            "id": "o38bf754063d9f878",
+            "type": "offer",
+            "typeLabel": "I can help",
+            "title": "Can help with resumes and cover letters",
+            "details": "Happy to review a resume or cover letter for any member. Evenings only.",
+            "categoryLabel": "Education & tutoring",
+            "member": "Test Player 07",
+            "state": "open",
+            "createdAt": 1792181189472,
+            "reports": [
+              {
+                "reason": "spam",
+                "reasonLabel": "Spam or advertising",
+                "note": "Looks like an ad",
+                "by": "Test Player 09",
+                "at": 1792181222606
+              }
+            ]
+          }
+        ],
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "step": "S6 one report does not hide it",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 08>",
+      "body": {
+        "id": "o38bf754063d9f878"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "item": {
+          "id": "o38bf754063d9f878",
+          "type": "offer",
+          "typeLabel": "I can help",
+          "title": "Can help with resumes and cover letters",
+          "details": "Happy to review a resume or cover letter for any member. Evenings only.",
+          "category": "education",
+          "categoryLabel": "Education & tutoring",
+          "area": "Remote",
+          "member": "Test Player 07",
+          "business": null,
+          "createdAt": 1792181189472,
+          "updatedAt": 1792181189472,
+          "expiresAt": 1794773189472,
+          "state": "open",
+          "mine": false,
+          "myRequest": null
+        },
+        "canModerate": false,
+        "reasons": [
+          [
+            "spam",
+            "Spam or advertising"
+          ],
+          [
+            "scam",
+            "Scam or misleading"
+          ],
+          [
+            "offensive",
+            "Offensive or harassing"
+          ],
+          [
+            "private",
+            "Shares someone's private info"
+          ],
+          [
+            "offtopic",
+            "Not a real request"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ],
+        "reported": false
+      }
+    }
+  },
+  {
+    "step": "S6 Player 12 posts before removal",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppSave",
+      "auth": "Bearer <token of Test Player 12>",
+      "body": {
+        "type": "offer",
+        "title": "Can help with tax forms",
+        "category": "professional"
+      }
+    },
+    "response": {
+      "status": 200,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "ok": true,
+        "item": {
+          "id": "o03f5bd66c7099c13",
+          "type": "offer",
+          "typeLabel": "I can help",
+          "title": "Can help with tax forms",
+          "details": "",
+          "category": "professional",
+          "categoryLabel": "Legal & accounting",
+          "area": "",
+          "member": "Test Player 12",
+          "business": null,
+          "createdAt": 1792181222616,
+          "updatedAt": 1792181222616,
+          "expiresAt": 1794773222616,
+          "state": "open",
+          "mine": true
+        }
+      }
+    }
+  },
+  {
+    "step": "S6 removed member uses old token",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppList",
+      "auth": "Bearer <token of Test Player 12>",
+      "body": {}
+    },
+    "response": {
+      "status": 401,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "Sign in first."
+      }
+    }
+  },
+  {
+    "step": "S6 removed member listing",
+    "request": {
+      "method": "POST",
+      "path": "/api/oppGet",
+      "auth": "Bearer <token of Test Player 09>",
+      "body": {
+        "id": "o03f5bd66c7099c13"
+      }
+    },
+    "response": {
+      "status": 404,
+      "xRobotsTag": "noindex, nofollow, noarchive",
+      "body": {
+        "error": "This listing is not available any more."
+      }
+    }
+  }
+]

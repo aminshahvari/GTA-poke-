@@ -1,0 +1,171 @@
+{
+  "afterThreeReports": {
+    "opp:oe7da093eefde3875": {
+      "id": "oe7da093eefde3875",
+      "uid": "u7252d3824cd9",
+      "type": "offer",
+      "title": "Can help you earn fast cash from home",
+      "details": "Message me for details. (Fake spam listing for the moderation test.)",
+      "category": "finance",
+      "area": "",
+      "status": "open",
+      "expiresAt": 1794773243224,
+      "createdAt": 1792181243224,
+      "updatedAt": 1792181243224,
+      "closedAt": null,
+      "modHidden": false,
+      "autoHidden": true
+    },
+    "oppreq:of73ae9e551485ef7": {
+      "id": "of73ae9e551485ef7",
+      "oppId": "oe7da093eefde3875",
+      "from": "ub75238dc3ddf",
+      "to": "u7252d3824cd9",
+      "message": "What is this about?",
+      "status": "sent",
+      "shared": null,
+      "createdAt": 1792181243227,
+      "answeredAt": null
+    },
+    "oppreport:oe5d501a03a2ce306": {
+      "id": "oe5d501a03a2ce306",
+      "oppId": "oe7da093eefde3875",
+      "by": "u9545d6cc9224",
+      "reason": "spam",
+      "note": "Looks like a pitch",
+      "createdAt": 1792181243237,
+      "reviewed": false
+    },
+    "oppreport:o3ec739339edfcb7c": {
+      "id": "o3ec739339edfcb7c",
+      "oppId": "oe7da093eefde3875",
+      "by": "uec276b05cc16",
+      "reason": "scam",
+      "note": "",
+      "createdAt": 1792181243239,
+      "reviewed": false
+    },
+    "oppreport:od011e8694267f255": {
+      "id": "od011e8694267f255",
+      "oppId": "oe7da093eefde3875",
+      "by": "u3e977bc4bdef",
+      "reason": "spam",
+      "note": "Posted in two chats too",
+      "createdAt": 1792181243243,
+      "reviewed": false
+    }
+  },
+  "afterDismiss": {
+    "opp:oe7da093eefde3875": {
+      "id": "oe7da093eefde3875",
+      "uid": "u7252d3824cd9",
+      "type": "offer",
+      "title": "Can help you earn fast cash from home",
+      "details": "Message me for details. (Fake spam listing for the moderation test.)",
+      "category": "finance",
+      "area": "",
+      "status": "open",
+      "expiresAt": 1794773243224,
+      "createdAt": 1792181243224,
+      "updatedAt": 1792181243224,
+      "closedAt": null,
+      "modHidden": false,
+      "autoHidden": false
+    },
+    "oppreq:of73ae9e551485ef7": {
+      "id": "of73ae9e551485ef7",
+      "oppId": "oe7da093eefde3875",
+      "from": "ub75238dc3ddf",
+      "to": "u7252d3824cd9",
+      "message": "What is this about?",
+      "status": "sent",
+      "shared": null,
+      "createdAt": 1792181243227,
+      "answeredAt": null
+    },
+    "oppreport:oe5d501a03a2ce306": {
+      "id": "oe5d501a03a2ce306",
+      "oppId": "oe7da093eefde3875",
+      "by": "u9545d6cc9224",
+      "reason": "spam",
+      "note": "Looks like a pitch",
+      "createdAt": 1792181243237,
+      "reviewed": true
+    },
+    "oppreport:o3ec739339edfcb7c": {
+      "id": "o3ec739339edfcb7c",
+      "oppId": "oe7da093eefde3875",
+      "by": "uec276b05cc16",
+      "reason": "scam",
+      "note": "",
+      "createdAt": 1792181243239,
+      "reviewed": true
+    },
+    "oppreport:od011e8694267f255": {
+      "id": "od011e8694267f255",
+      "oppId": "oe7da093eefde3875",
+      "by": "u3e977bc4bdef",
+      "reason": "spam",
+      "note": "Posted in two chats too",
+      "createdAt": 1792181243243,
+      "reviewed": true
+    }
+  },
+  "beforeDelete": {
+    "opp:oe7da093eefde3875": {
+      "id": "oe7da093eefde3875",
+      "uid": "u7252d3824cd9",
+      "type": "offer",
+      "title": "Edited while hidden",
+      "details": "",
+      "category": "finance",
+      "area": "",
+      "status": "open",
+      "expiresAt": 1794773243224,
+      "createdAt": 1792181243224,
+      "updatedAt": 1792181269006,
+      "closedAt": null,
+      "modHidden": false,
+      "autoHidden": false
+    },
+    "oppreq:of73ae9e551485ef7": {
+      "id": "of73ae9e551485ef7",
+      "oppId": "oe7da093eefde3875",
+      "from": "ub75238dc3ddf",
+      "to": "u7252d3824cd9",
+      "message": "What is this about?",
+      "status": "sent",
+      "shared": null,
+      "createdAt": 1792181243227,
+      "answeredAt": null
+    },
+    "oppreport:oe5d501a03a2ce306": {
+      "id": "oe5d501a03a2ce306",
+      "oppId": "oe7da093eefde3875",
+      "by": "u9545d6cc9224",
+      "reason": "spam",
+      "note": "Looks like a pitch",
+      "createdAt": 1792181243237,
+      "reviewed": true
+    },
+    "oppreport:o3ec739339edfcb7c": {
+      "id": "o3ec739339edfcb7c",
+      "oppId": "oe7da093eefde3875",
+      "by": "uec276b05cc16",
+      "reason": "scam",
+      "note": "",
+      "createdAt": 1792181243239,
+      "reviewed": true
+    },
+    "oppreport:od011e8694267f255": {
+      "id": "od011e8694267f255",
+      "oppId": "oe7da093eefde3875",
+      "by": "u3e977bc4bdef",
+      "reason": "spam",
+      "note": "Posted in two chats too",
+      "createdAt": 1792181243243,
+      "reviewed": true
+    }
+  },
+  "afterDelete": {}
+}

@@ -1,0 +1,44 @@
+t_server.js repeated runs at a3c67e9, Fri Oct 16 19:52:38 UTC 2026
+run 1: exit 0, 75s :: server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 2 tied, 256 chip checks, 676 actions, 69s, champion Friend 11 
+run 2: exit 1, 43s :: FAIL chat leaked to another table server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 4 tied, 130 chip checks, 471 actions, 37s, champion Friend 2 1 FAILURES 
+run 3: exit 0, 60s :: server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 7 tied, 196 chip checks, 454 actions, 54s, champion Friend 19 
+run 4: exit 0, 74s :: server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 5 tied, 252 chip checks, 570 actions, 68s, champion Friend 12 
+run 5: exit 0, 74s :: server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 3 tied, 254 chip checks, 692 actions, 68s, champion Friend 22 
+run 6: exit 0, 78s :: server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 0 tied, 267 chip checks, 748 actions, 71s, champion Friend 12 
+run 7: exit 0, 74s :: server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 3 tied, 250 chip checks, 643 actions, 67s, champion Friend 3 
+run 8: exit 0, 59s :: server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 7 tied, 195 chip checks, 565 actions, 53s, champion Friend 14 
+
+=== npm test repeat 1 Fri Oct 16 20:01:35 UTC 2026
+> stacked-poker@1.0.0 test
+evaluator: all passed
+42 passed, 0 failed
+server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 3 tied, 243 chip checks, 568 actions, 65s, champion Friend 22
+server test passed
+coach test: 638 hands, 677 notes {
+coach test passed
+players test passed
+push test passed
+extra-time test passed
+security test passed
+business units passed (card parser, validators, staging seed)
+business club test passed
+opportunity club test passed
+csp + vendor test passed
+npm test exit: 0
+=== npm test repeat 2 Fri Oct 16 20:03:17 UTC 2026
+> stacked-poker@1.0.0 test
+evaluator: all passed
+42 passed, 0 failed
+server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 5 tied, 244 chip checks, 556 actions, 66s, champion Friend 4
+server test passed
+coach test: 504 hands, 601 notes {
+coach test passed
+players test passed
+push test passed
+extra-time test passed
+security test passed
+business units passed (card parser, validators, staging seed)
+business club test passed
+opportunity club test passed
+csp + vendor test passed
+npm test exit: 0

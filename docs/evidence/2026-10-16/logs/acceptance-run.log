@@ -1,0 +1,104 @@
+code: {"head":"a3c67e9","auditedRef":"a3c67e9","appCodeIdenticalToRef":true}
+server: http://localhost:4607 | boot log: store: file /tmp/evidence_3678_4607.json, 0 keys / staging: seeded Test Director and 12 fake members / staging: seeded 5 fake demo businesses / staging: seeded 5 fake demo opportunity listings / Blindrise poker club on :4607
+PASS S1.1 "I need help" listing created by Player 06
+PASS S1.2 shows as type need / "I need help" to other members
+PASS S1.3 poster shown by club name only (member, no uid/contact)
+PASS S1.4 default expiry 30 days
+PASS S1.5 server rejects a 1-character title (400)
+PASS S1.6 server rejects an unknown category (400)
+PASS S2.1 "I can help" listing created by Player 07
+PASS S2.2 shows as type offer / "I can help"; filter offer excludes needs
+PASS S2.3 search "resumes" finds it
+PASS S3.1 feed API answers right after login (Home card data)
+S3 DOM: {"tab":"event","oppPresent":true,"heading":"Community Opportunities","rows":4,"oppIndex":2,"bizIndex":1,"prevIsBizHome":true,"prevText":"Business ClubMeet the MembersSee all 5 ›★NPNorthline Plumbin","firstCard":"card-box","top":1081}
+PASS S3.2 Home (default "Tournament" tab) shows "Community Opportunities" after login
+PASS S3.3 it sits directly after the Business Club home section
+PASS S3.4 it lists up to 4 newest open listings
+PASS S4.1 request stored as "sent" with no contact details
+PASS S4.2 poster sees only sender club name + message (no uid, email, phone)
+PASS S4.3 second request on the same listing refused (400)
+PASS S4.4 request on own listing refused (400)
+PASS S4.5 a third member cannot answer someone else's request (404)
+PASS S4.6 sender now sees exactly the chosen field: phone + note, no email
+PASS S4.7 a request can be answered only once (400)
+PASS S4.8 declined request shares nothing
+PASS S4.9 sender screen shows the phone and no email address
+PASS S5.1 owner can edit; end date kept
+PASS S5.2e another member cannot edit it (404)
+PASS S5.2c another member cannot close it (404)
+PASS S5.2d another member cannot delete it (404)
+PASS S5.3 a forged uid in the body changes nothing (404)
+PASS S5.4 closed: state closed, out of the feed, 404 for others
+PASS S5.5 reopened: open again and visible to others
+PASS S5.6 deleted: 404 even for the owner, requests about it removed
+PASS S6.1 every opportunity endpoint is 401 without sign-in (13 endpoints)
+PASS S6.2 a made-up token is 401
+PASS S6.3 responses carry X-Robots-Tag noindex (even the 401)
+PASS S6.4 members get 403 on the reports queue and moderation
+PASS S6.5 report accepted once; duplicate, own and unknown-reason reports refused
+PASS S6.6 director queue shows the report (reason, note, reporter name)
+PASS S6.7 one report does not hide the listing (threshold is 3)
+PASS S6.8 removed member: old token is 401 and their listing is gone (404)
+PASS S6.9 browser without a token gets 401 from oppList
+S3 seated: before {"opp":true,"status":"registered"} during {"opp":false,"bizHome":false,"lobby":true,"tab":"event"}
+PASS S3.5 Community Opportunities visible while only registered
+PASS S3.6 hidden while seated in a running tournament (client side)
+S3 note: oppList while seated returns 200
+
+ID   | Check                                                                       | Result
+-----------------------------------------------------------------------------------------------
+S1.1 | "I need help" listing created by Player 06                                  | PASS
+S1.2 | shows as type need / "I need help" to other members                         | PASS
+S1.3 | poster shown by club name only (member, no uid/contact)                     | PASS
+S1.4 | default expiry 30 days                                                      | PASS
+S1.5 | server rejects a 1-character title (400)                                    | PASS
+S1.6 | server rejects an unknown category (400)                                    | PASS
+S2.1 | "I can help" listing created by Player 07                                   | PASS
+S2.2 | shows as type offer / "I can help"; filter offer excludes needs             | PASS
+S2.3 | search "resumes" finds it                                                   | PASS
+S3.1 | feed API answers right after login (Home card data)                         | PASS
+S3.2 | Home (default "Tournament" tab) shows "Community Opportunities" after login | PASS
+S3.3 | it sits directly after the Business Club home section                       | PASS
+S3.4 | it lists up to 4 newest open listings                                       | PASS
+S4.1 | request stored as "sent" with no contact details                            | PASS
+S4.2 | poster sees only sender club name + message (no uid, email, phone)          | PASS
+S4.3 | second request on the same listing refused (400)                            | PASS
+S4.4 | request on own listing refused (400)                                        | PASS
+S4.5 | a third member cannot answer someone else's request (404)                   | PASS
+S4.6 | sender now sees exactly the chosen field: phone + note, no email            | PASS
+S4.7 | a request can be answered only once (400)                                   | PASS
+S4.8 | declined request shares nothing                                             | PASS
+S4.9 | sender screen shows the phone and no email address                          | PASS
+S5.1 | owner can edit; end date kept                                               | PASS
+S5.2e | another member cannot edit it (404)                                         | PASS
+S5.2c | another member cannot close it (404)                                        | PASS
+S5.2d | another member cannot delete it (404)                                       | PASS
+S5.3 | a forged uid in the body changes nothing (404)                              | PASS
+S5.4 | closed: state closed, out of the feed, 404 for others                       | PASS
+S5.5 | reopened: open again and visible to others                                  | PASS
+S5.6 | deleted: 404 even for the owner, requests about it removed                  | PASS
+S6.1 | every opportunity endpoint is 401 without sign-in (13 endpoints)            | PASS
+S6.2 | a made-up token is 401                                                      | PASS
+S6.3 | responses carry X-Robots-Tag noindex (even the 401)                         | PASS
+S6.4 | members get 403 on the reports queue and moderation                         | PASS
+S6.5 | report accepted once; duplicate, own and unknown-reason reports refused     | PASS
+S6.6 | director queue shows the report (reason, note, reporter name)               | PASS
+S6.7 | one report does not hide the listing (threshold is 3)                       | PASS
+S6.8 | removed member: old token is 401 and their listing is gone (404)            | PASS
+S6.9 | browser without a token gets 401 from oppList                               | PASS
+S3.5 | Community Opportunities visible while only registered                       | PASS
+S3.6 | hidden while seated in a running tournament (client side)                   | PASS
+
+41 passed, 0 failed. Raw JSON: raw/acceptance-*.json. Screenshots:
+  S3 screens/acceptance/S3-01-home-after-login-Player06.png, screens/acceptance/S3-02-home-after-login-Player08.png, screens/acceptance/S3-03-home-community-opportunities-scrolled.png, screens/acceptance/S3-04-home-registered-not-started.png, screens/acceptance/S3-05-home-while-seated-running.png
+  S1 screens/acceptance/S1-01-need-form-filled.png, screens/acceptance/S1-02-need-posted-detail.png
+  S2 screens/acceptance/S2-01-offer-form-filled.png, screens/acceptance/S2-02-offer-posted-detail.png
+  S4 screens/acceptance/S4-01-sender-opens-listing.png, screens/acceptance/S4-02-sender-request-sheet.png, screens/acceptance/S4-03-sender-request-sent.png, screens/acceptance/S4-04-poster-incoming-request.png, screens/acceptance/S4-05-poster-chooses-phone-only.png, screens/acceptance/S4-06-poster-after-sharing.png, screens/acceptance/S4-07-sender-sees-only-phone.png
+  S5 screens/acceptance/S5-01-my-posts-closed.png, screens/acceptance/S5-02-my-posts-reopened-edited.png, screens/acceptance/S5-03-my-posts-after-delete.png
+  S6 screens/acceptance/S6-01-not-signed-in-sign-in-screen.png, screens/acceptance/S6-02-removed-member-back-to-sign-in.png, screens/acceptance/S6-03-director-queue-one-report.png
+server log:
+  store: file /tmp/evidence_3678_4607.json, 0 keys
+  staging: seeded Test Director and 12 fake members
+  staging: seeded 5 fake demo businesses
+  staging: seeded 5 fake demo opportunity listings
+  Blindrise poker club on :4607

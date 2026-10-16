@@ -1,0 +1,379 @@
+[
+  {
+    "group": "url",
+    "label": "https://x.com",
+    "value": "See https://x.com for more",
+    "results": {
+      "oppSave.title": "400 Links and web addresses are not allowed in title",
+      "oppSave.details": "400 Links and web addresses are not allowed in details",
+      "oppRequest.message": "400 Links and web addresses are not allowed in message",
+      "oppReply.note": "400 Links and web addresses are not allowed in note",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "http:// (scheme, nothing after)",
+    "value": "Starts with http://",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "http://example.org/page",
+    "value": "Details at http://example.org/page",
+    "results": {
+      "oppSave.title": "400 Links and web addresses are not allowed in title",
+      "oppSave.details": "400 Links and web addresses are not allowed in details",
+      "oppRequest.message": "400 Links and web addresses are not allowed in message",
+      "oppReply.note": "400 Links and web addresses are not allowed in note",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "www.example.com",
+    "value": "Visit www.example.com",
+    "results": {
+      "oppSave.title": "400 Links and web addresses are not allowed in title",
+      "oppSave.details": "400 Links and web addresses are not allowed in details",
+      "oppRequest.message": "400 Links and web addresses are not allowed in message",
+      "oppReply.note": "400 Links and web addresses are not allowed in note",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "example.com",
+    "value": "Visit example.com today",
+    "results": {
+      "oppSave.title": "400 Links and web addresses are not allowed in title",
+      "oppSave.details": "400 Links and web addresses are not allowed in details",
+      "oppRequest.message": "400 Links and web addresses are not allowed in message",
+      "oppReply.note": "400 Links and web addresses are not allowed in note",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "example.fr",
+    "value": "Visit example.fr today",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "example.de",
+    "value": "Visit example.de today",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "example.ai",
+    "value": "Visit example.ai today",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "EXAMPLE.CA",
+    "value": "Visit EXAMPLE.CA today",
+    "results": {
+      "oppSave.title": "400 Links and web addresses are not allowed in title",
+      "oppSave.details": "400 Links and web addresses are not allowed in details",
+      "oppRequest.message": "400 Links and web addresses are not allowed in message",
+      "oppReply.note": "400 Links and web addresses are not allowed in note",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "bit.ly/abc",
+    "value": "Short link bit.ly/abc",
+    "results": {
+      "oppSave.title": "400 Links and web addresses are not allowed in title",
+      "oppSave.details": "400 Links and web addresses are not allowed in details",
+      "oppRequest.message": "400 Links and web addresses are not allowed in message",
+      "oppReply.note": "400 Links and web addresses are not allowed in note",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "hxxp://example[.]com",
+    "value": "Go to hxxp://example[.]com",
+    "results": {
+      "oppSave.title": "400 Links and web addresses are not allowed in title",
+      "oppSave.details": "400 Links and web addresses are not allowed in details",
+      "oppRequest.message": "400 Links and web addresses are not allowed in message",
+      "oppReply.note": "400 Links and web addresses are not allowed in note",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "hxxps://example.com",
+    "value": "Go to hxxps://example.com",
+    "results": {
+      "oppSave.title": "400 Links and web addresses are not allowed in title",
+      "oppSave.details": "400 Links and web addresses are not allowed in details",
+      "oppRequest.message": "400 Links and web addresses are not allowed in message",
+      "oppReply.note": "400 Links and web addresses are not allowed in note",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "example[.]com",
+    "value": "Go to example[.]com",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "example . com (spaces)",
+    "value": "Go to example . com",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "example。com (U+3002 ideographic full stop)",
+    "value": "Go to example。com",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "example․com (U+2024 one dot leader)",
+    "value": "Go to example․com",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "example．com (U+FF0E fullwidth full stop)",
+    "value": "Go to example．com",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "url",
+    "label": "example dot com",
+    "value": "Go to example dot com",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "email",
+    "label": "a@b.com",
+    "value": "Email me at a@b.com",
+    "results": {
+      "oppSave.title": "400 Links and web addresses are not allowed in title",
+      "oppSave.details": "400 Links and web addresses are not allowed in details",
+      "oppRequest.message": "400 Links and web addresses are not allowed in message",
+      "oppReply.note": "400 Links and web addresses are not allowed in note",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "email",
+    "label": "a@b.fr",
+    "value": "Email me at a@b.fr",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "email",
+    "label": "a@b.de",
+    "value": "Email me at a@b.de",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "email",
+    "label": "a at b dot com",
+    "value": "Email me at a at b dot com",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "email",
+    "label": "a(at)b.fr",
+    "value": "Email me at a(at)b.fr",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "phone",
+    "label": "416-555-0100",
+    "value": "Call 416-555-0100",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "phone",
+    "label": "(416) 555 0100",
+    "value": "Call (416) 555 0100",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "phone",
+    "label": "+1 416 555 0100",
+    "value": "Call +1 416 555 0100",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "phone",
+    "label": "4165550100",
+    "value": "Call 4165550100",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "phone",
+    "label": "four one six five five five zero one zero zero",
+    "value": "Call four one six five five five zero one zero zero",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  },
+  {
+    "group": "control",
+    "label": "plain text (control)",
+    "value": "Happy to help with this",
+    "results": {
+      "oppSave.title": "200 accepted",
+      "oppSave.details": "200 accepted",
+      "oppRequest.message": "200 accepted",
+      "oppReply.note": "200 accepted",
+      "bizSave.description": "200 accepted",
+      "bizSave.services": "200 accepted"
+    }
+  }
+]

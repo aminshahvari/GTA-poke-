@@ -1,0 +1,56 @@
+$ git rev-parse HEAD
+a3c67e9ab2ecb84c7e67c0de19ca7d418efd4b6d
+$ node -v
+v22.22.0
+$ date -u
+Fri Oct 16 19:39:05 UTC 2026
+$ node test/phase1/run.js
+PASS db_failure: state after db outage + restart is consistent
+  note: writes that failed while db was down: 3
+  note: persisted tourney.places=["ud21969862ba9","u85d9da5009f4","u69bebb5b5b63"] remaining=5; live seated=["u081b74a78341","u42de8bb09c5f","u50844a50713b","u040a90dcc32d","u7abf85c36e9b"] (sum 80000)
+  note: restarted server resumed=true; seated now=5 chips=80000/80000
+  note: final results rows=8 for entrants=8, duplicate uids=0
+  note: cause: per-key async upserts with no transaction (server/store.js:39-47); tourney and live written separately (server/club.js:337 then :347)
+PASS finish_crash: result recorded exactly once in both crash points
+  note: A: died {"code":null,"signal":"SIGKILL"}; db had tourney.status=finished, history row=true, live row=false; restart resumed=false; history rows after=1
+  note: B: died {"code":null,"signal":"SIGKILL"}; db had tourney.status=finished, history row=true, live row=false; restart resumed=false; history rows after=1
+  note: flush order = Set insertion order of dirty keys (server/store.js:41); no transaction across history:/tourney/live (server/club.js:436-438)
+PASS sigterm_mid_hand: state after SIGTERM + restart consistent
+  note: A(at bust): SIGTERM 0 ms after bust shown; exit={"code":0,"signal":null}; persisted places=1/1; restart chips 40000/40000
+  note: B(next hand): SIGTERM 24 ms after bust shown; exit={"code":0,"signal":null}; persisted places=1/1; restart chips 40000/40000
+  note: server flushes before exit: has a SIGTERM handler
+  note: an interrupted hand is replayed from starting stacks by design (server/club.js:157); only state not yet flushed is lost
+PASS duplicate_actions: 10 decisions, 20 duplicate sends + stale acts all ignored; points = history pts for all 5 members
+  note: total pts awarded 54 across 5 results; a rejected act gets no reply from the server (club.act returns false silently, server/index.js:309)
+PASS two_instances: only one instance dealt; state not clobbered
+  note: B resumed the running tournament on boot: true; A exit={"code":1,"signal":null}, A said: lease lost: epoch 2 held by vm:550, ours was 1
+  note: hand numbers seen: A {"t1792179556070-1":2} -> {"t1792179556070-1":2}; B {"t1792179556070-1":23}
+  note: both report live tables: A 0 tables n/a (exited) chips, B 1 tables 600000 chips; 116 db samples
+  note: before B1, players on A kept playing while B timed them out (away -> folds) and both wrote tourney/live rows
+PASS lease_fencing: stale-epoch flush rolled back; old instance closed sockets (4001) and exited without writing
+  note: invite on A answered {"status":200,"code":"d_23dyO3Lx-O"}; A exit={"code":1,"signal":null}; healthz A {"ok":true,"mode":"postgres","epoch":1,"leaseLost":false,"dirty":0,"lastWriteError":null} B {"ok":true,"mode":"postgres","epoch":2,"leaseLost":false,"dirty":0,"lastWriteError":null}
+  note: A said: lease lost: epoch 2 held by vm:571, ours was 1
+PASS reconnect: server re-sent turn (same seq, legal, deadline) and cards on reconnect; act on new socket applied
+  note: send on dead socket: returned without error and the act went nowhere; deadline kept (not reset): true
+  note: server reply to a rejected act: none - no ack/nack for act (server/index.js:309), so a client cannot tell a lost act from a slow one
+FAIL fair_after_interrupt: interrupted deal (hand 3, cards players saw before the crash) is not in the report; hand 3 has 1 record(s) with different cards
+  note: verifier: sealOk=true ok=4 bad=0 (all beacons local: NO_BEACON); 4 hand records
+  note: killed on t1792179565312-1 hand 3 after board 3c 6c 2c; restart replays it as hand 3 with a new deck
+FAIL sessions_owner_reset: owner tokens from before resetOwner still valid (setup token=true, login token=true); removed member's open socket got 1 club broadcast(s) after removal (sees tourney "After removal")
+  note: wrong codes: statuses 400,400,400,400,400,400,400,400,400,400,429,429 (limited from attempt 11)
+  note: after the lockout the real owner with the correct code gets 429 Too many tries. Wait a few minutes. - anyone can lock the owner out of recovery for 10 min
+
+test                   | result | expected  | verdict          | secs   | reason
+------------------------------------------------------------------------------------------------------------------------
+db_failure             | PASS   | FAIL      | UNEXPECTED PASS  | 2.3    | state after db outage + restart is consistent
+finish_crash           | PASS   | FAIL      | UNEXPECTED PASS  | 2.1    | result recorded exactly once in both crash points
+sigterm_mid_hand       | PASS   | PASS      | ok               | 3.3    | state after SIGTERM + restart consistent
+duplicate_actions      | PASS   | PASS      | ok               | 2.4    | 10 decisions, 20 duplicate sends + stale acts all ignored; points = history pts for all 5 members
+two_instances          | PASS   | PASS      | ok               | 7.2    | only one instance dealt; state not clobbered
+lease_fencing          | PASS   | PASS      | ok               | 0.9    | stale-epoch flush rolled back; old instance closed sockets (4001) and exited without writing
+reconnect              | PASS   | PASS      | ok               | 1.3    | server re-sent turn (same seq, legal, deadline) and cards on reconnect; act on new socket applied
+fair_after_interrupt   | FAIL   | FAIL      | known bug        | 1.9    | interrupted deal (hand 3, cards players saw before the crash) is not in the report; hand 3 has 1 record(s) with different cards
+sessions_owner_reset   | FAIL   | FAIL      | known bug        | 1.1    | owner tokens from before resetOwner still valid (setup token=true, login token=true); removed member's open socket got 1 club broadcast(s) after removal (sees t
+
+9 tests: 7 pass, 2 fail (2 expected), 0 unexpected failures
+exit code: 0

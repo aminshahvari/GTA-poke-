@@ -1,0 +1,26 @@
+Preparing worktree (detached HEAD 1e6953f)
+
+== 1e6953f before BC1 (B0 on staging)
+GET / Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'
+POST /api/status Content-Security-Policy identical: true
+X-Content-Type-Options: nosniff | Referrer-Policy: no-referrer
+external <script>/<link> in index.html: link https://fonts.googleapis.com ; link https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap
+public/vendor/ present: false
+Preparing worktree (detached HEAD 18bb929)
+
+== 18bb929 BC1 app commit
+GET / Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; frame-ancestors 'none'
+POST /api/status Content-Security-Policy identical: true
+X-Content-Type-Options: nosniff | Referrer-Policy: no-referrer
+external <script>/<link> in index.html: link https://fonts.googleapis.com ; link https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap
+public/vendor/ present: false
+Preparing worktree (detached HEAD a3c67e9)
+
+== a3c67e9 staging tip (audited)
+GET / Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+POST /api/status Content-Security-Policy identical: true
+X-Content-Type-Options: nosniff | Referrer-Policy: no-referrer
+external <script>/<link> in index.html: link https://fonts.googleapis.com ; link https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap
+public/vendor/ present: true
+
+saved raw/csp-headers.json; temporary worktrees removed: true

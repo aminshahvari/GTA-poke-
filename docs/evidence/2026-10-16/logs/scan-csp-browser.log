@@ -1,0 +1,32 @@
+$ PLAYWRIGHT_CORE=node_modules/playwright-core PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node test/browser/scan_csp.js 
+CSP on / : default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+signed in as Test Player 07
+scanner open; OCR files requested so far: 0
+synthetic card PNG: 113811 bytes
+worker started: /vendor/tesseract-5.1.1/worker.min.js
+card read in 1.5s, fields: {"name":"Rivera Plumbing","fullName":"Alex Rivera","jobTitle":"Owner","phone":"416-555-0100","email":"alex@example.com","website":"riveraplumbing.example","address":"123 Queen St W, Toronto, ON M5H 2M9","category":"trades"}
+OCR files loaded from our origin: ["/vendor/tesseract-5.1.1/tesseract.min.js","/vendor/tesseract-5.1.1/worker.min.js","/vendor/tesseract-5.1.1/tesseract-core-simd-lstm.js","/vendor/tesseract-5.1.1/tesseract-core-simd-lstm.wasm","/vendor/tessdata-eng-1.0.0/eng.traineddata.gz"]
+negative control (cdn.jsdelivr.net script): blocked by CSP: script-src-elem blocked https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js (:1)
+CSP violations during sign-in + scan: 0 
+third-party requests during sign-in + scan: 0 
+pre-existing Google Fonts requests (not BC1, aborted in this sandbox): 1
+page errors: 0 
+scan + CSP browser test passed (SIMD core)
+exit 0
+
+$ PLAYWRIGHT_CORE=node_modules/playwright-core PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node test/browser/scan_csp.js --no-simd
+CSP on / : default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+signed in as Test Player 07
+scanner open; OCR files requested so far: 0
+synthetic card PNG: 113811 bytes
+worker started: /vendor/tesseract-5.1.1/worker.min.js
+card read in 1.9s, fields: {"name":"Rivera Plumbing","fullName":"Alex Rivera","jobTitle":"Owner","phone":"416-555-0100","email":"alex@example.com","website":"riveraplumbing.example","address":"123 Queen St W, Toronto, ON M5H 2M9","category":"trades"}
+OCR files loaded from our origin: ["/vendor/tesseract-5.1.1/tesseract.min.js","/vendor/tesseract-5.1.1/worker.min.js","/vendor/tesseract-5.1.1/tesseract-core-lstm.js","/vendor/tesseract-5.1.1/tesseract-core-lstm.wasm","/vendor/tessdata-eng-1.0.0/eng.traineddata.gz"]
+negative control (cdn.jsdelivr.net script): blocked by CSP: script-src-elem blocked https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js (:1)
+CSP violations during sign-in + scan: 0 
+third-party requests during sign-in + scan: 0 
+pre-existing Google Fonts requests (not BC1, aborted in this sandbox): 1
+page errors: 0 
+scan + CSP browser test passed (plain core, no SIMD)
+exit 0
+
