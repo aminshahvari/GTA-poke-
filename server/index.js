@@ -351,6 +351,7 @@ wss.on('connection', (ws, req) => {
         case 'leave': club.leave(u.id); break;
         // owner controls
         case 'create': own(u); club.create(m); break;
+        case 'edit': own(u); club.edit(m); break;
         case 'start': own(u); club.start(); break;
         case 'cancel': own(u); club.cancel(); break;
         case 'pause': own(u); club.pause(); break;

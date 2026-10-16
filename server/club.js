@@ -60,6 +60,18 @@ function create({ name, stack, levelMin, startAt, repeat, anteMode, actSec, tabl
   hooks.onClub();
   hooks.onNotice('open', T());
 }
+// change a tournament that is still taking sign-ups, keeping everyone who joined
+function edit({ name, stack, levelMin, startAt, repeat, anteMode, actSec, lateLevels, helper }){
+  const t = T();
+  if(!t || t.status !== 'registering') throw new Error('Only a tournament that has not started can be changed.');
+  const at = startAt ? +startAt : null;
+  saveT({ name: String(name || t.name).slice(0, 60), stack: [10000, 20000, 30000, 50000, 60000, 100000].includes(+stack) ? +stack : t.stack,
+    levelMin: Math.max(1, Math.min(60, Math.round(+levelMin || t.levelMin))), startAt: at, repeat: at && ['daily', 'weekly'].includes(repeat) ? repeat : 'none',
+    anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : t.actSec, tableSize: 9,
+    lateLevels: LATE.includes(+lateLevels) ? +lateLevels : t.lateLevels, helper: helper !== false && helper !== 'off',
+    reminded: at === t.startAt ? t.reminded : false });
+  hooks.onClub();
+}
 function join(uid){
   const t = T();
   if(t && t.status === 'running') return lateJoin(uid);
@@ -506,5 +518,5 @@ function totalChips(){
   return sum;
 }
 
-module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, join, leave, cancel, start, resume, pause, unpause, act, extend, back,
+module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, edit, join, leave, cancel, start, resume, pause, unpause, act, extend, back,
   snapshot, cardsFor, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, TIME_BANK };

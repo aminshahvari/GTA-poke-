@@ -83,7 +83,7 @@ function authScreen(mode){
 let ws = null, club = null, retry = 0;
 const tables = new Map();
 const myCards = new Map(); // tid -> {hand, cards}
-let tab = 'event', view = 'lobby', watchTid = null, lastSent = null, seen = new Set(), lastStatus = null, lastMyTable = null, clockSkew = 0;
+let editingT = false, tab = 'event', view = 'lobby', watchTid = null, lastSent = null, seen = new Set(), lastStatus = null, lastMyTable = null, clockSkew = 0;
 function connect(){
   const token = local.get('token', null);
   if(!token && location.pathname.startsWith('/join/')) return authScreen('join');
@@ -301,32 +301,36 @@ function directorMainHTML(){
     <div class="btn-row"><button class="btn" id="chatOffBtn">${club.chatOff ? 'Turn table chat on' : 'Turn table chat off'}</button></div>
     <p class="note">Table chat is ${club.chatOff ? '<b>off</b>' : '<b>on</b>'}. <b>Mute</b> stops one person from chatting or throwing things.</p>
     <p class="note">Use <b>Home</b> to mark people who live together (for example a couple). They're never seated at the same table. Players on the same internet or the same phone are kept apart automatically.</p></div>`;
-  if(!T || ['finished', 'cancelled'].includes(T.status)){
-    const d = new Date(Date.now() + 864e5); d.setHours(20, 0, 0, 0);
+  const editing = editingT && T && T.status === 'registering';
+  if(!T || ['finished', 'cancelled'].includes(T.status) || editing){
+    const P = editing ? T : null, opt = (v, l, cur) => `<option value="${v}"${String(v) === String(cur) ? ' selected' : ''}>${l}</option>`;
+    const d = P && P.startAt ? new Date(P.startAt) : new Date(Date.now() + 864e5); if(!(P && P.startAt)) d.setHours(20, 0, 0, 0);
     const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    return `<div class="card-box"><span class="eyebrow">New tournament</span>
+    const at = P && P.startAt ? 'at' : 'manual';
+    return `<div class="card-box"><span class="eyebrow">${editing ? 'Edit tournament' : 'New tournament'}</span>
+      ${editing ? `<p class="note">Changes keep everyone who already joined (${T.regs.length}).</p>` : ''}
       <form class="form" id="newForm">
-        <label>Name<input id="nName" maxlength="40" value="${esc(new Date().toLocaleDateString('en-US', { weekday: 'long' }))} Night Tournament"></label>
-        <div class="two"><label>Starting stack<select id="nStack"><option>10000</option><option>20000</option><option selected>30000</option><option>50000</option><option value="60000">60000 (WSOP Main Event)</option></select></label>
-        <label>Level length<select id="nLevel"><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20" selected>20 min</option><option value="30">30 min</option></select></label></div>
+        <label>Name<input id="nName" maxlength="40" value="${esc(P ? P.name : new Date().toLocaleDateString('en-US', { weekday: 'long' }) + ' Night Tournament')}"></label>
+        <div class="two"><label>Starting stack<select id="nStack">${[[10000, '10000'], [20000, '20000'], [30000, '30000'], [50000, '50000'], [60000, '60000 (WSOP Main Event)']].map(([v, l]) => opt(v, l, P ? P.stack : 30000)).join('')}</select></label>
+        <label>Level length<select id="nLevel">${[5, 10, 15, 20, 30].map(v => opt(v, v + ' min', P ? P.levelMin : 20)).join('')}</select></label></div>
         <div class="two"><label>Players per table<select id="nSize"><option value="9" selected>9 (WSOP/WPT)</option></select></label>
-        <label>Late registration<select id="nLate"><option value="0">Off</option><option value="2">Until end of level 2</option><option value="4" selected>Until end of level 4</option><option value="6">Until end of level 6</option></select></label></div>
-        <div class="two"><label>Ante<select id="nAnte"><option value="each" selected>Every player</option><option value="bb">Big blind (WSOP)</option></select></label>
-        <label>Time to act<select id="nAct"><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="20" selected>20 seconds</option><option value="30">30 seconds</option></select></label></div>
-        <label>Hand helper<select id="nHelper"><option value="on" selected>On: show hand strength and win chance</option><option value="off">Off (pro mode)</option></select></label>
-        <div class="two"><label>Start<select id="nWhen"><option value="manual">When I press Start</option><option value="at">At a set time</option></select></label>
-        <label>Repeat<select id="nRepeat"><option value="none">Just once</option><option value="daily">Every day</option><option value="weekly">Every week</option></select></label></div>
-        <label id="atWrap" hidden>Start time<input type="datetime-local" id="nAt" value="${local}"></label>
-        <button class="btn red" type="submit">Open registration</button>
+        <label>Late registration<select id="nLate">${[[0, 'Off'], [2, 'Until end of level 2'], [4, 'Until end of level 4'], [6, 'Until end of level 6']].map(([v, l]) => opt(v, l, P ? P.lateLevels : 4)).join('')}</select></label></div>
+        <div class="two"><label>Ante<select id="nAnte">${opt('each', 'Every player', P ? P.anteMode : 'each')}${opt('bb', 'Big blind (WSOP)', P ? P.anteMode : 'each')}</select></label>
+        <label>Time to act<select id="nAct">${[10, 15, 20, 30].map(v => opt(v, v + ' seconds', P ? P.actSec : 20)).join('')}</select></label></div>
+        <label>Hand helper<select id="nHelper">${opt('on', 'On: show hand strength and win chance', P && P.helper === false ? 'off' : 'on')}${opt('off', 'Off (pro mode)', P && P.helper === false ? 'off' : 'on')}</select></label>
+        <div class="two"><label>Start<select id="nWhen">${opt('manual', 'When I press Start', at)}${opt('at', 'At a set time', at)}</select></label>
+        <label>Repeat<select id="nRepeat">${[['none', 'Just once'], ['daily', 'Every day'], ['weekly', 'Every week']].map(([v, l]) => opt(v, l, P ? P.repeat : 'none')).join('')}</select></label></div>
+        <label id="atWrap"${at === 'at' ? '' : ' hidden'}>Start time<input type="datetime-local" id="nAt" value="${local}"></label>
+        <div class="btn-row">${editing ? '<button class="btn" type="button" id="editBack">Back</button>' : ''}<button class="btn red" type="submit">${editing ? 'Save changes' : 'Open registration'}</button></div>
       </form>
-      <p class="note">Tables are made automatically from the table size you pick: with 6-max, 1 table for up to 6 players, 2 for up to 12, and so on. Players are moved to keep tables even, and tables merge as people bust, down to one final table. A repeating tournament opens again by itself at the same time.</p></div>${members}`;
+      ${editing ? '' : '<p class="note">Tables are 9-handed: 1 table for up to 9 players, 2 for up to 18, and so on. Players are moved to keep tables even, and tables merge as people bust, down to one final table. A repeating tournament opens again by itself at the same time.</p>'}</div>${members}`;
   }
   if(T.status === 'registering'){
     return `<div class="card-box"><span class="status-pill">Registration open</span><h3>${esc(T.name)}</h3>
       <p>${T.regs.length} joined · ${Math.max(1, Math.ceil(T.regs.length / (T.tableSize || 9)))} table${T.regs.length > (T.tableSize || 9) ? 's' : ''}${T.startAt ? ' · starts ' + esc(when(T.startAt)) : ''}</p>
       <div class="plist">${T.regs.map(u => pchip(u, true)).join('') || '<span class="note">Waiting for players to join.</span>'}</div>
       ${T.regs.length < 2 ? `<p class="warn-note">You need at least 2 players to start. Send an invite, and ask your friend to tap <b>Join tournament</b> on the Tournament tab.</p>` : ''}
-      <div class="btn-row"><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button><button class="btn" id="cancelBtn">Cancel</button></div></div>${members}`;
+      <div class="btn-row"><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button><button class="btn" id="editBtn">Edit</button><button class="btn" id="cancelBtn">Cancel</button></div></div>${members}`;
   }
   return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
     <div class="kv num"><div><small>Players left</small><b>${T.remaining}</b></div><div><small>Tables</small><b>${club.tables.length}</b></div><div><small>Clock</small><b>${T.paused ? 'Paused' : 'Running'}</b></div></div>
@@ -447,11 +451,13 @@ function wireLobby(){
     nf.onsubmit = e => {
       e.preventDefault();
       const at = $('nWhen').value === 'at' ? new Date($('nAt').value).getTime() : null;
-      send({ t: 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value, helper: $('nHelper').value });
-      tab = 'event';
+      send({ t: editingT ? 'edit' : 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value, helper: $('nHelper').value });
+      if(editingT){ editingT = false; toast('Tournament updated.'); } else tab = 'event';
     };
+    on('editBack', () => { editingT = false; renderLobby(); });
   }
   on('startBtn', async () => { if(await modal(`<h2>Start ${esc(club.tourney.name)}?</h2><p>${club.tourney.regs.length} players will be seated now.</p>`, [{ label: 'Not yet', value: false }, { label: 'Shuffle up and deal', value: true, primary: true }])) send({ t: 'start' }); });
+  on('editBtn', () => { editingT = true; renderLobby(); });
   on('cancelBtn', async () => { if(await modal('<h2>Cancel this tournament?</h2><p>Everyone who joined is taken off the list.</p>', [{ label: 'Keep it', value: false }, { label: 'Cancel it', value: true, primary: true }])) send({ t: 'cancel' }); });
   on('pauseBtn', () => send({ t: 'pause' }));
   on('resumeBtn', () => send({ t: 'resume' }));
