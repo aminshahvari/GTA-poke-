@@ -10,7 +10,7 @@ const local = {
   set(k, v){ try{ localStorage.setItem('stacked:' + k, JSON.stringify(v)); }catch(e){} },
   del(k){ try{ localStorage.removeItem('stacked:' + k); }catch(e){} }
 };
-const showScreen = id => { ['auth','lobby','game'].forEach(s => $(s).hidden = s !== id); keepAwake(id === 'game'); };
+const showScreen = id => { ['auth','lobby','game'].forEach(s => $(s).hidden = s !== id); keepAwake(id === 'game'); if(id !== 'lobby') document.querySelector('.app').classList.remove('wide'); };
 // keep the phone screen on while a table is open, so it doesn't lock and sit you out between hands
 let wakeLock = null, wantAwake = false;
 async function keepAwake(on){
@@ -99,6 +99,10 @@ let ws = null, club = null, retry = 0;
 const tables = new Map();
 const myCards = new Map(); // tid -> {hand, cards}
 let editingT = false, tab = 'event', view = 'lobby', watchTid = null, lastSent = null, seen = new Set(), lastStatus = null, lastMyTable = null, clockSkew = 0;
+// Business Club (public/business.js) gets the few app helpers it needs; it builds its own DOM with textContent
+window.BizClub.init({ post, toast, token: () => local.get('token', ''), me: () => club.me, tab: () => tab,
+  openTab: t => { tab = t; view = 'lobby'; showScreen('lobby'); renderLobby(); $('lobbyBody').scrollTop = 0; },
+  confirm: (title, text, ok) => modal(`<h2>${esc(title)}</h2><p>${esc(text)}</p>`, [{ label: 'Cancel', value: false }, { label: esc(ok), value: true, primary: true }]) });
 function connect(){
   const token = local.get('token', null);
   if(!token && location.pathname.startsWith('/join/')) return authScreen('join');
@@ -143,7 +147,7 @@ function onClub(c){
   if(c.myTable && c.myTable !== lastMyTable && st === 'running'){ watchTid = c.myTable; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid: watchTid }); }
   lastMyTable = c.myTable;
   const typing = document.activeElement && $('lobbyBody').contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
-  if(view === 'lobby'){ showScreen('lobby'); if(tab !== 'learn' && !typing) renderLobby(); } else renderTable();
+  if(view === 'lobby'){ showScreen('lobby'); if(tab !== 'learn' && tab !== 'biz' && !typing) renderLobby(); } else renderTable();
 }
 function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)) renderTable(); }
 
@@ -152,7 +156,7 @@ $('lobbyBody').addEventListener('click', e => {
   if(e.target.closest('[data-kick]')) return;
   const t = e.target.closest('[data-prof]'); if(t) openProfile(t.dataset.prof);
 });
-$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if(!b) return; tab = b.dataset.tab; if(tab === 'learn'){ openHand = null; send({ t: 'hands' }); } renderLobby(); $('lobbyBody').scrollTop = 0; });
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if(!b) return; tab = b.dataset.tab; if(tab === 'learn'){ openHand = null; send({ t: 'hands' }); } if(tab === 'biz') window.BizClub.open('list'); renderLobby(); $('lobbyBody').scrollTop = 0; });
 const nameOf = uid => { const m = club.members.find(x => x.id === uid); if(m) return m.name; for(const h of club.history) for(const r of h.results) if(r.uid === uid) return r.name; return 'Former member'; };
 const pchip = (uid, removable) => `<span class="pchip ${uid === club.me.id ? 'me' : ''}" data-prof="${esc(uid)}">${avHTML(uid, nameOf(uid), 'xs')}${esc(nameOf(uid))}${removable ? `<button data-kick="${esc(uid)}" aria-label="Remove from tournament">×</button>` : ''}</span>`;
 const when = ms => new Date(ms).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -160,8 +164,18 @@ function renderLobby(){
   if(!club) return;
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   const body = $('lobbyBody');
+  document.querySelector('.app').classList.toggle('wide', tab === 'biz');
+  if(tab === 'biz'){ body.replaceChildren(); window.BizClub.render(body); return; }
   body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : picNudgeHTML() + eventHTML() + friendsHTML();
+  if(tab !== 'board' && tab !== 'learn' && !(tab === 'director' && club.me.owner)) bizHome(body);
   wireLobby();
+}
+// Home: Business Club's "Meet the Members" goes right under the tournament card. Hidden while you're seated in a running tournament.
+function bizHome(body){
+  const sec = document.createElement('div'); sec.className = 'bz-homewrap';
+  const cards = [...body.children].filter(c => c.classList.contains('card-box') && !c.classList.contains('pic-nudge') && !c.classList.contains('next-box'));
+  if(cards[0]) cards[0].after(sec); else body.append(sec);
+  window.BizClub.mountHome(sec, !!(club.myTable && club.tourney && club.tourney.status === 'running'));
 }
 // Start times for a quick tournament: now, or a time later today (tomorrow if it has passed).
 function startChoices(){
@@ -641,10 +655,11 @@ async function showProfile(p){
       <p class="note">The rating comes mostly from decisions the coach checks every hand (folding weak hands, raising instead of limping, not paying off with nothing), and partly from tournament finishes. Sharks unlock 🦈 to throw; Pros also get 👑 and 💎.</p></details>
   </div>`;
   const btns = [{ label: 'Close', value: null }];
-  if(me) btns.push({ label: 'Change picture', value: 'pic', primary: true });
+  if(me) btns.push({ label: 'My business', value: 'biz' }, { label: 'Change picture', value: 'pic', primary: true });
   else if(club.me.owner && p.av) btns.push({ label: 'Remove photo', value: 'rmpic' });
   const v = await modal(html, btns);
   if(v === 'pic') pickAvatar();
+  else if(v === 'biz'){ window.BizClub.open('mine'); tab = 'biz'; view = 'lobby'; showScreen('lobby'); renderLobby(); }
   else if(v === 'rmpic') send({ t: 'avatarClear', uid: p.uid });
   else if(v && v.startsWith('t:')){ openChat(false); sendChat({ t: 'throw', item: v.slice(2), to: p.uid }); }
 }

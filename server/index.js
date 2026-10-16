@@ -11,6 +11,7 @@ const fair = require('./fair');
 const players = require('./players');
 const coach = require('./coach');
 const push = require('./push');
+const business = require('./business');
 
 const PORT = +process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -103,7 +104,9 @@ const api = {
     store.set('user:' + u.id, players.setAvatar(store.get('user:' + u.id), a));
     broadcastClub();
     return { ok: true };
-  }
+  },
+  // Business Club (members-only directory, separate from poker): see server/business.js
+  ...business.api
 };
 const GROUP_MAX = 100, GROUP_DAYS = 30, MEMBER_DAYS = 7;
 // Members can invite friends too (the owner can switch that off). A member's link joins at most MEMBER_MAX people,
@@ -131,11 +134,14 @@ const invitedCount = uid => store.values('user:').filter(x => !x.removed && x.in
 // ---------- HTTP ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
 const SECURITY = {
-  'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
+  // cdn.jsdelivr.net, wasm and blob workers: only for the on-phone business card reader (Tesseract.js, pinned version, loaded when the scanner opens)
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer'
 };
-function send(res, code, body, type = 'application/json'){
-  res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY });
+// Business Club data is for signed-in members only and must never be indexed
+const NOINDEX = { 'X-Robots-Tag': 'noindex, nofollow, noarchive' };
+function send(res, code, body, type = 'application/json', extra){
+  res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY, ...extra });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 const server = http.createServer((req, res) => {
@@ -147,7 +153,8 @@ const server = http.createServer((req, res) => {
   if(req.method === 'POST' && url.pathname.startsWith('/api/')){
     const ip = 'ip:' + clientIp(req);
     let body = '';
-    const limit = url.pathname === '/api/avatar' ? 70000 : 10000;
+    const limit = url.pathname === '/api/avatar' || url.pathname === '/api/bizSave' ? 70000 : 10000;
+    const extra = url.pathname.startsWith('/api/biz') ? NOINDEX : undefined;
     req.on('data', c => { body += c; if(body.length > limit) req.destroy(); });
     req.on('end', () => {
       let acct = null;
@@ -159,8 +166,8 @@ const server = http.createServer((req, res) => {
         acct = acctKey(url.pathname, data);
         if(acct && blocked(acct, 10)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
-        send(res, 200, fn(data, u));
-      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); } send(res, 400, { error: e.message || 'Something went wrong.' }); }
+        send(res, 200, fn(data, u), undefined, extra);
+      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); } send(res, [401, 403, 404, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.' }, undefined, extra); }
     });
     return;
   }
@@ -169,6 +176,13 @@ const server = http.createServer((req, res) => {
   if(av){
     const buf = players.photo(av[1]); if(!buf) return send(res, 404, 'Not found', 'text/plain');
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=604800, immutable', ...SECURITY }); return res.end(buf);
+  }
+  // Business Club logos: only with the member's token (sent by fetch, not a plain <img> link)
+  const bl = /^\/bizlogo\/(u[0-9a-f]{12})$/.exec(url.pathname);
+  if(bl){
+    const r = business.logoFor(bl[1], userByToken(req.headers.authorization?.replace(/^Bearer /, '')));
+    if(r.status !== 200) return send(res, r.status, 'Not found', 'text/plain', NOINDEX);
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
   let file = url.pathname === '/' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
   if(file === 'engine.js') return fs.readFile(path.join(__dirname, 'engine.js'), (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES['.js']));
@@ -384,7 +398,7 @@ wss.on('connection', (ws, req) => {
         case 'invite': { const code = inviteCode(u, !!m.group); sendWS(ws, { t: 'invite', code, group: !isOwner(u) || !!m.group, max: store.get('invite:' + code).max || 1 }); broadcastClub(); } break;
         case 'membersInvite': own(u); store.set('settings', { ...(store.get('settings') || {}), membersInvite: !!m.on }); broadcastClub(); break;
         case 'revoke': own(u); { const inv = store.get('invite:' + m.code); if(inv) store.set('invite:' + m.code, { ...inv, revoked: true }); broadcastClub(); } break;
-        case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); for(const k of store.keys('session:')) if(store.get(k).uid === x.id) store.del(k); club.leave(x.id); } broadcastClub(); } break;
+        case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); for(const k of store.keys('session:')) if(store.get(k).uid === x.id) store.del(k); club.leave(x.id); business.removeUser(x.id); } broadcastClub(); } break;
       }
     }catch(e){ sendWS(ws, { t: 'error', error: e.message }); }
   });
@@ -427,6 +441,8 @@ process.on('SIGINT', () => shutdown('SIGINT'));
       console.log('staging: seeded Test Director and 12 fake members');
     }catch(e){ console.error('staging seed failed', e.message); }
   }
+  // Staging only: a few fake demo businesses for the fake Test Player accounts (once; never in production)
+  if(process.env.STAGING === '1'){ const n = business.seedDemo(); if(n) console.log(`staging: seeded ${n} fake demo businesses`); }
   if(stopping) return;
   if(club.resume()) console.log('resumed running tournament');
   server.listen(PORT, () => { ready = true; console.log(`Blindrise poker club on :${PORT}`); });
