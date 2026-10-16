@@ -793,7 +793,7 @@ label.btn{display:flex;align-items:center;justify-content:center;gap:8px;cursor:
 /* ---------- Opportunity Club: "I need help" / "I can help" inside Business Club ---------- */
 :root{--need:#7fb2ff;--need-soft:rgba(127,178,255,.12);--need-line:rgba(127,178,255,.4);--offer:#4fd1a1;--offer-soft:rgba(79,209,161,.12);--offer-line:rgba(79,209,161,.4)}
 .tabs .biz-tab{position:relative}
-.op-tabdot{position:absolute;top:4px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--biz);color:#1d1710;font-size:11px;font-weight:700;line-height:18px;text-align:center}
+.op-tabdot{display:inline-block;vertical-align:2px;margin-left:5px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--biz);color:#1d1710;font-size:11px;font-weight:700;line-height:18px;text-align:center}
 .op-top{display:grid;gap:10px}
 .op-entry{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .op-big{display:flex;align-items:center;gap:10px;min-height:64px;padding:10px 12px;border-radius:14px;text-align:left;color:var(--text);border:1px solid}
@@ -915,3 +915,5 @@ label.btn{display:flex;align-items:center;justify-content:center;gap:8px;cursor:
 .op-catchips .bz-chip{min-height:38px;padding:6px 12px;font-size:13px}
 .op-starters{display:flex;flex-wrap:wrap;gap:6px}
 .op-starter{min-height:36px;padding:6px 12px;border-radius:99px;background:transparent;border:1px dashed var(--biz-line);color:var(--biz-hi);font-size:13px;font-weight:600}
+.op-form input:not([type=checkbox]):not([type=radio]){font:inherit;font-size:16px;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:#151922;color:var(--text);width:100%;min-height:48px}
+.op-form input:focus,.op-form textarea:focus{border-color:var(--biz);outline:none}

@@ -304,7 +304,7 @@ function mineCard(x){
       reqs.map(r => h('div', { class: 'op-req ' + r.status },
         h('div', { class: 'op-req-head' }, h('b', null, r.from), h('small', null, ago(r.createdAt))),
         h('p', { class: 'bz-pre' }, r.message),
-        r.status === 'sent' ? h('div', { class: 'btn-row' }, h('button', { class: 'btn bz-gold', onclick: () => shareSheet(r, x) }, 'Share my contact'), h('button', { class: 'btn', onclick: () => decline(r) }, 'Decline'))
+        r.status === 'sent' ? h('div', { class: 'btn-row' }, h('button', { class: 'btn bz-gold', onclick: () => shareSheet(r, x) }, 'Share contact'), h('button', { class: 'btn', onclick: () => decline(r) }, 'Decline'))
           : r.status === 'shared' ? h('p', { class: 'op-status shared' }, 'You shared: ' + [r.shared.email, r.shared.phone].filter(Boolean).join(', ') + (r.shared.note ? ' · "' + r.shared.note + '"' : ''))
           : h('p', { class: 'op-status declined' }, 'You declined.')))),
     h('div', { class: 'btn-row' }, h('button', { class: 'btn', onclick: () => newListing(x.type, x) }, 'Edit'),
@@ -347,7 +347,7 @@ function renderReports(el){
     x.reports.length ? h('ul', { class: 'op-replist' }, x.reports.map(r => h('li', null, h('b', null, r.reasonLabel), ' · ' + r.by + ', ' + ago(r.at), r.note ? h('span', { class: 'op-note' }, '"' + r.note + '"') : null))) : h('p', { class: 'bz-muted' }, 'No open reports.'),
     h('div', { class: 'btn-row' },
       x.state === 'hidden' || x.state === 'review' ? h('button', { class: 'btn', onclick: () => moderate(x.id, 'unhide') }, 'Show again') : h('button', { class: 'btn', onclick: () => moderate(x.id, 'dismiss') }, 'Dismiss reports'),
-      x.state !== 'hidden' ? h('button', { class: 'btn', onclick: () => moderate(x.id, 'hide') }, 'Keep hidden') : null,
+      x.state !== 'hidden' ? h('button', { class: 'btn', onclick: () => moderate(x.id, 'hide') }, x.state === 'review' ? 'Keep hidden' : 'Hide') : null,
       h('button', { class: 'btn danger', onclick: () => moderate(x.id, 'delete') }, 'Delete'))));
   el.replaceChildren(...kids);
 }
