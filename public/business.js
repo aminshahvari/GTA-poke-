@@ -347,13 +347,18 @@ function shrinkLogo(file){
 }
 
 // ---------- scan a business card (read on the phone; the photo is never uploaded) ----------
-const TESS = { src: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js', sri: 'sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F',
-  worker: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js', core: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1', lang: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int' };
+// Tesseract.js 5.1.1 + core 5.1.1 + English data 1.0.0, served from this server (public/vendor/, see scripts/vendor-tesseract.js).
+// Nothing is fetched until a member picks a photo. The worker is started from its own file (no blob: worker) and we pick
+// the core ourselves: the SIMD build where the phone supports WebAssembly SIMD, the plain build otherwise.
+const TV = '/vendor/tesseract-5.1.1/';
+const TESS = { src: TV + 'tesseract.min.js', sri: 'sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F', worker: TV + 'worker.min.js', lang: '/vendor/tessdata-eng-1.0.0' };
+const SIMD_PROBE = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]);
+const tessCore = () => { let simd = false; try{ simd = WebAssembly.validate(SIMD_PROBE); }catch(e){} return TV + (simd ? 'tesseract-core-simd-lstm.js' : 'tesseract-core-lstm.js'); };
 let tessP = null;
 function loadTess(){
   if(window.Tesseract) return Promise.resolve(window.Tesseract);
   if(!tessP) tessP = new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = TESS.src; s.integrity = TESS.sri; s.crossOrigin = 'anonymous'; s.async = true;
+    const s = document.createElement('script'); s.src = TESS.src; s.integrity = TESS.sri; s.async = true;
     const t = setTimeout(() => rej(new Error('timeout')), 30000);
     s.onload = () => { clearTimeout(t); window.Tesseract ? res(window.Tesseract) : rej(new Error('missing')); };
     s.onerror = () => { clearTimeout(t); rej(new Error('load')); };
@@ -391,7 +396,7 @@ async function readCard(file, onStep){
   onStep('Starting the card reader…', 15);
   let T;
   try{ T = await loadTess(); }catch(e){ throw Object.assign(new Error('reader'), { reader: true }); }
-  const w = await T.createWorker('eng', 1, { workerPath: TESS.worker, corePath: TESS.core, langPath: TESS.lang,
+  const w = await T.createWorker('eng', 1, { workerPath: TESS.worker, corePath: tessCore(), langPath: TESS.lang, workerBlobURL: false,
     logger: m => { if(m.status === 'recognizing text') onStep('Reading your card…', 40 + Math.round(m.progress * 55)); else if(/load/.test(m.status)) onStep('Starting the card reader…', 15 + Math.round((m.progress || 0) * 20)); } });
   try{ const r = await w.recognize(canvas); return r.data.text || ''; }
   finally{ w.terminate().catch(() => {}); canvas.width = canvas.height = 0; }
@@ -436,7 +441,7 @@ function renderScan(el){
       h('label', { class: 'btn bz-gold big' }, '📷  ' + (st.msg ? 'Try again' : 'Take a photo'), pick(true)),
       h('label', { class: 'btn big' }, '🖼  Choose a photo', pick(false)),
       h('button', { class: 'btn big ghost', type: 'button', onclick: () => startEdit() }, 'Enter manually instead')),
-    h('p', { class: 'bz-muted' }, 'Your photo is read on this phone and never uploaded or saved. The reader (about 5 MB) downloads the first time you scan.')));
+    h('p', { class: 'bz-muted' }, 'Your photo is read on this phone and never uploaded or saved. The reader (about 6 MB) downloads the first time you scan.')));
 }
 
 // ---------- Home: "Meet the Members" carousel, new businesses and the intro prompt ----------

@@ -35,3 +35,25 @@ npm test
 ```
 
 Runs the hand evaluator, rules, a long simulation, and a full server test with many websocket players (pass a player count to `node test/t_server.js 60`).
+
+## Self-hosted card reader (public/vendor/)
+
+The Business Club card scanner reads the photo on the phone with Tesseract.js. Its files are served from this server
+(never from a CDN), so the Content-Security-Policy allows scripts and connections only from our own origin.
+
+| Package (npm) | Version | Files used | Served at |
+|---|---|---|---|
+| `tesseract.js` | 5.1.1 | `dist/tesseract.min.js`, `dist/worker.min.js`, `LICENSE.md` | `/vendor/tesseract-5.1.1/` |
+| `tesseract.js-core` | 5.1.1 | `tesseract-core-simd-lstm.js/.wasm` (phones with WebAssembly SIMD), `tesseract-core-lstm.js/.wasm` (older phones), `LICENSE` | `/vendor/tesseract-5.1.1/` |
+| `@tesseract.js-data/eng` | 1.0.0 | `4.0.0_best_int/eng.traineddata.gz` | `/vendor/tessdata-eng-1.0.0/` |
+
+All three are Apache-2.0. The files are copied unchanged from the npm tarballs by `node scripts/vendor-tesseract.js`
+(`npm pack` checks the registry's sha512) and pinned by sha256 in `public/vendor/SHA256SUMS`; the script refuses to
+overwrite a file whose sum changed. `node scripts/vendor-tesseract.js --check` re-verifies the committed files, and
+`test/t_csp.js` checks that the server sends exactly those bytes. `tesseract.min.js` also matches the SRI hash
+`sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F` that jsDelivr serves for the same version.
+Files under `/vendor/` are sent with `Cache-Control: public, max-age=31536000, immutable`, so a new version must go in
+a new folder (e.g. `tesseract-5.1.2/`). Nothing is downloaded until a member picks a photo (about 6 MB the first time).
+
+Browser check (needs Chromium and `playwright-core`, not part of `npm test`):
+`PLAYWRIGHT_CORE=<path to playwright-core> node test/browser/scan_csp.js [--no-simd]`.
