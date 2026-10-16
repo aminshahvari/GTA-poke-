@@ -140,6 +140,7 @@ function send(res, code, body, type = 'application/json'){
 }
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
+  if(process.env.STAGING === '1' && url.pathname === '/api/status') console.log('staging xff:', JSON.stringify({ xff: req.headers['x-forwarded-for'] || null, tci: req.headers['true-client-ip'] || null, cf: req.headers['cf-connecting-ip'] || null, remote: req.socket.remoteAddress }));
   if(req.method === 'GET' && url.pathname === '/healthz') return send(res, 200, { ok: true });
   if(process.env.FAST === '1' && url.pathname === '/debug/chips'){ const t = club.T(); return send(res, 200, { chips: club.totalChips(), expected: t && t.status === 'running' ? t.stack * t.entrants : null, tables: club.tablesSummary(), hfh: club.hfhState(), detail: process.env.DEBUG_CHIPS ? [...club.tables.values()].map(tb => ({ tid: tb.tid, broken: tb.broken, toBreak: tb.toBreak, inHand: tb.inHand, seats: tb.g.seats.map((p, i) => p && [i, p.uid, p.stack, p.start]).filter(Boolean), hp: tb.g.hand ? tb.g.hand.players.map(p => [p.seat, p.uid, p.start]) : [] })) : undefined }); }
   if(req.method === 'POST' && url.pathname.startsWith('/api/')){
@@ -398,6 +399,14 @@ if(process.env.STAGING === '1' && String(process.env.DATABASE_URL || '').include
 
 (async () => {
   await store.init();
+  // Staging only: on an empty database, create a test director and fake members so there is something to test with.
+  if(process.env.STAGING === '1' && !owner() && process.env.OWNER_CODE){
+    try{
+      const tok = api.setup({ code: process.env.OWNER_CODE, name: 'Test Director', pin: '246810', agree: true }).token, dir = userByToken(tok);
+      for(let i = 1; i <= 12; i++) api.redeem({ code: inviteCode(dir), name: 'Test Player ' + String(i).padStart(2, '0'), pin: '1357' + String(i % 10).repeat(2), agree: true });
+      console.log('staging: seeded Test Director and 12 fake members');
+    }catch(e){ console.error('staging seed failed', e.message); }
+  }
   if(club.resume()) console.log('resumed running tournament');
   server.listen(PORT, () => console.log(`Blindrise poker club on :${PORT}`));
   if(!process.env.NO_BEACON) fair.probe();
