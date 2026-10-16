@@ -5,7 +5,8 @@
 // both write `tourney` / `live` / `fair:` rows. Players stay connected to the old instance (A); the new one (B) is
 // watched by one extra socket. TIME_BANK_MS=400 keeps the test short.
 // Asserts: only one instance deals hands, the persisted `live` hand numbers never go backwards (no clobbering), and
-// the old instance (A) closes its sockets with 4001 and exits once B holds the lease.
+// the old instance (A) closes its sockets with 4001 once B holds the lease and then stays up fenced (503), without
+// exiting (P0: an exited old process gets restarted by Render and re-claims the lease).
 const L = require('./lib');
 const NAME = 'two_instances', EXPECT_FAIL = false;
 let A, B, clients = [], obsB;
@@ -41,13 +42,15 @@ L.guard(NAME, EXPECT_FAIL, async () => {
   let backwards = 0, last = {};
   for(const s of samples) for(const [k, n] of Object.entries(s.hands)){ if(last[k] != null && n < last[k]) backwards++; last[k] = n; }
   if(backwards) issues.push(`persisted live.handNo went backwards ${backwards} times (instances overwrite each other)`);
-  if(!A.exit) issues.push('old instance A still running after B took over');
+  const hA = await fetch(A.base + '/healthz').then(async r => ({ status: r.status, ...(await r.json()) })).catch(e => ({ error: e.message }));
+  if(A.exit) issues.push('old instance A exited after B took over ' + JSON.stringify(A.exit) + ' (a supervisor would restart it)');
+  else if(hA.status !== 503 || !hA.leaseLost) issues.push('old instance A not fenced after B took over: ' + JSON.stringify(hA));
   const codes = [...new Set(clients.map(c => c.closeCode))];
-  if(A.exit && codes.join() !== '4001') issues.push('A closed player sockets with ' + codes.join());
-  const dA = await L.chips(A.base).catch(() => ({ tables: [], chips: 'n/a (exited)' })), dB = await L.chips(B.base);
+  if(codes.join() !== '4001') issues.push('A closed player sockets with ' + codes.join());
+  const dA = { tables: [], chips: 'n/a (A fenced, answers 503)' }, dB = await L.chips(B.base);
   L.result(NAME, { pass: !issues.length, expectFail: EXPECT_FAIL,
     reason: issues.length ? issues.join('; ') : 'only one instance dealt; state not clobbered',
-    notes: [`B resumed the running tournament on boot: ${bResumed}; A exit=${JSON.stringify(A.exit)}, A said: ${(A.log.match(/lease lost[^\n]*/) || ['(no lease message)'])[0]}`,
+    notes: [`B resumed the running tournament on boot: ${bResumed}; A exit=${JSON.stringify(A.exit)}, A healthz ${JSON.stringify(hA)}, A said: ${(A.log.match(/lease lost[^\n]*/) || ['(no lease message)'])[0]}`,
       `hand numbers seen: A ${JSON.stringify(startA)} -> ${JSON.stringify(handsA)}; B ${JSON.stringify(handsB)}`,
       `both report live tables: A ${dA.tables.length} tables ${dA.chips} chips, B ${dB.tables.length} tables ${dB.chips} chips; ${samples.length} db samples`,
       'before B1, players on A kept playing while B timed them out (away -> folds) and both wrote tourney/live rows'] });

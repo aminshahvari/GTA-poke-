@@ -6,7 +6,7 @@
 const { spawnSync } = require('child_process');
 const fs = require('fs'), path = require('path');
 
-const ORDER = ['db_failure', 'finish_crash', 'sigterm_mid_hand', 'duplicate_actions', 'two_instances', 'lease_fencing', 'reconnect', 'fair_after_interrupt', 'sessions_owner_reset'];
+const ORDER = ['db_failure', 'finish_crash', 'sigterm_mid_hand', 'duplicate_actions', 'two_instances', 'lease_fencing', 'lease_lost_stays_alive', 'restart_pingpong', 'sigterm_after_loss', 'reconnect', 'fair_after_interrupt', 'sessions_owner_reset'];
 const filter = process.argv[2];
 const files = ORDER.map(n => 't_' + n + '.js').filter(f => fs.existsSync(path.join(__dirname, f)) && (!filter || f.includes(filter)));
 const rows = [];
