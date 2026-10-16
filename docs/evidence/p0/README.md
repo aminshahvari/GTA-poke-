@@ -51,7 +51,7 @@ Raw lines: `logs/render-staging-deploys.log`. Staging ran commit `9026503` (this
 | 2 (redeploy, 20:55) | cgmzn -> 6vf5h | 11 -> 12 | **exactly 1** | fenced, "staying up and answering 503", never reclaimed |
 | 3 (redeploy, 20:59) | 6vf5h -> ld76p | 12 -> 13 | **exactly 1** | fenced, "staying up and answering 503", never reclaimed |
 
-Deploys 2 and 3 are the two consecutive deploys where both old and new servers ran the fix. Before the fix, the same kind of overlap produced repeated takeovers (epoch climbing by several per deploy).
+Deploys 2 and 3 are the two consecutive deploys where both old and new servers ran the fix. Before the fix, the local race reproduction (section 2) went epoch 1 -> 6.
 
 ### Still not verified
 
