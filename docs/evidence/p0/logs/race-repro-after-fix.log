@@ -1,0 +1,14 @@
+  0.10s  OLD  boot pid 999: "store: postgres, 0 keys, lease epoch 1 (srv-hibernate-6d7675c4d4-ckzdq:999)"
+  0.20s  OLD  a member is connected to OLD over the websocket
+  0.70s  NEW  deploy: NEW instance boots while OLD is still running
+  0.79s  NEW  boot pid 1006: "store: postgres, 8 keys, lease epoch 2 (srv-hibernate-6dd5c78cb7-9mhp7:1006)"
+  0.84s  db   lease row: epoch 2 held by srv-hibernate-6dd5c78cb7-9mhp7:1006
+ 14.79s  OLD  end of overlap: supervisor sends SIGTERM to OLD and stops restarting it
+ 14.80s  OLD  exit {"code":0,"signal":null} | shutting down: lease lost: epoch 2 held by srv-hibernate-6dd5c78cb7-9mhp7:1006, ours was 1 | final save skipped or incomplete {"mode":"postgres","epoch":1,"leaseLost":true,"dirty":0,"lastWriteError":null}
+ 19.80s  NEW  final /healthz: {"ok":true,"mode":"postgres","epoch":2,"leaseLost":false,"dirty":0,"lastWriteError":null}
+ 19.80s  cli  the member connected to the first OLD process was closed with code 4001 "server moved"
+
+summary: lease epoch went from 1 to 2 (1 handovers for what should have been 1); restarts OLD=0 NEW=0
+NOT REPRODUCED
+(test cleanup: the script now SIGKILLs its own servers)
+ 19.80s  NEW  exit {"code":null,"signal":"SIGKILL"} |  | 

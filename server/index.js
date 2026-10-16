@@ -338,6 +338,7 @@ function notice(kind, t){
 club.setHooks({ onNotice: notice, onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.user.id === uid) sendWS(ws, msg); }, onClub: broadcastClub, onTable: pushTable, onTableClosed: tid => { chatLogs.delete(tid); for(const ws of sockets) sendWS(ws, { t: 'closed', tid }); broadcastClub(); } });
 
 wss.on('connection', (ws, req) => {
+  if(stopping){ try{ ws.close(4001, 'server moved'); }catch(e){} return; }
   const origin = req.headers.origin;
   let originHost = null; try{ originHost = origin && new URL(origin).host; }catch(e){}
   if(origin && originHost !== req.headers.host){ ws.close(1008, 'origin'); return; }
@@ -421,22 +422,35 @@ if(process.env.STAGING === '1' && String(process.env.DATABASE_URL || '').include
 }
 
 // ---------- single writer / shutdown ----------
-// A newer instance took the lease (deploy), or Render sent SIGTERM: stop the game, save once if we still own the
-// state, tell clients to reconnect (4001 lands them on the new instance) and exit well inside Render's 30 s grace.
-let ready = false, stopping = false;
+// Render sent SIGTERM: stop the game, save once, tell clients to reconnect (4001 lands them on the new instance) and
+// exit well inside Render's 30 s grace.
+// A newer instance took the lease (deploy): stop the game and freeze the store the same way, but do NOT exit. Render
+// restarts a process that exits, even inside an instance it is about to retire, and a restarted old process would
+// claim the lease back from the new one (lease ping-pong, evidence 2026-10-16 item 02). Instead stay alive as a
+// fenced-off husk: every request gets 503, /healthz is 503, websockets are closed with 4001, nothing is written and
+// the lease is never claimed again. The process only exits on SIGTERM, when Render retires the old instance.
+let ready = false, stopping = false, fenced = false;
 async function shutdown(why, leaseLost){
-  if(stopping) return; stopping = true;
+  if(stopping) return; stopping = true; fenced = !!leaseLost;
   console.log('shutting down:', why);
   club.stopAll(); store.freeze();
   const saved = leaseLost ? false : await Promise.race([store.flush(), new Promise(r => setTimeout(r, 10000, false))]);
   console.log('final save', saved ? 'done' : 'skipped or incomplete', JSON.stringify(store.health()));
   for(const ws of sockets) try{ ws.close(4001, 'server moved'); }catch(e){}
+  if(leaseLost){
+    console.log('lease lost: staying up and answering 503 until SIGTERM; this process will not claim the lease again');
+    setInterval(() => {}, 60000); // keep the event loop alive even if nothing else is listening
+    if(!server.listening) server.listen(PORT);
+    return;
+  }
   server.close();
-  setTimeout(() => process.exit(leaseLost ? 1 : 0), 300);
+  setTimeout(() => process.exit(0), 300);
 }
+// SIGTERM on a fenced process: nothing to save (it lost the lease and wrote nothing since), so exit at once
+const onSignal = sig => { if(fenced){ console.log(sig + ' after lease loss: exiting'); process.exit(0); } shutdown(sig); };
 store.onLost(e => shutdown(e.message, true));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => onSignal('SIGTERM'));
+process.on('SIGINT', () => onSignal('SIGINT'));
 
 (async () => {
   await store.init();
