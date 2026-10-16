@@ -219,7 +219,7 @@ function tableIO(tb){
       const h = tb.g.hand;
       // Pacing close to the big online rooms: quick between actions, a beat longer on an all-in run-out.
       const runout = h && h.players.filter(E.canAct).length < 2;
-      const wait = { deal: 900, action: 250, collect: 300, board: runout ? 1100 : 650, showdown: h && h.result && h.result.showdown ? 3000 : 1000 }[type] || 0;
+      const wait = { deal: 900, action: 250, collect: 300, board: runout ? 1100 : 650, showdown: h && h.result && h.result.showdown ? 4500 : 1800 }[type] || 0;
       if(wait) await sleep(wait * SPEED);
     },
     async think(){},

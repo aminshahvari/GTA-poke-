@@ -512,6 +512,21 @@ function layoutOf(d){
   return { allowed, rel, posOf: s => ring[rel(s)] };
 }
 const CENTER = [50, 45];
+// the pot slides over to whoever won it
+function potToWinners(d, handKey, posOf){
+  const key = 'win' + handKey; if(seen.has(key)) return; seen.add(key);
+  const area = $('tableArea'), fx = $('fx'), pot = $('pot'); if(!area || !fx || !pot) return;
+  const a = area.getBoundingClientRect(), pr = pot.getBoundingClientRect();
+  const px = pr.width ? pr.left + pr.width / 2 - a.left : a.width * CENTER[0] / 100, py = pr.height ? pr.top + pr.height / 2 - a.top : a.height * CENTER[1] / 100;
+  d.seats.forEach((p, s) => {
+    if(!p || !(p.won > 0)) return;
+    const [sx, sy] = pctToPx(posOf(s)), el = document.createElement('div');
+    el.className = 'bet num potwin';
+    el.style.cssText = `left:${px}px;top:${py}px;--tx:${sx - px}px;--ty:${sy - py}px`;
+    el.innerHTML = `${chipsIcon(3)}${fmt(p.won)}`;
+    fx.appendChild(el); setTimeout(() => el.remove(), 2600);
+  });
+}
 const pctToPx = ([x, y]) => { const a = $('tableArea'); return [a.clientWidth * x / 100, a.clientHeight * y / 100]; };
 const toward = ([x, y], f) => [x + (CENTER[0] - x) * f, y + (CENTER[1] - y) * f];
 const cs = s => E.parse(s)[0];
@@ -701,8 +716,8 @@ function renderTable(){
         const anim = isNew && d.street === 0 && !res ? `dl" style="--fx:${cx - sx}px;--fy:${cy - sy}px;animation-delay:${(j * 9 + s) * 50}ms` : '';
         const c = p.shown ? cs(p.shown[j]) : (isMe && mine ? mine[j] : null);
         const hl = res && res.showdown && winCards.size && c != null ? (winCards.has(c) ? ' wincard' : ' dim') : '';
-        if(isMe) return cardHTML(c, `hero ${p.folded ? 'dim' : ''}${hl} ${anim}`);
-        if(c != null) return cardHTML(c, `show${hl}`);
+        if(isMe) return cardHTML(c, `hero ${p.folded ? 'dim' : ''}${hl === ' dim' ? '' : hl} ${anim}`);
+        if(c != null) return cardHTML(c, `show${hl === ' dim' ? '' : hl}`); // a losing hand stays fully readable at showdown
         return cardHTML(null, `mini ${anim}`);
       }).join('');
     }
@@ -730,6 +745,7 @@ function renderTable(){
     html += `<div class="dealer" style="left:${dd[0] + side}%;top:${dd[1] + (atMe ? -2 : 5)}%">D</div>`;
   }
   $('seats').innerHTML = html;
+  if(res) try{ potToWinners(d, handKey, posOf); }catch(e){}
   $('pot').innerHTML = !res && d.pot > 0 ? `${chipsIcon(3)}Pot ${fmt(d.pot)}` : '';
   $('pot').style.visibility = $('pot').innerHTML ? 'visible' : 'hidden';
   let b = '';
