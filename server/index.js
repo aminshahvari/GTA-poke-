@@ -39,8 +39,13 @@ const isOwner = u => u && u.role === 'owner';
 // simple per-IP rate limit for login attempts
 const attempts = new Map();
 const failures = ip => (attempts.get(ip) || []).filter(t => Date.now() - t < 10 * 60000);
-const blocked = ip => process.env.FAST !== '1' && failures(ip).length >= 15;
-const recordFailure = ip => attempts.set(ip, [...failures(ip), Date.now()]);
+const blocked = (key, max = 15) => process.env.FAST !== '1' && failures(key).length >= max;
+const recordFailure = key => { if(attempts.size > 5000) for(const k of attempts.keys()){ if(!failures(k).length) attempts.delete(k); } attempts.set(key, [...failures(key), Date.now()]); };
+// The proxy in front of us appends the real client address to the right of x-forwarded-for; anything to its left is
+// whatever the caller sent, so it can't be trusted for rate limiting.
+const clientIp = req => String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean).pop() || req.socket.remoteAddress || '';
+// Per-account limit, which no header can get around: 10 wrong tries on one name locks that name for 10 minutes.
+const acctKey = (path, data) => path === '/api/login' ? 'acct:' + cleanName(data && data.name).toLowerCase() : path === '/api/resetOwner' ? 'acct:#owner' : null;
 
 const api = {
   // first-time setup of the club owner, guarded by OWNER_CODE from the environment
@@ -138,19 +143,22 @@ const server = http.createServer((req, res) => {
   if(req.method === 'GET' && url.pathname === '/healthz') return send(res, 200, { ok: true });
   if(process.env.FAST === '1' && url.pathname === '/debug/chips'){ const t = club.T(); return send(res, 200, { chips: club.totalChips(), expected: t && t.status === 'running' ? t.stack * t.entrants : null, tables: club.tablesSummary(), hfh: club.hfhState(), detail: process.env.DEBUG_CHIPS ? [...club.tables.values()].map(tb => ({ tid: tb.tid, broken: tb.broken, toBreak: tb.toBreak, inHand: tb.inHand, seats: tb.g.seats.map((p, i) => p && [i, p.uid, p.stack, p.start]).filter(Boolean), hp: tb.g.hand ? tb.g.hand.players.map(p => [p.seat, p.uid, p.start]) : [] })) : undefined }); }
   if(req.method === 'POST' && url.pathname.startsWith('/api/')){
-    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
+    const ip = 'ip:' + clientIp(req);
     let body = '';
     const limit = url.pathname === '/api/avatar' ? 70000 : 10000;
     req.on('data', c => { body += c; if(body.length > limit) req.destroy(); });
     req.on('end', () => {
+      let acct = null;
       try{
-        const fn = api[url.pathname.slice(5)];
+        const name = url.pathname.slice(5), fn = Object.hasOwn(api, name) && api[name];
         if(!fn) return send(res, 404, { error: 'Not found' });
-        if(blocked(ip)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
+        if(blocked(ip, 30)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const data = body ? JSON.parse(body) : {};
+        acct = acctKey(url.pathname, data);
+        if(acct && blocked(acct, 10)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
         send(res, 200, fn(data, u));
-      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)) recordFailure(ip); send(res, 400, { error: e.message || 'Something went wrong.' }); }
+      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); } send(res, 400, { error: e.message || 'Something went wrong.' }); }
     });
     return;
   }
@@ -308,7 +316,8 @@ club.setHooks({ onNotice: notice, onCoach: (uid, h) => { const msg = { t: 'coach
 
 wss.on('connection', (ws, req) => {
   const origin = req.headers.origin;
-  if(origin && new URL(origin).host !== req.headers.host){ ws.close(1008, 'origin'); return; }
+  let originHost = null; try{ originHost = origin && new URL(origin).host; }catch(e){}
+  if(origin && originHost !== req.headers.host){ ws.close(1008, 'origin'); return; }
   sockets.add(ws);
   ws.ip = ipOf(req);
   ws.isAlive = true;
