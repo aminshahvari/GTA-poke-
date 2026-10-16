@@ -132,10 +132,11 @@ function inviteCode(u, group){
 const invitedCount = uid => store.values('user:').filter(x => !x.removed && x.invitedBy === uid).length;
 
 // ---------- HTTP ----------
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.wasm': 'application/wasm', '.gz': 'application/octet-stream' };
 const SECURITY = {
-  // cdn.jsdelivr.net, wasm and blob workers: only for the on-phone business card reader (Tesseract.js, pinned version, loaded when the scanner opens)
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; frame-ancestors 'none'",
+  // Everything the app runs comes from this server. 'wasm-unsafe-eval' lets the on-phone business card reader
+  // (Tesseract.js, served from /vendor/) compile its WebAssembly; it does not allow eval() of JavaScript.
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer'
 };
 // Business Club data is for signed-in members only and must never be indexed
@@ -188,7 +189,10 @@ const server = http.createServer((req, res) => {
   if(file === 'engine.js') return fs.readFile(path.join(__dirname, 'engine.js'), (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES['.js']));
   const full = path.join(PUBLIC, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
   if(!full.startsWith(PUBLIC)) return send(res, 404, 'Not found', 'text/plain');
-  fs.readFile(full, (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES[path.extname(full)] || 'application/octet-stream'));
+  // pinned third-party files (public/vendor/<name>-<version>/): never change at a given path, so phones may keep them for a year.
+  // eng.traineddata.gz goes out as plain bytes with no Content-Encoding; the card reader unzips it itself.
+  const cache = url.pathname.startsWith('/vendor/') ? { 'Cache-Control': 'public, max-age=31536000, immutable' } : undefined;
+  fs.readFile(full, (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES[path.extname(full)] || 'application/octet-stream', cache));
 });
 
 // ---------- realtime ----------
