@@ -10,7 +10,7 @@ Prepared 2026-10-16 23:40 UTC. Nothing was modified: no database record, no Rend
 |---|---|
 | Render MCP `query_render_postgres` (read-only transaction) on `dpg-db8qnj49v7es73dhrdm0-a` (gta-poker-staging-db) | **Refused**: "This database blocks all external connections because its IP allowlist is empty" (`get_postgres`: `ipAllowList: []`). |
 | psql / node from Claude's container | Not possible: same allowlist; container egress to onrender.com is also refused. |
-| Render Shell / SSH on the staging web service | Not available on the free instance type (Render offers Shell/SSH only on paid instances). Not attempted. |
+| Render Shell / SSH on the staging web service | Render documents Shell/SSH as paid-instance features and this service is on the free plan; not attempted, so this is inferred, not tested. |
 | Staging `/healthz` | Reports the running process's epoch (in memory), not a database read. Unreachable from here. |
 
 Every direct route needs a configuration change (an IP allowlist entry), which is outside this authorization. So per instruction 2 the query is handed to Muse.
