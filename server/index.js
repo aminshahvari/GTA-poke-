@@ -389,6 +389,13 @@ wss.on('connection', (ws, req) => {
 function own(u){ if(!isOwner(u)) throw new Error('Only the club owner can do that.'); }
 setInterval(() => { for(const ws of sockets){ if(!ws.isAlive){ ws.terminate(); continue; } ws.isAlive = false; ws.ping(); } }, 30000);
 
+// Staging must never point at the production database: refuse to start if it does.
+const PROD_DB_HOST = 'dpg-db81kuom7kps73cmh9dg-a';
+if(process.env.STAGING === '1' && String(process.env.DATABASE_URL || '').includes(PROD_DB_HOST)){
+  console.error('STAGING=1 but DATABASE_URL points at the production database. Refusing to start.');
+  process.exit(1);
+}
+
 (async () => {
   await store.init();
   if(club.resume()) console.log('resumed running tournament');

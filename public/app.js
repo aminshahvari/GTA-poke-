@@ -1318,3 +1318,6 @@ async function demoLoop(D){
 
 connect();
 })();
+
+// Staging copy: a banner on every screen so test data is never mistaken for the real club.
+if(/staging/i.test(location.hostname)){ const b = document.createElement('div'); b.className = 'staging-banner'; b.textContent = 'STAGING · test data only'; document.body.appendChild(b); }

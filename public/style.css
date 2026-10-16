@@ -650,3 +650,5 @@ body{font-size:15px;letter-spacing:0}
   #auth .logo .tagline{font-size:18px}
   #auth #globe{top:45%;width:110%}
 }
+
+.staging-banner{position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:99;background:#b8161f;color:#fff;font:600 11px/1 system-ui,sans-serif;letter-spacing:.08em;padding:4px 10px;border-radius:0 0 8px 8px;pointer-events:none}
