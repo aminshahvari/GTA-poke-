@@ -2,7 +2,7 @@
 
 Branch `p0-deploy-race`, from `staging` at `a3c67e9`. Fix commit: `78fbfb0` (code and tests; unchanged since). Merged into `staging` as `9026503` and **deployed to staging only** (section 3). Not merged into `main`; production untouched (`main` stays at `4d1be3b`).
 
-> **Correction log (C3).** The first version of this README (commit `78fbfb0`) was written before any staging deploy and said "not deployed to staging" and, in section 3, "Two staging deployments ... NOT VERIFIED". Both statements were true when written and are now out of date: the staging deploys are recorded in section 3 (added in `7ec0539`, wording fixed in `9b36126`) and the controlled C1 deploy in section 5. The original text is preserved in git history (`git show 78fbfb0:docs/evidence/p0/README.md`). No evidence file from `78fbfb0` (`logs/phase1-run*.log`, `logs/race-repro-after-fix.log`, `logs/npm-test.log`, `server-index.diff`, `race-repro.js`) was changed; new evidence is only added as new files.
+> **Correction log (C3).** The first version of this README (commit `78fbfb0`) was written before any staging deploy and said "not deployed to staging" and, in section 3, "Two staging deployments ... NOT VERIFIED". Both statements were true when written and are now out of date: the staging deploys are recorded in section 3 (added in `7ec0539`, wording fixed in `9b36126`) and the controlled C1 deploy in section 5; the C2 health-check proposal is `c2-healthcheck-proposal.md`. The original text is preserved in git history (`git show 78fbfb0:docs/evidence/p0/README.md`). No evidence file from `78fbfb0` (`logs/phase1-run*.log`, `logs/race-repro-after-fix.log`, `logs/npm-test.log`, `server-index.diff`, `race-repro.js`) was changed; new evidence is only added as new files.
 Spec: evidence package `audit-evidence-2026-10-16`, `docs/evidence/2026-10-16/02-deploy-race.md`, sections 7.1 and 7.2.
 
 Labels: **IMPLEMENTED**, **TESTED** (local), **NOT IMPLEMENTED**, **NOT VERIFIED**.
@@ -59,6 +59,31 @@ Deploys 2 and 3 are the two consecutive deploys where both old and new servers r
 
 - **Risk 7.3 (SIGTERM to the fenced process):** the line "SIGTERM after lease loss: exiting" did **not** appear for cgmzn or 6vf5h; neither logged anything after fencing. Render may have stopped the instance without a SIGTERM reaching the process, or the last lines were lost when the instance was removed. Either way neither process claimed the lease again or wrote to the database (no epoch beyond the next deploy's).
 - **Health check path** (`/healthz`) is not set on either Render service.
+
+## 5. C1: one controlled staging deploy (Muse condition C1)
+
+Raw record: `logs/render-c1-controlled-deploy.log`. One deploy only (`dep-db99g30n74is73et5bp0`, 21:33 UTC); no repeat deploys.
+
+**Pre-checks.** Staging live on `9026503`, whose server/lib/test code is identical to the reviewed fix `78fbfb0`. Service: free plan, 1 instance, `healthCheckPath` unset, start command `npm start`, auto-deploy from `staging`. Rollback target: `a3c67e9` (deploy `dep-db97kbvavr4c73dr7hrg`). The instance was asleep, so the owner signed in to wake it (epoch 14 at 21:29:23) before the deploy. `/healthz` and the staging database cannot be reached from this environment (outbound access to onrender.com is refused; the database has an empty IP allowlist), so health was taken from Render logs, events and metrics.
+
+**Timeline.** 21:33:42.849 new instance `gllcb` claimed **epoch 15**; 21:33:43.66 Render marked the previous deploy deactivated; 21:33:43.81 live. Observed until 22:06 (32 minutes after the handover).
+
+| Check | Result | Evidence |
+|---|---|---|
+| Exactly one leadership handoff | **PASS**: 14 -> 15, nothing else | only two epoch lines in the window |
+| No lease reacquisition | **PASS**: no epoch 16, old instance never logged again | logs through 22:06:01 |
+| No stale writes | **PASS (indirect)**: no "lease lost", no rolled-back flush, no "store write failed" from any instance | logs; the database itself could not be queried |
+| "SIGTERM after lease loss: exiting" | **NOT OBSERVED** | no line at all from `4l5gs` after 21:29:23 |
+| Render-confirmed removal of the old instance | **PARTIAL**: Render metrics for `4l5gs` stop after the 21:33 sample and the old deploy is `deactivated` at 21:33:43; Render has no explicit "instance terminated" event | `get_metrics`, `list_deploys`, `list_events` |
+| No unexpected availability regression | **NOT MEASURED**: free plan has no request logs and the site cannot be reached from here; no `server_failed` / `server_restarted` events | `list_events` |
+
+**Difference from deploys 2 and 3.** There the old instance logged "lease lost: staying up and answering 503" 0.1 to 0.6 s after the new claim. This time the old instance logged nothing after the claim, although its 3 s heartbeat would have detected the loss. So it was either stopped before its next heartbeat or its last lines were not shipped. Across the whole day no "shutting down: SIGTERM" line from any instance appears in Render logs either, even where the old code would have logged one, so lines written while an instance is being stopped appear not to reach Render's log stream. **Inferred, not verified**: one possible cause is the `npm start` wrapper (signal and output handling between npm and node).
+
+### Remaining risks
+1. SIGTERM handling of a fenced process is proven locally (`sigterm_after_loss`, exit 0 in under 10 ms) but not on Render.
+2. Fenced window: in deploys 2 and 3 the old instance answered 503 for 2 to 10 s before Render switched traffic; clients reconnect (code 4001), but requests in that window fail.
+3. Health check path: see `c2-healthcheck-proposal.md`; setting `/healthz` as it is could re-create the ping-pong.
+4. The staging database and HTTP endpoints could not be inspected directly from this environment.
 
 ## 4. Re-run
 

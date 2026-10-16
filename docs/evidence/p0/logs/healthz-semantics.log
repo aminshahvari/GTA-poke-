@@ -1,0 +1,6 @@
+1 leader, healthy          /healthz 200 {"ok":true,"mode":"postgres","epoch":1,"leaseLost":false,"dirty":0,"lastWriteError":null} | /  200
+2 A after B took the lease /healthz 503 {"ok":false,"mode":"postgres","epoch":1,"leaseLost":true,"dirty":0,"lastWriteError":null} | /  503 | A alive: true
+2 B new leader             /healthz 200 {"ok":true,"mode":"postgres","epoch":2,"leaseLost":false,"dirty":0,"lastWriteError":null}
+3 leader, database down    /healthz 200 {"ok":true,"mode":"postgres","epoch":1,"leaseLost":false,"dirty":0,"lastWriteError":{"message":"p1 fake pg: connection refused","ageMs":1105}}
+4 SIGTERM, final save      /healthz no answer (ECONNREFUSED)
+  C exit {"code":0,"signal":null}

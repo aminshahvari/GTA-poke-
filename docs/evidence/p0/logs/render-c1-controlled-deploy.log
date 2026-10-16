@@ -1,0 +1,34 @@
+# C1 controlled staging deploy. Service srv-db8qnn6i0phs738m9ajg (gta-poker-staging), commit 9026503 (= fix 78fbfb0;
+# `git diff 78fbfb0 9026503 -- server lib test package.json` is empty). Render list_logs / list_events / list_deploys /
+# get_metrics, queried 21:25-22:06 UTC 2026-10-16. Timestamps UTC.
+
+## Pre-checks (21:25)
+service: autoDeploy yes (branch staging), plan free, numInstances 1, healthCheckPath "" (unset), startCommand "npm start"
+live deploy: dep-db99054s728c73ff95gg (commit 9026503), status live
+rollback target: commit a3c67e9 (pre-P0 staging), deploy dep-db97kbvavr4c73dr7hrg
+health: /healthz not reachable from this environment (egress to onrender.com refused); staging DB not reachable (empty IP allowlist).
+state: instance asleep (free plan); woken by the owner signing in as Test Director.
+
+## Wake (no old instance)
+21:29:23.257  4l5gs  store: postgres, 73 keys, lease epoch 14 (srv-db8qnn6i0phs738m9ajg-hibernate-566dfd444-4l5gs:64)
+21:29:23.462  4l5gs  Blindrise poker club on :10000
+
+## Controlled deploy dep-db99g30n74is73et5bp0 (API trigger 21:33:00)
+21:33:01.651  event  deploy_started
+21:33:21.699  event  build_ended succeeded
+21:33:42.849  gllcb  store: postgres, 74 keys, lease epoch 15 (srv-db8qnn6i0phs738m9ajg-hibernate-79cf987d5f-gllcb:83)
+21:33:43.045  gllcb  Blindrise poker club on :10000
+21:33:43.658  deploy dep-db99054s728c73ff95gg (old) status -> deactivated (updatedAt 21:33:43.657)
+21:33:43.776  event  deploy_ended succeeded
+21:33:43.810  ---    Your service is live
+21:38:50.103  ---    Detected service running on port 10000
+(no other app log lines from any instance through 22:06:01)
+
+## Old instance 4l5gs after the handover
+app log lines from 4l5gs after 21:29:23.678: NONE (no "lease lost", no "shutting down", no "SIGTERM after lease loss")
+Render metrics, instance 4l5gs: memory samples 21:30, 21:31, 21:32, 21:33; cpu 21:31, 21:32, 21:33; nothing from 21:34 on
+Render metrics, instance gllcb: memory/cpu every minute 21:34 .. 21:49 (then idle sleep, free plan)
+Render events 21:33:30 .. 22:06: only deploy_ended (no server_failed, server_restarted)
+
+## Lease epochs seen in the whole window
+14 (wake, 4l5gs) -> 15 (deploy, gllcb). No 16. No "lease lost" lines from anyone.
