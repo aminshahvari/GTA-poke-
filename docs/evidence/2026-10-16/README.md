@@ -101,7 +101,7 @@ Every script spawns its own local server(s) on a random port with `STAGING=1` (f
 
 ## Environment and what could not be verified
 
-- Runs were done on 2026-10-16 between 19:39 and about 20:20 UTC in a Linux sandbox (Node v22.22.0, headless Chromium build 1194 via `playwright-core` 1.56.1).
+- Runs were done on 2026-10-16 between 19:39 and 20:10 UTC in a Linux sandbox (Node v22.22.0, headless Chromium build 1194 via `playwright-core` 1.56.1).
 - **Live staging (`gta-poker-staging.onrender.com`) and Render were not reachable** from the sandbox. Render log lines in `02-deploy-race.md` were **copied from Render logs by the coordinator** and are quoted as such.
 - **Real devices, iOS Safari, Android Chrome, Samsung Internet: NOT VERIFIED.** Only desktop Chromium (headless) with phone viewport emulation.
 - **Google Fonts** cannot be reached from the sandbox; screenshots used locally served IBM Plex files (npm `@fontsource/ibm-plex-sans`) through request routing. The app itself still links Google Fonts (pre-existing since before BC1).
@@ -109,6 +109,22 @@ Every script spawns its own local server(s) on a random port with `STAGING=1` (f
 
 ## GitHub accessibility check
 
-See the section below, filled in after the branch was pushed.
+Checked on 2026-10-16 at 20:10 UTC, right after pushing commit `b2f241c` (the first commit of this branch; this README section was added in the next commit). The repository `aminshahvari/GTA-poke-` is **public** (`"private": false, "visibility": "public"`), so the reviewer can read the branch without an account.
 
-<!-- GITHUB-CHECK -->
+```
+$ gh api repos/aminshahvari/GTA-poke-/branches/audit-evidence-2026-10-16 --jq '[.name,.commit.sha]|@tsv'
+audit-evidence-2026-10-16	b2f241cfb37f15948ea0eed1cc0bcd795944b2c5
+
+$ gh api "repos/aminshahvari/GTA-poke-/contents/docs/evidence/2026-10-16/<file>?ref=audit-evidence-2026-10-16" --jq '[.path,.size,.sha,.type,.encoding]|@tsv'
+docs/evidence/2026-10-16/README.md                                            10620   a2156a4aaaf318899fd615eff9c5f0ab974bca02  file  base64
+docs/evidence/2026-10-16/02-deploy-race.md                                    17654   48bbccf683bc550e0fe60406e8774710b8138965  file  base64
+docs/evidence/2026-10-16/scripts/acceptance.js                                23591   1643e0c91c6856a548063f70929137f62b21be6e  file  base64
+docs/evidence/2026-10-16/screens/acceptance/S4-07-sender-sees-only-phone.png  157069  d5d528408cd6b6762fedbdfb1a71505ed398dc22  file  base64
+docs/evidence/2026-10-16/raw/moderation.json                                  34035   eceac4c390a254e81ce04f9f86d14f0ebcbabf5f  file  base64
+```
+
+Byte-for-byte comparison of what GitHub serves with the local files:
+- `README.md` (as of `b2f241c`): content from the API, base64-decoded, sha256 `4a8eb1973bcc74ba871eb6de947fec65af281822056518cb7aca4001726ba6ad` = local file; the API blob sha `a2156a4…` = local `git hash-object`.
+- `screens/acceptance/S4-07-sender-sees-only-phone.png` downloaded raw (`-H "Accept: application/vnd.github.raw"`): sha256 `df602d8264168479e1c25be0c5819d5f448bf045c9be406629df7fbe30dc8e3d` = local file.
+
+Result: **accessible and identical**. Browse: https://github.com/aminshahvari/GTA-poke-/tree/audit-evidence-2026-10-16/docs/evidence/2026-10-16
