@@ -141,7 +141,9 @@ function send(res, code, body, type = 'application/json'){
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if(process.env.STAGING === '1' && url.pathname === '/api/status') console.log('staging xff:', JSON.stringify({ xff: req.headers['x-forwarded-for'] || null, tci: req.headers['true-client-ip'] || null, cf: req.headers['cf-connecting-ip'] || null, remote: req.socket.remoteAddress }));
-  if(req.method === 'GET' && url.pathname === '/healthz') return send(res, 200, { ok: true });
+  // 503 until the lease is held and state is loaded, and again while shutting down (Render routes only to 200s)
+  if(req.method === 'GET' && url.pathname === '/healthz'){ const ok = ready && !stopping; return send(res, ok ? 200 : 503, { ok, ...store.health() }); }
+  if(stopping) return send(res, 503, { error: 'Server is restarting. Try again in a moment.' });
   if(process.env.FAST === '1' && url.pathname === '/debug/chips'){ const t = club.T(); return send(res, 200, { chips: club.totalChips(), expected: t && t.status === 'running' ? t.stack * t.entrants : null, tables: club.tablesSummary(), hfh: club.hfhState(), detail: process.env.DEBUG_CHIPS ? [...club.tables.values()].map(tb => ({ tid: tb.tid, broken: tb.broken, toBreak: tb.toBreak, inHand: tb.inHand, seats: tb.g.seats.map((p, i) => p && [i, p.uid, p.stack, p.start]).filter(Boolean), hp: tb.g.hand ? tb.g.hand.players.map(p => [p.seat, p.uid, p.start]) : [] })) : undefined }); }
   if(req.method === 'POST' && url.pathname.startsWith('/api/')){
     const ip = 'ip:' + clientIp(req);
@@ -325,6 +327,7 @@ wss.on('connection', (ws, req) => {
   ws.on('pong', () => ws.isAlive = true);
   ws.on('close', () => sockets.delete(ws));
   ws.on('message', raw => {
+    if(stopping) return; // shutting down: no more actions
     let m; try{ m = JSON.parse(raw); }catch(e){ return; }
     if(!m || typeof m !== 'object') return;
     if(m.t === 'hello'){
@@ -397,6 +400,24 @@ if(process.env.STAGING === '1' && String(process.env.DATABASE_URL || '').include
   process.exit(1);
 }
 
+// ---------- single writer / shutdown ----------
+// A newer instance took the lease (deploy), or Render sent SIGTERM: stop the game, save once if we still own the
+// state, tell clients to reconnect (4001 lands them on the new instance) and exit well inside Render's 30 s grace.
+let ready = false, stopping = false;
+async function shutdown(why, leaseLost){
+  if(stopping) return; stopping = true;
+  console.log('shutting down:', why);
+  club.stopAll(); store.freeze();
+  const saved = leaseLost ? false : await Promise.race([store.flush(), new Promise(r => setTimeout(r, 10000, false))]);
+  console.log('final save', saved ? 'done' : 'skipped or incomplete', JSON.stringify(store.health()));
+  for(const ws of sockets) try{ ws.close(4001, 'server moved'); }catch(e){}
+  server.close();
+  setTimeout(() => process.exit(leaseLost ? 1 : 0), 300);
+}
+store.onLost(e => shutdown(e.message, true));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
 (async () => {
   await store.init();
   // Staging only: on an empty database, create a test director and fake members so there is something to test with.
@@ -407,8 +428,9 @@ if(process.env.STAGING === '1' && String(process.env.DATABASE_URL || '').include
       console.log('staging: seeded Test Director and 12 fake members');
     }catch(e){ console.error('staging seed failed', e.message); }
   }
+  if(stopping) return;
   if(club.resume()) console.log('resumed running tournament');
-  server.listen(PORT, () => console.log(`Blindrise poker club on :${PORT}`));
+  server.listen(PORT, () => { ready = true; console.log(`Blindrise poker club on :${PORT}`); });
   if(!process.env.NO_BEACON) fair.probe();
 })();
 module.exports = { server };

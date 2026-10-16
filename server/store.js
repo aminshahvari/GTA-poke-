@@ -1,21 +1,46 @@
 // Tiny key-value store. Everything is kept in memory for fast, synchronous reads.
 // Writes are persisted to Postgres when DATABASE_URL is set, otherwise to a JSON file.
+// Postgres mode is single-writer: a lease row kv('lease') = {epoch, instance, at}. On boot an instance bumps the epoch
+// (claiming the lease) BEFORE loading state; every flush is one transaction that first locks the lease row and checks
+// the epoch is still ours. If a newer instance took over (a Render deploy), the flush rolls back, the store stops
+// writing for good and onLost() fires. File mode (local dev/tests) has no fencing: run one process per file.
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
+const LEASE = 'lease', BEAT_MS = 3000;
+const UPSERT = 'insert into kv (k, v) values ($1, $2) on conflict (k) do update set v = excluded.v';
+const INSTANCE = (process.env.RENDER_INSTANCE_ID || os.hostname()) + ':' + process.pid;
 const cache = new Map();
 let pool = null, file = null, saveTimer = null;
 const dirty = new Set();
-let flushing = false;
+let flushP = null, epoch = null, lost = false, frozen = false, beat = false, lastWriteError = null, onLost = () => {};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// one transaction on one pooled connection; any throw rolls back
+async function tx(fn){
+  const c = await pool.connect();
+  let bad = null;
+  try{ await c.query('begin'); const r = await fn(c); await c.query('commit'); return r; }
+  catch(e){ bad = e; try{ await c.query('rollback'); }catch(_){} throw e; }
+  finally{ c.release(bad && !bad.lost ? bad : undefined); }
+}
+const leaseRow = async c => { const { rows } = await c.query('select v from kv where k = $1 for update', [LEASE]); return (rows[0] && rows[0].v) || {}; };
 
 async function init(){
   if(process.env.DATABASE_URL){
     const { Pool } = require('pg');
     pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.PGSSL === '1' ? { rejectUnauthorized: false } : undefined, max: 4 });
+    pool.on('error', e => console.error('store: idle client error', e.message));
     await pool.query('create table if not exists kv (k text primary key, v jsonb not null)');
+    // claim the lease first, then load: anything the previous instance writes after this is fenced out
+    await pool.query('insert into kv (k, v) values ($1, $2) on conflict (k) do nothing', [LEASE, JSON.stringify({ epoch: 0 })]);
+    await tx(async c => { const cur = await leaseRow(c); epoch = (+cur.epoch || 0) + 1; await c.query(UPSERT, [LEASE, JSON.stringify({ epoch, instance: INSTANCE, at: Date.now() })]); });
     const { rows } = await pool.query('select k, v from kv');
-    rows.forEach(r => cache.set(r.k, r.v));
-    console.log(`store: postgres, ${rows.length} keys`);
+    rows.forEach(r => { if(r.k !== LEASE) cache.set(r.k, r.v); });
+    console.log(`store: postgres, ${cache.size} keys, lease epoch ${epoch} (${INSTANCE})`);
+    // heartbeat: also notices a lost lease while nothing is dirty
+    setInterval(() => { beat = true; schedule(); }, BEAT_MS).unref();
   } else {
     file = process.env.DATA_FILE || path.join(__dirname, '..', 'data', 'club.json');
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -24,36 +49,53 @@ async function init(){
   }
 }
 
+function writeFile(){ const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(cache))); fs.renameSync(tmp, file); }
 function schedule(){
-  if(file){
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      const tmp = file + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(cache)));
-      fs.renameSync(tmp, file);
-    }, 150);
-    return;
-  }
-  if(flushing) return;
-  flushing = true;
-  setImmediate(async () => {
-    while(dirty.size){
-      const keys = [...dirty]; dirty.clear();
-      for(const k of keys){
-        try{
-          if(cache.has(k)) await pool.query('insert into kv (k, v) values ($1, $2) on conflict (k) do update set v = excluded.v', [k, JSON.stringify(cache.get(k))]);
-          else await pool.query('delete from kv where k = $1', [k]);
-        }catch(e){ console.error('store write failed', k, e.message); dirty.add(k); await new Promise(r => setTimeout(r, 1000)); }
-      }
+  if(file){ clearTimeout(saveTimer); saveTimer = setTimeout(writeFile, 150); return; }
+  if(flushP || lost) return;
+  // starts on the next tick, so writes made in one synchronous step of game logic land in the same batch
+  flushP = new Promise(r => setImmediate(r)).then(drain).finally(() => { flushP = null; });
+}
+async function drain(){
+  while((dirty.size || beat) && !lost){
+    const keys = [...dirty], hb = beat; dirty.clear(); beat = false;
+    try{
+      await tx(async c => {
+        const cur = await leaseRow(c);
+        if(cur.epoch !== epoch){ const e = new Error(`lease lost: epoch ${cur.epoch} held by ${cur.instance}, ours was ${epoch}`); e.lost = true; throw e; }
+        for(const k of keys){
+          if(cache.has(k)) await c.query(UPSERT, [k, JSON.stringify(cache.get(k))]);
+          else await c.query('delete from kv where k = $1', [k]);
+        }
+        if(hb) await c.query(UPSERT, [LEASE, JSON.stringify({ epoch, instance: INSTANCE, at: Date.now() })]);
+      });
+      lastWriteError = null;
+    }catch(e){
+      keys.forEach(k => dirty.add(k)); // the whole batch stays dirty and is retried
+      if(e.lost){ lost = true; console.error('store:', e.message); try{ onLost(e); }catch(_){} return; }
+      lastWriteError = { message: String(e.message).replace(/\w+:\/\/\S+/g, '<url>'), at: Date.now() };
+      console.error('store write failed', keys.length, 'keys:', e.message);
+      await sleep(1000);
     }
-    flushing = false;
-  });
+  }
+}
+// Final save on shutdown: resolves true once nothing is left dirty (false if the lease is lost or the db is down).
+async function flush(){
+  if(file){ clearTimeout(saveTimer); writeFile(); return true; }
+  if(lost) return false;
+  schedule();
+  while(flushP) await flushP;
+  return !lost && !dirty.size;
 }
 
 const get = k => cache.get(k);
-function set(k, v){ cache.set(k, v); dirty.add(k); schedule(); return v; }
-function del(k){ cache.delete(k); dirty.add(k); schedule(); }
+function set(k, v){ if(frozen) return v; cache.set(k, v); dirty.add(k); schedule(); return v; }
+function del(k){ if(frozen) return; cache.delete(k); dirty.add(k); schedule(); }
 const keys = prefix => [...cache.keys()].filter(k => k.startsWith(prefix));
 const values = prefix => keys(prefix).map(k => cache.get(k));
+// freeze(): ignore all later changes, so the final flush saves the state as of shutdown
+const freeze = () => { frozen = true; };
+const health = () => ({ mode: file ? 'file' : pool ? 'postgres' : null, epoch, leaseLost: lost, dirty: dirty.size,
+  lastWriteError: lastWriteError && { message: lastWriteError.message, ageMs: Date.now() - lastWriteError.at } });
 
-module.exports = { init, get, set, del, keys, values };
+module.exports = { init, get, set, del, keys, values, flush, freeze, health, onLost: fn => { onLost = fn; } };

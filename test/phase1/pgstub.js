@@ -4,8 +4,8 @@
 // can inject faults described by P1_FAULT (JSON):
 //   { "match": { "key": "tourney" | "prefix": "history:", "minPlaces": 1, "status": "finished" },
 //     "action": "down" | "kill" }
-// After the first matching upsert is persisted, "down" makes every later query throw (database unreachable) and
-// "kill" SIGKILLs this process on the spot (a crash between two per-key writes).
+// After the first matching upsert is persisted (with the rest of its transaction), "down" makes every later query
+// throw (database unreachable) and "kill" SIGKILLs this process on the spot.
 // P1_DB_LATENCY_MS adds a delay to every query, like the round trip to a hosted database.
 const Module = require('module');
 const fs = require('fs');
@@ -29,33 +29,67 @@ function matches(k, v){
   return true;
 }
 
+// Transactions: BEGIN takes a database-wide lock (a lock dir shared by all processes on P1_DB_DIR; stolen if its
+// holder died), writes are buffered and applied at COMMIT, ROLLBACK drops them. Stronger than Postgres row locks,
+// but it gives the same answers for the lease row's SELECT ... FOR UPDATE.
+const LOCK = path.join(DIR, '.txlock');
+const alive = pid => { try{ process.kill(pid, 0); return true; }catch(e){ return e.code === 'EPERM'; } };
+async function lock(){
+  for(;;){
+    try{ fs.mkdirSync(LOCK); fs.writeFileSync(path.join(LOCK, 'pid'), String(process.pid)); return; }
+    catch(e){
+      if(e.code !== 'EEXIST') throw e;
+      let pid = 0; try{ pid = +fs.readFileSync(path.join(LOCK, 'pid'), 'utf8'); }catch(_){}
+      if(pid && !alive(pid)) try{ fs.rmSync(LOCK, { recursive: true, force: true }); continue; }catch(_){}
+      await new Promise(r => setTimeout(r, 2));
+    }
+  }
+}
+const unlock = () => { try{ fs.rmSync(LOCK, { recursive: true, force: true }); }catch(e){} };
+function readAll(){
+  return fs.readdirSync(DIR).filter(f => f.endsWith('.json')).map(f => {
+    try{ return { k: decodeURIComponent(f.slice(0, -5)), v: JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')) }; }catch(e){ return null; }
+  }).filter(Boolean);
+}
+function put(k, json){ const tmp = fileOf(k) + '.' + process.pid + '.tmp'; fs.writeFileSync(tmp, json); fs.renameSync(tmp, fileOf(k)); }
+// faults fire after a whole commit is on disk (Postgres commits are atomic), or after a lone upsert outside a transaction
+function check(written){
+  for(const [k, json] of written) if(matches(k, JSON.parse(json))){
+    fired = true;
+    process.stderr.write(`P1FAULT fired on ${k} action=${fault.action}\n`);
+    if(fault.action === 'kill') process.kill(process.pid, 'SIGKILL');
+    if(fault.action === 'down') down = true;
+  }
+}
+async function run(sql, params, txn){
+  if(LATENCY) await new Promise(r => setTimeout(r, LATENCY));
+  if(down) throw new Error('p1 fake pg: connection refused');
+  const s = sql.trim().toLowerCase();
+  if(s.startsWith('create table')) return { rows: [] };
+  if(s === 'begin'){ await lock(); txn.ops = []; return { rows: [] }; }
+  if(s === 'commit'){ const ops = txn.ops || [], w = []; txn.ops = null; try{ for(const op of ops) op(w); } finally{ unlock(); } check(w); return { rows: [] }; }
+  if(s === 'rollback'){ if(txn.ops) unlock(); txn.ops = null; return { rows: [] }; }
+  const later = op => { if(txn && txn.ops) txn.ops.push(op); else { const w = []; op(w); check(w); } return { rows: [] }; };
+  if(s.startsWith('select')){
+    const rows = readAll();
+    return { rows: / where k = \$1/.test(s) ? rows.filter(r => r.k === params[0]) : rows };
+  }
+  if(s.startsWith('insert')){
+    const [k, json] = params;
+    if(/do nothing/.test(s) && fs.existsSync(fileOf(k))) return { rows: [] };
+    return later(w => { put(k, json); w.push([k, json]); });
+  }
+  if(s.startsWith('delete')) return later(() => { try{ fs.unlinkSync(fileOf(params[0])); }catch(e){} });
+  throw new Error('pgstub: unexpected sql ' + sql);
+}
+
 class Pool {
   constructor(){}
-  async query(sql, params){
-    if(LATENCY) await new Promise(r => setTimeout(r, LATENCY));
-    if(down) throw new Error('p1 fake pg: connection refused');
-    const s = sql.trim().toLowerCase();
-    if(s.startsWith('create table')) return { rows: [] };
-    if(s.startsWith('select')){
-      const rows = fs.readdirSync(DIR).filter(f => f.endsWith('.json')).map(f => {
-        try{ return { k: decodeURIComponent(f.slice(0, -5)), v: JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')) }; }catch(e){ return null; }
-      }).filter(Boolean);
-      return { rows };
-    }
-    if(s.startsWith('insert')){
-      const [k, json] = params, v = JSON.parse(json);
-      const tmp = fileOf(k) + '.' + process.pid + '.tmp';
-      fs.writeFileSync(tmp, json); fs.renameSync(tmp, fileOf(k));
-      if(matches(k, v)){
-        fired = true;
-        process.stderr.write(`P1FAULT fired on ${k} action=${fault.action}\n`);
-        if(fault.action === 'kill') process.kill(process.pid, 'SIGKILL');
-        if(fault.action === 'down') down = true;
-      }
-      return { rows: [] };
-    }
-    if(s.startsWith('delete')){ try{ fs.unlinkSync(fileOf(params[0])); }catch(e){} return { rows: [] }; }
-    throw new Error('pgstub: unexpected sql ' + sql);
+  on(){}
+  query(sql, params){ return run(sql, params, null); }
+  async connect(){
+    const txn = { ops: null };
+    return { query: (sql, params) => run(sql, params, txn), release(){ if(txn.ops){ txn.ops = null; unlock(); } } };
   }
 }
 

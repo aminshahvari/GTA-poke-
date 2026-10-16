@@ -125,7 +125,8 @@ function connect(){
     if(m.t === 'fair'){ showFair(m.report); return; }
     if(m.t === 'error'){ modal(`<h2>That didn't work</h2><p>${esc(m.error)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
   };
-  ws.onclose = () => { $('offline').hidden = false; setTimeout(connect, Math.min(8000, 500 * 2 ** retry++)); };
+  // 4001: the server handed over to a new instance (deploy), so come back fast instead of backing off
+  ws.onclose = e => { $('offline').hidden = false; setTimeout(connect, e.code === 4001 ? 250 + Math.random() * 750 : Math.min(8000, 500 * 2 ** retry++)); };
 }
 const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
 

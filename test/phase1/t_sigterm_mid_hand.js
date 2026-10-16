@@ -1,14 +1,13 @@
-// 3. sigterm_mid_hand (EXPECTED TO FAIL today)
-// Render stops an instance with SIGTERM. server/index.js installs no SIGTERM/SIGINT handler, and the Postgres store
-// flushes dirty keys one by one in the background (server/store.js:37-50; the file store uses a 150 ms debounce), so
-// whatever is still queued when the signal lands is never written. Runs the real Postgres store path against the fake
+// 3. sigterm_mid_hand (passes since B1: SIGTERM stops the game, flushes once, exits)
+// Render stops an instance with SIGTERM. Before B1 server/index.js installed no SIGTERM/SIGINT handler and whatever
+// the store still had queued when the signal landed was never written. Runs the real Postgres store path against the fake
 // pool with a 3 ms round trip per query (a hosted database in the same region).
 // Case A: SIGTERM the moment clients are shown a bust. Case B: SIGTERM once the next hand is being dealt.
 // After restart: the bust clients saw must still be recorded, that player must not be seated again, places unique,
 // chips conserved. Also reports whether the server flushes before exit.
 const fs = require('fs'), path = require('path');
 const L = require('./lib');
-const NAME = 'sigterm_mid_hand', EXPECT_FAIL = true;
+const NAME = 'sigterm_mid_hand', EXPECT_FAIL = false;
 const procs = []; let clients = [];
 
 async function runCase(label, immediate){

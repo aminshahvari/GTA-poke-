@@ -71,7 +71,7 @@ function connect(port, token, { policy = 'shove', i = 0, ip } = {}){
     c.send = send;
     ws.on('open', () => send({ t: 'hello', token, device: 'p1dev' + i }));
     ws.on('error', e => { if(!c.ready) rej(e); });
-    ws.on('close', () => { c.closed = true; });
+    ws.on('close', (code, why) => { c.closed = true; c.closeCode = code; c.closeReason = String(why); });
     ws.on('message', raw => {
       const m = JSON.parse(raw); c.msgs.push({ at: Date.now(), t: m.t });
       if(m.t === 'auth'){ c.authOk = m.ok; if(!m.ok && !c.ready){ c.ready = true; res(c); } }
