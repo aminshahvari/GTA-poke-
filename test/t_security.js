@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const WebSocket = require('ws');
 const PORT = 3990 + Math.floor(Math.random() * 9), BASE = 'http://localhost:' + PORT;
 const srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: require('os').tmpdir() + '/t_sec_' + process.pid + '.json', FAST: '' }, stdio: 'ignore' });
-const post = (p, body, ip) => fetch(BASE + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(ip ? { 'x-forwarded-for': ip } : {}) }, body: JSON.stringify(body) });
+const post = (p, body, ip, h = {}) => fetch(BASE + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(ip ? { 'x-forwarded-for': ip } : {}), ...h }, body: JSON.stringify(body) });
 (async () => {
   await new Promise(r => setTimeout(r, 900));
   assert.strictEqual((await post('/api/setup', { code: 'secret', name: 'Sean', pin: '1234', agree: true })).status, 200, 'owner set up');
@@ -17,6 +17,12 @@ const post = (p, body, ip) => fetch(BASE + p, { method: 'POST', headers: { 'cont
   assert.ok(codes.slice(0, 10).every(c => c === 400), 'first 10 wrong PINs answered normally');
   assert.deepStrictEqual(codes.slice(10), [429, 429], 'name locked after 10 wrong PINs, even with a new IP each time');
   assert.strictEqual((await post('/api/login', { name: 'Sean', pin: '1234' }, '10.9.9.9')).status, 429, 'locked name stays locked');
+  // Render's real chain (seen on staging): every player's x-forwarded-for ends in the same internal proxy address.
+  const chain = c => `${c}, 162.158.41.82, 10.30.39.19`;
+  codes = [];
+  for(let i = 0; i < 31; i++) codes.push((await post('/api/login', { name: 'Nobody' + i, pin: '1111' }, chain('9.9.9.' + i), { 'cf-connecting-ip': '203.0.113.7' })).status);
+  assert.strictEqual(codes[30], 429, 'one caller is IP-limited after 30 failures, whatever x-forwarded-for says');
+  assert.notStrictEqual((await post('/api/login', { name: 'Nobody', pin: '1111' }, chain('198.51.100.9'), { 'cf-connecting-ip': '198.51.100.9' })).status, 429, 'another player behind the same proxy is not locked out');
   assert.strictEqual((await post('/api/constructor', {})).status, 404, 'inherited names are not API calls');
   console.log('security test passed'); srv.kill(); process.exit(0);
 })().catch(e => { console.error(e); srv.kill(); process.exit(1); });
