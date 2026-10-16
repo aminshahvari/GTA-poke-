@@ -619,3 +619,34 @@ body{font-size:15px;letter-spacing:0}
 .potwin{z-index:9;animation:potwin 1.6s cubic-bezier(.4,0,.2,1) .5s both;font-size:13px;color:var(--gold)}
 @keyframes potwin{0%{transform:translate(-50%,-50%) scale(1.1);opacity:1}75%{transform:translate(calc(-50% + var(--tx)),calc(-50% + var(--ty))) scale(.9);opacity:1}100%{transform:translate(calc(-50% + var(--tx)),calc(-50% + var(--ty))) scale(.6);opacity:0}}
 @media (prefers-reduced-motion:reduce){.potwin{animation-duration:.01s}}
+
+/* sign-up / sign-in: full-screen background, never clip the logo, fit every screen */
+#auth{position:fixed;inset:0;justify-content:flex-start;padding:max(20px,env(safe-area-inset-top)) 16px max(20px,env(safe-area-inset-bottom))}
+#auth>.logo{margin-top:auto;flex:none}
+#auth>.glass{margin-bottom:auto;flex:none;width:min(420px,100%)}
+#auth #globe,#auth .chip{position:fixed}
+#auth #globe{width:max(160%,900px);max-width:1400px}
+@media (max-height:700px){
+  #auth{gap:10px}
+  #auth .logo b{font-size:clamp(40px,12vw,64px)}
+  #auth .logo .tagline{font-size:13px;margin-top:2px}
+  #auth .glass{padding:14px 14px 12px;gap:9px}
+  #auth .c3{display:none}
+}
+@media (max-height:560px){
+  #auth .logo .tagline,#auth .pill{display:none}
+  #auth .logo b{font-size:40px}
+  #auth .chip{display:none}
+}
+@media (max-width:360px){
+  #auth{padding-left:12px;padding-right:12px}
+  #auth .glass{padding:14px 12px 12px}
+}
+@media (min-width:860px) and (min-height:520px){
+  #auth{flex-direction:row;gap:clamp(40px,7vw,110px)}
+  #auth>.logo{margin:auto 0 auto auto}
+  #auth>.glass{margin:auto auto auto 0}
+  #auth .logo b{font-size:clamp(72px,7vw,110px)}
+  #auth .logo .tagline{font-size:18px}
+  #auth #globe{top:45%;width:110%}
+}
