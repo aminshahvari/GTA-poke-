@@ -3,7 +3,7 @@
 Claude, 2026-10-17, on the owner's "Prepare R2 production release autonomously" directive (23:20). For Muse's independent audit of this exact candidate and the owner's separate GO. Nothing here was deployed; `main`, staging, Render settings and the production database are untouched.
 
 ## Candidate
-- Branch `r2-release`. Exact SHA: the head of this branch (the commit that adds this file); Muse audits that SHA.
+- Branch `r2-release`. Exact SHA: the head of this branch; Muse audits that SHA. First submission `62e60b3` is superseded (it lacked `30853e1`).
 - Parents:
   - `origin/r2-premium-ui` `87dc8fb` (R2 RC `c4445ed` + premium UI `7dabbc3` + Muse preview verdict).
   - `origin/r2-rc` `0c13010` (docs only: staging record, readiness report, Muse beta criteria).
@@ -17,6 +17,8 @@ Claude, 2026-10-17, on the owner's "Prepare R2 production release autonomously" 
 | Merge of `main` | Conflicts in `public/app.js`, `public/index.html`, `public/style.css`, `test/ui/t_premium_ui.js` resolved to the R2 premium versions. Shape A's production-only adaptations are dropped because R2 has the real features: inert doors without a clubs switch, no Exchange tab, single-layer felt. Shape A docs and evidence are carried over. |
 | `a1fd5d3` | Muse MINOR-1 (`.op-filters .bz-chips` inside its column at 320 px). Muse MINOR-2 (dialog button rows wrap). Shape A's in-flow "Opening soon" label: in R2's closed state the absolute pill covered the door title, which the new test caught. New `test/ui/t_clubs_closed.js`. |
 | this commit | This handoff and the rollback rehearsal evidence. |
+| `6a4fe62` | Merge of the ux-fonts follow-up `30853e1` (`r2-ux-fonts`), required by Muse's R2 criteria item 2 and missing from the first submission `62e60b3`. Action badges sit 3 px lower; 320 px top-bar slack. Conflict in `public/style.css` resolved by keeping the premium block and adding the three badge offsets and the 320 px media rule. |
+| `c8ebe63` | `R2-DEPLOY-RUNBOOK.md` (docs only). |
 
 Already in R2, so no port is needed: green felt (`.felt::before`, the cause of the navy table in Shape A) and the egg/tomato splats (`splatOn`, `.splatfx`). The `shape-a-felt` and `shape-a-table` branches become unnecessary once R2 ships.
 
@@ -28,7 +30,10 @@ What a deploy changes compared with live `bf24ceb` is the same as the R2 readine
 - `ws` 8.18.0 → 8.22.0.
 - No migration; new keys only.
 
-## Tests (all on this candidate, local Chromium)
+## Re-run after adding `30853e1` (on `6a4fe62`, same results on the docs-only head)
+`npm test` exit 0 · t_mobile_ux 73 ok, passed · t_premium_ui 295 ok / 0 failed · t_clubs_closed 25 ok / 0 failed · t_welcome 32 ok, passed · t_table_small 20 ok, passed · t_registration passed · t_bizsearch passed. Server and package files still byte-identical to `c4445ed`. scan_csp was not re-run (CSS-only change); npm test's csp + vendor test passed.
+
+## Tests (first submission `62e60b3`, local Chromium)
 | Test | Result |
 |---|---|
 | `npm test` (16 suites incl. sim stress 3000 tournaments) | exit 0, all passed |
