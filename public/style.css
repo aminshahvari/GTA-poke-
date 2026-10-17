@@ -1684,3 +1684,9 @@ body{background:var(--lx-ink)}
 #game .badge.won{background:var(--lx-gold-grad);color:#1a1408;box-shadow:none}
 #game .pot{color:var(--lx-gold-hi)}
 #lobby .tbl td:first-child,#lobby .statgrid b,#lobby .bigpts,#game .lvl b,#modalRoot .prof .statgrid b{font-variant-numeric:lining-nums tabular-nums}
+/* "Opening soon" doors (members, clubs closed): the label sits in the flow, never over the icon or title (as Shape A) */
+#lobby .lx-door.soon em{position:static;justify-self:start;align-self:center;white-space:nowrap}
+/* 320 px fixes (Muse MINOR-1/2): the Opportunities chip row stays inside its column; dialog buttons wrap instead of overflowing */
+.op-filters .bz-chips{margin:0;padding-left:0;padding-right:0;min-width:0;max-width:100%}
+.modal .row{flex-wrap:wrap}
+.modal .row>button{flex:1 1 auto;width:auto;min-width:0}
