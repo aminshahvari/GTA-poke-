@@ -9,6 +9,7 @@
 //   bizSpotlight   { uid, at, by } the one business the club owner features, or absent
 //   bizDemoSeeded  staging only: fake demo businesses were added once
 const store = require('./store');
+const content = require('./content');
 
 const CATEGORIES = [
   ['realestate', 'Real estate'], ['trades', 'Construction & trades'], ['home', 'Home services'], ['food', 'Food & drink'],
@@ -48,6 +49,9 @@ function text(v, key, label, multi){
   if(s.length > MAX[key]) throw bad(`${label} is too long (${MAX[key]} characters at most).`);
   return s;
 }
+// the profile's own words (name, description, services, ...): no web addresses, emails or phone numbers
+// (server/content.js). Those go in Contact details, where the member chooses what members see.
+const free = (v, key, label, multi) => content.check(text(v, key, label, multi), label, 'Add it under Contact details instead, where you choose what members see.', bad);
 const HOST = /^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(xn--[a-z0-9-]{2,59}|[a-z]{2,63})$/i;
 function website(v){
   let s = text(v, 'website', 'Website'); if(!s) return '';
@@ -147,16 +151,16 @@ const api = {
     const cur = store.get('biz:' + u.id);
     const b = {
       uid: u.id,
-      name: text(d.name, 'name', 'Business name'),
-      fullName: text(d.fullName, 'fullName', 'Full name'),
-      jobTitle: text(d.jobTitle, 'jobTitle', 'Job title'),
+      name: free(d.name, 'name', 'Business name'),
+      fullName: free(d.fullName, 'fullName', 'Full name'),
+      jobTitle: free(d.jobTitle, 'jobTitle', 'Job title'),
       category: String(d.category || ''),
-      categoryOther: text(d.categoryOther, 'categoryOther', 'Industry'),
-      description: text(d.description, 'description', 'Description', true),
-      services: text(d.services, 'services', 'Services', true),
-      area: text(d.area, 'area', 'Service area'),
+      categoryOther: free(d.categoryOther, 'categoryOther', 'Industry'),
+      description: free(d.description, 'description', 'Description', true),
+      services: free(d.services, 'services', 'Services', true),
+      area: free(d.area, 'area', 'Service area'),
       website: website(d.website), instagram: instagram(d.instagram), email: email(d.email), phone: phone(d.phone),
-      address: text(d.address, 'address', 'Business address'),
+      address: text(d.address, 'address', 'Business address'), // a contact field like the four above: members see it only if switched on
       referrals: d.referrals === true,
       show: {}
     };

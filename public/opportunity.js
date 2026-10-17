@@ -184,7 +184,7 @@ function contactSheet(x){
   const form = h('form', { class: 'bz-form op-form', novalidate: true },
     h('div', { class: 'op-about' }, typePill(x.type), h('b', null, x.title), h('small', null, 'Posted by ' + x.member)),
     h('label', { class: 'bz-field' }, h('span', null, 'Your message to ' + x.member), ta, counter(ta, 500)),
-    h('p', { class: 'op-privacy' }, 'Only ' + x.member + ' sees this, with your club name. Your phone and email are not shared. ' + x.member + ' can reply by sharing their contact details with you.'),
+    h('p', { class: 'op-privacy' }, 'Only ' + x.member + ' sees this, with your club name. No links, emails or phone numbers here: ' + x.member + ' can reply by sharing their contact details with you.'),
     err, send);
   const close = sheet(x.type === 'need' ? 'Offer to help' : 'Show interest', form);
   form.addEventListener('submit', async e => {

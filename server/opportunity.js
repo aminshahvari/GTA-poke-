@@ -13,6 +13,7 @@
 const crypto = require('crypto');
 const store = require('./store');
 const business = require('./business');
+const content = require('./content');
 
 const CAT = Object.fromEntries(business.CATEGORIES);
 const TYPES = { need: 'I need help', offer: 'I can help' };
@@ -49,14 +50,14 @@ function limit(uid, kind, max, win, msg){
 }
 
 // ---------- validation ----------
-// links are not allowed in what members type: members reach each other through contact requests instead.
-// Matches web addresses with a scheme, www., or a bare domain with a common ending (example.com, x.ly/abc).
-const LINK = /\b(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|co|ca|us|uk|me|ly|app|dev|info|biz|xyz|link|site|online|shop|store|page|gl|gg|tv|to|ru|cn)\b(?![.-]?\w)/i;
+// no web addresses, emails or phone numbers in what members type (server/content.js): members reach each other
+// through contact requests, and the poster chooses whether to share contact details
+const WHERE = 'Members reach you through a private request, and you choose whether to share your contact details.';
 function text(v, key, label, opts = {}){
   // Business Club's cleaner (NFC, control/zero-width/direction characters removed, whitespace collapsed); our own caps
   const s = business.validate.text(v, 'opp', label, !!opts.multi);
   if(s.length > MAX[key]) throw bad(`${label} is too long (${MAX[key]} characters at most).`);
-  if(opts.noLinks !== false && LINK.test(s)) throw bad(`Links and web addresses are not allowed in ${label.toLowerCase()}. Members reach you through a contact request instead.`);
+  if(opts.contact !== false) content.check(s, label, opts.where || WHERE, bad, opts.contact);
   return s;
 }
 function days(v){
@@ -209,7 +210,7 @@ const api = {
     const o = getOpp(id);
     if(!o || !live(o)) throw fail(404, 'This listing is not available any more.');
     if(o.uid === u.id) throw bad('This is your own listing.');
-    const msg = text(message, 'message', 'Message', { multi: true });
+    const msg = text(message, 'message', 'Message', { multi: true, where: 'The member can share contact details with you when they reply.' });
     if(msg.length < 2) throw bad('Write a short message to the member.');
     const prev = store.values('oppreq:').find(r => r.oppId === o.id && r.from === u.id);
     if(prev) throw bad(prev.status === 'sent' ? 'You already sent a request for this listing.' : 'You already contacted this member about this listing.');
@@ -228,7 +229,7 @@ const api = {
     if(action === 'decline') next = { ...r, status: 'declined', answeredAt: Date.now() };
     else if(action === 'share'){
       const shared = {};
-      const e = business.validate.email(email), p = business.validate.phone(phone), n = text(note, 'shareNote', 'Note', { multi: true });
+      const e = business.validate.email(email), p = business.validate.phone(phone), n = text(note, 'shareNote', 'Note', { multi: true, contact: ['link'], where: 'Share an email or phone number above instead.' });
       if(e) shared.email = e; if(p) shared.phone = p; if(n) shared.note = n;
       if(!e && !p) throw bad('Add the email or phone number you want to share.');
       next = { ...r, status: 'shared', shared, answeredAt: Date.now() };
@@ -253,7 +254,7 @@ const api = {
     if(o.uid === u.id) throw bad('This is your own listing.');
     if(!REASON[reason]) throw bad('Pick a reason.');
     if(store.values('oppreport:').some(r => r.oppId === o.id && r.by === u.id)) throw bad('You already reported this listing. Thank you.');
-    const n = text(note, 'note', 'Note', { multi: true, noLinks: false });
+    const n = text(note, 'note', 'Note', { multi: true, contact: false }); // only the director reads it, and it may quote the listing
     rate(u.id);
     const rep = { id: newId(), oppId: o.id, by: u.id, reason, note: n, createdAt: Date.now(), reviewed: false };
     store.set('oppreport:' + rep.id, rep);
@@ -317,4 +318,4 @@ function seedDemo(){
   return n;
 }
 
-module.exports = { api, removeUser, seedDemo, LINK, REASONS };
+module.exports = { api, removeUser, seedDemo, REASONS };
