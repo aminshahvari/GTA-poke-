@@ -27,19 +27,6 @@ document.addEventListener('visibilitychange', () => {
   if(club) send({ t: 'back' });
 });
 
-// ---------- start-screen art ----------
-(function drawGlobe(){
-  const c = $('globe'), x = c.getContext('2d'), W = 900, R = 420;
-  const g = x.createRadialGradient(W/2, W/2, 40, W/2, W/2, R);
-  g.addColorStop(0, 'rgba(120,170,255,.45)'); g.addColorStop(.5, 'rgba(46,107,207,.25)'); g.addColorStop(1, 'rgba(22,26,35,0)');
-  x.fillStyle = g; x.beginPath(); x.arc(W/2, W/2, R, 0, Math.PI*2); x.fill();
-  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647; const pts = [];
-  for(let i = 0; i < 70; i++){ const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R * .85; pts.push([W/2 + Math.cos(a)*r, W/2 + Math.sin(a)*r*.8]); }
-  x.strokeStyle = 'rgba(180,205,255,.16)';
-  pts.forEach((p, i) => pts.slice(i+1).forEach(q => { if(Math.hypot(p[0]-q[0], p[1]-q[1]) < 120){ x.beginPath(); x.moveTo(...p); x.lineTo(...q); x.stroke(); } }));
-  pts.forEach(p => { x.fillStyle = 'rgba(200,220,255,.8)'; x.beginPath(); x.arc(p[0], p[1], 2 + rnd()*2.5, 0, Math.PI*2); x.fill(); });
-})();
-
 function modal(html, buttons){
   return new Promise(res => {
     const root = $('modalRoot');
@@ -56,9 +43,21 @@ async function post(path, body){
   if(j.error) throw new Error(j.error);
   return j;
 }
+// welcome: what Blindrise is, then Join (needs an invite link) or Sign in; the forms below are unchanged
+function welcomeScreen(){
+  showScreen('auth');
+  const invite = location.pathname.startsWith('/join/');
+  $('auth').classList.remove('form-open');
+  $('authForm').hidden = true; $('welcome').hidden = false; $('wNote').hidden = true; $('auth').scrollTop = 0;
+  $('wInvite').hidden = !invite;
+  $('wJoin').textContent = invite ? 'Accept invitation' : 'Join Blindrise';
+  $('wJoin').onclick = () => { if(invite) authScreen('join'); else { $('wNote').hidden = false; $('wNote').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } };
+  $('wSignIn').onclick = () => authScreen('login');
+}
 function authScreen(mode){
   showScreen('auth');
   const f = $('authForm');
+  $('auth').classList.add('form-open'); $('welcome').hidden = true; f.hidden = false; $('auth').scrollTop = 0;
   const invite = location.pathname.startsWith('/join/') ? location.pathname.slice(6) : null;
   if(invite && mode !== 'login') mode = 'join';
   const titles = { join: "You're invited to the club", login: 'Welcome back', setup: 'Set up your club', reset: 'Reset the owner PIN' };
@@ -66,11 +65,13 @@ function authScreen(mode){
   f.innerHTML = `<h2>${titles[mode]}</h2><p>${blurbs[mode]}</p>
     ${mode === 'setup' || mode === 'reset' ? '<div class="field"><label for="aCode">Setup code</label><input id="aCode" autocomplete="off"></div>' : ''}
     ${mode === 'reset' ? '' : '<div class="field"><label for="aName">Table name</label><input id="aName" maxlength="16" autocomplete="username" placeholder="e.g. Sean"></div>'}
-    <div class="field"><label for="aPin">${mode === 'reset' ? 'New PIN' : 'PIN'} (4 to 8 digits)</label><input id="aPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></div>
+    <div class="field"><label for="aPin">${mode === 'reset' ? 'New PIN' : 'PIN'} (4 to 8 digits)</label><input id="aPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" placeholder="${mode === 'login' ? 'Your PIN' : 'Choose a PIN'}"></div>
     ${mode === 'join' || mode === 'setup' ? '<label class="agree"><input type="checkbox" id="aAgree"> <span>I\'m 19 or older and agree to the <button type="button" class="linkbtn" id="termsLink">club rules and prize terms</button>. Free to play; chips and points have no cash value.</span></label>' : ''}
     <div class="err" id="aErr"></div>
     <button class="btn-red" type="submit">${mode === 'join' ? 'Join the club' : mode === 'setup' ? 'Create my club' : mode === 'reset' ? 'Save new PIN' : 'Sign in'}</button>
-    ${mode === 'login' ? '<button type="button" class="linkbtn" id="toReset">Forgot your PIN?</button><span class="fine">New here? Ask the club owner for an invite link.</span>' : '<button type="button" class="linkbtn" id="toLogin">I already have an account</button>'}`;
+    ${mode === 'login' ? '<button type="button" class="linkbtn" id="toReset">Forgot your PIN?</button><span class="fine">New here? Ask the club owner for an invite link.</span>' : '<button type="button" class="linkbtn" id="toLogin">I already have an account</button>'}
+    ${mode === 'setup' ? '' : '<button type="button" class="linkbtn back" id="toWelcome">‹ Back</button>'}`;
+  const tw = $('toWelcome'); if(tw) tw.onclick = welcomeScreen;
   const tl = $('toLogin'); if(tl) tl.onclick = () => authScreen('login');
   const tr = $('toReset'); if(tr) tr.onclick = () => authScreen('reset');
   const tm = $('termsLink'); if(tm) tm.onclick = () => modal(`<h2>Club rules and prize terms</h2><div class="terms-modal">${window.LEARN.terms}</div>`, [{ label: 'Close', value: 1, primary: true }]);
@@ -101,8 +102,8 @@ const myCards = new Map(); // tid -> {hand, cards}
 let editingT = false, tab = 'event', view = 'lobby', watchTid = null, lastSent = null, seen = new Set(), lastStatus = null, lastMyTable = null, clockSkew = 0;
 function connect(){
   const token = local.get('token', null);
-  if(!token && location.pathname.startsWith('/join/')) return authScreen('join');
-  if(!token){ return post('/api/status', {}).then(s => authScreen(s.hasOwner ? 'login' : 'setup')).catch(() => authScreen('login')); }
+  if(!token && location.pathname.startsWith('/join/')) return welcomeScreen();
+  if(!token){ return post('/api/status', {}).then(s => s.hasOwner ? welcomeScreen() : authScreen('setup')).catch(() => welcomeScreen()); }
   if(ws) try{ ws.close(); }catch(e){}
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev })); };

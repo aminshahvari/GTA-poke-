@@ -3,29 +3,62 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#161a23">
+<meta name="theme-color" content="#0a0e18">
+<meta name="description" content="Blindrise is a private, invite-only club. Play Together. Connect with People. Discover Opportunities.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Blindrise">
+<meta property="og:title" content="Blindrise — Where Connections Rise.">
+<meta property="og:description" content="A private, invite-only club. Play Together. Connect with People. Discover Opportunities.">
+<meta property="og:url" content="https://gta-poker.onrender.com/">
+<meta property="og:image" content="https://gta-poker.onrender.com/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Blindrise: Where Connections Rise.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Blindrise — Where Connections Rise.">
+<meta name="twitter:description" content="A private, invite-only club. Play Together. Connect with People. Discover Opportunities.">
+<meta name="twitter:image" content="https://gta-poker.onrender.com/og.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Blindrise">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-180.png">
-<title>Blindrise Poker Club</title>
+<title>Blindrise — Where Connections Rise</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="/style.css">
 <style>html,body{padding-top:env(safe-area-inset-top,0px)}</style>
 </head>
 <body>
 <div class="app">
 <!-- Sign in / invite -->
-<section id="auth" class="screen start-like" hidden>
-  <canvas id="globe" width="900" height="900"></canvas>
-  <div class="chip c3"><span>BLIND<br>RISE<em>♠ ♥ ♣ ♦</em></span></div>
-  <div class="chip c2"><span>BLIND<br>RISE<em>♠ ♥ ♣ ♦</em></span></div>
-  <div class="chip c1"><span>BLIND<br>RISE<em>♠ ♥ ♣ ♦</em></span></div>
-  <div class="logo"><b>BLIND<span>RISE</span></b><span class="pill">POKER CLUB</span><small class="tagline">Every level, you rise.</small></div>
-  <form class="glass" id="authForm"></form>
+<section id="auth" class="screen lux" hidden>
+  <div class="lux-glow" aria-hidden="true"></div>
+  <div class="lux-wrap">
+    <header class="lux-brand">
+      <svg class="lux-mark" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22.5" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="24" cy="24" r="18.5" fill="none" stroke="currentColor" stroke-width=".6" opacity=".55"/><path d="M24 11c4.6 5.3 10 8.8 10 14a5.3 5.3 0 0 1-9 3.8l1.7 6.2h-5.4l1.7-6.2a5.3 5.3 0 0 1-9-3.8c0-5.2 5.4-8.7 10-14z" fill="currentColor"/></svg>
+      <h1 class="lux-word">BLINDRISE</h1>
+      <p class="lux-tag">Where Connections Rise.</p>
+      <p class="lux-sub" id="luxSub">Play Together. Connect with People. Discover Opportunities.</p>
+    </header>
+    <div class="lux-welcome" id="welcome" hidden>
+      <p class="lux-invite" id="wInvite" hidden><span>Private invitation</span>You've been invited to join Blindrise.</p>
+      <ul class="lux-cards">
+        <li class="lux-card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3 3.5 6.5 5.7 6.5 9a3.4 3.4 0 0 1-5.8 2.4l1.1 4.1h-3.6l1.1-4.1A3.4 3.4 0 0 1 5.5 12c0-3.3 3.5-5.5 6.5-9z"/></svg><div><b>Poker Club</b><span>Tournaments and live tables with friends, free to play.</span></div></li>
+        <li class="lux-card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6V4.8C9 4.4 9.4 4 9.8 4h4.4c.4 0 .8.4.8.8V6M4 7h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 12h16"/></svg><div><b>Business Club <em>Opening soon</em></b><span>Members' businesses and services, shared in trust.</span></div></li>
+        <li class="lux-card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.4 5.6L20 9.3l-4.3 3.9 1.3 5.8L12 16l-5 3 1.3-5.8L4 9.3l5.6-.7z"/></svg><div><b>Opportunity Club <em>Opening soon</em></b><span>Projects, roles and introductions within the circle.</span></div></li>
+      </ul>
+      <div class="lux-ctas">
+        <button type="button" class="lux-btn" id="wJoin">Join Blindrise</button>
+        <button type="button" class="lux-btn ghost" id="wSignIn">Already a Member? <b>Sign In</b></button>
+      </div>
+      <p class="lux-note" id="wNote" hidden>Blindrise is invite-only. Ask a member to send you an invite link, then open it on this phone.</p>
+      <p class="lux-foot">Private · Invite only · Free to play</p>
+    </div>
+    <form class="glass" id="authForm" hidden></form>
+  </div>
 </section>
 
 <!-- Lobby -->

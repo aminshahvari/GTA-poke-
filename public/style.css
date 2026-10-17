@@ -620,33 +620,104 @@ body{font-size:15px;letter-spacing:0}
 @keyframes potwin{0%{transform:translate(-50%,-50%) scale(1.1);opacity:1}75%{transform:translate(calc(-50% + var(--tx)),calc(-50% + var(--ty))) scale(.9);opacity:1}100%{transform:translate(calc(-50% + var(--tx)),calc(-50% + var(--ty))) scale(.6);opacity:0}}
 @media (prefers-reduced-motion:reduce){.potwin{animation-duration:.01s}}
 
-/* sign-up / sign-in: full-screen background, never clip the logo, fit every screen */
-#auth{position:fixed;inset:0;justify-content:flex-start;padding:max(20px,env(safe-area-inset-top)) 16px max(20px,env(safe-area-inset-bottom))}
-#auth>.logo{margin-top:auto;flex:none}
-#auth>.glass{margin-bottom:auto;flex:none;width:min(420px,100%)}
-#auth #globe,#auth .chip{position:fixed}
-#auth #globe{width:max(160%,900px);max-width:1400px}
-@media (max-height:700px){
-  #auth{gap:10px}
-  #auth .logo b{font-size:clamp(40px,12vw,64px)}
-  #auth .logo .tagline{font-size:13px;margin-top:2px}
-  #auth .glass{padding:14px 14px 12px;gap:9px}
-  #auth .c3{display:none}
-}
-@media (max-height:560px){
-  #auth .logo .tagline,#auth .pill{display:none}
-  #auth .logo b{font-size:40px}
-  #auth .chip{display:none}
-}
+/* welcome + sign-in: private-members look (midnight navy, champagne gold, glass). Scoped to #auth only. */
+#auth.lux{--g:#d8b46a;--g2:#f1dfb0;--gd:#9c7a3c;--iv:#f4eee2;--mu:#a3abbb;--serif:"Cormorant Garamond","Iowan Old Style","Palatino Linotype",Georgia,serif;
+  position:fixed;inset:0;display:block;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;color:var(--iv);
+  background:radial-gradient(120% 60% at 50% -8%,#1b2a4a 0%,#0d1527 46%,#070a12 100%);user-select:text;-webkit-user-select:text}
+#auth .lux-glow{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(60% 34% at 50% 14%,rgba(216,180,106,.16),transparent 70%),radial-gradient(50% 40% at 85% 105%,rgba(216,180,106,.08),transparent 70%),radial-gradient(40% 30% at 0% 70%,rgba(70,110,190,.10),transparent 70%)}
+#auth .lux-glow::after{content:"";position:absolute;inset:0;opacity:.018;background-image:repeating-linear-gradient(115deg,#fff 0 1px,transparent 1px 3px)}
+#auth .lux-wrap{position:relative;min-height:100%;width:min(460px,100%);margin:0 auto;display:flex;flex-direction:column;justify-content:center;gap:22px;
+  padding:max(28px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom))}
+#auth .lux-brand{text-align:center;display:grid;justify-items:center;gap:6px}
+#auth .lux-mark{width:44px;height:44px;color:var(--g);filter:drop-shadow(0 0 14px rgba(216,180,106,.35));margin-bottom:6px}
+#auth .lux-word{margin:0;font-family:var(--body);font-weight:500;font-size:clamp(30px,9.4vw,44px);letter-spacing:.32em;margin-right:-.32em;line-height:1;
+  background:linear-gradient(180deg,#fbf3dc 0%,var(--g2) 38%,var(--g) 70%,var(--gd) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+#auth .lux-tag{margin:6px 0 0;font-family:var(--serif);font-style:italic;font-weight:500;font-size:clamp(24px,7vw,32px);line-height:1.1;color:var(--iv)}
+#auth .lux-tag::after{content:"";display:block;width:56px;height:1px;margin:14px auto 0;background:linear-gradient(90deg,transparent,var(--g),transparent)}
+#auth .lux-sub{margin:6px 0 0;color:var(--mu);font-size:14px;line-height:1.55;letter-spacing:.02em;max-width:30ch;text-wrap:balance}
+#auth .lux-welcome{display:grid;gap:18px}
+#auth .lux-invite{margin:0;text-align:center;color:var(--iv);font-size:15px;padding:12px 14px;border-radius:14px;border:1px solid rgba(216,180,106,.38);background:rgba(216,180,106,.07)}
+#auth .lux-invite span{display:block;font-family:var(--cond);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--g);margin-bottom:3px}
+#auth .lux-cards{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+#auth .lux-card{position:relative;display:grid;grid-template-columns:40px 1fr;gap:14px;align-items:center;padding:14px 16px;border-radius:16px;
+  background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.02));border:1px solid rgba(241,223,176,.14);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 30px rgba(0,0,0,.28);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+#auth .lux-card svg{width:40px;height:40px;padding:9px;border-radius:12px;border:1px solid rgba(216,180,106,.35);background:rgba(216,180,106,.08);fill:none;stroke:var(--g);stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round}
+#auth .lux-card:first-child svg{fill:var(--g);stroke:none}
+#auth .lux-card div{display:grid;gap:2px;min-width:0}
+#auth .lux-card b{font-family:var(--serif);font-weight:600;font-size:21px;line-height:1.15;color:var(--iv);letter-spacing:.01em}
+#auth .lux-card span{color:var(--mu);font-size:13.5px;line-height:1.4}
+#auth .lux-card em{display:inline-block;vertical-align:4px;margin-left:2px;font-style:normal;font-family:var(--cond);font-weight:500;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--g);border:1px solid rgba(216,180,106,.4);border-radius:999px;padding:2px 7px 1px;white-space:nowrap}
+#auth .lux-ctas{display:grid;gap:10px;margin-top:4px}
+#auth .lux-btn{width:100%;min-height:52px;border-radius:999px;font-size:16px;font-weight:600;letter-spacing:.04em;color:#1a1408;
+  background:linear-gradient(180deg,#f3e2b6 0%,#ddb96f 52%,#c09a52 100%);box-shadow:0 10px 28px rgba(216,180,106,.25),inset 0 1px 0 rgba(255,255,255,.55);transition:transform .15s ease,filter .15s ease}
+#auth .lux-btn:active{transform:scale(.985);filter:brightness(.95)}
+#auth .lux-btn.ghost{background:transparent;color:var(--iv);font-weight:500;border:1px solid rgba(241,223,176,.3);box-shadow:none}
+#auth .lux-btn.ghost b{color:var(--g2);font-weight:600}
+#auth .lux-note{margin:0;text-align:center;font-size:14px;line-height:1.45;color:var(--iv);padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+#auth .lux-foot{margin:2px 0 0;text-align:center;font-family:var(--cond);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:rgba(163,171,187,.7)}
+/* the sign-in / join form, in the same glass */
+#auth .glass{width:100%;padding:22px 18px 18px;gap:13px;border-radius:20px;color:var(--iv);
+  background:linear-gradient(165deg,rgba(28,38,62,.86),rgba(12,18,32,.9));border:1px solid rgba(241,223,176,.16);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 24px 60px rgba(0,0,0,.45);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+#auth .glass h2{font-family:var(--serif);font-weight:600;font-size:28px;letter-spacing:.01em;color:var(--iv)}
+#auth .glass p{color:var(--mu);font-size:14.5px}
+#auth .field label{color:var(--g);font-size:11px;letter-spacing:.18em}
+#auth .glass input:not([type=checkbox]){background:rgba(5,8,15,.6);border:1px solid rgba(241,223,176,.18);border-radius:12px;color:var(--iv);padding:13px 14px;transition:border-color .15s,box-shadow .15s}
+#auth .glass input:not([type=checkbox]):focus{outline:none;border-color:var(--g);box-shadow:0 0 0 3px rgba(216,180,106,.18)}
+#auth .glass input::placeholder{color:rgba(163,171,187,.6)}
+#auth .agree{color:var(--mu)}
+#auth .agree input{accent-color:var(--g)}
+#auth .btn-red{border-radius:999px;min-height:52px;color:#1a1408;font-weight:600;letter-spacing:.04em;background:linear-gradient(180deg,#f3e2b6 0%,#ddb96f 52%,#c09a52 100%);box-shadow:0 10px 28px rgba(216,180,106,.22),inset 0 1px 0 rgba(255,255,255,.55)}
+#auth .linkbtn{color:var(--mu);text-underline-offset:3px}
+#auth .agree .linkbtn{color:var(--g2)}
+#auth .linkbtn.back{justify-self:center;text-decoration:none;color:var(--g2);font-size:14px;padding:8px 14px;border:0;background:none}
+#auth .fine{color:rgba(163,171,187,.8)}
+#auth .err{color:#ff8a8f}
+/* with a form open the brand steps back so the keyboard never hides the fields */
+#auth.form-open .lux-wrap{gap:18px}
+#auth.form-open .lux-sub{display:none}
+#auth.form-open .lux-mark{width:34px;height:34px;margin-bottom:2px}
+#auth.form-open .lux-word{font-size:clamp(24px,7vw,32px)}
+#auth.form-open .lux-tag{font-size:20px}
+#auth.form-open .lux-tag::after{display:none}
+/* entrance */
+@keyframes luxUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+#auth .lux-brand,#auth .lux-card,#auth .lux-ctas,#auth .glass,#auth .lux-invite{animation:luxUp .6s cubic-bezier(.2,.7,.2,1) both}
+#auth .lux-invite{animation-delay:.08s}
+#auth .lux-card:nth-child(1){animation-delay:.12s}
+#auth .lux-card:nth-child(2){animation-delay:.2s}
+#auth .lux-card:nth-child(3){animation-delay:.28s}
+#auth .lux-ctas{animation-delay:.36s}
+@media (prefers-reduced-motion:reduce){#auth *{animation:none!important;transition:none!important}}
+/* small phones (iPhone SE 1st gen, 320 wide / short screens) */
 @media (max-width:360px){
-  #auth{padding-left:12px;padding-right:12px}
-  #auth .glass{padding:14px 12px 12px}
+  #auth .lux-wrap{padding-left:14px;padding-right:14px;gap:16px}
+  #auth .lux-card{padding:12px;gap:12px;grid-template-columns:36px 1fr}
+  #auth .lux-card svg{width:36px;height:36px;padding:8px}
+  #auth .lux-card b{font-size:19px}
+  #auth .glass{padding:18px 14px 14px}
 }
-@media (min-width:860px) and (min-height:520px){
-  #auth{flex-direction:row;gap:clamp(40px,7vw,110px)}
-  #auth>.logo{margin:auto 0 auto auto}
-  #auth>.glass{margin:auto auto auto 0}
-  #auth .logo b{font-size:clamp(72px,7vw,110px)}
-  #auth .logo .tagline{font-size:18px}
-  #auth #globe{top:45%;width:110%}
+@media (max-height:700px){
+  #auth .lux-wrap{gap:14px;padding-top:max(18px,env(safe-area-inset-top))}
+  #auth .lux-mark{display:none}
+  #auth .lux-tag::after{margin-top:10px}
+  #auth .lux-cards{gap:8px}
+  #auth .lux-card{padding:11px 14px}
+  #auth .lux-card span{font-size:12.5px}
+  #auth.form-open .lux-tag{display:none}
+}
+/* wide screens: brand on the left, content on the right */
+@media (min-width:860px) and (min-height:560px){
+  #auth .lux-wrap{width:min(1040px,100%);display:grid;grid-template-columns:1fr minmax(380px,440px);align-content:center;column-gap:clamp(40px,7vw,100px);padding:40px}
+  #auth .lux-brand{justify-items:start;text-align:left}
+  #auth .lux-word{font-size:46px}
+  #auth .lux-tag{font-size:40px;white-space:nowrap}
+  #auth .lux-tag::after{margin-left:0}
+  #auth .lux-sub{font-size:16px;max-width:34ch}
+  #auth.form-open .lux-word{font-size:46px}
+  #auth.form-open .lux-tag{font-size:40px;display:block}
+  #auth.form-open .lux-sub{display:block}
+  #auth.form-open .lux-mark{width:44px;height:44px}
 }
