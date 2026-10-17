@@ -50,7 +50,7 @@ function limit(uid, kind, max, win, msg){
 }
 
 // ---------- validation ----------
-// no web addresses, emails or phone numbers in what members type (server/content.js): members reach each other
+// no web addresses, emails, social handles or phone numbers in what members type (server/content.js): members reach each other
 // through contact requests, and the poster chooses whether to share contact details
 const WHERE = 'Members reach you through a private request, and you choose whether to share your contact details.';
 function text(v, key, label, opts = {}){
