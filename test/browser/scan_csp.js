@@ -44,6 +44,7 @@ const log = (...a) => console.log(...a);
 
   // sign in as a fake member (seeded by STAGING=1)
   await page.goto(BASE + '/');
+  await page.waitForSelector('#wSignIn'); await page.click('#wSignIn'); // welcome screen first (live since 49d9ece)
   await page.waitForSelector('#aName');
   await page.fill('#aName', 'Test Player 07'); await page.fill('#aPin', '135777');
   await page.click('#authForm button[type=submit]');
