@@ -86,3 +86,20 @@ Disruption window: about 1 to 2 minutes of reconnecting sockets during Render's 
 ## 9. Release 2 backlog (not in R1)
 
 Multi-club rollout; owner reset of a member's PIN if not approved today; business card scanner if not tested on a real phone; Gemini proposals for review: Tablemates, Smart Club Lounge, AI Matching, VIP Invitations, Club Assist.
+
+## 10. Known visual defects at freeze (self-review; Chromium only, no real iOS/Android device)
+
+| Severity | Where | Defect |
+|---|---|---|
+| MAJOR | Table, short phones (375x667) with 7-9 players | cramped: some bet chips touch the message line, top seats close to the pot pill, chips can overlap if most seats bet at once. 360x780, 390x844, desktop clean |
+| POLISH | Table, 360 px, 8-9 players | two bet chips can touch when nearly every seat bets |
+| POLISH | Table, showdown | revealed cards cover the top half of the avatar (intended) |
+| POLISH | Table | slight shift when the hand-strength box appears/disappears (pre-existing) |
+| POLISH | Table | resizing mid-animation can misplace a splat/winner stack until it fades |
+| POLISH | Home cards | long industry names truncated with "…" |
+| POLISH | Home cards | Demo tag overlaps the industry icon (staging only) |
+| POLISH | Desktop | text cards capped at 820 px while grids run full width |
+| POLISH | Style | 17 industry colour tokens outside the base palette |
+| POLISH | Home, registering | long tournament note makes the hero tall on phones |
+| NOT VERIFIED | all | automated contrast check; iPhone Safari; Android Chrome on a device |
+| NOTE | staging screenshots | this container cannot reach `*.onrender.com`; screenshots are from a local run of the exact frozen SHA with fake data. Staging itself must be checked by Muse / the owner |
