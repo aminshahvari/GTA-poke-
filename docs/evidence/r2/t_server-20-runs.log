@@ -1,0 +1,22 @@
+git 4b1650f + working tree; started 2026-10-17T05:21:50Z
+run 1 rc=0 77s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 2 tied, 267 chip checks, 562 actions, 72s, champion Friend 5 server test passed 
+run 2 rc=0 74s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 2 tied, 257 chip checks, 589 actions, 69s, champion Friend 8 server test passed 
+run 3 rc=0 66s | server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 5 tied, 224 chip checks, 598 actions, 61s, champion Friend 18 server test passed 
+run 4 rc=0 79s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 4 tied, 275 chip checks, 767 actions, 74s, champion Friend 9 server test passed 
+run 5 rc=0 64s | server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 12 tied, 221 chip checks, 500 actions, 60s, champion Friend 3 server test passed 
+run 6 rc=0 75s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 2 tied, 257 chip checks, 665 actions, 69s, champion Sean server test passed 
+run 7 rc=0 75s | server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 9 tied, 266 chip checks, 493 actions, 71s, champion Friend 10 server test passed 
+run 8 rc=0 61s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 4 tied, 203 chip checks, 460 actions, 55s, champion Friend 11 server test passed 
+run 9 rc=0 76s | server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 5 tied, 264 chip checks, 577 actions, 71s, champion Friend 14 server test passed 
+run 10 rc=0 61s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 6 tied, 206 chip checks, 528 actions, 56s, champion Friend 1 server test passed 
+run 11 rc=0 117s | server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 11 tied, 425 chip checks, 628 actions, 113s, champion Friend 7 server test passed 
+run 12 rc=0 77s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 6 tied, 269 chip checks, 533 actions, 72s, champion Friend 9 server test passed 
+run 13 rc=0 76s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 3 tied, 263 chip checks, 489 actions, 71s, champion Friend 15 server test passed 
+run 14 rc=0 75s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 2 tied, 263 chip checks, 516 actions, 71s, champion Friend 1 server test passed 
+run 15 rc=0 74s | server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 10 tied, 259 chip checks, 448 actions, 70s, champion Friend 21 server test passed 
+run 16 rc=0 77s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 4 tied, 269 chip checks, 747 actions, 72s, champion Friend 11 server test passed 
+run 17 rc=0 76s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 7 tied, 261 chip checks, 510 actions, 70s, champion Sean server test passed 
+run 18 rc=0 79s | server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 6 tied, 277 chip checks, 536 actions, 74s, champion Friend 8 server test passed 
+run 19 rc=0 75s | server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 7 tied, 263 chip checks, 509 actions, 71s, champion Friend 9 server test passed 
+run 20 rc=0 76s | server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 8 tied, 265 chip checks, 603 actions, 71s, champion Friend 14 server test passed 
+done
