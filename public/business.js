@@ -306,6 +306,7 @@ function renderEdit(el){
       input('description', 'Short description', { maxlength: 400, rows: 3, placeholder: 'What you do, in a sentence or two' }, 'textarea'),
       input('services', 'Services offered', { maxlength: 300, rows: 2, placeholder: 'e.g. Repairs, renovations, water heaters' }, 'textarea'),
       input('area', 'Service area', { maxlength: 60, placeholder: 'e.g. Toronto & GTA' }),
+      h('p', { class: 'bz-muted' }, 'Keep links, emails and phone numbers out of these. Add them under Contact details below, where you choose what members see.'),
       h('div', { class: 'bz-field' }, h('span', null, 'Logo or photo'), logoBox)),
     h('fieldset', null, h('legend', null, 'You'),
       h('div', { class: 'bz-contact' }, input('fullName', 'Full name (as on your card)', { maxlength: 60, autocomplete: 'off' }), toggle('fullName', 'Show name and title')),
