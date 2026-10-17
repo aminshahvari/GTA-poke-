@@ -436,6 +436,7 @@ body{font-size:15px;letter-spacing:0}
 .card-box{background:var(--panel);border-color:var(--line);border-radius:12px}
 .status-pill{background:rgba(79,209,161,.14)}
 .status-pill.live{background:var(--blue);color:#fff}
+.status-pill.reg{background:rgba(79,209,161,.22);color:var(--good);margin-left:6px}
 .btn{background:var(--panel2);border-color:var(--line)}
 .btn.red,.btn-red{background:var(--blue);border:0;color:#fff}
 .btn.red:active,.btn-red:active{background:var(--blue-deep)}

@@ -296,13 +296,13 @@ function eventMainHTML(){
   }
   if(T.status === 'registering'){
     const mine = T.regs.includes(club.me.id);
-    return `<div class="card-box"><span class="status-pill">Registration open</span><h3>${esc(T.name)}</h3>
+    return `<div class="card-box"><span class="status-pill">Registration open</span>${mine ? ' <span class="status-pill reg">✓ You\'re registered</span>' : ''}<h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Starts</small><b>${T.startAt ? esc(when(T.startAt)) : 'When the owner starts it'}</b></div><div><small>Stack</small><b>${fmt(T.stack)}</b></div><div><small>Levels</small><b>${T.levelMin} min</b></div></div>
       <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act. Every player has 3 extra-time cards (+30 seconds each) for the tournament, and a fresh 5 at the final table.</p>
       ${T.repeat !== 'none' ? `<p class="note">Repeats ${T.repeat === 'daily' ? 'every day' : 'every week'} at this time.</p>` : ''}
       <p>${T.regs.length} joined</p>
       <div class="plist">${T.regs.map(u => pchip(u, false)).join('') || '<span class="note">Nobody has joined yet.</span>'}</div>
-      <div class="btn-row">${mine ? '<button class="btn" id="leaveBtn">Leave</button>' : '<button class="btn red" id="joinBtn">Join tournament</button>'}</div>
+      <div class="btn-row">${mine ? '<button class="btn" id="leaveBtn">Cancel my registration</button>' : '<button class="btn red" id="joinBtn">Join tournament</button>'}</div>
       ${mine ? `<p>You're in. Your table opens by itself when the tournament starts.</p>${remindHTML(T)}` : ''}
       ${club.me.owner ? `<div class="owner-row"><button class="btn" id="inviteBtn">Invite a friend</button><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button></div>
       ${T.regs.length < 2 ? '<p class="warn-note">You need at least 2 players to start. Send an invite, and ask your friend to tap <b>Join tournament</b>.</p>' : ''}` : ''}</div>${lastResultHTML()}`;
@@ -313,6 +313,7 @@ function eventMainHTML(){
     return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Players left</small><b>${T.remaining} of ${T.entrants}</b></div><div><small>Level</small><b>${T.level + 1}</b></div><div><small>Blinds</small><b>${fmt(sb)}/${fmt(bb)}</b></div></div>
       ${club.myTable ? `<button class="btn red" data-watch="${esc(club.myTable)}">Go to my table</button>` : out ? `<p>You finished ${ord(out.place)}. You can still watch.</p>`
+        : (T.regs || []).includes(club.me.id) ? `<p><span class="status-pill reg">✓ You're registered</span></p><p>Finding your seat… your table opens by itself in a moment.</p>`
         : T.lateOpen ? `<p>Late registration is open until the end of level ${T.lateLevels}. You start with ${fmt(T.stack)} chips.</p><button class="btn red" id="joinBtn">Join now</button>` : '<p>You are not playing in this one. You can watch any table.</p>'}
       ${T.lateOpen && club.me.owner ? `<p class="note">Late registration open until the end of level ${T.lateLevels}. <a href="#" id="lateInvite">Invite more players</a></p>` : ''}
       <div class="table-list">${club.tables.map(t => `<div class="trow"><b>Table ${t.n}</b><small>${t.players} players</small><button class="back" data-watch="${esc(t.tid)}">Watch</button></div>`).join('')}</div>
@@ -529,7 +530,8 @@ function wireLobby(){
   const rf = $('rewardForm'); if(rf) rf.onsubmit = e => { e.preventDefault(); send({ t: 'addReward', name: $('rwName').value, cost: +$('rwCost').value, qty: +$('rwQty').value, value: $('rwValue').value }); };
   const on = (id, f) => { const el = $(id); if(el) el.onclick = f; };
   on('joinBtn', () => { send({ t: 'join' }); setTimeout(offerReminder, 600); });
-  on('leaveBtn', () => send({ t: 'leave' }));
+  // cancelling asks first; the server still only allows it while registration is open
+  on('leaveBtn', async () => { if(await modal(`<h2>Cancel your registration?</h2><p>You'll be taken off ${esc(club.tourney.name)}. You can join again while registration is open.</p>`, [{ label: 'Keep my seat', value: false }, { label: 'Cancel my registration', value: true, primary: true }])) send({ t: 'leave' }); });
   document.querySelectorAll('[data-watch]').forEach(b => b.onclick = () => openTable(b.dataset.watch));
   document.querySelectorAll('[data-range]').forEach(b => b.onclick = () => { boardRange = b.dataset.range; renderLobby(); });
   document.querySelectorAll('[data-kick]').forEach(b => b.onclick = () => send({ t: 'kick', uid: b.dataset.kick }));
