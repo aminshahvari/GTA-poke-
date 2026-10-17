@@ -17,7 +17,7 @@ const YEAR = 'public, max-age=31536000, immutable';
     const r = await fetch(BASE + p);
     assert.strictEqual(r.status, 200, p);
     assert.strictEqual(r.headers.get('content-security-policy'), CSP, 'CSP on ' + p);
-    assert.strictEqual(r.headers.get('cache-control'), 'no-store', 'app files are not cached long: ' + p);
+    assert.strictEqual(r.headers.get('cache-control'), 'no-cache', 'app files are always revalidated, never used stale: ' + p);
     assert.strictEqual(r.headers.get('x-content-type-options'), 'nosniff');
   }
   assert.ok(!/jsdelivr|unpkg|cdnjs/.test(CSP), 'no CDN in the CSP');
@@ -50,6 +50,14 @@ const YEAR = 'public, max-age=31536000, immutable';
   assert.notStrictEqual((await fetch(BASE + '/vendor/nope.js')).headers.get('cache-control'), YEAR);
   assert.strictEqual((await fetch(BASE + '/vendor/../../server/index.js')).status, 404, 'no path traversal');
   assert.strictEqual((await fetch(BASE + '/vendor/%2e%2e/%2e%2e/server/index.js')).status, 404, 'no encoded path traversal');
+  // app files revalidate: no-cache + ETag, and an unchanged file answers 304 with no body
+  const a1 = await fetch(BASE + '/app.js');
+  assert.strictEqual(a1.headers.get('cache-control'), 'no-cache');
+  const tag = a1.headers.get('etag'); assert.ok(tag, 'app.js has an ETag');
+  const a2 = await fetch(BASE + '/app.js', { headers: { 'if-none-match': tag } });
+  assert.strictEqual(a2.status, 304); assert.strictEqual((await a2.text()).length, 0);
+  assert.strictEqual((await fetch(BASE + '/app.js', { headers: { 'if-none-match': '"old"' } })).status, 200);
+  assert.ok((await fetch(BASE + '/')).headers.get('content-security-policy'), 'index keeps its CSP');
   console.log('csp + vendor test passed');
   srv.kill(); fs.rmSync(DATA, { force: true }); process.exit(0);
 })().catch(e => { console.error(e); srv.kill(); fs.rmSync(DATA, { force: true }); process.exit(1); });

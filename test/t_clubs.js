@@ -19,6 +19,8 @@ function clubView(tok, msg){
     ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', token: tok })));
     ws.on('message', m => { m = JSON.parse(m);
       if(m.t === 'auth' && !m.ok) return rej(new Error('auth'));
+      // a refused action answers with an error and no new view: read a fresh view instead
+      if(m.t === 'error' && msg){ ws.close(); return clubView(tok).then(v => res({ ...v, refused: m.error }), rej); }
       if(m.t !== 'club') return;
       if(++n === 1 && msg){ ws.send(JSON.stringify(msg)); return; }
       ws.close(); res(m.club); });
@@ -44,7 +46,8 @@ function clubView(tok, msg){
   await ok('oppSave', { type: 'need', title: 'Looking for a plumber', details: '', category: 'trades', area: '', expiresInDays: 30 }, O);
 
   // a member cannot open them
-  assert.strictEqual((await clubView(A, { t: 'clubs', on: true })).features.clubs, false);
+  const tried = await clubView(A, { t: 'clubs', on: true });
+  assert.strictEqual(tried.features.clubs, false); assert.match(tried.refused || '', /owner/);
   assert.strictEqual((await call('oppList', {}, A)).status, 403);
 
   // the owner opens them: members see the owner's listing

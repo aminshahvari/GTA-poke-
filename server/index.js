@@ -201,7 +201,14 @@ const server = http.createServer((req, res) => {
   // pinned third-party files (public/vendor/<name>-<version>/): never change at a given path, so phones may keep them for a year.
   // eng.traineddata.gz goes out as plain bytes with no Content-Encoding; the card reader unzips it itself.
   const cache = url.pathname.startsWith('/vendor/') ? { 'Cache-Control': 'public, max-age=31536000, immutable' } : undefined;
-  fs.readFile(full, (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES[path.extname(full)] || 'application/octet-stream', cache));
+  fs.readFile(full, (err, buf) => {
+    if(err) return send(res, 404, 'Not found', 'text/plain');
+    // app files: the phone keeps a copy but asks every time ("no-cache"); an unchanged file costs a 304 instead of the whole file
+    const tag = '"' + crypto.createHash('sha1').update(buf).digest('base64url').slice(0, 20) + '"';
+    const fresh = cache || { 'Cache-Control': 'no-cache', ETag: tag };
+    if(!cache && req.headers['if-none-match'] === tag){ res.writeHead(304, { ...SECURITY, ...fresh }); return res.end(); }
+    send(res, 200, buf, TYPES[path.extname(full)] || 'application/octet-stream', fresh);
+  });
 });
 
 // ---------- realtime ----------

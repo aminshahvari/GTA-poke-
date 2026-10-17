@@ -66,3 +66,15 @@ Disruption window: about 1 to 2 minutes of reconnecting sockets during Render's 
 2. Up to ~3 s window where the old server can answer a request that is never saved.
 3. Phase1 `fair_after_interrupt` and `sessions_owner_reset` still fail (B5, B6 not started).
 4. `test/t_server.js` is a known flaky timing test.
+
+## 8. Owner UX checks for R1 (from the Gemini review, 2026-10-17)
+
+| Check | Existing behaviour | Evidence |
+|---|---|---|
+| Switching Poker ⇄ Business/Opportunities never disrupts the connection, timer or game state | Business is a tab in the same page; the websocket is shared and not reopened on tab change [V code read: `public/app.js` tab click handler only re-renders] | browser check pending (screens in `r1-screens/home/`) |
+| Poker first during play; Business/Opportunities easy to reach otherwise | Home sections hidden while seated in a running tournament [V OC1 report 19a/19b] | re-check on the new Home |
+| Professional empty states; demo data never shown as real members | Empty states exist (BC1 report); demo rows only with `STAGING=1` [V code read] | screenshots pending |
+
+## 9. Release 2 backlog (not in R1)
+
+Multi-club rollout; owner reset of a member's PIN if not approved today; business card scanner if not tested on a real phone; Gemini proposals for review: Tablemates, Smart Club Lounge, AI Matching, VIP Invitations, Club Assist.
