@@ -359,7 +359,7 @@ function notice(kind, t){
   }
   if(kind === 'start') push.notify(t.regs, { title: `${t.name} is starting!`, body: 'Cards are in the air. Tap to take your seat.', tag: 'start-' + t.id, ttl: 600 }).catch(() => {});
 }
-club.setHooks({ onNotice: notice, onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.user.id === uid) sendWS(ws, msg); }, onClub: broadcastClub, onTable: pushTable, onTableClosed: tid => { chatLogs.delete(tid); for(const ws of sockets) sendWS(ws, { t: 'closed', tid }); broadcastClub(); } });
+club.setHooks({ onNotice: notice, onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.user.id === uid) sendWS(ws, msg); }, onClub: broadcastClub, onTable: pushTable, onTableClosed: tid => { chatLogs.delete(tid); for(const ws of sockets) if(ws.user) sendWS(ws, { t: 'closed', tid }); broadcastClub(); } });
 
 wss.on('connection', (ws, req) => {
   if(stopping){ try{ ws.close(4001, 'server moved'); }catch(e){} return; }
