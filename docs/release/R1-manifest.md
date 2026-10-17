@@ -1,27 +1,30 @@
 # Blindrise Release 1: release manifest (draft, 2026-10-17)
 
-Status: **DRAFT. Not frozen yet.** The RC SHA is filled in when the branch is frozen.
+Status: **FROZEN for audit.** Release candidate code = `a8eef118bf38de9d6ffdb0a1394595161909b5a8` (branch `rc-2026-10-17`; later commits on the branch are documentation only, and any code change re-freezes with a new SHA). Staging `gta-poker-staging` deploys this SHA from branch `staging`. **Release remains NO-GO until Muse's verdict and the owner's explicit approval.**
 Production today: `main` @ `d00b592` (Coming soon card). Production DB: `gta-poker-db` (paid plan `0.1c-256mb`, Postgres 17, IP allowlist empty = no external connections).
 
 Labels: **[V]** verified with evidence in this repo; **[A]** assumed / not verified. Muse column: audit status by Muse (independent), never filled by Claude.
 
-## 1. Features
+## 1. Features (status at freeze `a8eef11`)
 
-| Feature | Build status | Tests (Claude) | Muse | Release |
+| Feature | Build | Tests (Claude) | Muse | Release |
 |---|---|---|---|---|
-| Poker core: login, invite-only sign-up, scheduling, clock, blinds/antes, action timer, seating/balancing, late reg, points, leaderboard, director, results | DONE (on production today) | `npm test` exit 0 on `a824b0a` [V] | NOT VERIFIED | R1 |
-| B0 sign-in limit keyed on `cf-connecting-ip` | DONE, on production (`4d1be3b`) | `t_security` [V] | NOT VERIFIED | already live |
-| B1 single writer (lease + epoch fencing, graceful SIGTERM, `/healthz`) | DONE on staging | phase1 `two_instances`, `lease_fencing`, `sigterm_mid_hand` PASS [V] | NOT VERIFIED | R1 (gated by G2) |
-| P0 stay-up-fenced (no lease ping-pong) | DONE on staging (`78fbfb0`) | C1 controlled deploy record [V] | G2 **OPEN** | R1 (gated by G2) |
-| Business Club (profile, logo, category, contact by consent, search, Home carousel, moderation) | DONE on staging | `t_business`, `t_bizunit` [V] | NOT VERIFIED | R1, behind owner switch |
-| Opportunity Club (need/can help, private request, share contact by consent, report, director queue) | DONE on staging | `t_opportunity` [V] | NOT VERIFIED | R1, behind owner switch |
-| Owner switch for both clubs (closed by default in production) | DONE (`a824b0a`) | `t_clubs` [V] | NOT VERIFIED | R1 |
-| Business card scanner (on-device OCR, review screen, save draft, separate publish) | DONE in code | unit + browser test with synthetic card [V]; **not tested on a real phone** [A] | NOT VERIFIED | R2 unless tested on a real phone today |
-| Friend invitations (member links, group link) and mobile sign-up | DONE (on production today) | `t_server`, `t_security` [V] | NOT VERIFIED | already live |
-| Premium Home: Poker / Business / Opportunities | IN PROGRESS | | | R1 if done + screenshots |
-| Oval table, egg/tomato splat, winner chip animation (visual only) | IN PROGRESS | | | R1 if done |
-| Owner reset of a member's PIN | NOT STARTED (needs owner's yes: auth change) | | | R1 or R2 |
-| Multi-club | NOT STARTED (design only) | | | R2 |
+| Poker core | DONE (live today) | `npm test` exit 0 ×2 on the frozen tree; phase1 10 pass / 2 expected (B5, B6) | baseline audited | R1 |
+| B1 single writer + P0 stay-up-fenced | DONE | phase1 `two_instances`, `lease_fencing`, `lease_lost_stays_alive`, `restart_pingpong`, `sigterm_*` PASS | CONDITIONAL PASS; G2 CLOSED | R1 |
+| Business Club | DONE | `t_business`, `t_bizunit`; M-2 fix + `test/ui/t_bizsearch.js` | VERIFIED on staging (pre-redesign) | R1, clubs closed by default |
+| Opportunity Club | DONE | `t_opportunity` | VERIFIED on staging; F1 open (before opening clubs) | R1, clubs closed by default |
+| Owner switch for both clubs | DONE (`a824b0a`) | `t_clubs` (5/5 after race fix) | to audit in RC diff | R1 |
+| Premium Home (M-1) | DONE (`dee22db`) | screenshots `r1-screens/home/`, websocket/timer check `09-websocket-check.log` | to audit | R1 |
+| Registration clarity (M-3, owner-approved, UI only) | DONE (`4aefa37`) | `test/ui/t_registration.js` (fails on old code) | to audit | R1 |
+| Oval table, egg/tomato splat, winner chips (visual only) | DONE (`edccaf0`) | screenshots + video `r1-screens/table/` | to audit | R1 |
+| B7 removed member's sockets closed | DONE (`c806166`) | phase1 sessions part (c) | to audit | R1 |
+| App files revalidate (ETag / 304) | DONE (`d3ff7c1`) | `t_csp` | to audit | R1 |
+| `/login` opens the app | DONE (`9e124ba`) | manual | to audit | R1 |
+| Business card scanner | in code (BC1) | synthetic-card browser test; **no real phone** | code VERIFIED, device NOT VERIFIED | R2 unless the owner tests on a phone |
+| Friend invitations, mobile sign-up | live today | `t_server`, `t_security` | spot-audit | R1 (unchanged) |
+| B6 owner sessions survive resetOwner | NOT FIXED (owner decision pending) | phase1 expected FAIL | — | R2 by default |
+| Scheduled breaks, late-reg level 1-12 | NOT STARTED (owner: R2) | — | proposal reviewed | R2 |
+| Multi-club | NOT STARTED | — | — | R2 |
 
 Staging demo listings/businesses: created only when `STAGING=1` and the store has none (`server/business.js` seedDemo, `server/opportunity.js` seedDemo). Production does not set `STAGING`, so they never appear there [V code read]; staging and production have separate databases [V Render].
 
