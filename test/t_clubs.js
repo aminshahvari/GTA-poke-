@@ -15,7 +15,7 @@ const ok = async (p, body, tok) => { const r = await call(p, body, tok); assert.
 // open a socket, optionally send one message, and return the next club view
 function clubView(tok, msg){
   return new Promise((res, rej) => {
-    const ws = new WebSocket(BASE.replace('http', 'ws') + '/ws'); let n = 0;
+    const ws = new WebSocket(BASE.replace('http', 'ws') + '/ws'); let n = 0, last = null;
     ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', token: tok })));
     ws.on('message', m => { m = JSON.parse(m);
       if(m.t === 'auth' && !m.ok) return rej(new Error('auth'));
@@ -23,7 +23,10 @@ function clubView(tok, msg){
       if(m.t === 'error' && msg){ ws.close(); return clubView(tok).then(v => res({ ...v, refused: m.error }), rej); }
       if(m.t !== 'club') return;
       if(++n === 1 && msg){ ws.send(JSON.stringify(msg)); return; }
-      ws.close(); res(m.club); });
+      // other broadcasts can arrive first (presence after hello): wait for the view that reflects the change, or give up after 2 s
+      last = m.club;
+      if(!msg || m.club.features.clubs === msg.on){ ws.close(); res(m.club); } });
+    setTimeout(() => { if(last){ try{ ws.close(); }catch(e){} res(last); } }, 2000);
     ws.on('error', rej);
     setTimeout(() => { try{ ws.close(); }catch(e){} rej(new Error('timeout')); }, 5000);
   });
