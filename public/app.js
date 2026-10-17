@@ -160,9 +160,42 @@ function renderLobby(){
   if(!club) return;
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   const body = $('lobbyBody');
-  body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : comingHTML() + picNudgeHTML() + eventHTML() + friendsHTML();
+  body.innerHTML = tab === 'board' ? pageHead('Poker · The Strategy Table', 'Club standings') + boardHTML() : tab === 'learn' ? pageHead('Learn', 'The Salon') + learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : memberHomeHTML() + comingHTML() + picNudgeHTML() + eventHTML() + friendsHTML();
   wireLobby();
 }
+// Member Home: a personal welcome and the club's doors. Built only from what the club message already carries.
+// Business, Opportunity and the card scanner are not open in this build, so they show as "Opening soon" (as on the
+// Welcome screen) and do nothing when tapped; only Poker is a working door.
+const LX_IC = {
+  poker: '<path d="M12 3c3 3.5 6.5 5.7 6.5 9a3.4 3.4 0 0 1-5.8 2.4l1.1 4.1h-3.6l1.1-4.1A3.4 3.4 0 0 1 5.5 12c0-3.3 3.5-5.5 6.5-9z" fill="currentColor" stroke="none"/>',
+  biz: '<path d="M9 6V4.8c0-.4.4-.8.8-.8h4.4c.4 0 .8.4.8.8V6M4 7h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 12h16"/>',
+  opp: '<path d="M12 3l2.4 5.6L20 9.3l-4.3 3.9 1.3 5.8L12 16l-5 3 1.3-5.8L4 9.3l5.6-.7z"/>',
+  scan: '<path d="M4 8V5.5C4 4.7 4.7 4 5.5 4H8M16 4h2.5c.8 0 1.5.7 1.5 1.5V8M20 16v2.5c0 .8-.7 1.5-1.5 1.5H16M8 20H5.5C4.7 20 4 19.3 4 18.5V16"/><rect x="7" y="8.5" width="10" height="7" rx="1.2"/><path d="M9.5 11h3M9.5 13h5"/>' };
+function memberHomeHTML(){
+  const me = club.me, m = memberOf(me.id), T = club.tourney, st = T && T.status, hr = new Date().getHours();
+  const greet = hr < 5 ? 'Good evening' : hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
+  const pts = club.shop ? club.shop.balance : null, playing = !!(club.myTable && st === 'running');
+  const poker = playing ? 'Your table is live' : st === 'running' ? 'Live now · ' + esc(T.name) : st === 'registering' ? (T.regs.includes(me.id) ? "You're registered · " : 'Registration open · ') + esc(T.name) : 'Tournaments with friends';
+  const door = (k, title, sub, on) => on
+    ? `<button type="button" class="lx-door lx-${k}" data-lx="${k}"><span class="lx-door-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${LX_IC[k]}</svg></span><span class="lx-door-t"><b>${title}</b><small>${sub}</small></span><svg class="lx-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`
+    : `<div class="lx-door lx-${k} soon" aria-disabled="true"><span class="lx-door-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${LX_IC[k]}</svg></span><span class="lx-door-t"><b>${title}</b><small>${sub}</small></span><em>Opening soon</em></div>`;
+  return `<section class="lx-hello" aria-label="The Lounge">
+    <div class="lx-brandline"><span class="eyebrow">Blindrise · Private Members Club</span><span class="lx-lounge">The Lounge</span></div>
+    <div class="lx-id">${avHTML(me.id, me.name, 'big')}<div class="lx-id-t"><span class="lx-greet">${greet},</span><h2>${esc(me.name.split(' ')[0])}</h2>
+      <div class="lx-id-meta">${me.owner ? '<span class="lx-role">Club director</span>' : '<span class="lx-role">Member</span>'}${tierPill(m)}${pts != null ? `<span class="lx-pts"><b class="num">${fmt(pts)}</b> points</span>` : ''}</div></div></div>
+    <div class="lx-doors">${door('poker', 'The Strategy Table', 'Poker · ' + poker, true)}${door('biz', 'The Exchange', "Business Club · members' businesses", false)}${door('opp', 'The Bulletin', 'Opportunity Club · ask for help, or offer it', false)}${door('scan', 'Business Card Scanner', 'Turn a business card into your profile', false)}</div>
+    <p class="lx-motto"><b>Pull Up a Chair.</b> Good Company. Meaningful Connections.</p>
+  </section>`;
+}
+// a quiet page title for Leaderboard and Learn, in the club's own names
+const pageHead = (eyebrow, title) => `<header class="lx-pagehead"><span class="eyebrow">${eyebrow}</span><h2>${title}</h2></header>`;
+// the Poker door: back to your table when you're seated, otherwise down to the tournament
+$('lobbyBody').addEventListener('click', e => {
+  if(!e.target.closest('[data-lx=poker]')) return;
+  if(club.myTable && club.tourney && club.tourney.status === 'running') return openTable(club.myTable);
+  const hello = document.querySelector('#lobbyBody .lx-hello'), next = hello && hello.nextElementSibling, body = $('lobbyBody'); if(!next) return;
+  body.scrollTo({ top: next.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 10, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+});
 // Start times for a quick tournament: now, or a time later today (tomorrow if it has passed).
 function startChoices(){
   const out = [['', 'When I press Start']], now = Date.now();
@@ -291,7 +324,7 @@ function boardHTML(){
   }));
   const rows = [...agg.values()].sort((a, b) => b.pts - a.pts || b.wins - a.wins);
   if(boardSeg === 'prizes') return prizesHTML();
-  return `<div class="seg2">${[['board','Leaderboard'],['prizes','Prizes']].map(([k, l]) => `<button data-bseg="${k}" aria-pressed="${boardSeg === k}">${l}</button>`).join('')}</div><div class="card-box"><span class="eyebrow">Club leaderboard</span>
+  return `<div class="seg2">${[['board','Leaderboard'],['prizes','Prizes']].map(([k, l]) => `<button data-bseg="${k}" aria-pressed="${boardSeg === k}">${l}</button>`).join('')}</div><div class="card-box"><span class="eyebrow">Recognition for good play</span>
     <div class="seg2 small">${[['week','This week'],['month','30 days'],['all','All time']].map(([k, l]) => `<button data-range="${k}" aria-pressed="${boardRange === k}">${l}</button>`).join('')}</div>
     ${rows.length ? `<table class="tbl dark"><thead><tr><th>#</th><th>Player</th><th>Played</th><th>Wins</th><th>Cashes</th><th>Points</th></tr></thead><tbody>
       ${rows.map((r, i) => `<tr class="${r.uid === club.me.id ? 'me' : ''}"><td>${i + 1}</td><td><span class="lb-name" data-prof="${esc(r.uid)}">${avHTML(r.uid, nameOf(r.uid), 'xs')}${esc(nameOf(r.uid))}</span></td><td class="num">${r.played}</td><td class="num">${r.wins}</td><td class="num">${r.cashes}</td><td class="num">${r.pts}</td></tr>`).join('')}</tbody></table>`
