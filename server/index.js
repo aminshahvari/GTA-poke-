@@ -36,6 +36,12 @@ function userByToken(tok){
   const s = store.get('session:' + sha(tok)); if(!s) return null;
   const u = store.get('user:' + s.uid); return u && !u.removed ? u : null;
 }
+// sign a user out everywhere: every stored token goes, and open sockets are closed (the app then shows the sign-in screen)
+function revokeSessions(uid){
+  for(const k of store.keys('session:')) if(store.get(k).uid === uid) store.del(k);
+  for(const ws of sockets) if(ws.user && ws.user.id === uid){ ws.user = null; try{ ws.close(4003, 'signed out'); }catch(e){} }
+}
+const sameCode = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const isOwner = u => u && u.role === 'owner';
 
 // simple per-IP rate limit for login attempts
@@ -47,14 +53,17 @@ const recordFailure = key => { if(attempts.size > 5000) for(const k of attempts.
 // caller sent. x-forwarded-for there ends in Render's own internal proxy (same for every player), so it is only a local fallback.
 const clientIp = req => String(req.headers['cf-connecting-ip'] || '').trim() || String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean).pop() || req.socket.remoteAddress || '';
 // Per-account limit, which no header can get around: 10 wrong tries on one name locks that name for 10 minutes.
-const acctKey = (path, data) => path === '/api/login' ? 'acct:' + cleanName(data && data.name).toLowerCase() : path === '/api/resetOwner' ? 'acct:#owner' : null;
+const acctKey = (path, data) => path === '/api/login' ? 'acct:' + cleanName(data && data.name).toLowerCase() : null;
+// Owner recovery (setup code): 5 wrong codes lock only the address they came from, so a stranger cannot lock the real
+// owner out. A club-wide cap of 60 wrong codes per 10 minutes stops guessing spread over many addresses.
+const RECOVERY = ['/api/setup', '/api/resetOwner'], RECOVERY_IP = 5, RECOVERY_ALL = 60;
 
 const api = {
   // first-time setup of the club owner, guarded by OWNER_CODE from the environment
   setup({ code, name, pin, agree }){
     if(agree !== true) throw new Error('Please confirm you are 19 or older and agree to the club rules.');
     if(owner()) throw new Error('This club already has an owner.');
-    if(!process.env.OWNER_CODE || code !== process.env.OWNER_CODE) throw new Error('That setup code is not right.');
+    if(!process.env.OWNER_CODE || !sameCode(code, process.env.OWNER_CODE)) throw new Error('That setup code is not right.');
     name = cleanName(name);
     if(!validName(name)) throw new Error('Pick a name with 2 to 16 letters or numbers.');
     if(!validPin(pin)) throw new Error('Pick a PIN of 4 to 8 digits.');
@@ -88,10 +97,11 @@ const api = {
   // the owner forgot their PIN: the setup code from the server settings proves it's them
   resetOwner({ code, pin }){
     const id = owner(), u = id && store.get('user:' + id);
-    if(!u || !process.env.OWNER_CODE || code !== process.env.OWNER_CODE) throw new Error('That setup code is not right.');
+    if(!u || !process.env.OWNER_CODE || !sameCode(code, process.env.OWNER_CODE)) throw new Error('That setup code is not right.');
     if(!validPin(pin)) throw new Error('Pick a PIN of 4 to 8 digits.');
     const salt = crypto.randomBytes(12).toString('hex');
     store.set('user:' + id, { ...u, salt, pin: hashPin(pin, salt) });
+    revokeSessions(id); // a new PIN signs out every device that used the old one
     return { token: newSession(id), name: u.name };
   },
   invite(_, u){ return { code: inviteCode(u) }; },
@@ -173,10 +183,11 @@ const server = http.createServer((req, res) => {
         const data = body ? JSON.parse(body) : {};
         acct = acctKey(url.pathname, data);
         if(acct && blocked(acct, 10)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
+        if(RECOVERY.includes(url.pathname) && (blocked('rec' + ip, RECOVERY_IP) || blocked('rec:all', RECOVERY_ALL))) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
         if(extra && clubsClosedFor(u)) return send(res, 403, { error: 'Business Club opens soon.' }, undefined, extra);
         send(res, 200, fn(data, u), undefined, extra);
-      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); } send(res, [401, 403, 404, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.' }, undefined, extra); }
+      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); if(RECOVERY.includes(url.pathname) && /setup code/.test(e.message)){ recordFailure('rec' + ip); recordFailure('rec:all'); } } send(res, [401, 403, 404, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.' }, undefined, extra); }
     });
     return;
   }
@@ -367,12 +378,12 @@ wss.on('connection', (ws, req) => {
     if(m.t === 'hello'){
       const u = userByToken(m.token);
       if(!u) return sendWS(ws, { t: 'auth', ok: false });
-      ws.user = u; remember(u, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); sendWS(ws, { t: 'auth', ok: true });
+      ws.user = u; ws.sess = sha(m.token); remember(u, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); sendWS(ws, { t: 'auth', ok: true });
       sendWS(ws, { t: 'club', club: clubView(u) });
       const mine = club.tableOf(u.id); if(mine){ pushTable(mine); chatLogFor(ws, mine); }
       return;
     }
-    const u = ws.user && store.get('user:' + ws.user.id);
+    const u = ws.user && store.get('session:' + ws.sess) && store.get('user:' + ws.user.id);
     if(!u || u.removed) return sendWS(ws, { t: 'auth', ok: false });
     ws.user = u;
     try{
@@ -420,7 +431,7 @@ wss.on('connection', (ws, req) => {
         case 'invite': { const code = inviteCode(u, !!m.group); sendWS(ws, { t: 'invite', code, group: !isOwner(u) || !!m.group, max: store.get('invite:' + code).max || 1 }); broadcastClub(); } break;
         case 'membersInvite': own(u); store.set('settings', { ...(store.get('settings') || {}), membersInvite: !!m.on }); broadcastClub(); break;
         case 'revoke': own(u); { const inv = store.get('invite:' + m.code); if(inv) store.set('invite:' + m.code, { ...inv, revoked: true }); broadcastClub(); } break;
-        case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); for(const k of store.keys('session:')) if(store.get(k).uid === x.id) store.del(k); for(const ws of sockets) if(ws.user && ws.user.id === x.id){ ws.user = null; try{ ws.close(4003, 'removed'); }catch(e){} } club.leave(x.id); business.removeUser(x.id); opportunity.removeUser(x.id); } broadcastClub(); } break;
+        case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); revokeSessions(x.id); club.leave(x.id); business.removeUser(x.id); opportunity.removeUser(x.id); } broadcastClub(); } break;
       }
     }catch(e){ sendWS(ws, { t: 'error', error: e.message }); }
   });

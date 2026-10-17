@@ -1,0 +1,42 @@
+
+> stacked-poker@1.0.0 test
+> node test/t_eval.js && node test/t_rules.js && node test/t_sim.js 20 && node test/t_server.js && node test/t_coach.js && node test/t_players.js && node test/t_push.js && node test/t_extra.js && node test/t_security.js && node test/t_bizunit.js && node test/t_business.js && node test/t_opportunity.js && node test/t_clubs.js && node test/t_csp.js
+
+random 7-card hands checked: 200000 category counts: High Card:34697, Pair:87324, Two Pair:47162, Three of a Kind:9744, Straight:9336, Flush:6066, Full House:5266, Four of a Kind:344, Straight Flush:61
+evaluator: all passed
+42 passed, 0 failed
+random-action stress: 3000 tournaments, 31296 hands, 1.698s, problems 0
+AI tournaments: 20, avg 163 hands, 5.954s, wins by style { tight: 7, aggro: 4, cautious: 8, loose: 1 } top-3 by style { cautious: 27, tight: 16, aggro: 10, loose: 7 } problems 0
+fair deal: 441 hands verified, 1762 dealt hands cross-checked
+server test: 23 players, max 3 tables, 0 hand-for-hand rounds, 3 tied, 260 chip checks, 550 actions, 70s, champion Friend 8
+server test passed
+coach test: 617 hands, 655 notes {
+  'Big over-shove': 75,
+  'All-in equity': 219,
+  'Called a raise with a weak hand': 110,
+  'Bad beat': 25,
+  'Got lucky': 28,
+  'Limped in': 40,
+  'Opened a weak hand': 22,
+  'Called off with a weak hand': 87,
+  'Folded for a small price': 7,
+  'Risky call near the bubble': 25,
+  'All-in bluff into a crowd': 8,
+  'Good all-in': 5,
+  'Missed an all-in': 1,
+  'Paid off with nothing': 2,
+  'Small raise with a short stack': 1
+}
+coach test passed
+store: file /tmp/t_players_2681.json, 0 keys
+players test passed
+store: file /tmp/t_push_2688.json, 0 keys
+push test passed
+extra-time test passed
+security test passed
+store: file /tmp/t_bizunit_2879.json, 0 keys
+business units passed (card parser, validators, staging seed)
+business club test passed
+opportunity club test passed
+clubs switch test passed
+csp + vendor test passed
