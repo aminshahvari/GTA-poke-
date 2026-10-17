@@ -76,7 +76,9 @@ function measure(){
   document.querySelectorAll('#seats .seat').forEach((s, i) => {
     s.querySelectorAll('.hole .card, .av, .plate, .badge').forEach(e => boxes.push({ kind: 'seat', seat: i, name: s.querySelector('.nm').textContent + ' ' + e.classList[0], ...R(e) }));
     const b = s.querySelector('.badge'), st = s.querySelector('.st'), nm = s.querySelector('.nm');
-    if(b && hit(R(b), R(st))) own.push(`"${b.textContent}" covers ${nm.textContent}'s stack ${st.textContent} by ${(R(st).b - R(b).t).toFixed(1)}px`);
+    // at least 1 px of clear space between a badge and its stack, so a 1-2 px rounding or font difference between
+    // browsers can't make them touch (Muse saw 1-2 px grazes in another Chromium setup when this was a 0 px fit)
+    if(b && R(b).t - R(st).b < 1 && Math.min(R(b).r, R(st).r) - Math.max(R(b).l, R(st).l) > 0.5) own.push(`"${b.textContent}" sits ${(R(b).t - R(st).b).toFixed(1)}px from ${nm.textContent}'s stack ${st.textContent} (needs 1px clear)`);
     if(b && !s.classList.contains('hero') && hit(R(b), R(nm))) own.push(`"${b.textContent}" covers the name ${nm.textContent}`);
     names.push({ text: nm.textContent, cut: nm.scrollWidth > nm.clientWidth + 1, hero: s.classList.contains('hero') });
   });
@@ -99,6 +101,19 @@ function measure(){
   for(let i = 0; i < 60; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(150); }
   const T7 = await login(7), T9 = await login(9), T5 = await login(5);
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
+  // FONTS_DIR=<dir with fonts.css + woff2 files named like fonts.gstatic.com paths with / -> _>: serve the real IBM Plex
+  // fonts the page asks Google Fonts for, so text widths match production (without it, Chromium falls back to system fonts)
+  if(process.env.FONTS_DIR){
+    const fs = require('fs'), path = require('path'), dir = process.env.FONTS_DIR, open = browser.newPage.bind(browser);
+    browser.newPage = async o => { const pg = await open(o);
+      await pg.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => { const u = r.request().url();
+        if(u.includes('fonts.googleapis.com/css2')) return r.fulfill({ status: 200, contentType: 'text/css', body: fs.readFileSync(path.join(dir, 'fonts.css')) });
+        const f = path.join(dir, u.slice('https://fonts.gstatic.com/'.length).replace(/\//g, '_'));
+        return fs.existsSync(f) ? r.fulfill({ status: 200, contentType: 'font/woff2', headers: { 'access-control-allow-origin': '*' }, body: fs.readFileSync(f) }) : r.abort(); });
+      return pg; };
+    const pg = await browser.newPage({}); await pg.goto(BASE + '/'); const ok = await pg.evaluate(async () => (await document.fonts.load('600 16px "IBM Plex Sans"')).length > 0); await pg.close();
+    check(ok, 'real IBM Plex fonts loaded from FONTS_DIR');
+  }
 
   // ---- 1-3: the live table ----
   for(const vp of PHONES.filter(v => !process.env.ONLY || process.env.ONLY === v.join('x'))){

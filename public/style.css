@@ -79,14 +79,14 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .table-area.compact .seat:not(.hero) .plate{min-width:70px;padding:5px 5px 2px}
 .table-area.compact .seat:not(.hero) .nm{font-size:11px;max-width:68px}
 .table-area.compact .seat:not(.hero) .st{font-size:12px}
-.table-area.compact .seat .badge{font-size:9px;bottom:-13px}
+.table-area.compact .seat .badge{font-size:9px;bottom:-16px}
 /* the smallest seats, for a full table in a short area (iPhone SE class) */
 .table-area.mini .seat:not(.hero){width:66px}
 .table-area.mini .seat:not(.hero) .av{width:26px;height:26px;font-size:11px;border-width:1.5px}
 .table-area.mini .seat:not(.hero) .plate{min-width:60px;padding:4px 4px 2px;border-radius:7px;margin-top:-5px}
 .table-area.mini .seat:not(.hero) .nm{font-size:10px;max-width:58px}
 .table-area.mini .seat:not(.hero) .st{font-size:11px}
-.table-area.mini .seat .badge{font-size:8.5px;padding:1px 4px;bottom:-11px}
+.table-area.mini .seat .badge{font-size:8.5px;padding:1px 4px;bottom:-14px}
 .table-area.mini .card.mini{--w:13px}
 .table-area.mini .hole:not(.shown){margin-bottom:-8px}
 .table-area.mini .seat.hero{width:104px}
@@ -123,7 +123,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .seat.win .plate{border-color:var(--good);box-shadow:0 0 0 2px var(--good),0 0 22px rgba(111,220,171,.55)}
 .nm{font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:76px;color:#e9e3e4}
 .st{font-size:13px;font-weight:700;color:var(--gold)}
-.badge{position:absolute;left:50%;bottom:-14px;transform:translateX(-50%);background:#4d4549;color:#fff;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;white-space:nowrap;z-index:4}
+.badge{position:absolute;left:50%;bottom:-17px;transform:translateX(-50%);background:#4d4549;color:#fff;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;white-space:nowrap;z-index:4}
 .badge.act-raise,.badge.act-bet,.badge.act-all-in{background:var(--red)}
 .badge.act-call,.badge.act-check{background:#2f6f57}
 .badge.hand{background:#3a3236;color:#f0e6c8}
@@ -1316,4 +1316,9 @@ label.btn{display:flex;align-items:center;justify-content:center;gap:8px;cursor:
   .me-chip .me-btn{gap:6px}
   .me-chip .me-btn span{white-space:normal;line-height:1.15;max-width:84px;font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere;text-align:left}
   .me-chip .back{padding-left:10px;padding-right:10px}
+}
+/* 320 px: the logo and Sign out give up a little width so "Player 07" never has to break mid-word (it had ~3 px to spare) */
+@media (max-width:340px){
+  .topbar .mini-logo{font-size:18px}
+  .me-chip .back{padding-left:8px;padding-right:8px}
 }
