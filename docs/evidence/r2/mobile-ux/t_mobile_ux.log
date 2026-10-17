@@ -1,0 +1,75 @@
+ok   320x568 badges clear of their own stack and name
+ok   320x568 nothing on the felt overlaps (your turn)
+ok   320x568 every seat's name is different: Test 07, Test 01, Test 02, Test 03, Test 04, Test 05, Test 06, Test 08, Test 09
+ok   320x568 no opponent's name is cut off
+NOTE 320x568 nothing overlaps while someone else acts: bet "1,200" x dealer "D"; bet "1,200" x pot "pot"; bet "400" x pot "pot"
+ok   320x568 coach tip shown over the table without shrinking it (333px -> 333px)
+NOTE 320x568 nothing overlaps with the coach tip open: bet "1,200" x dealer "D"; bet "1,200" x pot "pot"; bet "400" x pot "pot"
+ok   320x568 coach tip stays above the action bar
+ok   320x568 coach tip closes on your turn, table back to 378px (now 378px)
+ok   320x568 nothing overlaps on your next decision
+ok   375x667 badges clear of their own stack and name
+ok   375x667 nothing on the felt overlaps (your turn)
+ok   375x667 every seat's name is different: Test 07, Test 01, Test 02, Test 03, Test 04, Test 05, Test 06, Test 08, Test 09
+ok   375x667 no opponent's name is cut off
+ok   375x667 nothing overlaps while someone else acts
+ok   375x667 coach tip shown over the table without shrinking it (420px -> 420px)
+ok   375x667 nothing overlaps with the coach tip open
+ok   375x667 coach tip stays above the action bar
+ok   375x667 coach tip closes on your turn, table back to 398px (now 398px)
+ok   375x667 nothing overlaps on your next decision
+ok   375x629 badges clear of their own stack and name
+ok   375x629 nothing on the felt overlaps (your turn)
+ok   375x629 every seat's name is different: Test 07, Test 01, Test 02, Test 03, Test 04, Test 05, Test 06, Test 08, Test 09
+ok   375x629 no opponent's name is cut off
+ok   375x629 nothing overlaps while someone else acts
+ok   375x629 coach tip shown over the table without shrinking it (382px -> 382px)
+ok   375x629 nothing overlaps with the coach tip open
+ok   375x629 coach tip stays above the action bar
+ok   375x629 coach tip closes on your turn, table back to 360px (now 360px)
+ok   375x629 nothing overlaps on your next decision
+ok   390x664 badges clear of their own stack and name
+ok   390x664 nothing on the felt overlaps (your turn)
+ok   390x664 every seat's name is different: Test 07, Test 01, Test 02, Test 03, Test 04, Test 05, Test 06, Test 08, Test 09
+ok   390x664 no opponent's name is cut off
+ok   390x664 nothing overlaps while someone else acts
+ok   390x664 coach tip shown over the table without shrinking it (417px -> 417px)
+ok   390x664 nothing overlaps with the coach tip open
+ok   390x664 coach tip stays above the action bar
+ok   390x664 coach tip closes on your turn, table back to 395px (now 395px)
+ok   390x664 nothing overlaps on your next decision
+ok   390x844 badges clear of their own stack and name
+ok   390x844 nothing on the felt overlaps (your turn)
+ok   390x844 every seat's name is different: Test 07, Test 01, Test 02, Test 03, Test 04, Test 05, Test 06, Test 08, Test 09
+ok   390x844 no opponent's name is cut off
+ok   390x844 nothing overlaps while someone else acts
+ok   390x844 coach tip shown over the table without shrinking it (545px -> 545px)
+ok   390x844 nothing overlaps with the coach tip open
+ok   390x844 coach tip stays above the action bar
+ok   390x844 coach tip closes on your turn, table back to 522px (now 522px)
+ok   390x844 nothing overlaps on your next decision
+ok   360x740 badges clear of their own stack and name
+ok   360x740 nothing on the felt overlaps (your turn)
+ok   360x740 every seat's name is different: Test 07, Test 01, Test 02, Test 03, Test 04, Test 05, Test 06, Test 08, Test 09
+ok   360x740 no opponent's name is cut off
+ok   360x740 nothing overlaps while someone else acts
+ok   360x740 coach tip shown over the table without shrinking it (441px -> 441px)
+ok   360x740 nothing overlaps with the coach tip open
+ok   360x740 coach tip stays above the action bar
+ok   360x740 coach tip closes on your turn, table back to 418px (now 418px)
+ok   360x740 nothing overlaps on your next decision
+ok   412x839 badges clear of their own stack and name
+ok   412x839 nothing on the felt overlaps (your turn)
+ok   412x839 every seat's name is different: Test 07, Test 01, Test 02, Test 03, Test 04, Test 05, Test 06, Test 08, Test 09
+ok   412x839 no opponent's name is cut off
+ok   412x839 nothing overlaps while someone else acts
+ok   412x839 coach tip shown over the table without shrinking it (540px -> 540px)
+ok   412x839 nothing overlaps with the coach tip open
+ok   412x839 coach tip stays above the action bar
+ok   412x839 coach tip closes on your turn, table back to 517px (now 517px)
+ok   412x839 nothing overlaps on your next decision
+ok   320x568 top bar shows "Test Player 07" in full, no sideways scroll
+ok   Business directory refreshes on coming back to the tab (5 businesses -> 6 businesses)
+ok   the new business is found by search without a reload
+ok   320x568 share error "Please remove the web address from note. Share an email or phone number above instead. If it is not a web address, add a space after the period." and its button are on screen (error 396,490, button 502,552, screen 568)
+mobile ux test passed

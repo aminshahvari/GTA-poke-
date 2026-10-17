@@ -614,7 +614,7 @@ function seatSizes(area, look, bet){
   const key = `${look}:${bet}:${area.style.getPropertyValue('--cw')}`;
   if(SIZES.has(key)) return SIZES.get(key);
   const S = inLook(area, look, () => {
-    const txt = '<div class="nm">Wwwwwwwwwwwwww</div><div class="st num">8,888,888</div>', badge = '<span class="badge raise">Raise 888,888</span>', at = 'style="left:0;top:0"';
+    const txt = '<div class="nm">Wwwwwwwwwwwwww</div><div class="st num">8,888,888</div>', badge = '<span class="badge act-raise">Raise 888,888</span>', at = 'style="left:0;top:0"';
     const p = document.createElement('div');
     p.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;pointer-events:none';
     p.innerHTML = `<div class="seat" ${at}><div class="hole">${cardHTML(null, 'mini')}${cardHTML(null, 'mini')}</div>${avHTML('', 'W W')}<div class="plate">${txt}${badge}</div></div>`
@@ -981,6 +981,18 @@ async function saveAvatar(a){
   catch(err){ toast(err.message); }
 }
 
+// short seat names that still tell everyone apart: "Sean Shahvari" -> "Sean", "Test Player 07" -> "Test 07" when
+// several players share a first name, "Sean S." for two Seans; names up to 10 characters stay as they are
+function seatNicks(all){
+  const w = n => String(n).trim().split(/\s+/);
+  const at = (n, L) => { const x = w(n); if(x.length < 2) return x[0] || ''; if(L === 0) return x[0]; const last = x[x.length - 1]; return x[0] + ' ' + (/^\d+$/.test(last) || last.length <= 3 ? last : last[0].toUpperCase() + '.'); };
+  return n => {
+    if(String(n).trim().length <= 10) return n;
+    const taken = new Set(all.filter(o => o !== n).flatMap(o => [String(o).trim(), at(o, 0), at(o, 1)].map(t => t.toLowerCase())));
+    for(const L of [0, 1]){ const c = at(n, L); if(!taken.has(c.toLowerCase())) return c; }
+    return n;
+  };
+}
 function renderTable(){
   if(view !== 'table' || !club) return;
   const tid = watchTid || club.myTable, d = tables.get(tid);
@@ -1019,6 +1031,7 @@ function renderTable(){
   area.classList.toggle('tall', G.tall); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini);
   if(!d.result) $('fx').querySelectorAll('.winpile').forEach(e => { if(e.dataset.hand !== d.tid + ':' + d.handNo){ e.classList.add('gone'); setTimeout(() => e.remove(), 400); } });
   const mc = myCards.get(d.tid), mine = mc && mc.hand === d.handNo ? mc.cards.map(cs) : null;
+  const nick = seatNicks(d.seats.filter(Boolean).map(p => p.name));
   let html = '';
   for(const s of LY.allowed){
     const p = d.seats[s], pos = posOf(s);
@@ -1041,7 +1054,7 @@ function renderTable(){
     if(res && p.won > 0) badge = '<span class="badge won">Winner</span>';
     else if(res && res.showdown && p.cat) badge = `<span class="badge hand">${esc(p.cat)}</span>`;
     else if(p.away) badge = '<span class="badge">Away</span>';
-    else if(p.act){ const amt = (p.act === 'Raise' || p.act === 'Bet') ? ' ' + fmt(p.lastAmt) : ''; badge = `<span class="badge ${p.act.toLowerCase()}">${esc(p.act)}${amt}</span>`; }
+    else if(p.act){ const amt = (p.act === 'Raise' || p.act === 'Bet') ? ' ' + fmt(p.lastAmt) : ''; badge = `<span class="badge act-${p.act.toLowerCase().replace(/[^a-z]+/g, '-')}">${esc(p.act)}${amt}</span>`; }
     const acting = d.acting === s;
     const stackTxt = p.inHand && p.allIn && !res ? 'All-in' : fmt(p.stack);
     const cls = `seat ${isMe ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
@@ -1049,8 +1062,8 @@ function renderTable(){
     const av = avHTML(p.uid, p.name);
     const shot = acting ? '<div class="shot"><i class="shotBar"></i></div>' : '';
     html += isMe
-      ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
-      : `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`;
+      ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
+      : `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`;
     if(p.inHand && p.bet > 0){
       const [bx, by] = LY.betOf(s), bp = pxToPct([bx, by]), [sx, sy] = pctToPx(pos);
       const key = `b${handKey}-${d.street}-${s}-${p.bet}`, isNew = !seen.has(key); seen.add(key);
@@ -1067,6 +1080,8 @@ function renderTable(){
   $('sPlayers').textContent = `${d.seats.filter(Boolean).length} seated`;
   renderControls(d, mySeat, mine);
   renderHelper(d, mySeat >= 0 ? d.seats[mySeat] : null, mine);
+  // last hand's coach tip floats over the table; it gets out of the way when it's your turn to act
+  if(d.actUid === club.me.id && !d.result && !$('coachTip').hidden){ $('coachTip').hidden = true; clearTimeout(tipTimer); }
   tickClock();
 }
 // Pre-actions (like the big online rooms): pick Check/Fold, Check, Call or Call any before your turn.
