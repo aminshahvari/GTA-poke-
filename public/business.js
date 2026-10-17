@@ -120,9 +120,10 @@ function renderList(el){
   }
   const L = S.list, items = L.items;
   const kids = [window.OppClub.topBar('biz'), header()];
+  let spot = null, recent = null;
   if(L.spotlight){
     const b = L.spotlight;
-    kids.push(h('div', { class: 'card-box bz-spot' },
+    kids.push(spot = h('div', { class: 'card-box bz-spot' },
       h('span', { class: 'eyebrow bz-eyebrow bz-eyeic' }, I('star'), 'Member Spotlight'),
       h('button', { class: 'bz-spot-main c-' + catId(b), type: 'button', onclick: () => openDetail(b.uid) },
         logoEl(b, 'xl'),
@@ -141,18 +142,22 @@ function renderList(el){
     const present = new Set(items.map(b => b.category));
     const chips = h('div', { class: 'bz-chips', role: 'group', 'aria-label': 'Filter by industry' },
       [['', 'All'], ...S.cats.filter(c => present.has(c[0]))].map(([id, l]) => h('button', { type: 'button', class: 'bz-chip', 'aria-pressed': String(S.cat === id), onclick: () => { S.cat = id; renderList(el); } }, l)));
-    const grid = h('div', { class: 'bz-grid' });
+    const grid = h('div', { class: 'bz-grid' }), count = h('div', { class: 'bz-count', 'aria-live': 'polite' });
+    // while searching or filtering, the whole page agrees with the results: spotlight and "New to the Club" step aside and the count is of matches
     const fill = () => {
-      const f = filtered();
+      const f = filtered(), narrowed = !!(S.q.trim() || S.cat);
+      if(spot) spot.hidden = narrowed;
+      if(recent) recent.hidden = narrowed;
+      count.textContent = narrowed ? f.length + ' of ' + items.length + ' businesses' : items.length === 1 ? '1 business' : items.length + ' businesses';
       grid.replaceChildren(...(f.length ? f.map(b => bizCard(b)) : [h('div', { class: 'card-box bz-empty bz-nomatch' }, h('span', { class: 'bz-empty-art', 'aria-hidden': 'true' }, I('search')), h('p', null, 'No businesses match that search.'), h('button', { class: 'btn', onclick: () => { S.q = ''; S.cat = ''; renderList(el); } }, 'Clear search'))]));
     };
     search.addEventListener('input', () => { S.q = search.value; fill(); });
     kids.push(h('div', { class: 'bz-find' }, search, chips));
-    if(L.recent.length && !S.q && !S.cat){
-      kids.push(h('div', { class: 'card-box bz-recent' }, h('span', { class: 'eyebrow bz-eyebrow' }, 'New to the Club'),
+    if(L.recent.length){
+      kids.push(recent = h('div', { class: 'card-box bz-recent' }, h('span', { class: 'eyebrow bz-eyebrow' }, 'New to the Club'),
         h('div', { class: 'bz-rail' }, L.recent.map(b => miniCard(b)))));
     }
-    kids.push(h('div', { class: 'bz-count' }, items.length === 1 ? '1 business' : items.length + ' businesses'), grid);
+    kids.push(count, grid);
     fill();
   }
   if(L.canModerate && L.hidden && L.hidden.length){

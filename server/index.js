@@ -194,7 +194,7 @@ const server = http.createServer((req, res) => {
     if(r.status !== 200) return send(res, r.status, 'Not found', 'text/plain', NOINDEX);
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
-  let file = url.pathname === '/' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
+  let file = url.pathname === '/' || url.pathname === '/login' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
   if(file === 'engine.js') return fs.readFile(path.join(__dirname, 'engine.js'), (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES['.js']));
   const full = path.join(PUBLIC, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
   if(!full.startsWith(PUBLIC)) return send(res, 404, 'Not found', 'text/plain');
