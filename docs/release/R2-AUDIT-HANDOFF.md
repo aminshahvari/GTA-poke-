@@ -1,5 +1,7 @@
 # Release 2 — handoff to Muse for independent audit
 
+> **Update 2026-10-17 15:xx UTC — F1 gaps from Muse's probing.** Persian/Arabic-Indic digits, comma-separated phones and letter-for-digit (O1OO) are fixed in `server/content.js`; see `R2-F1-gaps-muse-oct17.md` (before/after, 261-probe matrix, server checks, known limits). New code candidate: the commit that adds that note (code change only in server/content.js + test/t_content.js since `8919df3`). F1 verdict remains Muse's.
+
 > **Update 2026-10-17 (owner decisions of 14:08 UTC).** Code candidate: `r2-dev` @ `8919df3` (later commits on r2-dev are docs only; Muse please audit and name the exact SHA you approve for staging).
 > - B5 policy **APPROVED** by the owner: void verifiable record, replay keeps its hand number (as built).
 > - F1 **REVISED**: social handles, profile links and messaging-app IDs now blocked too (`02d2886`); test/t_content.js 201 probes (54 social incl. 15 bypass attempts, 80 allowed incl. 27 social false-positive checks).

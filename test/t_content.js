@@ -56,6 +56,19 @@ const MATRIX = [
   ['a snap to install', _], ['ig and fb ads', _], ['Telegram bot development', _], ['WhatsApp Business setup', _], ['YouTube channel editing', _],
   ['Pinterest boards for brands', _], ['LinkedIn profile writing', _], ['discord moderation tips', _], ['Text me through the club', _], ['Rivera & Sons', _],
   ['Plan B is fine', _], ['Vitamin D and B12', _],
+  // Muse F1 probe gaps (Oct 17): Persian / Arabic-Indic / other-script digits, comma-separated phones, letters for digits
+  ['۴۱۶-۵۵۵-۰۱۰۰', P], ['۴۱۶ ۵۵۵ ۰۱۰۰', P], ['۴۱۶۵۵۵۰۱۰۰', P], ['تلفن: ۰۹۱۲ ۳۴۵ ۶۷۸۹', P], ['٤١٦ ٥٥٥ ٠١٠٠', P], ['٤١٦٥٥٥٠١٠٠', P],
+  ['call ٤١٦-٥٥٥-0100', P], ['४१६ ५५५ ०१००', P], ['৪১৬ ৫৫৫ ০১০০', P], ['+٤٤ ٢٠ ٧٩٤٦ ٠٩٥٨', P],
+  ['416,829,5953', P], ['416, 829, 5953', P], ['1,416,829,5953', P], ['(416),829,5953', P], ['call 416 ,829, 5953', P], ['10, 416 555 0100, 12', P],
+  ['416-555-O1OO', P], ['416 555 O1OO', P], ['4l6 555 OlOO', P], ['Call 416 555 OIOO', P], ['(4l6) 555-0l00', P], ['Call l-8OO-555-OI99', P],
+  ['4I6.555.0I00', P], ['416 555 0|00', P], ['Ref: 416 555 0100', P], ['Order 416-555-0100', P], ['call 4471-2290', P],
+  ['قیمت ۱۵۰۰ دلار', _], ['۱٬۵۰۰٬۰۰۰ تومان', _], ['از سال ۲۰۱۹', _], ['۲۰-۳۰ نفر', _], ['٣ سنوات خبرة', _], ['۱۴۰۳/۰۷/۲۶', _],
+  ['$1,500,000', _], ['1,500,000 sq ft', _], ['Price 1,250.50', _], ['Sizes 10, 12, 14, 16, 18', _], ['Orders 1043, 1044, 1045', _],
+  ['Rooms 101, 102, 103, 104', _], ['1500, 2000, 2500 sq ft', _], ['$45, $60, $90', _], ['Sizes 100, 200, 300, 400', _], ['Since 1998, 25 years', _],
+  ['Suite 1100, 150 King St W', _], ['PO Box 1234, Toronto ON M5H 2M9', _], ['Toronto ON M4C 1B5, Canada', _], ['Invoice 2026-10-17, 1500 units', _],
+  ['Order no. 4471-2290', _], ['Order #10045678', _], ['Invoice 20261017-0042', _], ['Order #10045', _],
+  ['Oil change 2019', _], ['OIL and gas since 1999', _], ['I/O boards, 10 pcs', _], ['Model IO1 since 2019', _], ['lol 5 stars', _], ['Iron Oil Co.', _],
+  ['Social media marketing for Toronto bakeries', _], ['Instagram growth for 10, 20 or 50 posts', _], ['Lot 12, 13 and 14', _],
   ['3.5 stars', _], ['v2.0 release', _], ['Room for 6-8 people', _], ['Call me after 6', _], ['1-on-1 coaching', _], ['Need 2 3D printers', _]
 ];
 let fails = 0;
@@ -159,6 +172,12 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   // a refused edit leaves the saved profile alone
   await err('bizSave', biz({ services: 'Call 416 555 0100' }), A);
   assert.strictEqual((await ok('bizMine', {}, A)).mine.services, 'Water heaters (40-60 gallon), 2-3 day renos');
+  // Muse's F1 bypasses are refused on the server too; allowed text in other scripts is saved exactly as typed (never rewritten)
+  for(const t of ['Call ۴۱۶ ۵۵۵ ۰۱۰۰', 'Call ٤١٦-٥٥٥-٠١٠٠', 'Call 416,829,5953', 'Call 416 555 O1OO'])
+    assert.match(await err('bizSave', biz({ services: t }), A), /phone number from services/, t);
+  const fa = 'قیمت از ۱٬۵۰۰ دلار، از سال ۱۴۰۳/۰۷/۲۶. Order no. 4471-2290; 1,500,000 sq ft; sizes 10, 12, 14';
+  await ok('bizSave', biz({ services: fa }), A);
+  assert.strictEqual((await ok('bizMine', {}, A)).mine.services, fa, 'saved byte for byte');
   // switched on, the Instagram handle reaches members, from its own field only
   await ok('bizSave', biz({ show: { website: true, email: true, instagram: true } }), A);
   assert.deepStrictEqual((await ok('bizGet', { uid: idA }, B)).business.contacts.instagram, { handle: 'rivera_pl', url: 'https://instagram.com/rivera_pl' });

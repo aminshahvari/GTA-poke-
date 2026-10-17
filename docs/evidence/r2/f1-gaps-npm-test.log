@@ -1,0 +1,47 @@
+
+> stacked-poker@1.0.0 test
+> node test/t_eval.js && node test/t_rules.js && node test/t_sim.js 20 && node test/t_server.js && node test/t_chat.js && node test/t_coach.js && node test/t_players.js && node test/t_push.js && node test/t_extra.js && node test/t_security.js && node test/t_bizunit.js && node test/t_business.js && node test/t_opportunity.js && node test/t_content.js && node test/t_clubs.js && node test/t_csp.js
+
+random 7-card hands checked: 200000 category counts: High Card:35046, Pair:87710, Two Pair:47006, Three of a Kind:9746, Straight:9084, Flush:6014, Full House:4983, Four of a Kind:340, Straight Flush:71
+evaluator: all passed
+42 passed, 0 failed
+random-action stress: 3000 tournaments, 30572 hands, 2.396s, problems 0
+AI tournaments: 20, avg 138 hands, 6.289s, wins by style { tight: 8, loose: 3, cautious: 5, aggro: 4 } top-3 by style { tight: 21, cautious: 19, loose: 10, aggro: 10 } problems 0
+fair deal: 419 hands verified, 1679 dealt hands cross-checked
+server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 4 tied, 277 chip checks, 531 actions, 74s, champion Friend 10
+server test passed
+rebalance: P15 moved t1792251078134-3 -> t1792251078134-1
+break: P10 moved t1792251078134-1 -> t1792251078134-3 (old table closed)
+break: P15 moved t1792251078134-1 -> t1792251078134-2 (old table closed)
+chat test: 1849 checks, 1 moved by rebalance, 2 moved by break (t1792251078134-1), no-delivery proofs: owner not watching 41, player at another table 838, railbird of another table 152, signed-out socket 162, removed member 78, member in lobby 120
+chat test passed
+coach test: 746 hands, 704 notes {
+  'Called a raise with a weak hand': 122,
+  'Got lucky': 25,
+  'Bad beat': 25,
+  'All-in equity': 242,
+  'All-in bluff into a crowd': 11,
+  'Good all-in': 5,
+  'Big over-shove': 75,
+  'Called off with a weak hand': 82,
+  'Opened a weak hand': 30,
+  'Risky call near the bubble': 28,
+  'Paid off with nothing': 6,
+  'Limped in': 38,
+  'Folded for a small price': 14,
+  'Small raise with a short stack': 1
+}
+coach test passed
+store: file /tmp/t_players_523.json, 0 keys
+players test passed
+store: file /tmp/t_push_530.json, 0 keys
+push test passed
+extra-time test passed
+security test passed
+store: file /tmp/t_bizunit_569.json, 0 keys
+business units passed (card parser, validators, staging seed)
+business club test passed
+opportunity club test passed
+content rule test passed (261 probes: 32 links, 11 emails, 54 social, 51 phones, 113 allowed; server fields and visibility)
+clubs switch test passed
+csp + vendor test passed

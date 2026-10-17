@@ -1,0 +1,51 @@
+matrix: "۴۱۶-۵۵۵-۰۱۰۰" expected phone got null
+matrix: "۴۱۶ ۵۵۵ ۰۱۰۰" expected phone got null
+matrix: "۴۱۶۵۵۵۰۱۰۰" expected phone got null
+matrix: "تلفن: ۰۹۱۲ ۳۴۵ ۶۷۸۹" expected phone got null
+matrix: "٤١٦ ٥٥٥ ٠١٠٠" expected phone got null
+matrix: "٤١٦٥٥٥٠١٠٠" expected phone got null
+matrix: "call ٤١٦-٥٥٥-0100" expected phone got null
+matrix: "४१६ ५५५ ०१००" expected phone got null
+matrix: "৪১৬ ৫৫৫ ০১০০" expected phone got null
+matrix: "+٤٤ ٢٠ ٧٩٤٦ ٠٩٥٨" expected phone got null
+matrix: "416,829,5953" expected phone got null
+matrix: "416, 829, 5953" expected phone got null
+matrix: "1,416,829,5953" expected phone got null
+matrix: "(416),829,5953" expected phone got null
+matrix: "call 416 ,829, 5953" expected phone got null
+matrix: "416-555-O1OO" expected phone got null
+matrix: "416 555 O1OO" expected phone got null
+matrix: "4l6 555 OlOO" expected phone got null
+matrix: "Call 416 555 OIOO" expected phone got null
+matrix: "(4l6) 555-0l00" expected phone got null
+matrix: "Call l-8OO-555-OI99" expected phone got null
+matrix: "4I6.555.0I00" expected phone got null
+matrix: "Order no. 4471-2290" expected null got phone
+matrix: "Order #10045678" expected null got phone
+matrix: "Invoice 20261017-0042" expected null got phone
+node:assert:150
+  throw new AssertionError(obj);
+  ^
+
+AssertionError [ERR_ASSERTION]: 25 probe(s) failed
+
+25 !== 0
+
+    at Object.<anonymous> (/home/claude/r2/test/t_content.js:79:8)
+    at Module._compile (node:internal/modules/cjs/loader:1706:14)
+    at Object..js (node:internal/modules/cjs/loader:1839:10)
+    at Module.load (node:internal/modules/cjs/loader:1441:32)
+    at Function._load (node:internal/modules/cjs/loader:1263:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 25,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.22.0
