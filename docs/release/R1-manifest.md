@@ -1,6 +1,6 @@
 # Blindrise Release 1: release manifest (draft, 2026-10-17)
 
-Status: **DRAFT. Not a release candidate yet.** The RC SHA is filled in when the branch is frozen.
+Status: **DRAFT. Not frozen yet.** The RC SHA is filled in when the branch is frozen.
 Production today: `main` @ `d00b592` (Coming soon card). Production DB: `gta-poker-db` (paid plan `0.1c-256mb`, Postgres 17, IP allowlist empty = no external connections).
 
 Labels: **[V]** verified with evidence in this repo; **[A]** assumed / not verified. Muse column: audit status by Muse (independent), never filled by Claude.
@@ -25,13 +25,18 @@ Labels: **[V]** verified with evidence in this repo; **[A]** assumed / not verif
 
 Staging demo listings/businesses: created only when `STAGING=1` and the store has none (`server/business.js` seedDemo, `server/opportunity.js` seedDemo). Production does not set `STAGING`, so they never appear there [V code read]; staging and production have separate databases [V Render].
 
-## 2. Gates
+## 2. Gates (per Muse's release checklist, `RELEASE-CHECKLIST-blindrise-release1.md`)
 
 | Gate | Status | Note |
 |---|---|---|
-| G1 | UNKNOWN to Claude | Muse's G1 text not received in this thread |
-| G2 (independent read of staging DB) | **OPEN** per Muse assessment 2026-10-16 | needs owner to authorize Route 1 (temporary Starter + Render Shell) or Route 2 (owner /32 allowlist) |
-| G3 | UNKNOWN to Claude | Muse's G3 text not received |
+| G1 (fenced-instance exit line never observed) | OPEN, non-blocker | capture the old instance's logs for 30+ min during the production deploy |
+| G2 (independent read of staging DB) | **CLOSED** by Muse 2026-10-16 (Route 1) | `docs/evidence/p0/MUSE-G2-RESULT-2026-10-16.md` |
+| G3 (deploy-window availability) | OPEN, blocker only for mid-game deploys | measure the switch window and 503s from production logs during the deploy |
+| M1 (production identity) | **RESOLVED** by Muse | `gta-poker` deploys `main`, auto-deploy on commit, live `d00b592` |
+
+Auto-deploy is on: **merging into `main` is the production deploy**. Nothing is merged to `main` before the owner's explicit approval.
+
+**Muse question (M1 note): game state at 20:18 EDT on Oct 16 when `d00b592` auto-deployed.** The tournament was set for 21:00 EDT and was registering, not running; Claude pushed `d00b592` to `main` at 20:18 EDT on the owner's written approval and checked the boot (944 keys, no errors). Players had already registered on the old code; no anomaly was reported in the game that followed [A: no request logs on Render; based on the boot log and the owner's report].
 
 ## 3. Data migration
 
