@@ -1,5 +1,13 @@
 # Release 2 — handoff to Muse for independent audit
 
+> **Update 2026-10-17 (owner decisions of 14:08 UTC).** Code candidate: `r2-dev` @ `8919df3` (later commits on r2-dev are docs only; Muse please audit and name the exact SHA you approve for staging).
+> - B5 policy **APPROVED** by the owner: void verifiable record, replay keeps its hand number (as built).
+> - F1 **REVISED**: social handles, profile links and messaging-app IDs now blocked too (`02d2886`); test/t_content.js 201 probes (54 social incl. 15 bypass attempts, 80 allowed incl. 27 social false-positive checks).
+> - Staging: CONDITIONAL GO only after Muse confirms isolation — see `R2-STAGING-DEPLOY-PLAN.md`. Nothing deployed.
+> - Final evidence on 8919df3: `docs/evidence/r2/final-npm-test.log` (exit 0), `final-phase1.log` (12/12 pass), `final-ui-tests.log` (t_table_small, t_registration, t_bizsearch, scan_csp all pass).
+> - Muse asked to verify: B5, B6, chat isolation, F1, mobile layout, scanner tests, staging deploy risk.
+> - Still UNVERIFIED (needs real devices after staging): iPhone Safari + Android Chrome for scanner/camera permission, 9-player table, touch controls, layout.
+
 Claude, 2026-10-17. Branch `r2-dev` (base: frozen R1 RC `a8eef11` + R1 docs `4b1650f`). Release 1 branch, `staging`, `main` and production untouched. Nothing merged to main, nothing deployed, OWNER_CODE untouched, clubs closed.
 
 | Item | Note | Main files | Proof |
@@ -7,7 +15,7 @@ Claude, 2026-10-17. Branch `r2-dev` (base: frozen R1 RC `a8eef11` + R1 docs `4b1
 | B6 owner sessions + recovery (auth) | R2-B6-sessions.md | server/index.js | phase1 sessions_owner_reset FAIL on R1, PASS here |
 | B5 interrupted-hand fairness record | R2-B5-fairness-interrupt.md | server/fair.js, server/club.js, public/fair-verify.js, public/app.js (showFair) | phase1 fair_after_interrupt FAIL on R1, PASS here |
 | Chat isolation + t_server de-flake | R2-chat-isolation.md | test/t_chat.js (new), test/t_server.js, server/index.js (closed notice only to signed-in sockets) | t_chat ~2,000 checks/run, 10/10; t_server 20/20 (`t_server-20-runs.log`) |
-| F1 content rule (Opportunity + Business text) | R2-F1-content-rule.md | server/content.js (new), server/opportunity.js, server/business.js, copy in public/*.js, scripts/content-audit.js | test/t_content.js, 120 probes + per-field + visibility/noindex |
+| F1 content rule incl. social IDs (Opportunity + Business text) | R2-F1-content-rule.md | server/content.js (new), server/opportunity.js, server/business.js, copy in public/*.js, scripts/content-audit.js | test/t_content.js, 201 probes + per-field + visibility/noindex |
 | Small-phone table (iPhone SE class) | R2-table-small-phones.md | public/app.js, public/style.css | test/ui/t_table_small.js: 19/20 cases fail on R1, 20/20 pass; screenshots in project files poker-club/reports/r2-screens/table-small/ |
 | Scanner real devices | R2-scanner-device-test.md | no code change | Chromium scan_csp pass (SIMD + no-SIMD); real phones = owner pass on staging |
 

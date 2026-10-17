@@ -1,0 +1,36 @@
+ok   320x568 9-handed actions (table area 312x378)
+ok   320x568 9-handed sizing (table area 312x373)
+ok   320x568 7-handed actions (table area 312x378)
+ok   320x568 7-handed sizing (table area 312x373)
+ok   375x667 9-handed actions (table area 367x398)
+ok   375x667 9-handed sizing (table area 367x412)
+ok   375x667 7-handed actions (table area 367x398)
+ok   375x667 7-handed sizing (table area 367x412)
+ok   360x780 9-handed actions (table area 352x458)
+ok   360x780 9-handed sizing (table area 352x437)
+ok   360x780 7-handed actions (table area 352x458)
+ok   360x780 7-handed sizing (table area 352x437)
+ok   390x844 9-handed actions (table area 382x522)
+ok   390x844 9-handed sizing (table area 382x500)
+ok   390x844 7-handed actions (table area 382x522)
+ok   390x844 7-handed sizing (table area 382x500)
+ok   1280x800 9-handed actions (table area 532x478)
+ok   1280x800 9-handed sizing (table area 532x456)
+ok   1280x800 7-handed actions (table area 532x478)
+ok   1280x800 7-handed sizing (table area 532x456)
+small table ui test passed
+registration ui test passed
+business search ui test passed
+CSP on / : default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+signed in as Test Player 07
+scanner open; OCR files requested so far: 0
+synthetic card PNG: 113811 bytes
+worker started: /vendor/tesseract-5.1.1/worker.min.js
+card read in 2.6s, fields: {"name":"Rivera Plumbing","fullName":"Alex Rivera","jobTitle":"Owner","phone":"416-555-0100","email":"alex@example.com","website":"riveraplumbing.example","address":"123 Queen St W, Toronto, ON M5H 2M9","category":"trades"}
+OCR files loaded from our origin: ["/vendor/tesseract-5.1.1/tesseract.min.js","/vendor/tesseract-5.1.1/worker.min.js","/vendor/tesseract-5.1.1/tesseract-core-simd-lstm.js","/vendor/tesseract-5.1.1/tesseract-core-simd-lstm.wasm","/vendor/tessdata-eng-1.0.0/eng.traineddata.gz"]
+negative control (cdn.jsdelivr.net script): blocked by CSP: script-src-elem blocked https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js (:1)
+CSP violations during sign-in + scan: 0 
+third-party requests during sign-in + scan: 0 
+pre-existing Google Fonts requests (not BC1, aborted in this sandbox): 1
+page errors: 0 
+scan + CSP browser test passed (SIMD core)
