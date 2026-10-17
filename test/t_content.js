@@ -96,6 +96,9 @@ const MATRIX = [
   ['2019-2023. 416*829*5953', P], ['416,829,5953 2-3 weeks', P], ['416,829,5953. 10% off', P], ['Units 5 / 416,829,5953', P],
   ['Step 2: 416,829,5953', P], ['Since 2019 (416) 829-5953', P], ['Since 2019 1-416-829-5953', P], ['$40 4168295953', P],
   ['grades 6-12. 416~829~5953', P], ['grades 6-12. 416−829−5953', P], ['Since 2019 555-0199', P], ['grades 6-12 16 416 829 5953', P],
+  // Muse's addendum examples (247f7a3), verbatim
+  ['Order 55. 416,829,5953', P], ['6-12 416,829,5953', P], ['Grades 6-12. 416•829•5953', P], ['grades 6-12, then 416,829,5953', P],
+  ['Price $1,500 — call 416,829,5953', P], ['Ages 6-12. Call 416,829,5953', P],
   ['We tutor grades 6-12. Rates from $40, 2-3 sessions weekly.', _], ['$1,500. Delivery 2-3 weeks.', _], ['Since 2019. 1,500,000 views', _],
   ['Price $1,500, $2,000, $2,500', _], ['Budget $1,500,000. 2,500 sq ft', _], ['2019. 2020. 2021.', _], ['10, 20, 50 posts', _],
   ['Rooms 101, 102, 103, 104', _], ['We have 15 years, 300 clients, 1,200 reviews.', _], ['Since 2019, 1500000 dollars raised', _],

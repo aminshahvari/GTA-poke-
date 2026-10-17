@@ -1,6 +1,6 @@
 # R2 F1 — a number written just before a phone (owner direction, Oct 17 19:32 UTC)
 
-Branch `r2-f1-prefix`, based on `r2-dev` `523a284` (contains the audited `6f57c75`, unchanged). Security only; the mobile UI work is on `r2-mobile-ux`. Not deployed.
+Branch `r2-f1-prefix`, based on `r2-dev` `247f7a3` (Muse addendum) (contains the audited `6f57c75`, unchanged). Security only; the mobile UI work is on `r2-mobile-ux`. Not deployed.
 
 ## The gap
 `We tutor grades 6-12. 416,829,5953` was accepted: the phone regex joins `6-12. 416,829,5953` into one run (". " is an allowed separator), and the run as a whole is not phone-shaped (comma rule, year rule, etc.). Same for `$1,500. 416,829,5953`, `Since 2019 416-829-5953` (year rule), `Since 2019. 416 829 5953`, `Sizes 10, 12, 416,829,5953`, and the separator variants from `6f57c75`.
@@ -12,8 +12,8 @@ Branch `r2-f1-prefix`, based on `r2-dev` `523a284` (contains the audited `6f57c7
 3. Detection copy only; stored text untouched (server test saves a number-heavy English/Persian string and reads it back byte for byte).
 
 ## Tests
-- `test/t_content.js`: 353 → **408 probes** (+32 phones: prefixes . , ; / : space, years, prices, ratings, lists, suffix numbers, (416), 1-416, +1, Persian digits, O1OO, bullets, _ ~ * − separators; +23 allowed number-heavy business texts). Server: `oppSave` details/title, `oppRequest`, 3 more `bizSave` refusals, byte-for-byte save.
-- Old code (`6f57c75`) against the new test: **23 matrix failures** (`docs/evidence/r2/f1-prefix-old-code.log`); new code passes.
+- `test/t_content.js`: 353 → **414 probes** (+38 phones incl. every example in Muse's addendum `247f7a3`: prefixes . , ; / : space, years, prices, ratings, lists, suffix numbers, (416), 1-416, +1, Persian digits, O1OO, bullets, _ ~ * − separators; +23 allowed number-heavy business texts). Server: `oppSave` details/title, `oppRequest`, 3 more `bizSave` refusals, byte-for-byte save.
+- Old code (`6f57c75`) against the new test: **26 matrix failures** (`docs/evidence/r2/f1-prefix-old-code.log`); new code passes.
 - `npm test`: all suites pass.
 
 ## Known, unchanged
