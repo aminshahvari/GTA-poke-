@@ -1079,16 +1079,65 @@ function bubble(msg){
   b.style.left = cx + 'px'; b.style.setProperty('--tail', (x - cx) + 'px');
   setTimeout(() => b.remove(), 4500);
 }
+// Throws (ported from R2 edccaf0): egg and tomato splat on the target's avatar; other items fly and pop as before.
+const reducedMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+// An element's centre inside the table area (for a seat's avatar), or null.
+function avatarPx(uid){
+  const area = $('tableArea'), el = area && area.querySelector(`.seat[data-uid="${CSS.escape(uid)}"] .av`); if(!el) return null;
+  const a = area.getBoundingClientRect(), r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2 - a.left, y: r.top + r.height / 2 - a.top, size: r.width };
+}
 function flyThrow(msg){
   const a = seatPosOf(msg.from), z = seatPosOf(msg.to); if(!a || !z) return;
+  const A = avatarPx(msg.from), Z = avatarPx(msg.to);
+  const [ax, ay] = A ? [A.x, A.y] : pctToPx(a), [zx, zy] = Z ? [Z.x, Z.y] : pctToPx(z), size = Z ? Z.size : 40;
+  const messy = msg.item === 'egg' || msg.item === 'tomato';
+  if(reducedMotion()){ if(messy) splatOn(msg.item, zx, zy, size, msg.to); return; }
   const el = document.createElement('div'); el.className = 'throw'; el.textContent = THROW_ICONS[msg.item] || '❓';
-  const [ax, ay] = pctToPx(a), [zx, zy] = pctToPx(z);
   el.style.left = ax + 'px'; el.style.top = ay + 'px';
   $('fx').appendChild(el);
+  const arc = Math.min(90, 40 + Math.hypot(zx - ax, zy - ay) * .2);
   el.animate([{ transform: 'translate(-50%,-50%) scale(.6) rotate(0)', offset: 0 },
-    { transform: `translate(calc(-50% + ${(zx - ax) / 2}px), calc(-50% + ${(zy - ay) / 2 - 60}px)) scale(1.4) rotate(200deg)`, offset: .5 },
-    { transform: `translate(calc(-50% + ${zx - ax}px), calc(-50% + ${zy - ay}px)) scale(1.1) rotate(400deg)`, offset: 1 }], { duration: 750, easing: 'ease-in-out', fill: 'forwards' })
-    .finished.then(() => { el.classList.add('splat'); setTimeout(() => el.remove(), 1400); });
+    { transform: `translate(calc(-50% + ${(zx - ax) / 2}px), calc(-50% + ${(zy - ay) / 2 - arc}px)) scale(1.35) rotate(200deg)`, offset: .5 },
+    { transform: `translate(calc(-50% + ${zx - ax}px), calc(-50% + ${zy - ay}px)) scale(${messy ? .9 : 1.1}) rotate(${messy ? 380 : 400}deg)`, offset: 1 }], { duration: 750, easing: 'ease-in-out', fill: 'forwards' })
+    .finished.then(() => {
+      if(messy){ el.remove(); splatOn(msg.item, zx, zy, size, msg.to); }
+      else { el.classList.add('splat'); setTimeout(() => el.remove(), 1400); }
+    }).catch(() => el.remove());
+}
+// A lumpy blob outline for a splat, centred on 0,0 in a 100x100 box.
+function blobPath(r, lumps, jit){
+  const pts = Array.from({ length: lumps }, (_, i) => { const t = i / lumps * Math.PI * 2, k = r * (1 - jit + Math.random() * jit * 2); return [Math.cos(t) * k, Math.sin(t) * k]; });
+  const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2], f = n => n.toFixed(1);
+  let dpath = `M${f(mid(pts[lumps - 1], pts[0])[0])} ${f(mid(pts[lumps - 1], pts[0])[1])}`;
+  pts.forEach((p, i) => { const m = mid(p, pts[(i + 1) % lumps]); dpath += ` Q${f(p[0])} ${f(p[1])} ${f(m[0])} ${f(m[1])}`; });
+  return dpath + 'Z';
+}
+// Egg: the shell cracks, white and yolk spread over the avatar and a drip runs down. Tomato: it bursts
+// and splatters. Stays about 1.6 s, then fades. Drawn on the effects layer, so the table never waits.
+function splatOn(item, x, y, size, uid){
+  const fx = $('fx'); if(!fx) return;
+  fx.querySelectorAll(`.splatfx[data-uid="${CSS.escape(uid)}"]`).forEach(e => e.remove());
+  const egg = item === 'egg', el = document.createElement('div');
+  el.className = `splatfx ${egg ? 'egg' : 'tomato'}`; el.dataset.uid = uid;
+  const S = Math.round(size * 1.9);
+  el.style.cssText = `left:${x}px;top:${y}px;width:${S}px;height:${S}px`;
+  const drops = Array.from({ length: egg ? 4 : 7 }, (_, i) => {
+    const t = (i / (egg ? 4 : 7) + Math.random() * .1) * Math.PI * 2, d = 36 + Math.random() * 12, r = egg ? 3 + Math.random() * 3 : 3 + Math.random() * 4;
+    return `<circle class="drop" cx="${(Math.cos(t) * d).toFixed(1)}" cy="${(Math.sin(t) * d).toFixed(1)}" r="${r.toFixed(1)}" style="--dx:${(-Math.cos(t) * 14).toFixed(1)}px;--dy:${(-Math.sin(t) * 14).toFixed(1)}px"/>`;
+  }).join('');
+  el.innerHTML = egg
+    ? `<svg viewBox="-50 -50 100 100" aria-hidden="true"><g class="spread"><path class="white" d="${blobPath(30, 9, .22)}"/><path class="yolk" d="${blobPath(12, 7, .15)}"/><ellipse class="shine" cx="-4" cy="-5" rx="4" ry="2.5"/></g><g class="drops">${drops}</g>
+        <path class="drip" d="M-3 8 C-4 22 -5 30 -1 36 C3 40 5 34 4 24 C3 16 3 10 3 8Z"/>
+        <path class="shell s1" d="M-14 -4 L-9 -14 L-6 -7 L-1 -15 L2 -6 L-2 -2 Z"/><path class="shell s2" d="M6 2 L14 -6 L13 3 L19 6 L10 10 Z"/><path class="shell s3" d="M-12 8 L-5 5 L-7 12 L-13 14 Z"/></svg>`
+    : `<svg viewBox="-50 -50 100 100" aria-hidden="true"><g class="spread"><path class="pulp" d="${blobPath(31, 11, .3)}"/><path class="juice" d="${blobPath(19, 8, .25)}"/>
+        <path class="gel" d="${blobPath(9, 6, .3)}"/><ellipse class="seed" cx="-4" cy="-2" rx="1.6" ry="1"/><ellipse class="seed" cx="3" cy="2" rx="1.6" ry="1"/><ellipse class="seed" cx="1" cy="-5" rx="1.6" ry="1"/><path class="skin k1" d="M-24 -10 Q-18 -20 -8 -22 Q-14 -14 -18 -6Z"/><path class="skin k2" d="M14 16 Q24 10 26 -2 Q20 6 10 10Z"/></g><g class="drops">${drops}</g>
+        <path class="drip" d="M-5 10 C-6 24 -6 31 -3 35 C0 38 2 32 1 22 C1 16 0 12 0 10Z"/></svg>`;
+  fx.appendChild(el);
+  const seat = $('tableArea').querySelector(`.seat[data-uid="${CSS.escape(uid)}"] .av`);
+  if(seat && !reducedMotion()) seat.animate([{ transform: 'translate(0,0)' }, { transform: 'translate(-3px,1px) rotate(-6deg)' }, { transform: 'translate(3px,0) rotate(5deg)' }, { transform: 'translate(0,0)' }], { duration: 320, easing: 'ease-out' });
+  setTimeout(() => el.classList.add('fade'), 1600);
+  setTimeout(() => el.remove(), 2100);
 }
 function renderChat(){
   const log = chatLogs.get(curTid()) || [];

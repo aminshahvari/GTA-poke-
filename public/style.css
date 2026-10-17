@@ -328,6 +328,32 @@ details.terms-d summary{cursor:pointer;color:var(--gold);font-weight:600;margin:
 .throw{position:absolute;font-size:34px;transform:translate(-50%,-50%);filter:drop-shadow(0 4px 6px rgba(0,0,0,.4))}
 .throw.splat{animation:splat 1.4s ease-out forwards}
 @keyframes splat{0%{scale:1}20%{scale:1.6}100%{scale:1.2;opacity:0}}
+/* egg and tomato splats on the target avatar (ported from R2 edccaf0) */
+.splatfx{position:absolute;transform:translate(-50%,-50%);z-index:12;pointer-events:none;transition:opacity .5s}
+.splatfx svg{width:100%;height:100%;overflow:visible;display:block}
+.splatfx.fade{opacity:0}
+.splatfx .spread{transform-origin:0 0;animation:sp-in .28s cubic-bezier(.2,1.5,.5,1) both}
+.splatfx .drops circle{animation:sp-drop .35s ease-out both}
+.splatfx .drip{transform-origin:0 8px;animation:sp-drip 1.3s cubic-bezier(.5,0,.6,1) .25s both}
+.splatfx.egg .white{fill:#f7f4ea;fill-opacity:.94;stroke:rgba(0,0,0,.12);stroke-width:.6}
+.splatfx.egg .yolk{fill:#f7b21b;stroke:#d98a0a;stroke-width:.8}
+.splatfx.egg .shine{fill:rgba(255,255,255,.75)}
+.splatfx.egg .drops circle{fill:#f7f4ea}
+.splatfx.egg .drip{fill:#f5ad19;opacity:.95}
+.splatfx.egg .shell{fill:#fbf6ec;stroke:#c9bfae;stroke-width:.7;animation:sp-shell .55s cubic-bezier(.2,.8,.4,1) both}
+.splatfx.egg .s1{--sx:-16px;--sy:-14px;--sr:-50deg}.splatfx.egg .s2{--sx:16px;--sy:-8px;--sr:60deg}.splatfx.egg .s3{--sx:-12px;--sy:14px;--sr:-30deg}
+.splatfx.tomato .pulp{fill:#d8231f;fill-opacity:.92}
+.splatfx.tomato .juice{fill:#ff4a3a;fill-opacity:.85}
+.splatfx.tomato .gel{fill:#f0703a;fill-opacity:.9}
+.splatfx.tomato .seed{fill:#f6dc8c}
+.splatfx.tomato .skin{fill:#a8140f}
+.splatfx.tomato .drops circle{fill:#d8231f}
+.splatfx.tomato .drip{fill:#c81d1a;opacity:.92}
+@keyframes sp-in{from{transform:scale(.25);opacity:.3}to{transform:scale(1);opacity:1}}
+@keyframes sp-drop{from{transform:translate(var(--dx),var(--dy)) scale(.3);opacity:0}to{transform:none;opacity:1}}
+@keyframes sp-drip{from{transform:scaleY(.1);opacity:0}15%{opacity:1}to{transform:scaleY(1)}}
+@keyframes sp-shell{from{transform:none;opacity:1}to{transform:translate(var(--sx),var(--sy)) rotate(var(--sr));opacity:.95}}
+@media (prefers-reduced-motion:reduce){.splatfx .spread,.splatfx .drops circle,.splatfx .drip,.splatfx.egg .shell{animation-duration:.01s;animation-delay:0s}.splatfx{transition:none}}
 .chat-sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;max-height:58vh;display:flex;flex-direction:column;gap:8px;background:#17131a;border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:12px 12px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -12px 30px rgba(0,0,0,.5)}
 .chat-sheet[hidden]{display:none}
 .chat-head{display:flex;justify-content:space-between;align-items:center}
