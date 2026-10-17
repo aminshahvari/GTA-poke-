@@ -78,8 +78,14 @@ function letterDigits(t){
 // bullet-like dots between digit groups (416•829•5953, 416 · 829 · 5953) read as commas, so the comma rules decide:
 // phone-shaped groups are a phone, a list of sizes or prices is not
 const BULLET = /(\d)\s*[\u2022\u00b7\u2027\u2219\u22c5\u30fb\u25e6\u2043]\s*(?=\d)/g;
+// other hyphens and dashes (‐ ‒ ― − ﹘), underscores and tildes (~ ∼ 〜) between digit groups read as -, so the dash
+// rules decide: 416_829_5953 or 416~829~5953 is a phone, 2019~2021, 10~15 or 1403_07_26 is not. Asterisks (* ∗ ✱) read
+// as commas, like bullets: 416*829*5953 is a phone, 1500*2000 mm or 120*60*75 is not. Applied before letter-for-digit
+// mapping (416_555_O1OO) when a digit is on either side; stored text is never changed.
+const sepRe = cls => new RegExp(`(?<=[\\d)])\\s*[${cls}]\\s*(?=[\\d(oOIl|])|(?<=[\\doOIl|)])\\s*[${cls}]\\s*(?=[\\d(])`, 'g');
+const DASH = sepRe('\\u2010-\\u2015\\u2212\\ufe58_~\\u223c\\u301c'), STAR = sepRe('*\\u2217\\u2731');
 function phone(t){
-  t = letterDigits(t.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine)\b/gi, w => WORDS[w.toLowerCase()])).replace(BULLET, '$1,');
+  t = letterDigits(t.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine)\b/gi, w => WORDS[w.toLowerCase()]).replace(DASH, '-').replace(STAR, ',')).replace(BULLET, '$1,');
   const re = /\+?\(?\d(?:[\s.,\-–—/()]{0,3}\d)+\)?/g;
   for(let m; (m = re.exec(t));){
     const run = m[0], digits = run.replace(/\D/g, '');

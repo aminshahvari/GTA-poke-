@@ -73,6 +73,20 @@ const MATRIX = [
   ['416 • 829 • 5953', P], ['1•800•555•0100', P], ['+1•416•829•5953', P], ['call ۴۱۶•۸۲۹•۵۹۵۳', P], ['416•555•O1OO', P],
   ['Sizes 10 • 12 • 14 • 16', _], ['Pizza • 2 for $20 • 10% off', _], ['Open 9•5 • Mon–Fri', _], ['Rating 4·5', _], ['Rooms 101 · 102 · 103', _],
   ['2019 • 2020 • 2021', _], ['10:00 • 18:00', _], ['M5H 2M9 • Toronto', _], ['$1,500 • 2-3 weeks • 1500 sq ft', _], ['قیمت ۱٬۵۰۰ دلار • ۱۴۰۳/۰۷/۲۶', _],
+  // Owner GO (Oct 17 evening): the rest of the separator family: Unicode hyphens/dashes/minus, _ ~ * and their look-alikes
+  ['416‐829‐5953', P], ['416‑829‑5953', P], ['416‒829‒5953', P], ['416―829―5953', P], ['416−829−5953', P], ['416﹘829﹘5953', P],
+  ['416﹣829﹣5953', P], ['416－829－5953', P], ['416_829_5953', P], ['416＿829＿5953', P], ['416~829~5953', P], ['416～829～5953', P],
+  ['416∼829∼5953', P], ['416〜829〜5953', P], ['416*829*5953', P], ['416＊829＊5953', P], ['416∗829∗5953', P], ['416✱829✱5953', P],
+  ['416 _ 829 _ 5953', P], ['1_800_555_0100', P], ['+1~416~829~5953', P], ['call ۴۱۶_۸۲۹_۵۹۵۳', P], ['416_555_O1OO', P], ['416~555~O1OO', P],
+  ['4l6_555_0100', P], ['(416)*829*5953', P], ['text 647*555*0199 anytime', P], ['416_829_59_53', P], ['four one six_829_5953', P],
+  // mixed separators in one number
+  ['416_829•5953', P], ['416~829-5953', P], ['416*829 5953', P], ['416−829·5953', P], ['416‐829_5953', P], ['416*829~5953', P],
+  ['Sizes 10~12~14', _], ['2019~2021', _], ['Open 9~5', _], ['Rating 4*5', _], ['5* hotel, 4.5*', _], ['10~15 mins', _], ['1~2 weeks', _],
+  ['1500*2000 mm', _], ['120*60*75 cm', _], ['1200*800*600 mm', _], ['100*200*300', _], ['Rooms 101*102*103', _], ['Shoe 9*10*11*12', _],
+  ['$1,500~$2,000', _], ['Price $1500 * 2', _], ['2026−10−17', _], ['1990−2020', _], ['score 3−1', _], ['1403_07_26', _], ['Order no. 4471_2290', _],
+  ['file_2024_v2.pdf', _], ['snake_case_var 12', _], ['10:00 ~ 18:00', _], ['Open 9:00~17:00', _], ['Team of 10–15 people', _], ['Grade A* students', _],
+  ['*** 5 stars ***', _], ['4.5*/5 rating', _], ['Pizza ~ 2 for $20 ~ 10% off', _], ['قیمت ۱٬۵۰۰ ~ ۲٬۰۰۰ دلار', _], ['2500 sq ft ~ 3000 sq ft', _],
+  ['Est. 1998 * Toronto * 2024', _], ['M5H_2M9', _], ['v1_2_3', _], ['Lot 12*34*56', _], ['2019_2020_2021', _],
   ['Social media marketing for Toronto bakeries', _], ['Instagram growth for 10, 20 or 50 posts', _], ['Lot 12, 13 and 14', _],
   ['3.5 stars', _], ['v2.0 release', _], ['Room for 6-8 people', _], ['Call me after 6', _], ['1-on-1 coaching', _], ['Need 2 3D printers', _]
 ];
@@ -161,6 +175,11 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   assert.match(await err('oppSave', listing({ details: 'Call 416•829•5953' }), A), /phone number from details/);
   assert.match(await err('oppSave', listing({ id: a1.id, title: 'Deck 416 · 829 · 5953' }), A), /phone number from title/);
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! 647•555•0199' }, B), /phone number from message/);
+  // the rest of the separator family, on the same three paths
+  assert.match(await err('oppSave', listing({ details: 'Call 416_829_5953' }), A), /phone number from details/);
+  assert.match(await err('oppSave', listing({ id: a1.id, title: 'Deck 416 ~ 829 ~ 5953' }), A), /phone number from title/);
+  assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! 647*555*0199' }, B), /phone number from message/);
+  assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! 647−555−0199' }, B), /phone number from message/);
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! bea@example.com' }, B), /email address from message/);
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! DM me on insta' }, B), /social media handle or profile from message/);
   const rq = (await ok('oppRequest', { id: a1.id, message: 'Hi! I built two decks last year, about 300 sq ft each.' }, B)).request;
@@ -191,11 +210,15 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   await err('bizSave', biz({ services: 'Call 416 555 0100' }), A);
   assert.strictEqual((await ok('bizMine', {}, A)).mine.services, 'Water heaters (40-60 gallon), 2-3 day renos');
   // Muse's F1 bypasses are refused on the server too; allowed text in other scripts is saved exactly as typed (never rewritten)
-  for(const t of ['Call ۴۱۶ ۵۵۵ ۰۱۰۰', 'Call ٤١٦-٥٥٥-٠١٠٠', 'Call 416,829,5953', 'Call 416 555 O1OO', 'Call 416•829•5953', 'Call 416·829·5953'])
+  for(const t of ['Call ۴۱۶ ۵۵۵ ۰۱۰۰', 'Call ٤١٦-٥٥٥-٠١٠٠', 'Call 416,829,5953', 'Call 416 555 O1OO', 'Call 416•829•5953', 'Call 416·829·5953',
+    'Call 416‐829‐5953', 'Call 416−829−5953', 'Call 416_829_5953', 'Call 416~829~5953', 'Call 416*829*5953', 'Call 416_829•5953'])
     assert.match(await err('bizSave', biz({ services: t }), A), /phone number from services/, t);
   const fa = 'قیمت از ۱٬۵۰۰ دلار، از سال ۱۴۰۳/۰۷/۲۶. Order no. 4471-2290; 1,500,000 sq ft; sizes 10, 12, 14';
   await ok('bizSave', biz({ services: fa }), A);
   assert.strictEqual((await ok('bizMine', {}, A)).mine.services, fa, 'saved byte for byte');
+  const sep = 'Sizes 1500*2000 mm, 120*60*75 cm; open 9:00~17:00; 2019~2021; 10–15 people; rated 4.5*; ۱۴۰۳_۰۷_۲۶ − 1,500~2,000 CAD';
+  await ok('bizSave', biz({ services: sep }), A);
+  assert.strictEqual((await ok('bizMine', {}, A)).mine.services, sep, 'separator text saved byte for byte');
   // switched on, the Instagram handle reaches members, from its own field only
   await ok('bizSave', biz({ show: { website: true, email: true, instagram: true } }), A);
   assert.deepStrictEqual((await ok('bizGet', { uid: idA }, B)).business.contacts.instagram, { handle: 'rivera_pl', url: 'https://instagram.com/rivera_pl' });
