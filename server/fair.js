@@ -51,10 +51,17 @@ async function deckForHand(t, tid, handNo){
   return { deck: deckFrom(key), rec: { tid, hand: handNo, beacon, round: b ? b.round : null, at: Date.now() } };
 }
 
-// After the hand: record who got which cards, so the deck can be checked once the seed is revealed.
-function saveHand(tourneyId, rec, h){
-  const players = h.players.map(p => ({ uid: p.uid, name: p.name, cards: p.cards.slice() }));
-  store.set(`fair:${tourneyId}:${rec.tid}:${String(rec.hand).padStart(5, '0')}:${rec.at}`, { ...rec, players, board: h.board.slice() });
+// Who got which cards (and the board so far), keyed so the finished hand overwrites its own deal-time record.
+const fkey = (tourneyId, rec) => `fair:${tourneyId}:${rec.tid}:${String(rec.hand).padStart(5, '0')}:${rec.at}`;
+const snap = (rec, h, live) => ({ ...rec, ...(live ? { live: true } : {}), players: h.players.map(p => ({ uid: p.uid, name: p.name, cards: p.cards.slice() })), board: h.board.slice() });
+// At the deal and each new street: save the deal as it stands, marked live, so a deal cut off by a restart stays on record.
+function saveDeal(tourneyId, rec, h){ store.set(fkey(tourneyId, rec), snap(rec, h, true)); }
+// After the hand: the complete record, so the deck can be checked once the seed is revealed.
+function saveHand(tourneyId, rec, h){ store.set(fkey(tourneyId, rec), snap(rec, h, false)); }
+// On resume: a record still live was cut off by the restart. Its hand is replayed under the same number with a new
+// deck, so the old deal stays in the report as its own record, marked void (it decided no chips).
+function voidLive(tourneyId){
+  for(const k of store.keys(`fair:${tourneyId}:`)){ const r = store.get(k); if(r && r.live){ const { live, ...rest } = r; store.set(k, { ...rest, void: 'interrupted' }); } }
 }
 
 function prune(){
@@ -66,10 +73,11 @@ function prune(){
 function report(t){
   if(!t) return null;
   const done = ['finished', 'cancelled'].includes(t.status);
-  const hands = done ? store.keys(`fair:${t.id}:`).sort().map(k => store.get(k)) : [];
+  // a record still live here never finished for another reason (a failed hand, a mid-hand cancel): void too
+  const hands = done ? store.keys(`fair:${t.id}:`).sort().map(k => store.get(k)).map(({ live, ...r }) => live ? { ...r, void: 'unfinished' } : r) : [];
   return { id: t.id, name: t.name, status: t.status, seal: t.fairSeal || null, seed: done ? t.fairSeed || null : null, chain: CHAIN, beaconUrl: BEACON_URL, hands };
 }
 
 async function probe(){ const b = await fetchBeacon(); console.log(b ? `fair deal: drand beacon ok (round ${b.round})` : 'fair deal: drand beacon NOT reachable'); }
 
-module.exports = { probe, deckFrom, newSeed, deckForHand, saveHand, prune, report, CHAIN, _setBeacon: f => { fetchBeacon = f; } };
+module.exports = { probe, deckFrom, newSeed, deckForHand, saveDeal, saveHand, voidLive, prune, report, CHAIN, _setBeacon: f => { fetchBeacon = f; } };

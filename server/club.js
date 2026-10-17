@@ -149,6 +149,7 @@ function resume(){
   const t = T(), live = store.get('live');
   if(!t || t.status !== 'running' || !live) return false;
   if(!t.fairSeed){ const { seed, seal } = fair.newSeed(); saveT({ fairSeed: seed, fairSeal: seal }); }
+  fair.voidLive(t.id); // deals cut off by the restart stay on record as void; their hands are replayed below
   tables.clear();
   for(const lt of live.tables){
     const tb = newTable(lt.tid, lt.n);
@@ -214,6 +215,11 @@ function tableIO(tb){
     async deck(handNo){ const t = T(); if(!t || !t.fairSeed) return null; const r = await fair.deckForHand(t, tb.tid, handNo); tb.fairRec = r.rec; return r.deck; },
     async event(type, data){
       try{ tb.record(type, tb.g, data); }catch(e){ console.error('hand record failed', e); }
+      // commit the deal and each new street before anyone sees it (bounded wait: a slow db never stalls the table)
+      if((type === 'deal' || type === 'board') && tb.fairRec && tb.g.hand && T()){
+        try{ fair.saveDeal(T().id, tb.fairRec, tb.g.hand); }catch(e){ console.error('fair deal record failed', e); }
+        await Promise.race([store.flush().catch(() => {}), sleep(1000)]);
+      }
       if(!running) return;
       publish(tb);
       const h = tb.g.hand;
