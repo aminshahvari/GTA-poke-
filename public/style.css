@@ -79,7 +79,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .table-area.compact .seat:not(.hero) .plate{min-width:70px;padding:5px 5px 2px}
 .table-area.compact .seat:not(.hero) .nm{font-size:11px;max-width:68px}
 .table-area.compact .seat:not(.hero) .st{font-size:12px}
-.table-area.compact .seat .badge{font-size:9px;bottom:-12px}
+.table-area.compact .seat .badge{font-size:9px;bottom:-13px}
 /* the smallest seats, for a full table in a short area (iPhone SE class) */
 .table-area.mini .seat:not(.hero){width:66px}
 .table-area.mini .seat:not(.hero) .av{width:26px;height:26px;font-size:11px;border-width:1.5px}
@@ -124,8 +124,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .nm{font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:76px;color:#e9e3e4}
 .st{font-size:13px;font-weight:700;color:var(--gold)}
 .badge{position:absolute;left:50%;bottom:-14px;transform:translateX(-50%);background:#4d4549;color:#fff;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;white-space:nowrap;z-index:4}
-.badge.raise,.badge.bet,.badge.all-in{background:var(--red)}
-.badge.call,.badge.check{background:#2f6f57}
+.badge.act-raise,.badge.act-bet,.badge.act-all-in{background:var(--red)}
+.badge.act-call,.badge.act-check{background:#2f6f57}
 .badge.hand{background:#3a3236;color:#f0e6c8}
 .badge.won{background:var(--good);color:#0c2a1e}
 .seat.hero{width:120px}
@@ -230,6 +230,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .me-chip{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);min-width:0}
 .me-chip img{width:28px;height:28px;border-radius:50%;flex:none}
 .me-chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+
 .tabs{display:flex;gap:4px;padding:6px 16px 0}
 .tabs button{flex:1 1 auto;min-width:0;background:transparent;color:var(--muted);font-family:var(--cond);font-size:15px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:10px 4px;border-bottom:3px solid transparent}
 .tabs button[aria-selected="true"]{color:var(--text);border-color:var(--red)}
@@ -533,8 +534,8 @@ body{font-size:15px;letter-spacing:0}
 .seat.acting .av{box-shadow:0 0 0 3px var(--blue),0 0 16px rgba(74,144,245,.6)}
 .shot i{background:var(--blue)}
 .badge{background:#3c4558}
-.badge.raise,.badge.bet,.badge.all-in{background:#d9822b}
-.badge.call,.badge.check{background:#2f8f6a}
+.badge.act-raise,.badge.act-bet,.badge.act-all-in{background:#d9822b}
+.badge.act-call,.badge.act-check{background:#2f8f6a}
 .badge.hand{background:#2f3a52;color:#dbe7ff}
 .card.back{background:repeating-linear-gradient(45deg,#2e6bcf 0 3px,#1e4f9e 3px 6px);border-color:#e8ebf1}
 .card.red{color:#d62a33}
@@ -611,7 +612,7 @@ body{font-size:15px;letter-spacing:0}
 .prof p,.prof .note{text-align:left}
 
 /* coach tip, report card */
-.coachtip{margin:0 12px 6px;padding:9px 10px 9px 12px;border-radius:12px;background:rgba(27,32,43,.97);border:1px solid var(--line);border-left:4px solid var(--blue);display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.4;cursor:pointer;animation:bubIn .2s ease-out}
+.coachtip{position:absolute;left:6px;right:6px;bottom:4px;z-index:30;box-shadow:0 10px 30px rgba(0,0,0,.55);padding:9px 10px 9px 12px;border-radius:12px;background:rgba(27,32,43,.97);border:1px solid var(--line);border-left:4px solid var(--blue);display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.4;cursor:pointer;animation:bubIn .2s ease-out}
 .coachtip[hidden]{display:none}
 .coachtip.mistake{border-left-color:var(--red)}.coachtip.mind{border-left-color:#b57cff}.coachtip.good{border-left-color:var(--good)}.coachtip.luck{border-left-color:var(--gold)}
 .coachtip .ct-ic{font-size:18px;line-height:1.2}
@@ -956,7 +957,7 @@ label.btn{display:flex;align-items:center;justify-content:center;gap:8px;cursor:
 .op-q.review,.op-q.hidden{border-color:rgba(242,169,59,.5)}
 /* bottom sheet: phones slide it up from the bottom; wide screens get a centered panel */
 .op-sheet-wrap{position:fixed;inset:0;z-index:70;background:rgba(6,8,12,.62);display:flex;align-items:flex-end;justify-content:center}
-.op-sheet{width:100%;max-width:540px;max-height:92vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;padding:8px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(0,0,0,.45);animation:opup .18s ease-out;user-select:text;-webkit-user-select:text}
+.op-sheet{width:100%;max-width:540px;max-height:92vh;max-height:92dvh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;padding:8px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(0,0,0,.45);animation:opup .18s ease-out;user-select:text;-webkit-user-select:text}
 @keyframes opup{from{transform:translateY(30px);opacity:.4}}
 @media (prefers-reduced-motion:reduce){.op-sheet{animation:none}}
 .op-grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 6px}
@@ -1235,4 +1236,13 @@ label.btn{display:flex;align-items:center;justify-content:center;gap:8px;cursor:
    lobby) step aside while the panel is open, so the table keeps its room; Back brings them straight back */
 @media (max-height:860px){
   #game:has(.sizing) .helper,#game:has(.sizing) .stats{display:none}
+}
+
+/* small phones: your name wraps onto two short lines instead of turning into "Test…" */
+@media (max-width:380px){
+  .topbar{padding-left:12px;padding-right:12px;gap:8px}
+  .me-chip{gap:6px}
+  .me-chip .me-btn{gap:6px}
+  .me-chip .me-btn span{white-space:normal;line-height:1.15;max-width:84px;font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere;text-align:left}
+  .me-chip .back{padding-left:10px;padding-right:10px}
 }

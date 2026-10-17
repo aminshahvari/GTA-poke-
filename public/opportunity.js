@@ -167,6 +167,9 @@ async function moderate(id, action){
 }
 
 // ---------- bottom sheet (contact, share, report) ----------
+// an error in a sheet is shown with its button in view: both sit at the end of the sheet, which a 320x568 phone
+// otherwise leaves scrolled to the top
+function fail(err, msg, btn){ err.textContent = msg; if(btn) btn.disabled = false; const sh = err.closest('.op-sheet'); if(sh) sh.scrollTop = sh.scrollHeight; else err.scrollIntoView({ block: 'nearest' }); }
 function sheet(title, body, onClose){
   const close = () => { wrap.remove(); document.removeEventListener('keydown', esc); if(onClose) onClose(); };
   const esc = e => { if(e.key === 'Escape') close(); };
@@ -190,7 +193,7 @@ function contactSheet(x){
   form.addEventListener('submit', async e => {
     e.preventDefault(); err.textContent = ''; send.disabled = true;
     try{ await api('oppRequest', { id: x.id, message: ta.value }); close(); C.toast('Request sent to ' + x.member + '.'); O.list = null; O.mine = null; if(O.detail) O.detail.data = null; B.rerender(); }
-    catch(z){ err.textContent = z.message; send.disabled = false; }
+    catch(z){ fail(err, z.message, send); }
   });
 }
 function reportSheet(x, d){
@@ -204,10 +207,10 @@ function reportSheet(x, d){
   const close = sheet('Report listing', form);
   form.addEventListener('submit', async e => {
     e.preventDefault(); err.textContent = '';
-    if(!reason){ err.textContent = 'Pick a reason.'; return; }
+    if(!reason){ fail(err, 'Pick a reason.', sendB); return; }
     sendB.disabled = true;
     try{ await api('oppReport', { id: x.id, reason, note: note.value }); close(); C.toast('Thanks. The director will take a look.'); O.list = null; d.data = null; B.rerender(); }
-    catch(z){ err.textContent = z.message; sendB.disabled = false; }
+    catch(z){ fail(err, z.message, sendB); }
   });
 }
 function shareSheet(r, listing){
@@ -231,10 +234,10 @@ function shareSheet(r, listing){
   form.addEventListener('submit', async e => {
     e.preventDefault(); err.textContent = '';
     const body = { id: r.id, action: 'share', email: em.t.checked ? em.inp.value : '', phone: ph.t.checked ? ph.inp.value : '', note: note.value };
-    if(!body.email && !body.phone){ err.textContent = 'Switch on your email or phone (or both) to share it.'; return; }
+    if(!body.email && !body.phone){ fail(err, 'Switch on your email or phone (or both) to share it.', go2); return; }
     go2.disabled = true;
     try{ await api('oppReply', body); close(); C.toast('Shared with ' + r.from + '.'); O.mine = null; O.badgeAt = 0; B.rerender(); }
-    catch(z){ err.textContent = z.message; go2.disabled = false; }
+    catch(z){ fail(err, z.message, go2); }
   });
 }
 

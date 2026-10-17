@@ -118,6 +118,16 @@ function renderList(el){
     Promise.all([loadList(), S.mine === undefined ? loadMine() : null]).then(() => { if(S.view === 'list' && S.seg === 'biz' && root === el) renderList(el); }).catch(e => el.replaceChildren(window.OppClub.topBar('biz'), header(), h('div', { class: 'empty' }, e.message)));
     return;
   }
+  // coming back to the directory shows what we have at once, then picks up businesses published since (by anyone)
+  if(S.listStale){
+    S.listStale = false; const was = JSON.stringify(S.list);
+    loadList().then(r => {
+      if(JSON.stringify(r) === was || S.view !== 'list' || S.seg !== 'biz' || root !== el) return;
+      const typing = document.activeElement && document.activeElement.classList.contains('bz-search');
+      renderList(el);
+      const q = typing && el.querySelector('.bz-search'); if(q){ q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+    }).catch(() => {});
+  }
   const L = S.list, items = L.items;
   const kids = [window.OppClub.topBar('biz'), header()];
   let spot = null, recent = null;
@@ -502,11 +512,11 @@ window.BizClub = {
     C = ctx;
     window.OppClub.init({ C, h, secHead, rerender: () => render(root),
       showOpp: () => { S.view = 'list'; S.seg = 'opp'; if(C.tab() !== 'biz') return C.openTab('biz'); render(root); if(root) root.scrollTop = 0; },
-      showBiz: () => go('list', { seg: 'biz' }),
+      showBiz: () => go('list', { seg: 'biz', listStale: true }),
       openBiz: uid => openDetail(uid, 'opp') });
   },
   render, mountHome,
-  open(view){ S.view = view || 'list'; if(view === 'mine'){ S.mine = undefined; S.seg = 'biz'; } if(S.seg === 'opp') window.OppClub.open('feed'); },
+  open(view){ S.view = view || 'list'; S.listStale = true; if(view === 'mine'){ S.mine = undefined; S.seg = 'biz'; } if(S.seg === 'opp') window.OppClub.open('feed'); },
   myStatus: () => S.feed ? S.feed.mine : null,
   reset(){ window.OppClub.reset(); S.seg = 'biz'; S.list = null; S.feed = null; S.feedAt = 0; S.mine = undefined; S.view = 'list'; logos.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); logos.clear(); }
 };
