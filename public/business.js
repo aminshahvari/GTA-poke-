@@ -25,7 +25,11 @@ function h(tag, props, ...kids){
   return el;
 }
 const api = (name, body) => C.post('/api/' + name, body || {});
+const I = (name, cls) => window.Icons.el(name, cls);
+const catId = b => window.Icons.cat(b.category, b.categoryLabel);
 const catLabel = id => (S.cats.find(c => c[0] === id) || [, 'Other'])[1];
+// staging demo rows (fake Test Player accounts): always labelled Demo so they never pass for a real member's business
+const isDemo = b => !!b.demo || /^Test Player \d+$/.test(b.member || '') || /\(Demo profile/.test(b.description || '');
 const isNew = b => b.publishedAt && Date.now() - b.publishedAt < NEW_MS;
 // outside links: only http(s), mailto and tel ever reach an href, and the server has checked them already
 function ext(href, label, cls, icon){
@@ -79,20 +83,27 @@ function render(el){
 function header(){
   const status = S.mine === undefined ? null : !S.mine ? 'Add your business' : S.mine.published && !S.mine.modHidden ? 'My business · Listed' : 'My business · Not listed';
   return h('div', { class: 'card-box bz-head' },
-    h('span', { class: 'eyebrow bz-eyebrow' }, 'Business Club'),
-    h('h2', null, "Members' businesses"),
+    h('div', { class: 'bz-head-t' }, h('span', { class: 'hsec-ic biz' }, I('briefcase')), h('div', null,
+      h('span', { class: 'eyebrow bz-eyebrow' }, 'Business Club'),
+      h('h2', null, "Members' businesses"))),
     h('p', null, 'Work with people you already play with. Only signed-in club members can see this directory. It has nothing to do with poker results.'),
     h('div', { class: 'btn-row' }, h('button', { class: 'btn bz-gold big', onclick: () => go('mine') }, status || 'My business')));
 }
 
+// A visual business card: a cover tinted by industry with its icon, the logo (or a monogram placeholder: never a
+// made-up photo), name, industry and the member who owns it. One tap opens the detail.
 function bizCard(b, opts = {}){
-  return h('button', { class: 'bz-card' + (opts.spot ? ' spot' : ''), type: 'button', onclick: () => openDetail(b.uid, opts.from) },
-    logoEl(b),
-    h('span', { class: 'bz-card-txt' },
-      h('b', null, b.name),
-      h('small', null, b.categoryLabel + (b.area ? ' · ' + b.area : '')),
-      h('small', { class: 'bz-by' }, 'Member: ' + b.member)),
-    isNew(b) ? h('span', { class: 'bz-new' }, 'New') : null);
+  const cid = catId(b);
+  return h('button', { class: 'bz-vcard c-' + cid + (opts.spot ? ' spot' : ''), type: 'button', onclick: () => openDetail(b.uid, opts.from) },
+    h('span', { class: 'bz-cover', 'aria-hidden': 'true' }, I(cid, 'bz-cover-ic')),
+    opts.spot ? h('span', { class: 'bz-ribbon' }, I('star'), 'Spotlight') : isNew(b) ? h('span', { class: 'bz-new' }, 'New') : null,
+    isDemo(b) ? h('span', { class: 'demo-tag bz-demo' }, 'Demo') : null,
+    logoEl(b, 'lg bz-vlogo'),
+    h('span', { class: 'bz-vbody' },
+      h('b', { class: 'bz-vname' }, b.name),
+      h('span', { class: 'bz-vcat' }, I(cid), h('span', null, b.categoryLabel)),
+      b.area ? h('small', { class: 'bz-varea' }, I('pin'), h('span', null, b.area)) : null,
+      h('small', { class: 'bz-by' }, I('users'), h('span', null, b.member))));
 }
 
 function filtered(){
@@ -112,15 +123,15 @@ function renderList(el){
   if(L.spotlight){
     const b = L.spotlight;
     kids.push(h('div', { class: 'card-box bz-spot' },
-      h('span', { class: 'eyebrow bz-eyebrow' }, '★ Member Spotlight'),
-      h('button', { class: 'bz-spot-main', type: 'button', onclick: () => openDetail(b.uid) },
+      h('span', { class: 'eyebrow bz-eyebrow bz-eyeic' }, I('star'), 'Member Spotlight'),
+      h('button', { class: 'bz-spot-main c-' + catId(b), type: 'button', onclick: () => openDetail(b.uid) },
         logoEl(b, 'xl'),
         h('span', { class: 'bz-card-txt' }, h('b', null, b.name), h('small', null, b.categoryLabel + (b.area ? ' · ' + b.area : '')),
           b.description ? h('span', { class: 'bz-spot-desc' }, b.description) : null, h('small', { class: 'bz-by' }, 'Member: ' + b.member)))));
   }
   if(!items.length){
     kids.push(h('div', { class: 'card-box bz-empty' },
-      h('div', { class: 'bz-empty-art', 'aria-hidden': 'true' }, '◆'),
+      h('div', { class: 'bz-empty-art', 'aria-hidden': 'true' }, I('briefcase')),
       h('h3', null, 'No member businesses yet'),
       h('p', null, S.mine ? 'Your profile is saved. Publish it to be the first business in the club.' : 'Be the first: scan your business card or type in a few details. Nothing is shown until you publish it.'),
       h('div', { class: 'btn-row' }, S.mine ? h('button', { class: 'btn bz-gold big', onclick: () => go('mine') }, 'Go to my business')
@@ -133,7 +144,7 @@ function renderList(el){
     const grid = h('div', { class: 'bz-grid' });
     const fill = () => {
       const f = filtered();
-      grid.replaceChildren(...(f.length ? f.map(b => bizCard(b)) : [h('div', { class: 'empty bz-nomatch' }, h('p', null, 'No businesses match that search.'), h('button', { class: 'btn', onclick: () => { S.q = ''; S.cat = ''; renderList(el); } }, 'Clear search'))]));
+      grid.replaceChildren(...(f.length ? f.map(b => bizCard(b)) : [h('div', { class: 'card-box bz-empty bz-nomatch' }, h('span', { class: 'bz-empty-art', 'aria-hidden': 'true' }, I('search')), h('p', null, 'No businesses match that search.'), h('button', { class: 'btn', onclick: () => { S.q = ''; S.cat = ''; renderList(el); } }, 'Clear search'))]));
     };
     search.addEventListener('input', () => { S.q = search.value; fill(); });
     kids.push(h('div', { class: 'bz-find' }, search, chips));
@@ -154,14 +165,7 @@ function renderList(el){
 }
 function refresh(){ S.list = null; S.feed = null; S.feedAt = 0; render(root); }
 
-function miniCard(b, from){
-  return h('button', { class: 'bz-mini', type: 'button', onclick: () => openDetail(b.uid, from) },
-    logoEl(b, 'lg'),
-    h('b', null, b.name),
-    h('small', null, b.categoryLabel),
-    h('small', { class: 'bz-by' }, b.member),
-    isNew(b) ? h('span', { class: 'bz-new' }, 'New') : null);
-}
+function miniCard(b, from, spot){ return bizCard(b, { from, spot }); }
 
 // ---------- detail ----------
 function openDetail(uid, from){ go('detail', { detail: { uid, data: null }, back: from || 'list' }); }
@@ -175,17 +179,18 @@ function renderDetail(el){
     return;
   }
   const b = d.data.business, c = b.contacts, links = [];
-  if(c.website) links.push(ext(c.website, 'Website', 'bz-act', '↗'));
-  if(c.instagram) links.push(ext(c.instagram.url, '@' + c.instagram.handle, 'bz-act', '◎'));
-  if(c.email) links.push(ext('mailto:' + c.email, 'Email', 'bz-act', '✉'));
-  if(c.phone) links.push(ext('tel:' + c.phone.tel, 'Call ' + c.phone.text, 'bz-act', '✆'));
+  if(c.website) links.push(ext(c.website, 'Website', 'bz-act', I('globe')));
+  if(c.instagram) links.push(ext(c.instagram.url, '@' + c.instagram.handle, 'bz-act', I('insta')));
+  if(c.email) links.push(ext('mailto:' + c.email, 'Email', 'bz-act', I('mail')));
+  if(c.phone) links.push(ext('tel:' + c.phone.tel, 'Call ' + c.phone.text, 'bz-act', I('phone')));
   if(links[0]) links[0].classList.add('primary');
   const sect = (title, body) => body ? h('div', { class: 'bz-sect' }, h('span', { class: 'eyebrow bz-eyebrow' }, title), h('p', { class: 'bz-pre' }, body)) : null;
   const kids = [back,
-    h('div', { class: 'card-box bz-detail' + (d.data.spotlight ? ' spot' : '') },
-      d.data.spotlight ? h('span', { class: 'eyebrow bz-eyebrow' }, '★ Member Spotlight') : null,
+    h('div', { class: 'card-box bz-detail c-' + catId(b) + (d.data.spotlight ? ' spot' : '') },
+      h('div', { class: 'bz-dcover', 'aria-hidden': 'true' }, I(catId(b), 'bz-cover-ic')),
+      d.data.spotlight ? h('span', { class: 'eyebrow bz-eyebrow bz-eyeic' }, I('star'), 'Member Spotlight') : null,
       h('div', { class: 'bz-hero' }, logoEl(b, 'xl'),
-        h('div', null, h('h2', null, b.name), h('div', { class: 'bz-tags' }, h('span', { class: 'bz-tag' }, b.categoryLabel), b.referrals ? h('span', { class: 'bz-tag good' }, 'Open to referrals') : null, isNew(b) ? h('span', { class: 'bz-tag' }, 'New') : null),
+        h('div', null, h('h2', null, b.name), h('div', { class: 'bz-tags' }, h('span', { class: 'bz-tag cat' }, I(catId(b)), b.categoryLabel), b.referrals ? h('span', { class: 'bz-tag good' }, 'Open to referrals') : null, isNew(b) ? h('span', { class: 'bz-tag' }, 'New') : null, isDemo(b) ? h('span', { class: 'demo-tag' }, 'Demo') : null),
           b.fullName ? h('div', { class: 'bz-person' }, b.fullName + (b.jobTitle ? ', ' + b.jobTitle : '')) : null,
           h('small', { class: 'bz-by' }, 'Club member: ' + b.member))),
       sect('About', b.description), sect('Services', b.services), sect('Service area', b.area), sect('Address', c.address),
@@ -250,7 +255,7 @@ function introCard(home){
     h('h3', null, 'Introduce your business'),
     h('p', null, 'Own a business or freelance? Let club members find you. Scan your business card and it is ready in under a minute. Nothing is shown until you publish.'),
     h('div', { class: 'bz-stack' },
-      h('button', { class: 'btn bz-gold big', onclick: () => go('scan', { scan: null }) }, '📇  Scan your business card'),
+      h('button', { class: 'btn bz-gold big btn-ic', onclick: () => go('scan', { scan: null }) }, I('camera'), 'Scan your business card'),
       h('button', { class: 'btn big', onclick: () => startEdit() }, 'Type it in instead')));
 }
 
@@ -444,22 +449,36 @@ function renderScan(el){
     h('p', { class: 'bz-muted' }, 'Your photo is read on this phone and never uploaded or saved. The reader (about 6 MB) downloads the first time you scan.')));
 }
 
-// ---------- Home: "Meet the Members" carousel, new businesses and the intro prompt ----------
+// ---------- Home: the Business section (a rail of member business cards, then the intro prompt) ----------
+// Section header shared look with Home's Poker and Opportunities headers (style.css .hsec-head)
+function secHead(id, icon, title, sub, link){
+  return h('div', { class: 'hsec-head', id },
+    h('span', { class: 'hsec-ic ' + icon[1] }, I(icon[0])),
+    h('div', { class: 'hsec-t' }, h('h2', null, title), sub ? h('small', null, sub) : null),
+    link ? h('button', { class: 'hsec-link', type: 'button', onclick: link[1] }, link[0], I('chev')) : null);
+}
 function homeInto(sec){
-  const f = S.feed; if(!f){ sec.replaceChildren(); return; }
-  const kids = [];
+  const f = S.feed;
+  const head = (total) => secHead('hs-biz', ['briefcase', 'biz'], 'Business', total ? (total === 1 ? '1 member business' : total + ' member businesses') : "Your friends' businesses",
+    total ? ['See all', () => go('list', { seg: 'biz' })] : null);
+  // still loading: the header and placeholder cards, so the page doesn't jump when the cards arrive
+  if(!f){ sec.replaceChildren(head(0), h('div', { class: 'bz-rail home', 'aria-hidden': 'true' }, [0, 1, 2].map(() => h('span', { class: 'bz-vcard sk' })))); return; }
+  const kids = [head(f.total)];
+  const unlisted = f.mine === 'none' || f.mine === 'draft';
   if(f.items.length){
-    const rail = h('div', { class: 'bz-rail home', role: 'list' }, f.items.map(b => { const c = miniCard(b, 'home'); c.setAttribute('role', 'listitem'); if(b.uid === f.spotlight){ c.classList.add('spot'); c.prepend(h('span', { class: 'bz-star', title: 'Member Spotlight' }, '★')); } return c; }));
+    const cards = f.items.map(b => { const c = bizCard(b, { from: 'home', spot: b.uid === f.spotlight }); c.setAttribute('role', 'listitem'); return c; });
+    // members without a listed business get one more card at the end of the rail
+    if(unlisted && f.introDismissed) cards.push(h('button', { class: 'bz-vcard add', type: 'button', role: 'listitem', onclick: () => go('mine') },
+      h('span', { class: 'bz-add-ic', 'aria-hidden': 'true' }, I('plus')), h('b', null, f.mine === 'draft' ? 'Finish your business profile' : 'Add your business'), h('small', null, 'Members only. You choose what to show.')));
+    const rail = h('div', { class: 'bz-rail home', role: 'list', 'aria-label': "Members' businesses" }, cards);
     rail.addEventListener('scroll', () => { S.railX = rail.scrollLeft; }, { passive: true });
-    kids.push(h('div', { class: 'card-box bz-home' },
-      h('div', { class: 'bz-home-head' }, h('div', null, h('span', { class: 'eyebrow bz-eyebrow' }, 'Business Club'), h('h3', null, 'Meet the Members')),
-        h('button', { class: 'bz-link', type: 'button', onclick: () => go('list', { seg: 'biz' }) }, 'See all ' + f.total + ' ›')),
-      rail,
-      f.recent.length ? h('div', { class: 'bz-newlist' }, h('span', { class: 'eyebrow bz-eyebrow' }, 'New to the Club'),
-        f.recent.slice(0, 3).map(b => h('button', { class: 'bz-row', type: 'button', onclick: () => openDetail(b.uid, 'home') }, logoEl(b, 'sm'), h('span', null, h('b', null, b.name), h('small', null, b.categoryLabel + ' · ' + b.member)), h('span', { class: 'bz-chev', 'aria-hidden': 'true' }, '›')))) : null));
+    kids.push(rail);
     requestAnimationFrame(() => { rail.scrollLeft = S.railX; });
+  } else if(!unlisted || f.introDismissed){
+    kids.push(h('div', { class: 'card-box bz-empty sm' }, h('span', { class: 'bz-empty-art', 'aria-hidden': 'true' }, I('briefcase')), h('p', null, h('b', null, 'No member businesses yet. '), 'Own a business or freelance? Add yours and be the first.'),
+      h('button', { class: 'btn bz-gold', onclick: () => go('mine') }, f.mine === 'published' || f.mine === 'hidden' ? 'My business' : 'Add your business')));
   }
-  if((f.mine === 'none' || f.mine === 'draft') && !f.introDismissed){
+  if(unlisted && !f.introDismissed){
     const card = introCard(true);
     if(f.mine === 'draft'){ card.querySelector('h3').textContent = 'Finish your business profile'; card.querySelector('p').textContent = 'Your profile is saved but not published yet. Members can only see it after you publish.'; card.querySelector('.bz-stack').replaceChildren(h('button', { class: 'btn bz-gold big', onclick: () => go('mine') }, 'Continue')); }
     kids.push(card);
@@ -475,7 +494,7 @@ function mountHome(sec, playing){
 window.BizClub = {
   init(ctx){
     C = ctx;
-    window.OppClub.init({ C, h, rerender: () => render(root),
+    window.OppClub.init({ C, h, secHead, rerender: () => render(root),
       showOpp: () => { S.view = 'list'; S.seg = 'opp'; if(C.tab() !== 'biz') return C.openTab('biz'); render(root); if(root) root.scrollTop = 0; },
       showBiz: () => go('list', { seg: 'biz' }),
       openBiz: uid => openDetail(uid, 'opp') });

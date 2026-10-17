@@ -17,9 +17,14 @@ function ago(t){
 }
 const date = t => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
 function ends(t){ const d = Math.ceil((t - Date.now()) / DAY); return d <= 0 ? 'Ended ' + date(t) : d === 1 ? 'Ends tomorrow' : d <= 14 ? 'Ends in ' + d + ' days' : 'Ends ' + date(t); }
-const STATE = { open: ['Open', ''], closed: ['Closed', 'idle'], expired: ['Expired', 'idle'], review: ['Hidden: waiting for director review', 'warn'], hidden: ['Hidden by the club director', 'warn'] };
+const STATE = { open: ['Open', 'open'], closed: ['Closed', 'idle'], expired: ['Expired', 'idle'], review: ['Hidden: waiting for director review', 'warn'], hidden: ['Hidden by the club director', 'warn'] };
 const pill = st => h('span', { class: 'op-state ' + (STATE[st] || STATE.open)[1] }, (STATE[st] || STATE.open)[0]);
-const typePill = t => h('span', { class: 'op-type ' + t }, SHORT[t]);
+const I = (name, cls) => window.Icons.el(name, cls);
+const typePill = t => h('span', { class: 'op-type ' + t }, I(t), SHORT[t]);
+// the two big entry buttons: on the Business tab and on Home
+const bigButtons = () => h('div', { class: 'op-entry' },
+  h('button', { class: 'op-big need', type: 'button', onclick: () => newListing('need') }, h('span', { class: 'op-big-ic', 'aria-hidden': 'true' }, I('need')), h('span', null, h('b', null, 'I need help'), h('small', null, 'Ask the club'))),
+  h('button', { class: 'op-big offer', type: 'button', onclick: () => newListing('offer') }, h('span', { class: 'op-big-ic', 'aria-hidden': 'true' }, I('offer')), h('span', null, h('b', null, 'I can help'), h('small', null, 'Offer a hand'))));
 const counter = (input, max) => { const c = h('small', { class: 'op-count' }, input.value.length + ' / ' + max); input.addEventListener('input', () => { c.textContent = input.value.length + ' / ' + max; c.classList.toggle('over', input.value.length > max); }); return c; };
 
 function go(view, extra){ Object.assign(O, { view }, extra || {}); if(!O.list) homeAt = 0; B.showOpp(); }
@@ -29,9 +34,7 @@ function go(view, extra){ Object.assign(O, { view }, extra || {}); if(!O.list) h
 function topBar(seg){
   const n = O.badge || 0;
   return h('div', { class: 'op-top' },
-    h('div', { class: 'op-entry' },
-      h('button', { class: 'op-big need', type: 'button', onclick: () => newListing('need') }, h('span', { class: 'op-big-ic', 'aria-hidden': 'true' }, '?'), h('span', null, h('b', null, 'I need help'), h('small', null, 'Ask the club'))),
-      h('button', { class: 'op-big offer', type: 'button', onclick: () => newListing('offer') }, h('span', { class: 'op-big-ic', 'aria-hidden': 'true' }, '+'), h('span', null, h('b', null, 'I can help'), h('small', null, 'Offer a hand')))),
+    bigButtons(),
     h('div', { class: 'op-seg', role: 'tablist', 'aria-label': 'Business Club sections' },
       h('button', { type: 'button', role: 'tab', 'aria-selected': String(seg === 'biz'), onclick: () => B.showBiz() }, 'Businesses'),
       h('button', { type: 'button', role: 'tab', 'aria-selected': String(seg === 'opp'), onclick: () => go('feed') }, 'Opportunities', n ? h('span', { class: 'op-dot', 'aria-label': n + ' waiting' }, String(n)) : null)));
@@ -51,15 +54,19 @@ function render(el){
 const back = (label, fn) => h('button', { class: 'bz-back', type: 'button', onclick: fn }, '‹ ' + label);
 const loading = (el, kids, p, again) => { el.replaceChildren(...kids, h('div', { class: 'empty' }, 'Opening…')); p.then(again).catch(e => el.replaceChildren(...kids, h('div', { class: 'card-box bz-empty' }, h('h3', null, 'Not available'), h('p', null, e.message)))); };
 
-function oppCard(x){
-  return h('button', { class: 'op-card ' + x.type, type: 'button', onclick: () => openDetail(x.id, 'feed') },
-    h('span', { class: 'op-card-top' }, typePill(x.type), h('small', null, ago(x.createdAt))),
-    h('b', null, x.title),
-    x.details ? h('span', { class: 'op-snip' }, x.details) : null,
-    h('small', { class: 'op-meta' }, [x.categoryLabel, x.area, x.member].filter(Boolean).join(' · ')),
-    x.myRequest ? h('span', { class: 'op-mini-state' }, x.myRequest.status === 'shared' ? 'Contact shared with you' : x.myRequest.status === 'declined' ? 'Declined' : 'Request sent') : x.mine ? h('span', { class: 'op-mini-state' }, 'Your listing') : null,
-    x.reports ? h('span', { class: 'op-mini-state warn' }, x.reports + ' report' + (x.reports > 1 ? 's' : '')) : null,
-    x.state && x.state !== 'open' ? pill(x.state) : null);
+// A visual listing card: the type's icon tile, type and status pills, title, a short snippet, then industry, area and member.
+function oppCard(x, compact){
+  const cid = window.Icons.cat(x.category, x.categoryLabel);
+  return h('button', { class: 'op-card ' + x.type + (compact ? ' compact' : ''), type: 'button', onclick: () => openDetail(x.id, 'feed') },
+    h('span', { class: 'op-card-ic', 'aria-hidden': 'true' }, I(x.type)),
+    h('span', { class: 'op-card-body' },
+      h('span', { class: 'op-card-top' }, typePill(x.type), pill(x.state || 'open'), x.demo ? h('span', { class: 'demo-tag' }, 'Demo') : null, h('small', { class: 'op-ago' }, ago(x.createdAt))),
+      h('b', { class: 'op-title' }, x.title),
+      x.details && !compact ? h('span', { class: 'op-snip' }, x.details) : null,
+      h('span', { class: 'op-meta' }, h('span', { class: 'op-cat' }, I(cid), h('span', null, x.categoryLabel)), x.area ? h('span', { class: 'op-cat' }, I('pin'), h('span', null, x.area)) : null),
+      h('small', { class: 'op-by-line' }, I('users'), h('span', null, x.member)),
+      x.myRequest ? h('span', { class: 'op-mini-state' }, x.myRequest.status === 'shared' ? 'Contact shared with you' : x.myRequest.status === 'declined' ? 'Declined' : 'Request sent') : x.mine ? h('span', { class: 'op-mini-state' }, 'Your listing') : null,
+      x.reports ? h('span', { class: 'op-mini-state warn' }, x.reports + ' report' + (x.reports > 1 ? 's' : '')) : null));
 }
 
 function renderFeed(el){
@@ -85,12 +92,12 @@ function renderFeed(el){
   function fill(){
     const f = filtered();
     count.textContent = f.length === 1 ? '1 listing' : f.length + ' listings';
-    grid.replaceChildren(...(f.length ? f.map(oppCard) : [h('div', { class: 'empty bz-nomatch' }, h('p', null, 'No listings match.'), h('button', { class: 'btn', onclick: () => { O.q = ''; O.type = ''; O.cat = ''; renderFeed(el); } }, 'Clear filters'))]));
+    grid.replaceChildren(...(f.length ? f.map(x => oppCard(x)) : [h('div', { class: 'card-box bz-empty bz-nomatch' }, h('span', { class: 'bz-empty-art', 'aria-hidden': 'true' }, I('search')), h('p', null, 'No listings match.'), h('button', { class: 'btn', onclick: () => { O.q = ''; O.type = ''; O.cat = ''; renderFeed(el); } }, 'Clear filters'))]));
   }
   search.addEventListener('input', () => { O.q = search.value; fill(); });
   if(!items.length){
     kids.push(h('div', { class: 'card-box bz-empty' },
-      h('div', { class: 'bz-empty-art', 'aria-hidden': 'true' }, '◆'),
+      h('div', { class: 'bz-empty-art', 'aria-hidden': 'true' }, I('spark')),
       h('h3', null, 'No open listings yet'),
       h('p', null, 'Need a hand with something, or happy to help? Post it here. Only signed-in club members can see it.'),
       h('div', { class: 'btn-row' }, h('button', { class: 'btn bz-gold big', onclick: () => newListing('need') }, 'I need help'), h('button', { class: 'btn big', onclick: () => newListing('offer') }, 'I can help'))));
@@ -113,12 +120,13 @@ function renderDetail(el){
   const x = d.data.item;
   const kids = [bk];
   const box = h('div', { class: 'card-box op-detail ' + x.type },
-    h('div', { class: 'op-card-top' }, typePill(x.type), x.state !== 'open' ? pill(x.state) : null),
+    h('div', { class: 'op-dhead' }, h('span', { class: 'op-card-ic big', 'aria-hidden': 'true' }, I(x.type)),
+      h('div', { class: 'op-card-top' }, typePill(x.type), pill(x.state), x.demo ? h('span', { class: 'demo-tag' }, 'Demo') : null)),
     h('h2', null, x.title),
     x.details ? h('p', { class: 'bz-pre' }, x.details) : null,
-    h('div', { class: 'bz-tags' }, h('span', { class: 'bz-tag' }, x.categoryLabel), x.area ? h('span', { class: 'bz-tag' }, x.area) : null),
+    h('div', { class: 'bz-tags' }, h('span', { class: 'bz-tag cat' }, I(window.Icons.cat(x.category, x.categoryLabel)), x.categoryLabel), x.area ? h('span', { class: 'bz-tag cat' }, I('pin'), x.area) : null),
     h('p', { class: 'op-by' }, h('b', null, x.member), ' · posted ' + ago(x.createdAt) + ' · ' + ends(x.expiresAt)),
-    x.business ? h('button', { class: 'op-row', type: 'button', onclick: () => B.openBiz(x.business.uid) }, h('span', null, h('small', null, x.member + "'s business"), h('b', null, x.business.name)), h('span', { class: 'bz-chev', 'aria-hidden': 'true' }, '›')) : null);
+    x.business ? h('button', { class: 'op-row', type: 'button', onclick: () => B.openBiz(x.business.uid) }, h('span', null, h('small', null, x.member + "'s business"), h('b', null, x.business.name)), I('chev', 'bz-chev')) : null);
   if(x.mine){
     box.append(h('div', { class: 'bz-stack' },
       h('button', { class: 'btn bz-gold big', onclick: () => go('mine') }, 'See requests in My opportunities'),
@@ -285,10 +293,10 @@ function renderMine(el){
     h('button', { type: 'button', role: 'tab', 'aria-selected': String(O.mineTab === 'sent'), onclick: () => { O.mineTab = 'sent'; renderMine(el); } }, 'Requests I sent'));
   const kids = [bk, h('div', { class: 'card-box bz-head' }, h('span', { class: 'eyebrow bz-eyebrow' }, 'Opportunity Club'), h('h2', null, 'My opportunities'), seg)];
   if(O.mineTab === 'sent'){
-    if(!M.sent.length) kids.push(h('div', { class: 'card-box bz-empty' }, h('h3', null, 'No requests yet'), h('p', null, 'When you tap "I can help" or "I\'m interested" on a listing, it shows up here with the reply.'), h('button', { class: 'btn big', onclick: () => go('feed') }, 'Browse listings')));
+    if(!M.sent.length) kids.push(h('div', { class: 'card-box bz-empty' }, h('span', { class: 'bz-empty-art', 'aria-hidden': 'true' }, I('inbox')), h('h3', null, 'No requests yet'), h('p', null, 'When you tap "I can help" or "I\'m interested" on a listing, it shows up here with the reply.'), h('button', { class: 'btn big', onclick: () => go('feed') }, 'Browse listings')));
     for(const r of M.sent) kids.push(sentCard(r));
   } else {
-    if(!M.listings.length) kids.push(h('div', { class: 'card-box bz-empty' }, h('h3', null, 'You have no listings'), h('p', null, 'Post what you need or what you can offer. You can have ' + M.limits.open + ' open at a time.'),
+    if(!M.listings.length) kids.push(h('div', { class: 'card-box bz-empty' }, h('span', { class: 'bz-empty-art', 'aria-hidden': 'true' }, I('spark')), h('h3', null, 'You have no listings'), h('p', null, 'Post what you need or what you can offer. You can have ' + M.limits.open + ' open at a time.'),
       h('div', { class: 'btn-row' }, h('button', { class: 'btn bz-gold big', onclick: () => newListing('need') }, 'I need help'), h('button', { class: 'btn big', onclick: () => newListing('offer') }, 'I can help'))));
     else kids.push(h('p', { class: 'bz-count' }, M.limits.openNow + ' of ' + M.limits.open + ' open listings'));
     for(const x of M.listings) kids.push(mineCard(x));
@@ -368,21 +376,17 @@ function badge(btn, playing){
   api('oppBadge').then(r => { O.badge = r.pending; draw(); }).catch(() => {});
 }
 
-// ---------- Home: "Community Opportunities" under Meet the Members (hidden while seated in a running tournament) ----------
+// ---------- Home: the Opportunities section (hidden while seated in a running tournament) ----------
 let homeData = null, homeAt = 0;
 function homeInto(sec){
-  if(!homeData){ sec.replaceChildren(); return; }
+  const n = homeData ? homeData.items.length : 0;
+  const head = B.secHead('hs-opp', ['spark', 'opp'], 'Opportunities', n ? (n === 1 ? '1 open listing' : n + ' open listings') : 'Ask the club, or offer a hand', homeData ? [n ? 'See all' : 'Open', () => go('feed')] : null);
+  if(!homeData){ sec.replaceChildren(head, bigButtons(), h('div', { class: 'op-homelist', 'aria-hidden': 'true' }, h('span', { class: 'op-card sk' }), h('span', { class: 'op-card sk' }))); return; }
   const items = homeData.items.slice(0, 4);
-  sec.replaceChildren(h('div', { class: 'card-box op-home' },
-    h('div', { class: 'bz-home-head' }, h('div', null, h('span', { class: 'eyebrow bz-eyebrow' }, 'Business Club'), h('h3', null, 'Community Opportunities')),
-      h('button', { class: 'bz-link', type: 'button', onclick: () => go('feed') }, (homeData.items.length ? 'See all ' + homeData.items.length : 'Open') + ' ›')),
-    h('div', { class: 'op-entry' },
-      h('button', { class: 'op-big need', type: 'button', onclick: () => newListing('need') }, h('span', { class: 'op-big-ic', 'aria-hidden': 'true' }, '?'), h('span', null, h('b', null, 'I need help'), h('small', null, 'Ask the club'))),
-      h('button', { class: 'op-big offer', type: 'button', onclick: () => newListing('offer') }, h('span', { class: 'op-big-ic', 'aria-hidden': 'true' }, '+'), h('span', null, h('b', null, 'I can help'), h('small', null, 'Offer a hand')))),
-    items.length ? h('div', { class: 'op-homelist' }, items.map(x => h('button', { class: 'op-hrow ' + x.type, type: 'button', onclick: () => openDetail(x.id, 'feed') },
-      h('span', null, typePill(x.type), h('b', null, x.title), h('small', null, [x.categoryLabel, x.member, ago(x.createdAt)].join(' · '))), h('span', { class: 'bz-chev', 'aria-hidden': 'true' }, '›'))))
-      : h('p', { class: 'bz-muted' }, 'No open listings yet. Be the first to ask or offer.'),
-    homeData.pending ? h('button', { class: 'op-row', type: 'button', onclick: () => go('mine') }, h('span', null, h('b', null, 'Requests waiting for you'), h('small', null, 'In My opportunities')), h('span', { class: 'op-dot big' }, String(homeData.pending)), h('span', { class: 'bz-chev', 'aria-hidden': 'true' }, '›')) : null));
+  sec.replaceChildren(...[head, bigButtons(),
+    homeData.pending ? h('button', { class: 'op-row op-waiting', type: 'button', onclick: () => go('mine') }, h('span', null, h('b', null, 'Requests waiting for you'), h('small', null, 'In My opportunities')), h('span', { class: 'op-dot big' }, String(homeData.pending)), I('chev', 'bz-chev')) : null,
+    items.length ? h('div', { class: 'op-homelist', role: 'list', 'aria-label': 'Open listings' }, items.map(x => { const c = oppCard(x, true); c.setAttribute('role', 'listitem'); return c; }))
+      : h('div', { class: 'card-box bz-empty sm op-none' }, h('span', { class: 'bz-empty-art', 'aria-hidden': 'true' }, I('spark')), h('p', null, h('b', null, 'No open listings yet. '), 'Need a hand, or happy to help? Be the first to post.'))].filter(Boolean));
 }
 function mountHome(sec, playing){
   if(playing){ sec.replaceChildren(); return; }
