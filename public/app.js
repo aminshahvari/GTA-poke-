@@ -171,23 +171,74 @@ function renderLobby(){
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   // Opportunity Club: a small count of requests waiting for my answer on the Business tab; never while seated in a running tournament
   if(clubsVisible) window.OppClub.badge(bizTab, !!(club.myTable && club.tourney && club.tourney.status === 'running'));
-  document.querySelector('.app').classList.toggle('wide', tab === 'biz');
+  const home = tab !== 'board' && tab !== 'learn' && !(tab === 'director' && club.me.owner);
+  const playing = !!(club.myTable && club.tourney && club.tourney.status === 'running');
+  document.querySelector('.app').classList.toggle('wide', tab === 'biz' || (home && clubsVisible && !playing));
   if(tab === 'biz'){ body.replaceChildren(); window.BizClub.render(body); return; }
-  body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : (clubsOn ? '' : comingHTML()) + picNudgeHTML() + eventHTML() + friendsHTML();
-  if(clubsVisible && tab !== 'board' && tab !== 'learn' && !(tab === 'director' && club.me.owner)) bizHome(body);
+  if(home) renderHome(body, clubsOn, clubsVisible && !playing);
+  else body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : directorHTML();
   wireLobby();
 }
-// Home: Business Club's "Meet the Members" goes right under the tournament card. Hidden while you're seated in a running tournament.
-function bizHome(body){
-  const sec = document.createElement('div'); sec.className = 'bz-homewrap';
-  const cards = [...body.children].filter(c => c.classList.contains('card-box') && !c.classList.contains('pic-nudge') && !c.classList.contains('next-box') && !c.classList.contains('coming-box'));
-  if(cards[0]) cards[0].after(sec); else body.append(sec);
-  const playing = !!(club.myTable && club.tourney && club.tourney.status === 'running');
-  window.BizClub.mountHome(sec, playing);
-  // Opportunity Club: "Community Opportunities" right under Meet the Members (also hidden while seated)
-  const opp = document.createElement('div'); opp.className = 'bz-homewrap'; sec.after(opp);
-  window.OppClub.mountHome(opp, playing);
+// ---------- Home: Poker, then Business, then Opportunities ----------
+// The tournament card always comes first. Business and Opportunities show only when the clubs are open (the owner always
+// sees them) and never while you're seated in a running tournament: then Home is poker only.
+const SECTIONS = [['poker', 'spade', 'Poker'], ['biz', 'briefcase', 'Business'], ['opp', 'spark', 'Opportunities']];
+function homeNavHTML(){
+  return `<nav class="home-nav" aria-label="Home sections">${SECTIONS.map(([k, ic, l], i) => `<button type="button" class="hn-${k}" data-hs="${k}" aria-current="${i === 0}">${Icons.svg(ic)}<span>${l}</span></button>`).join('')}</nav>`;
 }
+function pokerHeadHTML(){
+  const st = club.tourney && club.tourney.status;
+  const sub = st === 'registering' ? 'Registration open' : st === 'running' ? 'Live now' : 'Club tournaments';
+  return `<div class="hsec-head" id="hs-poker"><span class="hsec-ic poker">${Icons.svg('spade')}</span><div class="hsec-t"><h2>Poker</h2><small class="${st === 'running' ? 'live' : ''}">${sub}</small></div>
+    <button type="button" class="hsec-link" data-gotab="board">Leaderboard${Icons.svg('chev')}</button></div>`;
+}
+// decorative only: two cards and a chip on the tournament card
+const HERO_ART = `<svg class="hero-art" viewBox="0 0 120 96" aria-hidden="true" focusable="false"><g transform="rotate(-14 46 52)"><rect x="22" y="14" width="46" height="64" rx="6" fill="#f4f1ea"/><text x="29" y="34" font-size="15" font-weight="700" fill="#1b1b1b" font-family="system-ui,sans-serif">A</text><path d="M45 42c4 4 9 7 9 11.5 0 2.8-2.2 4.7-4.7 4.7-1.5 0-2.8-.7-3.5-1.8.3 2.1 1.3 3.7 2.9 5.1h-7.4c1.6-1.4 2.6-3 2.9-5.1-.7 1.1-2 1.8-3.5 1.8-2.5 0-4.7-1.9-4.7-4.7C36 49 41 46 45 42z" fill="#1b1b1b"/></g><g transform="rotate(10 78 50)"><rect x="54" y="12" width="46" height="64" rx="6" fill="#fbfaf6"/><text x="61" y="32" font-size="15" font-weight="700" fill="#c8141f" font-family="system-ui,sans-serif">K</text><path d="M77 58s-10-6-10-12.5a5 5 0 0 1 10-1.8 5 5 0 0 1 10 1.8C87 52 77 58 77 58z" fill="#c8141f"/></g><circle cx="96" cy="76" r="15" fill="#2e6bcf"/><circle cx="96" cy="76" r="15" fill="none" stroke="#e8ebf1" stroke-width="4" stroke-dasharray="5 6.8"/><circle cx="96" cy="76" r="8.5" fill="#1b2333" stroke="#e8ebf1" stroke-width="1.2"/></svg>`;
+function renderHome(body, clubsOn, showClubs){
+  const ev = document.createElement('div'); ev.innerHTML = eventHTML();
+  const cards = [...ev.children];
+  // the hero: the owner's "Start the next tournament" box and/or the tournament card; older results go further down
+  let n = cards.length ? 1 : 0;
+  if(cards[0] && cards[0].classList.contains('next-box') && cards[1] && !cards[1].querySelector('table')) n = 2;
+  const main = cards.slice(0, n).find(c => !c.classList.contains('next-box') && c.querySelector('.status-pill'));
+  if(main){ main.classList.add('poker-hero'); main.insertAdjacentHTML('afterbegin', HERO_ART); }
+  const extra = document.createElement('div'); extra.innerHTML = (clubsOn ? '' : comingHTML()) + picNudgeHTML();
+  body.innerHTML = (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
+  body.append(...cards.slice(0, n), ...[...extra.children]);
+  if(showClubs){
+    const biz = document.createElement('section'); biz.className = 'hsec hsec-biz'; biz.setAttribute('aria-labelledby', 'hs-biz');
+    const opp = document.createElement('section'); opp.className = 'hsec hsec-opp'; opp.setAttribute('aria-labelledby', 'hs-opp');
+    body.append(biz, opp);
+    window.BizClub.mountHome(biz, false);
+    window.OppClub.mountHome(opp, false);
+  }
+  body.append(...cards.slice(n));
+  body.insertAdjacentHTML('beforeend', friendsHTML());
+  if(showClubs) requestAnimationFrame(navSync);
+}
+// the section switcher scrolls to a section and follows the scroll
+const navH = () => { const n = document.querySelector('.home-nav'); return n ? n.offsetHeight : 0; };
+function navSync(){
+  const body = $('lobbyBody'), nav = body.querySelector('.home-nav'); if(!nav) return;
+  const top = body.getBoundingClientRect().top + navH() + 24;
+  let cur = 'poker';
+  for(const [k] of SECTIONS){ const t = $('hs-' + k); if(t && t.getBoundingClientRect().top <= top) cur = k; }
+  if(body.scrollTop + body.clientHeight >= body.scrollHeight - 4 && $('hs-opp')) cur = 'opp';
+  nav.querySelectorAll('[data-hs]').forEach(b => b.setAttribute('aria-current', String(b.dataset.hs === cur)));
+}
+let navTick = false;
+$('lobbyBody').addEventListener('scroll', () => { if(navTick) return; navTick = true; requestAnimationFrame(() => { navTick = false; navSync(); }); }, { passive: true });
+$('lobbyBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-hs]');
+  if(b){
+    const body = $('lobbyBody'), t = $('hs-' + b.dataset.hs); if(!t) return;
+    const y = b.dataset.hs === 'poker' ? 0 : t.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - navH() - 10;
+    body.scrollTo({ top: y, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    return;
+  }
+  const g = e.target.closest('[data-gotab]');
+  if(g){ tab = g.dataset.gotab; renderLobby(); $('lobbyBody').scrollTop = 0; }
+});
 // Start times for a quick tournament: now, or a time later today (tomorrow if it has passed).
 function startChoices(){
   const out = [['', 'When I press Start']], now = Date.now();
@@ -387,7 +438,7 @@ function directorMainHTML(){
     return `<div class="card-box"><span class="status-pill">Registration open</span><h3>${esc(T.name)}</h3>
       <p>${T.regs.length} joined · ${Math.max(1, Math.ceil(T.regs.length / (T.tableSize || 9)))} table${T.regs.length > (T.tableSize || 9) ? 's' : ''}${T.startAt ? ' · starts ' + esc(when(T.startAt)) : ''}</p>
       <div class="plist">${T.regs.map(u => pchip(u, true)).join('') || '<span class="note">Waiting for players to join.</span>'}</div>
-      ${T.regs.length < 2 ? `<p class="warn-note">You need at least 2 players to start. Send an invite, and ask your friend to tap <b>Join tournament</b> on the Tournament tab.</p>` : ''}
+      ${T.regs.length < 2 ? `<p class="warn-note">You need at least 2 players to start. Send an invite, and ask your friend to tap <b>Join tournament</b> on Home.</p>` : ''}
       <div class="btn-row"><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button><button class="btn" id="editBtn">Edit</button><button class="btn" id="cancelBtn">Cancel</button></div></div>${members}`;
   }
   return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
