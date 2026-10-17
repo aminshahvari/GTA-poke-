@@ -88,9 +88,18 @@ function phone(t){
   t = letterDigits(t.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine)\b/gi, w => WORDS[w.toLowerCase()]).replace(DASH, '-').replace(STAR, ',')).replace(BULLET, '$1,');
   const re = /\+?\(?\d(?:[\s.,\-–—/()]{0,3}\d)+\)?/g;
   for(let m; (m = re.exec(t));){
-    const run = m[0], digits = run.replace(/\D/g, '');
-    if(digits.length < 7 || digits.length > 15 || ok(run, t.slice(0, m.index), t.slice(m.index + run.length))) continue;
-    return true;
+    // the run as a whole (as before), then every shorter stretch of it between spaces that is written like a North
+    // American phone (416 829 5953, 416,829,5953, 1-416-829-5953, 4168295953) or starts with +: a number written just
+    // before a phone ("grades 6-12. 416,829,5953", "$1,500. 416 829 5953", "Since 2019 416-829-5953") must not hide it,
+    // while lists and amounts ("Cap 1500 2000 2500 units", "$1 500 000 2 bedrooms") add nothing new.
+    const run = m[0], cut = [0];
+    for(const s of run.matchAll(/\D+/g)) if(/\s/.test(s[0])) cut.push(s.index, s.index + s[0].length);
+    cut.push(run.length);
+    for(let i = 0; i < cut.length; i += 2) for(let j = cut.length - 1; j > i; j -= 2){
+      const a = cut[i], b = cut[j], sub = run.slice(a, b), d = sub.replace(/\D/g, '').length;
+      if(d < 7 || d > 15 || b - a < run.length && !(NANP(sub) || sub[0] === '+')) continue;
+      if(!ok(sub, t.slice(0, m.index + a), t.slice(m.index + b))) return true;
+    }
   }
   return false;
 }

@@ -1,0 +1,49 @@
+matrix: "We tutor grades 6-12. 416,829,5953" expected phone got null
+matrix: "$1,500. 416,829,5953" expected phone got null
+matrix: "We tutor grades 6-12 416,829,5953" expected phone got null
+matrix: "grades 6-12, 416,829,5953" expected phone got null
+matrix: "Since 2019. 416,829,5953" expected phone got null
+matrix: "Since 2019 416-829-5953" expected phone got null
+matrix: "Since 2019. 416 829 5953" expected phone got null
+matrix: "Since 2019. 4168295953" expected phone got null
+matrix: "Sizes 10, 12, 416,829,5953" expected phone got null
+matrix: "Open 9-5. 416•829•5953" expected phone got null
+matrix: "$20. 647 555 0199" expected phone got null
+matrix: "grades 6-12. 416, 829, 5953" expected phone got null
+matrix: "grades 6-12. 1,416,829,5953" expected phone got null
+matrix: "۶-۱۲. ۴۱۶,۸۲۹,۵۹۵۳" expected phone got null
+matrix: "Rated 4.5. 416,829,5953" expected phone got null
+matrix: "grades 6-12. 416,829,5953. Thanks" expected phone got null
+matrix: "2019-2023. 416*829*5953" expected phone got null
+matrix: "416,829,5953 2-3 weeks" expected phone got null
+matrix: "416,829,5953. 10% off" expected phone got null
+matrix: "Units 5 / 416,829,5953" expected phone got null
+matrix: "Since 2019 1-416-829-5953" expected phone got null
+matrix: "$40 4168295953" expected phone got null
+matrix: "Since 2019 555-0199" expected phone got null
+node:assert:150
+  throw new AssertionError(obj);
+  ^
+
+AssertionError [ERR_ASSERTION]: 23 probe(s) failed
+
+23 !== 0
+
+    at Object.<anonymous> (/home/claude/r2-f1-prefix/test/t_content.js:114:8)
+    at Module._compile (node:internal/modules/cjs/loader:1706:14)
+    at Object..js (node:internal/modules/cjs/loader:1839:10)
+    at Module.load (node:internal/modules/cjs/loader:1441:32)
+    at Function._load (node:internal/modules/cjs/loader:1263:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 23,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.22.0

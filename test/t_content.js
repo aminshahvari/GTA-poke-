@@ -87,6 +87,22 @@ const MATRIX = [
   ['file_2024_v2.pdf', _], ['snake_case_var 12', _], ['10:00 ~ 18:00', _], ['Open 9:00~17:00', _], ['Team of 10–15 people', _], ['Grade A* students', _],
   ['*** 5 stars ***', _], ['4.5*/5 rating', _], ['Pizza ~ 2 for $20 ~ 10% off', _], ['قیمت ۱٬۵۰۰ ~ ۲٬۰۰۰ دلار', _], ['2500 sq ft ~ 3000 sq ft', _],
   ['Est. 1998 * Toronto * 2024', _], ['M5H_2M9', _], ['v1_2_3', _], ['Lot 12*34*56', _], ['2019_2020_2021', _],
+  // a number written just before (or after) a phone must not hide it (mobile run, Oct 17 evening)
+  ['We tutor grades 6-12. 416,829,5953', P], ['$1,500. 416,829,5953', P], ['We tutor grades 6-12 416,829,5953', P], ['grades 6-12, 416,829,5953', P],
+  ['grades 6-12; 416,829,5953', P], ['Since 2019. 416,829,5953', P], ['Since 2019 416-829-5953', P], ['Since 2019. 416 829 5953', P],
+  ['Since 2019. 4168295953', P], ['Sizes 10, 12, 416,829,5953', P], ['Open 9-5. 416•829•5953', P], ['Open 9-5. 416_829_5953', P],
+  ['$20. 647 555 0199', P], ['grades 6-12. 416, 829, 5953', P], ['grades 6-12. 1,416,829,5953', P], ['grades 6-12. +1 416 829 5953', P],
+  ['۶-۱۲. ۴۱۶,۸۲۹,۵۹۵۳', P], ['Rated 4.5. 416,829,5953', P], ['grades 6-12. 416,829,5953. Thanks', P], ['15 years. 416,555,O1OO', P],
+  ['2019-2023. 416*829*5953', P], ['416,829,5953 2-3 weeks', P], ['416,829,5953. 10% off', P], ['Units 5 / 416,829,5953', P],
+  ['Step 2: 416,829,5953', P], ['Since 2019 (416) 829-5953', P], ['Since 2019 1-416-829-5953', P], ['$40 4168295953', P],
+  ['grades 6-12. 416~829~5953', P], ['grades 6-12. 416−829−5953', P], ['Since 2019 555-0199', P], ['grades 6-12 16 416 829 5953', P],
+  ['We tutor grades 6-12. Rates from $40, 2-3 sessions weekly.', _], ['$1,500. Delivery 2-3 weeks.', _], ['Since 2019. 1,500,000 views', _],
+  ['Price $1,500, $2,000, $2,500', _], ['Budget $1,500,000. 2,500 sq ft', _], ['2019. 2020. 2021.', _], ['10, 20, 50 posts', _],
+  ['Rooms 101, 102, 103, 104', _], ['We have 15 years, 300 clients, 1,200 reviews.', _], ['Since 2019, 1500000 dollars raised', _],
+  ['Ages 6-12. 2-3 weeks. $1,500.', _], ['v2.0. 3.5 stars', _], ['9:00-17:00, 10:00-14:00', _], ['Price $1 500 000 2 bedrooms', _],
+  ['Cap 1500 2000 2500 units', _], ['Grades 6-12, 1500 students, 120 staff', _], ['Delivery 2-3 days, 1500 km radius', _],
+  ['1,000,000 2,000,000 3,000,000', _], ['2026-10-17 1500 units', _], ['From $1,250. 2-3 weeks. 15 years.', _], ['2019 2020 2021 2022', _],
+  ['قیمت ۱٬۵۰۰ دلار ۲٬۰۰۰ دلار', _], ['Model 3 2019 5000 km', _],
   ['Social media marketing for Toronto bakeries', _], ['Instagram growth for 10, 20 or 50 posts', _], ['Lot 12, 13 and 14', _],
   ['3.5 stars', _], ['v2.0 release', _], ['Room for 6-8 people', _], ['Call me after 6', _], ['1-on-1 coaching', _], ['Need 2 3D printers', _]
 ];
@@ -180,6 +196,10 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   assert.match(await err('oppSave', listing({ id: a1.id, title: 'Deck 416 ~ 829 ~ 5953' }), A), /phone number from title/);
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! 647*555*0199' }, B), /phone number from message/);
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! 647−555−0199' }, B), /phone number from message/);
+  // a number just before the phone, on the same three paths
+  assert.match(await err('oppSave', listing({ details: 'We tutor grades 6-12. 416,829,5953' }), A), /phone number from details/);
+  assert.match(await err('oppSave', listing({ id: a1.id, title: 'Since 2019 416-829-5953' }), A), /phone number from title/);
+  assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! $1,500. 647 555 0199' }, B), /phone number from message/);
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! bea@example.com' }, B), /email address from message/);
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! DM me on insta' }, B), /social media handle or profile from message/);
   const rq = (await ok('oppRequest', { id: a1.id, message: 'Hi! I built two decks last year, about 300 sq ft each.' }, B)).request;
@@ -211,7 +231,8 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   assert.strictEqual((await ok('bizMine', {}, A)).mine.services, 'Water heaters (40-60 gallon), 2-3 day renos');
   // Muse's F1 bypasses are refused on the server too; allowed text in other scripts is saved exactly as typed (never rewritten)
   for(const t of ['Call ۴۱۶ ۵۵۵ ۰۱۰۰', 'Call ٤١٦-٥٥٥-٠١٠٠', 'Call 416,829,5953', 'Call 416 555 O1OO', 'Call 416•829•5953', 'Call 416·829·5953',
-    'Call 416‐829‐5953', 'Call 416−829−5953', 'Call 416_829_5953', 'Call 416~829~5953', 'Call 416*829*5953', 'Call 416_829•5953'])
+    'Call 416‐829‐5953', 'Call 416−829−5953', 'Call 416_829_5953', 'Call 416~829~5953', 'Call 416*829*5953', 'Call 416_829•5953',
+    'We tutor grades 6-12. 416,829,5953', '$1,500. 416,829,5953', 'Since 2019 416-829-5953'])
     assert.match(await err('bizSave', biz({ services: t }), A), /phone number from services/, t);
   const fa = 'قیمت از ۱٬۵۰۰ دلار، از سال ۱۴۰۳/۰۷/۲۶. Order no. 4471-2290; 1,500,000 sq ft; sizes 10, 12, 14';
   await ok('bizSave', biz({ services: fa }), A);
@@ -219,6 +240,9 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   const sep = 'Sizes 1500*2000 mm, 120*60*75 cm; open 9:00~17:00; 2019~2021; 10–15 people; rated 4.5*; ۱۴۰۳_۰۷_۲۶ − 1,500~2,000 CAD';
   await ok('bizSave', biz({ services: sep }), A);
   assert.strictEqual((await ok('bizMine', {}, A)).mine.services, sep, 'separator text saved byte for byte');
+  const nums = 'We tutor grades 6-12. Rates from $40, 2-3 sessions weekly. Since 2019, 1,500,000 views; ۱۴۰۳/۰۷/۲۶. Cap 1500 2000 2500 units';
+  await ok('bizSave', biz({ services: nums }), A);
+  assert.strictEqual((await ok('bizMine', {}, A)).mine.services, nums, 'number-heavy text saved byte for byte');
   // switched on, the Instagram handle reaches members, from its own field only
   await ok('bizSave', biz({ show: { website: true, email: true, instagram: true } }), A);
   assert.deepStrictEqual((await ok('bizGet', { uid: idA }, B)).business.contacts.instagram, { handle: 'rivera_pl', url: 'https://instagram.com/rivera_pl' });
