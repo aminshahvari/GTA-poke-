@@ -31,7 +31,12 @@ Source of the issues: the 9-phone local run (`/mnt/project-files/poker-club/repo
   - Log: `docs/evidence/r2/mobile-ux/t_mobile_ux.log`.
 - Existing: `npm test` pass (all suites, content 353 probes unchanged); `test/ui/t_table_small.js`, `t_registration.js`,
   `t_bizsearch.js` pass; `test/browser/scan_csp.js` pass.
-- 9-phone harness re-run (`a_play.js layout`) on this branch: see `R2-mobile-ux-recheck` below.
+- **9-phone harness re-run** (`a_play.js layout 6`, the same real-tap 9-player run as the original report, on this branch's
+  code; the result file's `sha` field shows the base `523a284` because it ran on the working tree before the commit):
+  **2 of 206 live-table measurements had an overlap (was 126 of 501)**, **0 badge-over-own-stack**, no page scroll.
+  Both remaining overlaps are on the iPhone 13 mini (375×629) with the full hand helper showing a long draw line: the D
+  button touching the pot by 0.5 px, and one "200" chip touching the board (`iphone13mini-overlap-2.png`). Results:
+  `/mnt/project-files/poker-club/reports/r2-mobile-ux-recheck/` (`A-layout-result.json`, `shots-A-layout/`).
 
 ## Screenshots (`docs/evidence/r2/mobile-ux/`, 1×)
 `*-before.png` = unfixed code, `*-after.png` = this branch, same test state:
@@ -49,5 +54,7 @@ Source of the issues: the 9-phone local run (`/mnt/project-files/poker-club/repo
 - **Known, not fixed here (pre-existing layout limit):** on a 320×568 phone, while someone else is acting with all nine
   players betting (pre-action buttons and the hand line showing), two chip labels touch the pot / D button. Your-turn
   states at 320×568 are clean. Reported by the test as NOTE, not failed.
+- **Residual from the 9-phone re-run:** on a 375×629 phone with the hand helper's long draw line, a chip can touch the
+  board (2 of 206 measurements). Same pre-existing solver limit as above; a follow-up could cap the helper at two lines.
 - Not in this branch (outside the five items): the hero's own cards covering the hero's name (issue 4 of the run), small
   secondary tap targets, and the personal-invite auto-registration (separate investigation).
