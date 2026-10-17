@@ -40,3 +40,10 @@ Claude, 2026-10-17. Code read on `rc-2026-10-17`. **No code changed.** Nothing h
 **Medium.** It changes the tournament clock and the "may a hand start" check, the core of live play. Mitigations: reuse the audited Pause path rather than a new one; feature Off by default; dedicated tests above + the phase1 restart suite; Muse review before any deploy.
 
 **Recommendation:** do not put this into today's Release 1 freeze. Build it on its own branch after the owner says yes, have Muse audit it, and ship it as a follow-up between games.
+
+## Owner decisions (2026-10-17, for Release 2; nothing implemented in R1)
+
+- Late entrants get exactly the original starting stack and join at the current level (already true in code).
+- Director picks the last late-registration level from 1 to 12. Preferred setup: open through the end of level 8, closed at the start of level 9. Existing tournaments and defaults are not changed silently.
+- Late registration stays open during a scheduled break while the window has not expired (break after level 6 → open; levels 7-8 → open; level 9 starts → closed), judged by server-side progression.
+- Scheduled break and Director pause are separate states, even if they share timing code.
