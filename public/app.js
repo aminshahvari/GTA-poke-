@@ -545,34 +545,144 @@ function openTable(tid){ if(tid !== watchTid){ chatUnread = 0; $('chatDot').hidd
 $('lobbyBtn').onclick = () => { openChat(false); stopDemo(); view = 'lobby'; send({ t: 'watch', tid: null }); showScreen('lobby'); renderLobby(); };
 
 // ---------- table ----------
-// Seat ring layouts for 6, 8 and 9 players; position 0 is the bottom seat (you).
-const RING = n => { const r = Array.from({ length: n }, (_, k) => { const a = (90 + k * 360 / n) * Math.PI / 180; return [50 + 40 * Math.cos(a), 46 + 39.5 * Math.sin(a)]; }); r[0] = [50, 83]; return r; };
-const RINGS = { 6: RING(6), 8: RING(8), 9: RING(9) };
+// Table geometry, in pixels of the table area: an oval felt (straight sides, round ends) inside a padded
+// rail, with the seats spaced evenly along the middle of the rail. Tall on phones, long on wide screens.
+// Position 0 is the bottom seat (you).
+let GEO = null;
+function tableGeo(n){
+  const a = $('tableArea'), W = a.clientWidth || 360, H = a.clientHeight || 520, key = `${n}:${W}:${H}`;
+  if(GEO && GEO.key === key) return GEO;
+  const rail = Math.round(Math.max(10, Math.min(18, Math.min(W, H) * .036)));
+  // short table areas (small phones) use compact seats
+  const compact = H < 420, top = compact ? 40 : 50, bot = compact ? 56 : 64, side = compact ? 42 : 46, sh = compact ? .82 : 1;
+  // seats are centred on the middle of the rail, the side ones `side` px from the edge
+  let fw = Math.min(W - 2 * side + rail, 760), fh = H - top - bot;
+  // a real table's proportions: tall in a phone-width column, long when there's room; the shape stays
+  // the same when the area grows or shrinks a little between hands
+  if(W < 470 && fh >= fw * 1.15) fh = Math.min(fh, fw * 1.6);
+  else fh = Math.min(fh, Math.max(fw / 1.4, Math.min(fw / 1.2, 370)));
+  fw = Math.max(fw, 140); fh = Math.max(fh, 120);
+  const cx = W / 2, cy = top + (H - top - bot) / 2;
+  const hx = fw / 2 - rail / 2, hy = fh / 2 - rail / 2, r = Math.min(hx, hy), lx = hx - r, ly = hy - r;
+  // walk the middle of the rail clockwise from the bottom centre; each piece is [length, point(t), outward normal(t)]
+  const arc = (ox, oy, a0) => [Math.PI * r / 2, t => { const q = a0 + t / r; return [ox + r * Math.cos(q), oy + r * Math.sin(q), Math.cos(q), Math.sin(q)]; }];
+  const line = (x0, y0, dx, dy, len, nx, ny) => [len, t => [x0 + dx * t, y0 + dy * t, nx, ny]];
+  const parts = [line(0, hy, -1, 0, lx, 0, 1), arc(-lx, ly, Math.PI / 2), line(-hx, ly, 0, -1, 2 * ly, -1, 0), arc(-lx, -ly, Math.PI),
+    line(-lx, -hy, 1, 0, 2 * lx, 0, -1), arc(lx, -ly, Math.PI * 1.5), line(hx, -ly, 0, 1, 2 * ly, 1, 0), arc(lx, ly, 0), line(lx, hy, -1, 0, lx, 0, 1)];
+  const P = parts.reduce((t, q) => t + q[0], 0);
+  const at = d => { for(const [len, f] of parts){ if(d <= len + 1e-6) return f(d); d -= len; } return parts[0][1](0); };
+  // evenly spaced, with a little extra room either side of the hero's wider seat at a full table
+  const gap = n >= 6 ? P / n * 1.18 : P / n, along = k => k === 0 ? 0 : n === 2 ? P / 2 : gap + (k - 1) * (P - 2 * gap) / (n - 2);
+  const seats = Array.from({ length: n }, (_, k) => { const [x, y, nx, ny] = at(along(k)); return { x: cx + x, y: cy + y, nx, ny }; });
+  // the hero sits a little lower so their two big cards overlap the rail, not the board
+  const cw = Math.max(30, Math.min(46, W * .1)), heroH = cw * 1.18 * 1.4 + 38;
+  // on a long table the hero's cards reach into the felt, so the board sits a little higher
+  const tall = fh > fw, by = tall ? cy : cy - Math.min(28, fh * .08);
+  // board cards sized to the felt so they never run into the seats' chips
+  const bw = Math.max(28, Math.min(compact ? 34 : 50, (fw - 2 * rail) * (tall ? .128 : .108), (hx - 54) / 2.5)), boardHalf = bw * 2.5 + 8;
+  // Chips and the dealer button sit on the felt in front of each seat. Start straight in front of the seat,
+  // then slide along the rail (or a little in/out) until nothing overlaps: other seats, the board, the pot,
+  // the message under the board, or another seat's chips.
+  const cwide = cw * 1.18;
+  // what must stay clear: each seat (cards + avatar, and the name plate), the board, the pot and the message
+  const boxes = seats.flatMap((q, k) => k === 0 ? [[q.x, q.y - heroH / 2 + cwide * .7, cwide + 1, cwide * .7], [q.x, q.y + heroH / 2 - 20, 60, 20]]
+    : [[q.x, q.y - 16 * sh, 22, 27 * sh], [q.x, q.y + 26 * sh, 42 * sh, 24 * sh]]);
+  const msgHalf = Math.min(140, hx - 48, (Math.min(fw - 2 * rail - 16, bw * 5 + 50)) / 2);
+  boxes.push([cx, by, boardHalf, bw * .7], [cx, by - bw * .7 - 15, 56, 13, 1], [cx, by + bw * .7 + 23, msgHalf, 17, 1]);
+  const inside = (x, y, m) => Math.hypot(Math.max(0, Math.abs(x - cx) - lx), Math.max(0, Math.abs(y - cy) - ly)) <= r - rail / 2 - m;
+  const hits = (x, y, hw, hh, list) => list.some(([X, Y, w, h]) => Math.abs(x - X) < hw + w + 3 && Math.abs(y - Y) < hh + h + 3);
+  const steps = [];
+  for(const dd of [0, 10, -8, 20, 32, -16]) for(let tt = 0; tt <= 96; tt += 8) for(const sg of tt ? [1, -1] : [1]) steps.push([dd, tt * sg, tt + 1.5 * Math.abs(dd)]);
+  steps.sort((p, q) => p[2] - q[2]);
+  let fails = 0;
+  // overlap with what's there; seats and cards count most, then other chips, then the pot and the message
+  const overlap = (x, y, hw, hh, list) => list.reduce((t, [X, Y, w, h, wt = 3]) => t + wt * Math.max(0, hw + w + 3 - Math.abs(x - X)) * Math.max(0, hh + h + 3 - Math.abs(y - Y)), 0);
+  function place(x0, y0, nx, ny, hw, hh, list){
+    const tx = -ny, ty = nx;
+    for(const m of [Math.min(hw, hh) + 2, -rail / 2]) for(const [dd, tt] of steps){ const x = x0 - nx * dd + tx * tt, y = y0 - ny * dd + ty * tt; if(inside(x, y, m) && !hits(x, y, hw, hh, list)) return [x, y]; }
+    // no clean spot: the least crowded one on the felt
+    fails++; let best = [x0, y0], bc = Infinity;
+    for(const [dd, tt] of steps){ const x = x0 - nx * dd + tx * tt, y = y0 - ny * dd + ty * tt; if(!inside(x, y, -rail / 2)) continue; const c = overlap(x, y, hw, hh, list) + tt * .5; if(c < bc){ bc = c; best = [x, y]; } }
+    return best;
+  }
+  function solve(pw, ph){
+    fails = 0;
+    const bets = [];
+    seats.forEach((q, k) => {
+      let x0, y0, nx = q.nx, ny = q.ny;
+      if(k === 0){ nx = 0; ny = 1; [x0, y0] = tall ? [q.x, q.y - heroH / 2 - ph - 5] : [q.x - cwide - pw - 9, q.y - heroH / 2 + 18]; }
+      else { const ax = Math.abs(nx), ay = Math.abs(ny), d = (ax * 44 + ay * 52) * sh + 6 + ax * pw + ay * ph; x0 = q.x - nx * d; y0 = q.y - ny * d; }
+      bets.push(place(x0, y0, nx, ny, pw, ph, boxes.concat(bets.map(([x, y]) => [x, y, pw, ph, 2]))));
+    });
+    const betBoxes = bets.map(([x, y]) => [x, y, pw, ph, 2]);
+    const dealers = seats.map((q, k) => {
+      if(k === 0) return place(q.x + cwide + 14, q.y - heroH / 2 + 22, 0, 1, 11, 11, boxes.concat(betBoxes));
+      const ax = Math.abs(q.nx), ay = Math.abs(q.ny), d = (ax * 44 + ay * 52) * sh + 14, tx = -q.ny, ty = q.nx;
+      return place(q.x - q.nx * d - tx * 40, q.y - q.ny * d - ty * 40, q.nx, q.ny, 11, 11, boxes.concat(betBoxes));
+    });
+    return { bets, dealers, fails };
+  }
+  // on a crowded small table the chip labels get a size smaller
+  let L = solve(31, 11), tight = false;
+  if(L.fails){ const T = solve(26, 9); if(T.fails < L.fails){ L = T; tight = true; } }
+  const { bets, dealers } = L;
+  return GEO = { key, W, H, rail, cx, cy, by, tall, tight, compact, msgW: msgHalf * 2, fw, fh, seats, heroH, bw, betAt: k => bets[k], dealerAt: k => dealers[k] };
+}
+const pxToPct = ([x, y]) => [x / GEO.W * 100, y / GEO.H * 100];
 // Maps a table's seat numbers to screen positions, turned so you sit at the bottom.
 function layoutOf(d){
-  const allowed = d.allowed || [0, 1, 2, 3, 4, 5, 6, 7, 8], n = allowed.length, ring = RINGS[n] || RING(n);
+  const allowed = d.allowed || [0, 1, 2, 3, 4, 5, 6, 7, 8], n = allowed.length, G = tableGeo(n);
   const mySeat = d.seats.findIndex(p => p && club && p.uid === club.me.id), base = Math.max(0, allowed.indexOf(mySeat));
   const rel = s => (allowed.indexOf(s) - base + n) % n;
-  return { allowed, rel, posOf: s => ring[rel(s)] };
+  return { allowed, rel, G, posOf: s => pxToPct([G.seats[rel(s)].x, G.seats[rel(s)].y]), betOf: s => G.betAt(rel(s)), dealerOf: s => G.dealerAt(rel(s)) };
 }
-const CENTER = [50, 45];
-// the pot slides over to whoever won it
-function potToWinners(d, handKey, posOf){
+const centerPx = () => GEO ? [GEO.cx, GEO.by] : pctToPx([50, 45]);
+const reducedMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+// An element's centre inside the table area (for a seat's avatar), or null.
+function avatarPx(uid){
+  const area = $('tableArea'), el = area && area.querySelector(`.seat[data-uid="${CSS.escape(uid)}"] .av`); if(!el) return null;
+  const a = area.getBoundingClientRect(), r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2 - a.left, y: r.top + r.height / 2 - a.top, size: r.width };
+}
+// Winning a pot: the chips glide from the middle of the felt to the winner and settle there as a small
+// stack with a soft glow until the next hand. Purely on-screen; the game never waits for it.
+const WIN_GLIDE = 1400, WIN_DELAY = 250;
+function chipStacks(won, bb){
+  const cols = Math.max(1, Math.min(3, Math.ceil(won / Math.max(1, bb * 6))));
+  return Array.from({ length: cols }, (_, c) => { const h = Math.max(2, Math.min(6, Math.round(2 + (won / Math.max(1, bb)) / (4 * cols)) - c));
+    return `<span class="wcol">${'<i></i>'.repeat(h)}</span>`; }).join('');
+}
+function potToWinners(d, handKey, LY){
   const key = 'win' + handKey; if(seen.has(key)) return; seen.add(key);
-  const area = $('tableArea'), fx = $('fx'), pot = $('pot'); if(!area || !fx || !pot) return;
-  const a = area.getBoundingClientRect(), pr = pot.getBoundingClientRect();
-  const px = pr.width ? pr.left + pr.width / 2 - a.left : a.width * CENTER[0] / 100, py = pr.height ? pr.top + pr.height / 2 - a.top : a.height * CENTER[1] / 100;
+  const fx = $('fx'); if(!fx) return;
+  fx.querySelectorAll('.winpile').forEach(e => e.remove());
+  // start where the pot sits, just above the board
+  const area = $('tableArea'), ar = area.getBoundingClientRect(), br = $('board').getBoundingClientRect();
+  const [px, py] = br.width ? [br.left + br.width / 2 - ar.left, br.top - ar.top - 12] : centerPx(), still = reducedMotion(), bb = (d.blinds && d.blinds[1]) || 1;
   d.seats.forEach((p, s) => {
     if(!p || !(p.won > 0)) return;
-    const [sx, sy] = pctToPx(posOf(s)), el = document.createElement('div');
-    el.className = 'bet num potwin';
-    el.style.cssText = `left:${px}px;top:${py}px;--tx:${sx - px}px;--ty:${sy - py}px`;
-    el.innerHTML = `${chipsIcon(3)}${fmt(p.won)}`;
-    fx.appendChild(el); setTimeout(() => el.remove(), 2600);
+    const [bx, by] = LY.betOf(s), el = document.createElement('div');
+    el.className = 'winpile num'; el.dataset.hand = handKey;
+    el.style.cssText = `left:${bx}px;top:${by}px`;
+    el.innerHTML = `<span class="wglow"></span><span class="wstack">${chipStacks(p.won, bb)}</span><span class="wamt">+${fmt(p.won)}</span>`;
+    fx.appendChild(el);
+    if(still){ el.classList.add('settled'); return; }
+    const dx = px - bx, dy = py - by, lift = Math.min(60, Math.hypot(dx, dy) * .18);
+    el.querySelectorAll('.wcol').forEach((c, i) => c.animate([
+      { transform: `translate(${dx}px,${dy}px) scale(.9)`, opacity: .0 },
+      { transform: `translate(${dx}px,${dy}px) scale(.95)`, opacity: 1, offset: .08 },
+      { transform: `translate(${dx * .45}px,${dy * .45 - lift}px) scale(1.06)`, offset: .55 },
+      { transform: 'translate(0,0) scale(1)', opacity: 1 }],
+      { duration: WIN_GLIDE, delay: WIN_DELAY + i * 90, easing: 'cubic-bezier(.45,.05,.25,1)', fill: 'backwards' }));
+    setTimeout(() => el.classList.add('settled'), WIN_DELAY + WIN_GLIDE);
   });
+  // never outstay the hand: gone when the next hand is drawn, or after a few seconds at most
+  setTimeout(() => fx.querySelectorAll(`.winpile[data-hand="${CSS.escape(handKey)}"]`).forEach(e => { e.classList.add('gone'); setTimeout(() => e.remove(), 400); }), 6000);
 }
+// When did this hand's win start showing (so a redraw doesn't restart the winner animations)?
+const winStarts = new Map();
+function winElapsed(handKey){ if(!winStarts.has(handKey)){ winStarts.set(handKey, Date.now()); if(winStarts.size > 20) winStarts.delete(winStarts.keys().next().value); } return Date.now() - winStarts.get(handKey); }
 const pctToPx = ([x, y]) => { const a = $('tableArea'); return [a.clientWidth * x / 100, a.clientHeight * y / 100]; };
-const toward = ([x, y], f) => [x + (CENTER[0] - x) * f, y + (CENTER[1] - y) * f];
 const cs = s => E.parse(s)[0];
 function cardHTML(c, cls = '', extra = ''){
   if(c == null) return `<div class="card back ${cls}" ${extra}></div>`;
@@ -742,9 +852,15 @@ function renderTable(){
     tickClock(); return;
   }
   area.style.setProperty('--cw', Math.max(30, Math.min(46, area.clientWidth * .1)) + 'px');
-  area.style.setProperty('--bw', Math.max(30, Math.min(50, area.clientWidth * .105)) + 'px');
   const mySeat = d.seats.findIndex(s => s && s.uid === club.me.id);
-  const LY = layoutOf(d), posOf = LY.posOf;
+  const LY = layoutOf(d), posOf = LY.posOf, G = LY.G;
+  area.style.setProperty('--bw', G.bw + 'px');
+  const felt = area.querySelector('.felt');
+  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px`;
+  area.querySelector('.center').style.cssText = `left:${G.cx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
+  $('msg').style.maxWidth = G.msgW + 'px';
+  area.classList.toggle('tall', G.tall); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact);
+  if(!d.result) $('fx').querySelectorAll('.winpile').forEach(e => { if(e.dataset.hand !== d.tid + ':' + d.handNo){ e.classList.add('gone'); setTimeout(() => e.remove(), 400); } });
   const res = d.result, winCards = new Set((res && res.showdown ? res.winCards : []).map(cs));
   const handKey = d.tid + ':' + d.handNo;
   const mc = myCards.get(d.tid), mine = mc && mc.hand === d.handNo ? mc.cards.map(cs) : null;
@@ -755,7 +871,7 @@ function renderTable(){
     const isMe = p.uid === club.me.id;
     let hole = '';
     if(p.inHand && !(p.folded && !isMe)){
-      const [sx, sy] = pctToPx(pos), [cx, cy] = pctToPx(CENTER);
+      const [sx, sy] = pctToPx(pos), [cx, cy] = centerPx();
       hole = [0, 1].map(j => {
         const key = `h${handKey}-${s}-${j}`, isNew = !seen.has(key); seen.add(key);
         const anim = isNew && d.street === 0 && !res ? `dl" style="--fx:${cx - sx}px;--fy:${cy - sy}px;animation-delay:${(j * 9 + s) * 50}ms` : '';
@@ -767,30 +883,31 @@ function renderTable(){
       }).join('');
     }
     let badge = '';
-    if(res && p.won > 0) badge = `<span class="badge won">Wins ${fmt(p.won)}</span>`;
+    if(res && p.won > 0) badge = '<span class="badge won">Winner</span>';
     else if(res && res.showdown && p.cat) badge = `<span class="badge hand">${esc(p.cat)}</span>`;
     else if(p.away) badge = '<span class="badge">Away</span>';
     else if(p.act){ const amt = (p.act === 'Raise' || p.act === 'Bet') ? ' ' + fmt(p.lastAmt) : ''; badge = `<span class="badge ${p.act.toLowerCase()}">${esc(p.act)}${amt}</span>`; }
     const acting = d.acting === s;
     const stackTxt = p.inHand && p.allIn && !res ? 'All-in' : fmt(p.stack);
     const cls = `seat ${isMe ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
+    const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
     const av = avHTML(p.uid, p.name);
     const shot = acting ? '<div class="shot"><i class="shotBar"></i></div>' : '';
     html += isMe
-      ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
-      : `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%"><div class="hole">${hole}</div>${av}<div class="plate"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`;
+      ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
+      : `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm">${esc(p.name)}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`;
     if(p.inHand && p.bet > 0){
-      const bp = toward(pos, LY.rel(s) === 0 ? .36 : .4), [bx, by] = pctToPx(bp), [sx, sy] = pctToPx(pos);
+      const [bx, by] = LY.betOf(s), bp = pxToPct([bx, by]), [sx, sy] = pctToPx(pos);
       const key = `b${handKey}-${d.street}-${s}-${p.bet}`, isNew = !seen.has(key); seen.add(key);
       html += `<div class="bet num ${isNew ? 'chipin' : ''}" style="left:${bp[0]}%;top:${bp[1]}%;--fx:${sx - bx}px;--fy:${sy - by}px">${chipsIcon(Math.min(3, 1 + Math.floor(p.bet / (d.blinds[1] * 3))))}${fmt(p.bet)}</div>`;
     }
   }
   if(d.btn >= 0 && d.phase === 'hand'){
-    const pos = posOf(d.btn), dd = toward(pos, .2), atMe = LY.rel(d.btn) === 0, side = atMe ? 17 : (pos[0] < 50 ? 4 : pos[0] > 50 ? -4 : 9);
-    html += `<div class="dealer" style="left:${dd[0] + side}%;top:${dd[1] + (atMe ? -2 : 5)}%">D</div>`;
+    const dd = pxToPct(LY.dealerOf(d.btn));
+    html += `<div class="dealer" style="left:${dd[0]}%;top:${dd[1]}%">D</div>`;
   }
   $('seats').innerHTML = html;
-  if(res) try{ potToWinners(d, handKey, posOf); }catch(e){}
+  if(res) try{ potToWinners(d, handKey, LY); }catch(e){}
   $('pot').innerHTML = !res && d.pot > 0 ? `${chipsIcon(3)}Pot ${fmt(d.pot)}` : '';
   $('pot').style.visibility = $('pot').innerHTML ? 'visible' : 'hidden';
   let b = '';
@@ -1082,14 +1199,55 @@ function bubble(msg){
 }
 function flyThrow(msg){
   const a = seatPosOf(msg.from), z = seatPosOf(msg.to); if(!a || !z) return;
+  const A = avatarPx(msg.from), Z = avatarPx(msg.to);
+  const [ax, ay] = A ? [A.x, A.y] : pctToPx(a), [zx, zy] = Z ? [Z.x, Z.y] : pctToPx(z), size = Z ? Z.size : 40;
+  const messy = msg.item === 'egg' || msg.item === 'tomato';
+  if(reducedMotion()){ if(messy) splatOn(msg.item, zx, zy, size, msg.to); return; }
   const el = document.createElement('div'); el.className = 'throw'; el.textContent = THROW_ICONS[msg.item] || '❓';
-  const [ax, ay] = pctToPx(a), [zx, zy] = pctToPx(z);
   el.style.left = ax + 'px'; el.style.top = ay + 'px';
   $('fx').appendChild(el);
+  const arc = Math.min(90, 40 + Math.hypot(zx - ax, zy - ay) * .2);
   el.animate([{ transform: 'translate(-50%,-50%) scale(.6) rotate(0)', offset: 0 },
-    { transform: `translate(calc(-50% + ${(zx - ax) / 2}px), calc(-50% + ${(zy - ay) / 2 - 60}px)) scale(1.4) rotate(200deg)`, offset: .5 },
-    { transform: `translate(calc(-50% + ${zx - ax}px), calc(-50% + ${zy - ay}px)) scale(1.1) rotate(400deg)`, offset: 1 }], { duration: 750, easing: 'ease-in-out', fill: 'forwards' })
-    .finished.then(() => { el.classList.add('splat'); setTimeout(() => el.remove(), 1400); });
+    { transform: `translate(calc(-50% + ${(zx - ax) / 2}px), calc(-50% + ${(zy - ay) / 2 - arc}px)) scale(1.35) rotate(200deg)`, offset: .5 },
+    { transform: `translate(calc(-50% + ${zx - ax}px), calc(-50% + ${zy - ay}px)) scale(${messy ? .9 : 1.1}) rotate(${messy ? 380 : 400}deg)`, offset: 1 }], { duration: 750, easing: 'ease-in-out', fill: 'forwards' })
+    .finished.then(() => {
+      if(messy){ el.remove(); splatOn(msg.item, zx, zy, size, msg.to); }
+      else { el.classList.add('splat'); setTimeout(() => el.remove(), 1400); }
+    }).catch(() => el.remove());
+}
+// A lumpy blob outline for a splat, centred on 0,0 in a 100x100 box.
+function blobPath(r, lumps, jit){
+  const pts = Array.from({ length: lumps }, (_, i) => { const t = i / lumps * Math.PI * 2, k = r * (1 - jit + Math.random() * jit * 2); return [Math.cos(t) * k, Math.sin(t) * k]; });
+  const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2], f = n => n.toFixed(1);
+  let dpath = `M${f(mid(pts[lumps - 1], pts[0])[0])} ${f(mid(pts[lumps - 1], pts[0])[1])}`;
+  pts.forEach((p, i) => { const m = mid(p, pts[(i + 1) % lumps]); dpath += ` Q${f(p[0])} ${f(p[1])} ${f(m[0])} ${f(m[1])}`; });
+  return dpath + 'Z';
+}
+// Egg: the shell cracks, white and yolk spread over the avatar and a drip runs down. Tomato: it bursts
+// and splatters. Stays about 1.6 s, then fades. Drawn on the effects layer, so the table never waits.
+function splatOn(item, x, y, size, uid){
+  const fx = $('fx'); if(!fx) return;
+  fx.querySelectorAll(`.splatfx[data-uid="${CSS.escape(uid)}"]`).forEach(e => e.remove());
+  const egg = item === 'egg', el = document.createElement('div');
+  el.className = `splatfx ${egg ? 'egg' : 'tomato'}`; el.dataset.uid = uid;
+  const S = Math.round(size * 1.9);
+  el.style.cssText = `left:${x}px;top:${y}px;width:${S}px;height:${S}px`;
+  const drops = Array.from({ length: egg ? 4 : 7 }, (_, i) => {
+    const t = (i / (egg ? 4 : 7) + Math.random() * .1) * Math.PI * 2, d = 36 + Math.random() * 12, r = egg ? 3 + Math.random() * 3 : 3 + Math.random() * 4;
+    return `<circle class="drop" cx="${(Math.cos(t) * d).toFixed(1)}" cy="${(Math.sin(t) * d).toFixed(1)}" r="${r.toFixed(1)}" style="--dx:${(-Math.cos(t) * 14).toFixed(1)}px;--dy:${(-Math.sin(t) * 14).toFixed(1)}px"/>`;
+  }).join('');
+  el.innerHTML = egg
+    ? `<svg viewBox="-50 -50 100 100" aria-hidden="true"><g class="spread"><path class="white" d="${blobPath(30, 9, .22)}"/><path class="yolk" d="${blobPath(12, 7, .15)}"/><ellipse class="shine" cx="-4" cy="-5" rx="4" ry="2.5"/></g><g class="drops">${drops}</g>
+        <path class="drip" d="M-3 8 C-4 22 -5 30 -1 36 C3 40 5 34 4 24 C3 16 3 10 3 8Z"/>
+        <path class="shell s1" d="M-14 -4 L-9 -14 L-6 -7 L-1 -15 L2 -6 L-2 -2 Z"/><path class="shell s2" d="M6 2 L14 -6 L13 3 L19 6 L10 10 Z"/><path class="shell s3" d="M-12 8 L-5 5 L-7 12 L-13 14 Z"/></svg>`
+    : `<svg viewBox="-50 -50 100 100" aria-hidden="true"><g class="spread"><path class="pulp" d="${blobPath(31, 11, .3)}"/><path class="juice" d="${blobPath(19, 8, .25)}"/>
+        <path class="gel" d="${blobPath(9, 6, .3)}"/><ellipse class="seed" cx="-4" cy="-2" rx="1.6" ry="1"/><ellipse class="seed" cx="3" cy="2" rx="1.6" ry="1"/><ellipse class="seed" cx="1" cy="-5" rx="1.6" ry="1"/><path class="skin k1" d="M-24 -10 Q-18 -20 -8 -22 Q-14 -14 -18 -6Z"/><path class="skin k2" d="M14 16 Q24 10 26 -2 Q20 6 10 10Z"/></g><g class="drops">${drops}</g>
+        <path class="drip" d="M-5 10 C-6 24 -6 31 -3 35 C0 38 2 32 1 22 C1 16 0 12 0 10Z"/></svg>`;
+  fx.appendChild(el);
+  const seat = $('tableArea').querySelector(`.seat[data-uid="${CSS.escape(uid)}"] .av`);
+  if(seat && !reducedMotion()) seat.animate([{ transform: 'translate(0,0)' }, { transform: 'translate(-3px,1px) rotate(-6deg)' }, { transform: 'translate(3px,0) rotate(5deg)' }, { transform: 'translate(0,0)' }], { duration: 320, easing: 'ease-out' });
+  setTimeout(() => el.classList.add('fade'), 1600);
+  setTimeout(() => el.remove(), 2100);
 }
 function renderChat(){
   const log = chatLogs.get(curTid()) || [];
