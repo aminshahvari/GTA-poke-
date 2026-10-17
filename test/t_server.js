@@ -1,17 +1,30 @@
 // Full-stack test: owner + invited friends play a whole tournament over WebSockets.
 const { spawn } = require('child_process');
-const path = require('path'), fs = require('fs'), os = require('os');
+const path = require('path'), fs = require('fs'), os = require('os'), net = require('net');
 const WebSocket = require('ws');
-const N = +process.argv[2] || 23, PORT = 3900 + Math.floor(Math.random() * 90);
-const base = `http://127.0.0.1:${PORT}`;
-const dataFile = path.join(os.tmpdir(), `club-${PORT}.json`); try{ fs.unlinkSync(dataFile); }catch(e){}
+// a real free port (other test servers run on this machine; a random 3900+n port collided -> ECONNRESET)
+const freePort = () => new Promise((res, rej) => { const s = net.createServer(); s.unref(); s.on('error', rej); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
+const N = +process.argv[2] || 23;
+let PORT, base;
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tsrv-')), dataFile = path.join(dir, 'club.json');
 let fails = 0; const fail = m => { fails++; if(fails < 15) console.log('FAIL', m); };
 const post = async (p, body, token) => { const r = await fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body) }); return r.json(); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// wait for a condition instead of a fixed sleep (fixed sleeps failed under load); the caller still asserts it
+const until = async (f, ms = 3000) => { const t0 = Date.now(); while(!f() && Date.now() - t0 < ms) await sleep(20); };
+let srv; process.on('exit', () => { try{ srv.kill('SIGKILL'); }catch(e){} try{ fs.rmSync(dir, { recursive: true, force: true }); }catch(e){} });
 (async () => {
-  const srv = spawn(process.execPath, ['server/index.js'], { env: { ...process.env, PORT, FAST: '1', NO_BEACON: '1', DEBUG_CHIPS: '1', OWNER_CODE: 'secret', DATA_FILE: dataFile }, stdio: ['ignore', 'pipe', 'inherit'] });
-  srv.stdout.on('data', d => process.env.VERBOSE && process.stdout.write(d));
-  await sleep(700);
+  // start on a free port and wait for /healthz; retry on a new port if ours was taken in between (EADDRINUSE)
+  for(let tries = 0; ; tries++){
+    PORT = await freePort(); base = `http://127.0.0.1:${PORT}`;
+    srv = spawn(process.execPath, ['server/index.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(PORT), FAST: '1', NO_BEACON: '1', DEBUG_CHIPS: '1', OWNER_CODE: 'secret', DATA_FILE: dataFile }, stdio: ['ignore', 'pipe', 'inherit'] });
+    srv.stdout.on('data', d => process.env.VERBOSE && process.stdout.write(d));
+    let up = false; const t0 = Date.now();
+    while(!up && srv.exitCode === null && Date.now() - t0 < 10000){ try{ up = (await fetch(base + '/healthz')).ok; }catch(e){} if(!up) await sleep(40); }
+    if(up && srv.exitCode === null) break;
+    try{ srv.kill('SIGKILL'); }catch(e){}
+    if(tries >= 2) throw new Error('server did not start');
+  }
   // setup + negative auth checks
   if(!(await post('/api/setup', { code: 'nope', name: 'Sean', pin: '1234', agree: true })).error) fail('bad setup code accepted');
   if(!(await post('/api/setup', { code: 'secret', name: 'Sean', pin: '1234' })).error) fail('setup without agreeing accepted');
@@ -66,50 +79,60 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     });
   })));
   const owner = clients[0], m1 = clients[1];
-  m1.ws.send(JSON.stringify({ t: 'create', name: 'Hack' })); await sleep(150);
+  m1.ws.send(JSON.stringify({ t: 'create', name: 'Hack' })); await until(() => m1.lastError);
   if(!m1.lastError) fail('member could create a tournament');
   const SIZE = +(process.env.SIZE || 6); owner.ws.send(JSON.stringify({ t: 'create', name: 'Friday Night', stack: 30000, levelMin: 1, tableSize: SIZE, lateLevels: 2 }));
-  await sleep(200);
+  await until(() => owner.club.tourney && owner.club.tourney.status === 'registering');
   const late = clients.slice(-2); // these two use late registration
   clients.filter(c => !late.includes(c)).forEach(c => c.ws.send(JSON.stringify({ t: 'join' })));
-  await sleep(300);
+  await until(() => owner.club.tourney.regs.length === N - 2);
   if(owner.club.tourney.regs.length !== N - 2) fail('regs ' + owner.club.tourney.regs.length);
   // manual household: owner and Friend 3 live together
-  owner.ws.send(JSON.stringify({ t: 'household', uid: owner.id, with: clients[3].id })); await sleep(200);
+  owner.ws.send(JSON.stringify({ t: 'household', uid: owner.id, with: clients[3].id })); await until(() => (owner.club.households || {})[owner.id]); await sleep(100);
   const conf = owner.club.conflicts || [];
   const expectPairs = Math.floor((N - 3) / 2) + 1;
   if(conf.length !== expectPairs) fail(`expected ${expectPairs} linked pairs before start, got ${conf.length}`);
   if(m1.club.conflicts) fail('members can see link info');
   owner.ws.send(JSON.stringify({ t: 'start' }));
-  await sleep(120);
+  await until(() => owner.club.tourney.status === 'running');
   if(owner.club.tables.length !== Math.ceil((N - 2) / SIZE)) fail(`tables at start ${owner.club.tables.length}, expected ${Math.ceil((N - 2) / SIZE)}`);
   await sleep(280);
   if(N > 9 && N > 2 * SIZE && (owner.club.conflicts || []).length) fail('linked players seated together at start: ' + JSON.stringify(owner.club.conflicts));
   // shuffle seal is public, the secret is not
   if(!/^[0-9a-f]{64}$/.test(owner.club.tourney.seal || '')) fail('no shuffle seal');
   if(JSON.stringify(m1.club).includes('fairSeed')) fail('shuffle secret leaked while running');
-  // table chat: only the sender's table hears it; mute works
-  { await sleep(300);
-    const tidOf = c => c.club.myTable, a = clients.find(c => c !== owner && tidOf(c));
+  // table chat: only the sender's table hears it; mute works. The tournament is paused and seating taken from the server
+  // (not each client's lagging club.myTable): a player busted or moved between the check and the send made the throw
+  // silently drop ("throw not delivered") and mis-sorted mates/others. Isolation in depth: test/t_chat.js.
+  { owner.ws.send(JSON.stringify({ t: 'pause' })); await until(() => owner.club.tourney.paused);
+    let seat = null;
+    for(let prev = '', i = 0; i < 40; i++){ const d = await (await fetch(base + '/debug/chips')).json(), k = JSON.stringify(d.detail.map(x => [x.tid, x.seats.map(q => q[1])]));
+      if(k === prev){ seat = new Map(); d.detail.forEach(x => x.seats.forEach(q => seat.set(q[1], x.tid))); break; } prev = k; await sleep(400); }
+    if(!seat) fail('seating never settled while paused');
+    const tidOf = c => seat && seat.get(c.id), a = clients.find(c => c !== owner && tidOf(c) && clients.filter(m => tidOf(m) === tidOf(c)).length > 1);
     const mates = clients.filter(c => c !== a && tidOf(c) === tidOf(a)), others = clients.filter(c => tidOf(c) && tidOf(c) !== tidOf(a));
-    a.ws.send(JSON.stringify({ t: 'chat', text: '  nice   hand <b>x</b> ' })); await sleep(200);
-    const got = mates.filter(c => (c.chats || []).some(x => x.text === 'nice hand <b>x</b>' && x.from === a.id));
-    if(!mates.length || got.length !== mates.length) fail('table chat not delivered to tablemates');
+    a.ws.send(JSON.stringify({ t: 'chat', text: '  nice   hand <b>x</b> ' }));
+    const heard = c => (c.chats || []).some(x => x.text === 'nice hand <b>x</b>' && x.from === a.id);
+    await until(() => mates.every(heard)); await sleep(150);
+    if(!mates.length || !mates.every(heard)) fail('table chat not delivered to tablemates');
     if(others.some(c => (c.chats || []).length)) fail('chat leaked to another table');
-    a.ws.send(JSON.stringify({ t: 'chat', text: 'spam' })); await sleep(100);
+    a.chatErr = null; a.ws.send(JSON.stringify({ t: 'chat', text: 'spam' })); await until(() => a.chatErr);
     if(!a.chatErr) fail('chat rate limit missing');
     const target = mates[0]; await sleep(900);
-    a.ws.send(JSON.stringify({ t: 'throw', item: 'tomato', to: target.id })); await sleep(200);
-    if(target.club.myTable === a.club.myTable && !(target.chats || []).some(x => x.kind === 'throw' && x.item === 'tomato')) fail('throw not delivered');
-    owner.ws.send(JSON.stringify({ t: 'mute', uid: a.id, muted: true })); await sleep(250); a.chatErr = null;
-    a.ws.send(JSON.stringify({ t: 'chat', text: 'muted?' })); await sleep(200);
+    a.ws.send(JSON.stringify({ t: 'throw', item: 'tomato', to: target.id }));
+    const hit = () => (target.chats || []).some(x => x.kind === 'throw' && x.item === 'tomato'); await until(hit);
+    if(!hit()) fail('throw not delivered');
+    owner.ws.send(JSON.stringify({ t: 'mute', uid: a.id, muted: true })); await until(() => (owner.club.mutedIds || []).includes(a.id)); a.chatErr = null;
+    a.ws.send(JSON.stringify({ t: 'chat', text: 'muted?' })); await until(() => a.chatErr); await sleep(150);
     if(!a.chatErr || (target.chats || []).some(x => x.text === 'muted?')) fail('muted player could chat');
-    owner.ws.send(JSON.stringify({ t: 'mute', uid: a.id, muted: false })); }
+    owner.ws.send(JSON.stringify({ t: 'mute', uid: a.id, muted: false })); await until(() => !(owner.club.mutedIds || []).includes(a.id));
+    owner.ws.send(JSON.stringify({ t: 'resume' })); await until(() => !owner.club.tourney.paused);
+    if(owner.club.tourney.paused) fail('could not resume'); }
   // late registration: two players join after the start and get seats
-  late.forEach(c => c.ws.send(JSON.stringify({ t: 'join' }))); await sleep(400);
+  late.forEach(c => c.ws.send(JSON.stringify({ t: 'join' }))); await until(() => late.every(c => c.club.myTable));
   if(late.some(c => !c.club.myTable)) fail('late registrant not seated');
   if(owner.club.tourney.entrants !== N) fail('entrants after late reg ' + owner.club.tourney.entrants);
-  late[0].lastError = null; late[0].ws.send(JSON.stringify({ t: 'join' })); await sleep(150);
+  late[0].lastError = null; late[0].ws.send(JSON.stringify({ t: 'join' })); await until(() => late[0].lastError);
   if(!late[0].lastError) fail('joined twice');
   const t0 = Date.now(); let maxTables = 0, checks = 0, hfhRounds = 0;
   while(Date.now() - t0 < 600000){
