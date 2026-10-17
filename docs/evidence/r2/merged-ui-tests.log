@@ -1,0 +1,23 @@
+ok   320x568 9-handed actions (table area 312x378)
+ok   320x568 9-handed sizing (table area 312x373)
+ok   320x568 7-handed actions (table area 312x378)
+ok   320x568 7-handed sizing (table area 312x373)
+ok   375x667 9-handed actions (table area 367x398)
+ok   375x667 9-handed sizing (table area 367x412)
+ok   375x667 7-handed actions (table area 367x398)
+ok   375x667 7-handed sizing (table area 367x412)
+ok   360x780 9-handed actions (table area 352x458)
+ok   360x780 9-handed sizing (table area 352x437)
+ok   360x780 7-handed actions (table area 352x458)
+ok   360x780 7-handed sizing (table area 352x437)
+ok   390x844 9-handed actions (table area 382x522)
+ok   390x844 9-handed sizing (table area 382x500)
+ok   390x844 7-handed actions (table area 382x522)
+ok   390x844 7-handed sizing (table area 382x500)
+ok   1280x800 9-handed actions (table area 532x478)
+ok   1280x800 9-handed sizing (table area 532x456)
+ok   1280x800 7-handed actions (table area 532x478)
+ok   1280x800 7-handed sizing (table area 532x456)
+small table ui test passed
+registration ui test passed
+business search ui test passed
