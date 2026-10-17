@@ -68,6 +68,11 @@ const MATRIX = [
   ['Suite 1100, 150 King St W', _], ['PO Box 1234, Toronto ON M5H 2M9', _], ['Toronto ON M4C 1B5, Canada', _], ['Invoice 2026-10-17, 1500 units', _],
   ['Order no. 4471-2290', _], ['Order #10045678', _], ['Invoice 20261017-0042', _], ['Order #10045', _],
   ['Oil change 2019', _], ['OIL and gas since 1999', _], ['I/O boards, 10 pcs', _], ['Model IO1 since 2019', _], ['lol 5 stars', _], ['Iron Oil Co.', _],
+  // Muse follow-up (Oct 17 staging acceptance): bullet-like separators between digit groups
+  ['416•829•5953', P], ['416·829·5953', P], ['416‧829‧5953', P], ['416∙829∙5953', P], ['416⋅829⋅5953', P], ['416・829・5953', P],
+  ['416 • 829 • 5953', P], ['1•800•555•0100', P], ['+1•416•829•5953', P], ['call ۴۱۶•۸۲۹•۵۹۵۳', P], ['416•555•O1OO', P],
+  ['Sizes 10 • 12 • 14 • 16', _], ['Pizza • 2 for $20 • 10% off', _], ['Open 9•5 • Mon–Fri', _], ['Rating 4·5', _], ['Rooms 101 · 102 · 103', _],
+  ['2019 • 2020 • 2021', _], ['10:00 • 18:00', _], ['M5H 2M9 • Toronto', _], ['$1,500 • 2-3 weeks • 1500 sq ft', _], ['قیمت ۱٬۵۰۰ دلار • ۱۴۰۳/۰۷/۲۶', _],
   ['Social media marketing for Toronto bakeries', _], ['Instagram growth for 10, 20 or 50 posts', _], ['Lot 12, 13 and 14', _],
   ['3.5 stars', _], ['v2.0 release', _], ['Room for 6-8 people', _], ['Call me after 6', _], ['1-on-1 coaching', _], ['Need 2 3D printers', _]
 ];
@@ -94,6 +99,15 @@ fs.writeFileSync(AUD, kvBefore);
 const audit = require('child_process').execFileSync('node', [__dirname + '/../scripts/content-audit.js', AUD], { encoding: 'utf8' });
 assert.ok(audit.includes('opp:o1\ttitle\tphone') && audit.includes('biz:u1\tservices\tlink') && !audit.includes('user:u1') && /^2 field\(s\)/m.test(audit), audit);
 assert.strictEqual(fs.readFileSync(AUD, 'utf8'), kvBefore, 'audit changes nothing'); fs.unlinkSync(AUD);
+// --db mode: only a read-only transaction, one select and a rollback ever reach the database; text is never printed
+(async () => {
+  const { fromDb, audit: run } = require('../scripts/content-audit.js'), sent = [];
+  const pool = { connect: async () => ({ query: async sql => { sent.push(sql); return /^select/.test(sql) ? { rows: Object.entries(JSON.parse(kvBefore)).filter(([k]) => /^(opp|oppreq|biz):/.test(k)).map(([k, v]) => ({ k, v })) } : { rows: [] }; }, release(){} }) };
+  const lines = []; const n = run(await fromDb(pool), l => lines.push(l));
+  assert.deepStrictEqual(sent.map(s => s.split(' ').slice(0, 3).join(' ')), ['begin transaction read', 'select k, v', 'rollback'], sent.join(' | '));
+  assert.ok(/^select k, v from kv where k like 'opp:%' or k like 'oppreq:%' or k like 'biz:%'$/.test(sent[1]), sent[1]);
+  assert.strictEqual(n, 2); assert.ok(!lines.join('\n').includes('416-555-0100') && !lines.join('\n').includes('rivera.example.com'), 'no member text printed');
+})().catch(e => { console.error(e); process.exit(1); });
 
 // ---- the rule on the server, and who can see club data ----
 const DATA = require('os').tmpdir() + '/t_content_' + process.pid + '.json';
@@ -143,6 +157,10 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   assert.strictEqual(still.title, a1.title); assert.strictEqual(still.details, a1.details); assert.strictEqual(still.area, a1.area);
   // ---- the private request message: no contact details either; the share note carries a phone, never a link ----
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! Text me on 647 555 0199' }, B), /phone number from message/);
+  // bullet separators refused on an opportunity field (create and edit) and in a request message
+  assert.match(await err('oppSave', listing({ details: 'Call 416•829•5953' }), A), /phone number from details/);
+  assert.match(await err('oppSave', listing({ id: a1.id, title: 'Deck 416 · 829 · 5953' }), A), /phone number from title/);
+  assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! 647•555•0199' }, B), /phone number from message/);
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! bea@example.com' }, B), /email address from message/);
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! DM me on insta' }, B), /social media handle or profile from message/);
   const rq = (await ok('oppRequest', { id: a1.id, message: 'Hi! I built two decks last year, about 300 sq ft each.' }, B)).request;
@@ -173,7 +191,7 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   await err('bizSave', biz({ services: 'Call 416 555 0100' }), A);
   assert.strictEqual((await ok('bizMine', {}, A)).mine.services, 'Water heaters (40-60 gallon), 2-3 day renos');
   // Muse's F1 bypasses are refused on the server too; allowed text in other scripts is saved exactly as typed (never rewritten)
-  for(const t of ['Call ۴۱۶ ۵۵۵ ۰۱۰۰', 'Call ٤١٦-٥٥٥-٠١٠٠', 'Call 416,829,5953', 'Call 416 555 O1OO'])
+  for(const t of ['Call ۴۱۶ ۵۵۵ ۰۱۰۰', 'Call ٤١٦-٥٥٥-٠١٠٠', 'Call 416,829,5953', 'Call 416 555 O1OO', 'Call 416•829•5953', 'Call 416·829·5953'])
     assert.match(await err('bizSave', biz({ services: t }), A), /phone number from services/, t);
   const fa = 'قیمت از ۱٬۵۰۰ دلار، از سال ۱۴۰۳/۰۷/۲۶. Order no. 4471-2290; 1,500,000 sq ft; sizes 10, 12, 14';
   await ok('bizSave', biz({ services: fa }), A);

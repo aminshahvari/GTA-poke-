@@ -75,8 +75,11 @@ function letterDigits(t){
   return t;
 }
 // a phone number is 7 to 15 digits, written together or with spaces . , - / ( ) between them
+// bullet-like dots between digit groups (416•829•5953, 416 · 829 · 5953) read as commas, so the comma rules decide:
+// phone-shaped groups are a phone, a list of sizes or prices is not
+const BULLET = /(\d)\s*[\u2022\u00b7\u2027\u2219\u22c5\u30fb\u25e6\u2043]\s*(?=\d)/g;
 function phone(t){
-  t = letterDigits(t.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine)\b/gi, w => WORDS[w.toLowerCase()]));
+  t = letterDigits(t.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine)\b/gi, w => WORDS[w.toLowerCase()])).replace(BULLET, '$1,');
   const re = /\+?\(?\d(?:[\s.,\-–—/()]{0,3}\d)+\)?/g;
   for(let m; (m = re.exec(t));){
     const run = m[0], digits = run.replace(/\D/g, '');
