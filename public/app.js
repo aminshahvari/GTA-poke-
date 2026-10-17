@@ -104,6 +104,11 @@ let editingT = false, tab = 'event', view = 'lobby', watchTid = null, lastSent =
 window.BizClub.init({ post, toast, token: () => local.get('token', ''), me: () => club.me, tab: () => tab,
   openTab: t => { tab = t; view = 'lobby'; showScreen('lobby'); renderLobby(); $('lobbyBody').scrollTop = 0; },
   confirm: (title, text, ok) => modal(`<h2>${esc(title)}</h2><p>${esc(text)}</p>`, [{ label: 'Cancel', value: false }, { label: esc(ok), value: true, primary: true }]) });
+// Feedback Hub (public/feedback.js): a Feedback button in the lobby and in the table chat; the owner's inbox in the Director tab
+window.FeedbackHub.init({ post, toast, token: () => local.get('token', ''), isOwner: () => !!(club && club.me && club.me.owner),
+  features: () => (club && club.features) || {}, setOpen: on => send({ t: 'feedbackOn', on }),
+  confirm: (title, text, ok) => modal(`<h2>${esc(title)}</h2><p>${esc(text)}</p>`, [{ label: 'Cancel', value: false }, { label: esc(ok), value: true, primary: true }]),
+  section: () => view === 'table' ? 'poker' : tab === 'biz' ? (window.BizClub.seg() === 'opp' ? 'opportunity' : 'business') : ({ event: 'home', board: 'poker', learn: 'learn', director: 'director' })[tab] || 'other' });
 function connect(){
   const token = local.get('token', null);
   if(!token && location.pathname.startsWith('/join/')) return welcomeScreen();
@@ -140,6 +145,7 @@ function onClub(c){
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   $('meChip').innerHTML = `<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name)}</span></button><button class="back" id="outBtn">Sign out</button>`;
   $('meBtn').onclick = () => openProfile(c.me.id);
+  window.FeedbackHub.sync();   // the Feedback buttons show only while the Hub is open
   $('outBtn').onclick = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
   $('dirTab').hidden = !c.me.owner;
   const st = c.tourney && c.tourney.status;
@@ -178,6 +184,7 @@ function renderLobby(){
   if(tab === 'biz'){ body.replaceChildren(); window.BizClub.render(body); return; }
   if(home) renderHome(body, clubsOn, clubsVisible && !playing);
   else body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : directorHTML();
+  if(tab === 'director') window.FeedbackHub.mountAdmin($('fbAdmin'));
   wireLobby();
 }
 // ---------- Home: Poker, then Business, then Opportunities ----------
@@ -392,7 +399,7 @@ const demoCard = () => `<div class="card-box demo-box"><span class="eyebrow">Dem
   <p>Play a real game at a 6-max table against 5 practice players, with the same buttons, chat bubbles, antes and clock as a club tournament. It runs only on your phone: nothing is saved and no points are given.</p>
   <div class="btn-row"><button class="btn red big" data-demo>Open demo table</button></div></div>`;
 function directorHTML(){
-  return newsHTML() + demoCard() + conflictsHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
+  return newsHTML() + demoCard() + conflictsHTML() + clubsSwitchHTML() + '<div id="fbAdmin"></div>' + directorMainHTML() + prizeAdminHTML();
 }
 // Business Club + Opportunity Club: off until the owner opens them; while off only the owner sees them (to try them out)
 function clubsSwitchHTML(){

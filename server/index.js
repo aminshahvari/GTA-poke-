@@ -13,6 +13,7 @@ const coach = require('./coach');
 const push = require('./push');
 const business = require('./business');
 const opportunity = require('./opportunity');
+const feedback = require('./feedback');
 
 const PORT = +process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -119,7 +120,9 @@ const api = {
   // Business Club (members-only directory, separate from poker): see server/business.js
   ...business.api,
   // Opportunity Club ("I need help" / "I can help" listings inside Business Club): see server/opportunity.js
-  ...opportunity.api
+  ...opportunity.api,
+  // Feedback Hub (members send, only the owner reads): see server/feedback.js. Open even while the clubs are closed.
+  ...feedback.api
 };
 // Business Club + Opportunity Club: closed to members until the owner opens them in the Director tab (the owner can always use them).
 // Staging opens them by default so they can be tested; CLUBS_DEFAULT=on does the same for local test runs.
@@ -171,7 +174,7 @@ const server = http.createServer((req, res) => {
   if(req.method === 'POST' && url.pathname.startsWith('/api/')){
     const ip = 'ip:' + clientIp(req);
     let body = '';
-    const limit = url.pathname === '/api/avatar' || url.pathname === '/api/bizSave' ? 70000 : 10000;
+    const limit = url.pathname === '/api/avatar' || url.pathname === '/api/bizSave' ? 70000 : url.pathname === '/api/fbSend' ? 150000 : 10000;
     const extra = url.pathname.startsWith('/api/biz') || url.pathname.startsWith('/api/opp') ? NOINDEX : undefined;
     req.on('data', c => { body += c; if(body.length > limit) req.destroy(); });
     req.on('end', () => {
@@ -204,6 +207,13 @@ const server = http.createServer((req, res) => {
     const r = clubsClosedFor(lu) ? { status: 404 } : business.logoFor(bl[1], lu);
     if(r.status !== 200) return send(res, r.status, 'Not found', 'text/plain', NOINDEX);
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
+  }
+  // Feedback Hub screenshots: the owner only, with the token (sent by fetch); everyone else gets 404
+  const fs_ = /^\/fbshot\/([A-Za-z0-9]{1,40})$/.exec(url.pathname);
+  if(fs_){
+    const r = feedback.shotFor(fs_[1], userByToken(req.headers.authorization?.replace(/^Bearer /, '')));
+    if(r.status !== 200) return send(res, 404, 'Not found', 'text/plain', NOINDEX);
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'Content-Disposition': 'attachment; filename="screenshot.jpg"', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
   let file = url.pathname === '/' || url.pathname === '/login' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
   if(file === 'engine.js') return fs.readFile(path.join(__dirname, 'engine.js'), (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES['.js']));
@@ -283,7 +293,7 @@ function clubView(u){
       places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null } : null,
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
     members, history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
-    features: { clubs: clubsOn() }, chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
+    features: { clubs: clubsOn(), feedback: feedback.enabled(), feedbackLocked: feedback.envOff() }, chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
     pushOn: push.hasPush(u.id), membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
   };
   if(isOwner(u)){
@@ -429,9 +439,11 @@ wss.on('connection', (ws, req) => {
         case 'removeReward': own(u); rewards.removeReward(String(m.id || '')); broadcastClub(); break;
         case 'redeemStatus': own(u); rewards.setStatus(String(m.id || ''), m.status); broadcastClub(); break;
         case 'invite': { const code = inviteCode(u, !!m.group); sendWS(ws, { t: 'invite', code, group: !isOwner(u) || !!m.group, max: store.get('invite:' + code).max || 1 }); broadcastClub(); } break;
+        // Feedback Hub: the owner opens or closes it to members (FEEDBACK=off in the environment overrides this)
+        case 'feedbackOn': own(u); store.set('settings', { ...(store.get('settings') || {}), feedbackOff: !m.on }); broadcastClub(); break;
         case 'membersInvite': own(u); store.set('settings', { ...(store.get('settings') || {}), membersInvite: !!m.on }); broadcastClub(); break;
         case 'revoke': own(u); { const inv = store.get('invite:' + m.code); if(inv) store.set('invite:' + m.code, { ...inv, revoked: true }); broadcastClub(); } break;
-        case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); revokeSessions(x.id); club.leave(x.id); business.removeUser(x.id); opportunity.removeUser(x.id); } broadcastClub(); } break;
+        case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); revokeSessions(x.id); club.leave(x.id); business.removeUser(x.id); opportunity.removeUser(x.id); feedback.removeUser(x.id); } broadcastClub(); } break;
       }
     }catch(e){ sendWS(ws, { t: 'error', error: e.message }); }
   });

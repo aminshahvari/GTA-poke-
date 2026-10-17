@@ -518,6 +518,7 @@ window.BizClub = {
   render, mountHome,
   open(view){ S.view = view || 'list'; S.listStale = true; if(view === 'mine'){ S.mine = undefined; S.seg = 'biz'; } if(S.seg === 'opp') window.OppClub.open('feed'); },
   myStatus: () => S.feed ? S.feed.mine : null,
+  seg: () => S.seg,   // which part is showing (biz or opp), for the Feedback Hub's context
   reset(){ window.OppClub.reset(); S.seg = 'biz'; S.list = null; S.feed = null; S.feedAt = 0; S.mine = undefined; S.view = 'list'; logos.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); logos.clear(); }
 };
 })();
