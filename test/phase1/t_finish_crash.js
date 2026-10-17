@@ -7,7 +7,7 @@
 // After each restart: history for the tournament exists exactly once, and every member's earned points = sum of
 // their history pts.
 const L = require('./lib');
-const NAME = 'finish_crash', EXPECT_FAIL = true;
+const NAME = 'finish_crash', EXPECT_FAIL = false;
 const procs = []; let clients = [];
 
 async function runCase(label, fault){

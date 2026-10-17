@@ -5,7 +5,7 @@
 // server restarts against what the database actually holds.
 // Asserts: no player is both in places and seated, places has unique uids, chips are conserved.
 const L = require('./lib');
-const NAME = 'db_failure', EXPECT_FAIL = true;
+const NAME = 'db_failure', EXPECT_FAIL = false;
 let srv, srv2, clients = [];
 L.guard(NAME, EXPECT_FAIL, async () => {
   const dbDir = L.tmpdir('dbfail');
