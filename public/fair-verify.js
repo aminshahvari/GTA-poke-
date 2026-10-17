@@ -31,7 +31,7 @@
   }
 
   async function verify(rep, onProgress){
-    const out = { sealOk: false, hands: [], ok: 0, bad: 0, local: 0 };
+    const out = { sealOk: false, hands: [], ok: 0, bad: 0, local: 0, void: 0 };
     if(!rep || !rep.seed || !rep.seal) return out;
     out.sealOk = hex(await sha(rep.seed)) === rep.seal;
     for(let k = 0; k < rep.hands.length; k++){
@@ -43,6 +43,7 @@
       out.hands.push({ ...h, match });
       if(match) out.ok++; else out.bad++;
       if(!h.round) out.local++;
+      if(h.void) out.void++; // a deal cut off mid-hand (void: 'interrupted'): verified the same way, replayed under its number
       if(onProgress && k % 10 === 9) onProgress(k + 1, rep.hands.length);
     }
     return out;
