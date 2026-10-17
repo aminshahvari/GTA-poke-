@@ -518,6 +518,8 @@ window.BizClub = {
   render, mountHome,
   open(view){ S.view = view || 'list'; S.listStale = true; if(view === 'mine'){ S.mine = undefined; S.seg = 'biz'; } if(S.seg === 'opp') window.OppClub.open('feed'); },
   myStatus: () => S.feed ? S.feed.mine : null,
+  // Member Home cards: open the Business tab on one section ('biz' or 'opp') or straight on the card scanner
+  show(seg){ if(seg === 'scan'){ S.view = 'scan'; S.scan = null; S.seg = 'biz'; return; } S.view = 'list'; S.seg = seg; S.listStale = true; if(seg === 'opp') window.OppClub.open('feed'); },
   reset(){ window.OppClub.reset(); S.seg = 'biz'; S.list = null; S.feed = null; S.feedAt = 0; S.mine = undefined; S.view = 'list'; logos.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); logos.clear(); }
 };
 })();

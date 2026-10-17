@@ -1,0 +1,298 @@
+ok   320x568 member sees Home, Leaderboard, Learn and Business tabs
+ok   320x568 member does not see the Director tab
+ok   320x568 Home section switcher is shown
+ok   320x568 Member Home greets the member by first name
+ok   320x568 Member Home shows the four club doors (Poker, Business, Opportunity, Scanner)
+ok   320x568 home: no sideways scroll
+ok   320x568 home: tap targets >= 44px
+ok   320x568 home: text >= 11px
+ok   320x568 Scanner door opens the card scanner
+ok   320x568 Opportunity door opens Opportunities
+ok   320x568 Business door opens the business directory
+ok   320x568 Home switcher jumps to Opportunities
+ok   320x568 Leaderboard tab opens
+ok   320x568 leaderboard shows a row per player
+ok   320x568 leaderboard: no sideways scroll
+ok   320x568 leaderboard: tap targets >= 44px
+ok   320x568 leaderboard: text >= 11px
+ok   320x568 a leaderboard row opens that player's profile
+ok   320x568 the profile closes
+ok   320x568 Learn tab opens
+ok   320x568 learn: no sideways scroll
+ok   320x568 learn: tap targets >= 44px
+ok   320x568 learn: text >= 11px
+ok   320x568 learn-lessons: no sideways scroll
+ok   320x568 learn-lessons: tap targets >= 44px
+ok   320x568 learn-lessons: text >= 11px
+ok   320x568 a Learn lesson opens
+ok   320x568 Business tab opens
+ok   320x568 business directory lists businesses
+ok   320x568 business: no sideways scroll
+ok   320x568 business: tap targets >= 44px
+ok   320x568 business: text >= 11px
+ok   320x568 Opportunities view lists listings
+ok   320x568 opportunities: no sideways scroll
+ok   320x568 opportunities: tap targets >= 44px
+ok   320x568 opportunities: text >= 11px
+ok   320x568 an opportunity opens
+ok   320x568 opportunity-detail: no sideways scroll
+ok   320x568 opportunity-detail: tap targets >= 44px
+ok   320x568 opportunity-detail: text >= 11px
+ok   320x568 business-publish: no sideways scroll
+ok   320x568 business-publish: tap targets >= 44px
+ok   320x568 business-publish: text >= 11px
+ok   320x568 business form offers the card scanner
+ok   320x568 card scanner opens
+ok   320x568 scanner: no sideways scroll
+ok   320x568 scanner: tap targets >= 44px
+ok   320x568 scanner: text >= 11px
+ok   320x568 profile sheet opens
+ok   320x568 profile: no sideways scroll
+ok   320x568 profile: tap targets >= 44px
+ok   320x568 profile: text >= 11px
+ok   320x568 home-owner: no sideways scroll
+ok   320x568 home-owner: tap targets >= 44px
+ok   320x568 home-owner: text >= 11px
+ok   320x568 owner sees the Director tab
+ok   320x568 Director tab opens
+ok   320x568 Director shows its controls
+ok   320x568 director: no sideways scroll
+ok   320x568 director: tap targets >= 44px
+ok   320x568 director: text >= 11px
+ok   320x568 table: aFold visible
+ok   320x568 table: aCall visible
+ok   320x568 table: aRaise visible
+ok   320x568 table: action buttons inside the screen
+ok   320x568 table: no sideways scroll
+ok   320x568 table: tap targets >= 44px
+ok   320x568 table: text >= 11px
+ok   320x568 table: Raise opens the sizing panel
+ok   320x568 table-sizing: no sideways scroll
+ok   320x568 table-sizing: tap targets >= 44px
+ok   320x568 table-sizing: text >= 11px
+ok   320x568 table: Back closes the sizing panel
+note 320x568 table: Lobby button folded away during your turn (short screen, existing design)
+ok   375x667 member sees Home, Leaderboard, Learn and Business tabs
+ok   375x667 member does not see the Director tab
+ok   375x667 Home section switcher is shown
+ok   375x667 Member Home greets the member by first name
+ok   375x667 Member Home shows the four club doors (Poker, Business, Opportunity, Scanner)
+ok   375x667 home: no sideways scroll
+ok   375x667 home: tap targets >= 44px
+ok   375x667 home: text >= 11px
+ok   375x667 Scanner door opens the card scanner
+ok   375x667 Opportunity door opens Opportunities
+ok   375x667 Business door opens the business directory
+ok   375x667 Home switcher jumps to Opportunities
+ok   375x667 Leaderboard tab opens
+ok   375x667 leaderboard shows a row per player
+ok   375x667 leaderboard: no sideways scroll
+ok   375x667 leaderboard: tap targets >= 44px
+ok   375x667 leaderboard: text >= 11px
+ok   375x667 a leaderboard row opens that player's profile
+ok   375x667 the profile closes
+ok   375x667 Learn tab opens
+ok   375x667 learn: no sideways scroll
+ok   375x667 learn: tap targets >= 44px
+ok   375x667 learn: text >= 11px
+ok   375x667 learn-lessons: no sideways scroll
+ok   375x667 learn-lessons: tap targets >= 44px
+ok   375x667 learn-lessons: text >= 11px
+ok   375x667 a Learn lesson opens
+ok   375x667 Business tab opens
+ok   375x667 business directory lists businesses
+ok   375x667 business: no sideways scroll
+ok   375x667 business: tap targets >= 44px
+ok   375x667 business: text >= 11px
+ok   375x667 Opportunities view lists listings
+ok   375x667 opportunities: no sideways scroll
+ok   375x667 opportunities: tap targets >= 44px
+ok   375x667 opportunities: text >= 11px
+ok   375x667 an opportunity opens
+ok   375x667 opportunity-detail: no sideways scroll
+ok   375x667 opportunity-detail: tap targets >= 44px
+ok   375x667 opportunity-detail: text >= 11px
+ok   375x667 business-publish: no sideways scroll
+ok   375x667 business-publish: tap targets >= 44px
+ok   375x667 business-publish: text >= 11px
+ok   375x667 business form offers the card scanner
+ok   375x667 card scanner opens
+ok   375x667 scanner: no sideways scroll
+ok   375x667 scanner: tap targets >= 44px
+ok   375x667 scanner: text >= 11px
+ok   375x667 profile sheet opens
+ok   375x667 profile: no sideways scroll
+ok   375x667 profile: tap targets >= 44px
+ok   375x667 profile: text >= 11px
+ok   375x667 home-owner: no sideways scroll
+ok   375x667 home-owner: tap targets >= 44px
+ok   375x667 home-owner: text >= 11px
+ok   375x667 owner sees the Director tab
+ok   375x667 Director tab opens
+ok   375x667 Director shows its controls
+ok   375x667 director: no sideways scroll
+ok   375x667 director: tap targets >= 44px
+ok   375x667 director: text >= 11px
+ok   375x667 table: aFold visible
+ok   375x667 table: aCall visible
+ok   375x667 table: aRaise visible
+ok   375x667 table: action buttons inside the screen
+ok   375x667 table: no sideways scroll
+ok   375x667 table: tap targets >= 44px
+ok   375x667 table: text >= 11px
+ok   375x667 table: Raise opens the sizing panel
+ok   375x667 table-sizing: no sideways scroll
+ok   375x667 table-sizing: tap targets >= 44px
+ok   375x667 table-sizing: text >= 11px
+ok   375x667 table: Back closes the sizing panel
+ok   375x667 table: Lobby button returns to the lobby
+ok   390x844 member sees Home, Leaderboard, Learn and Business tabs
+ok   390x844 member does not see the Director tab
+ok   390x844 Home section switcher is shown
+ok   390x844 Member Home greets the member by first name
+ok   390x844 Member Home shows the four club doors (Poker, Business, Opportunity, Scanner)
+ok   390x844 home: no sideways scroll
+ok   390x844 home: tap targets >= 44px
+ok   390x844 home: text >= 11px
+ok   390x844 Scanner door opens the card scanner
+ok   390x844 Opportunity door opens Opportunities
+ok   390x844 Business door opens the business directory
+ok   390x844 Home switcher jumps to Opportunities
+ok   390x844 Leaderboard tab opens
+ok   390x844 leaderboard shows a row per player
+ok   390x844 leaderboard: no sideways scroll
+ok   390x844 leaderboard: tap targets >= 44px
+ok   390x844 leaderboard: text >= 11px
+ok   390x844 a leaderboard row opens that player's profile
+ok   390x844 the profile closes
+ok   390x844 Learn tab opens
+ok   390x844 learn: no sideways scroll
+ok   390x844 learn: tap targets >= 44px
+ok   390x844 learn: text >= 11px
+ok   390x844 learn-lessons: no sideways scroll
+ok   390x844 learn-lessons: tap targets >= 44px
+ok   390x844 learn-lessons: text >= 11px
+ok   390x844 a Learn lesson opens
+ok   390x844 Business tab opens
+ok   390x844 business directory lists businesses
+ok   390x844 business: no sideways scroll
+ok   390x844 business: tap targets >= 44px
+ok   390x844 business: text >= 11px
+ok   390x844 Opportunities view lists listings
+ok   390x844 opportunities: no sideways scroll
+ok   390x844 opportunities: tap targets >= 44px
+ok   390x844 opportunities: text >= 11px
+ok   390x844 an opportunity opens
+ok   390x844 opportunity-detail: no sideways scroll
+ok   390x844 opportunity-detail: tap targets >= 44px
+ok   390x844 opportunity-detail: text >= 11px
+ok   390x844 business-publish: no sideways scroll
+ok   390x844 business-publish: tap targets >= 44px
+ok   390x844 business-publish: text >= 11px
+ok   390x844 business form offers the card scanner
+ok   390x844 card scanner opens
+ok   390x844 scanner: no sideways scroll
+ok   390x844 scanner: tap targets >= 44px
+ok   390x844 scanner: text >= 11px
+ok   390x844 profile sheet opens
+ok   390x844 profile: no sideways scroll
+ok   390x844 profile: tap targets >= 44px
+ok   390x844 profile: text >= 11px
+ok   390x844 home-owner: no sideways scroll
+ok   390x844 home-owner: tap targets >= 44px
+ok   390x844 home-owner: text >= 11px
+ok   390x844 owner sees the Director tab
+ok   390x844 Director tab opens
+ok   390x844 Director shows its controls
+ok   390x844 director: no sideways scroll
+ok   390x844 director: tap targets >= 44px
+ok   390x844 director: text >= 11px
+ok   390x844 table: aFold visible
+ok   390x844 table: aCall visible
+ok   390x844 table: aRaise visible
+ok   390x844 table: action buttons inside the screen
+ok   390x844 table: no sideways scroll
+ok   390x844 table: tap targets >= 44px
+ok   390x844 table: text >= 11px
+ok   390x844 table: Raise opens the sizing panel
+ok   390x844 table-sizing: no sideways scroll
+ok   390x844 table-sizing: tap targets >= 44px
+ok   390x844 table-sizing: text >= 11px
+ok   390x844 table: Back closes the sizing panel
+ok   390x844 table: Lobby button returns to the lobby
+ok   430x932 member sees Home, Leaderboard, Learn and Business tabs
+ok   430x932 member does not see the Director tab
+ok   430x932 Home section switcher is shown
+ok   430x932 Member Home greets the member by first name
+ok   430x932 Member Home shows the four club doors (Poker, Business, Opportunity, Scanner)
+ok   430x932 home: no sideways scroll
+ok   430x932 home: tap targets >= 44px
+ok   430x932 home: text >= 11px
+ok   430x932 Scanner door opens the card scanner
+ok   430x932 Opportunity door opens Opportunities
+ok   430x932 Business door opens the business directory
+ok   430x932 Home switcher jumps to Opportunities
+ok   430x932 Leaderboard tab opens
+ok   430x932 leaderboard shows a row per player
+ok   430x932 leaderboard: no sideways scroll
+ok   430x932 leaderboard: tap targets >= 44px
+ok   430x932 leaderboard: text >= 11px
+ok   430x932 a leaderboard row opens that player's profile
+ok   430x932 the profile closes
+ok   430x932 Learn tab opens
+ok   430x932 learn: no sideways scroll
+ok   430x932 learn: tap targets >= 44px
+ok   430x932 learn: text >= 11px
+ok   430x932 learn-lessons: no sideways scroll
+ok   430x932 learn-lessons: tap targets >= 44px
+ok   430x932 learn-lessons: text >= 11px
+ok   430x932 a Learn lesson opens
+ok   430x932 Business tab opens
+ok   430x932 business directory lists businesses
+ok   430x932 business: no sideways scroll
+ok   430x932 business: tap targets >= 44px
+ok   430x932 business: text >= 11px
+ok   430x932 Opportunities view lists listings
+ok   430x932 opportunities: no sideways scroll
+ok   430x932 opportunities: tap targets >= 44px
+ok   430x932 opportunities: text >= 11px
+ok   430x932 an opportunity opens
+ok   430x932 opportunity-detail: no sideways scroll
+ok   430x932 opportunity-detail: tap targets >= 44px
+ok   430x932 opportunity-detail: text >= 11px
+ok   430x932 business-publish: no sideways scroll
+ok   430x932 business-publish: tap targets >= 44px
+ok   430x932 business-publish: text >= 11px
+ok   430x932 business form offers the card scanner
+ok   430x932 card scanner opens
+ok   430x932 scanner: no sideways scroll
+ok   430x932 scanner: tap targets >= 44px
+ok   430x932 scanner: text >= 11px
+ok   430x932 profile sheet opens
+ok   430x932 profile: no sideways scroll
+ok   430x932 profile: tap targets >= 44px
+ok   430x932 profile: text >= 11px
+ok   430x932 home-owner: no sideways scroll
+ok   430x932 home-owner: tap targets >= 44px
+ok   430x932 home-owner: text >= 11px
+ok   430x932 owner sees the Director tab
+ok   430x932 Director tab opens
+ok   430x932 Director shows its controls
+ok   430x932 director: no sideways scroll
+ok   430x932 director: tap targets >= 44px
+ok   430x932 director: text >= 11px
+ok   430x932 table: aFold visible
+ok   430x932 table: aCall visible
+ok   430x932 table: aRaise visible
+ok   430x932 table: action buttons inside the screen
+ok   430x932 table: no sideways scroll
+ok   430x932 table: tap targets >= 44px
+ok   430x932 table: text >= 11px
+ok   430x932 table: Raise opens the sizing panel
+ok   430x932 table-sizing: no sideways scroll
+ok   430x932 table-sizing: tap targets >= 44px
+ok   430x932 table-sizing: text >= 11px
+ok   430x932 table: Back closes the sizing panel
+ok   430x932 table: Lobby button returns to the lobby
+
+295 ok, 0 failed
