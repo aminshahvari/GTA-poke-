@@ -59,7 +59,7 @@ const api = {
     const u = createUser(name, pin, 'owner'); store.set('owner', u.id);
     return { token: newSession(u.id) };
   },
-  redeem({ code, name, pin, agree }){
+  redeem({ code, name, pin, agree }, _, ip){
     const inv = store.get('invite:' + code);
     const dead = !inv || inv.revoked || (inv.multi ? (inv.uses || []).length >= inv.max || Date.now() > inv.expiresAt : inv.usedBy);
     if(inv && !dead && inv.by && inv.by !== store.get('owner') && !membersInvite()) throw new Error('Member invites are switched off right now. Ask the organizer for a link.');
@@ -68,12 +68,14 @@ const api = {
     if(!validName(name)) throw new Error('Pick a name with 2 to 16 letters or numbers.');
     if(store.get('name:' + name.toLowerCase())) throw new Error('That name is taken. Try another.');
     if(!validPin(pin)) throw new Error('Pick a PIN of 4 to 8 digits.');
-    if(agree !== true) throw new Error('Please confirm you are 19 or older and agree to the club rules.');
+    if(agree !== true) throw new Error(inv.campaign ? 'Please tick the box to confirm you are 19 or older and agree to the club rules.' : 'Please confirm you are 19 or older and agree to the club rules.');
+    if(inv.campaign && campaignJoins(ip).length >= CAMPAIGN_IP_HOUR) throw new Error('Too many new accounts were made from this connection. Try again in an hour.');
     const u = createUser(name, pin, 'member');
-    if(inv.by) store.set('user:' + u.id, { ...u, invitedBy: inv.by });
-    // the link is usually sent for a tournament: sign the new player up for it straight away
+    if(inv.by) store.set('user:' + u.id, { ...u, invitedBy: inv.by, ...(inv.campaign ? { campaign: inv.campaign.source } : {}) });
+    // the link is usually sent for a tournament: sign the new player up for it straight away (not for a public campaign link)
     const t = club.T();
-    if(t && (t.status === 'registering' || (t.status === 'running' && club.lateOpen()))) try{ club.join(u.id); }catch(e){}
+    if(!inv.campaign && t && (t.status === 'registering' || (t.status === 'running' && club.lateOpen()))) try{ club.join(u.id); }catch(e){}
+    if(inv.campaign) campaignJoined(ip);
     store.set('invite:' + code, inv.multi ? { ...inv, uses: [...(inv.uses || []), u.id] } : { ...inv, usedBy: u.id, usedAt: Date.now() });
     broadcastClub();
     return { token: newSession(u.id) };
@@ -93,6 +95,24 @@ const api = {
     return { token: newSession(id), name: u.name };
   },
   invite(_, u){ return { code: inviteCode(u) }; },
+  // a public campaign link (for example an Instagram bio): owner only, its own cap, expiry and source label, no tournament sign-up
+  campaign({ source, max, hours }, u){
+    if(!isOwner(u)) throw new Error('Only the club owner can do that.');
+    source = String(source || '').trim().toLowerCase();
+    if(!/^[a-z0-9-]{2,24}$/.test(source)) throw new Error('Name the source with 2 to 24 lowercase letters, numbers or dashes, for example instagram-oct.');
+    max = Number(max); hours = Number(hours);
+    if(!Number.isInteger(max) || max < 1 || max > CAMPAIGN_MAX) throw new Error('Pick a cap of 1 to ' + CAMPAIGN_MAX + ' people.');
+    if(!Number.isFinite(hours) || hours < 1 || hours > CAMPAIGN_HOURS) throw new Error('Pick an expiry of 1 hour to 30 days.');
+    const code = crypto.randomBytes(9).toString('base64url');
+    store.set('invite:' + code, { code, createdAt: Date.now(), by: u.id, multi: true, campaign: { source }, max, uses: [], expiresAt: Date.now() + Math.round(hours * 3600e3) });
+    broadcastClub();
+    return { code };
+  },
+  // the join page asks whether its link is a public campaign link, to show the consent screen first; nothing else is revealed
+  campaignInfo({ code }){
+    const inv = typeof code === 'string' && store.get('invite:' + code);
+    return inv && inv.campaign ? { campaign: true, open: openInvite(inv) } : { campaign: false };
+  },
   status(){ return { hasOwner: !!owner() }; },
   pushKey(){ return { key: push.publicKey() }; },
   push(sub, u){ if(!u) throw new Error('Sign in first.'); push.subscribe(u.id, sub); broadcastClub(); return { ok: true }; },
@@ -109,17 +129,22 @@ const GROUP_MAX = 100, GROUP_DAYS = 30, MEMBER_DAYS = 7;
 // Members can invite friends too (the owner can switch that off). A member's link joins at most MEMBER_MAX people,
 // and asking again hands back the member's open link instead of piling up new ones.
 const MEMBER_MAX = 10;
+// public campaign links: at most CAMPAIGN_MAX joins and 30 days, and at most CAMPAIGN_IP_HOUR new accounts per connection per hour
+const CAMPAIGN_MAX = 2000, CAMPAIGN_HOURS = 30 * 24, CAMPAIGN_IP_HOUR = +process.env.CAMPAIGN_IP_HOUR || 5;
+const joinsByIp = new Map();
+const campaignJoins = ip => (joinsByIp.get(ip) || []).filter(t => Date.now() - t < 3600e3);
+const campaignJoined = ip => { if(joinsByIp.size > 5000) for(const k of joinsByIp.keys()){ if(!campaignJoins(k).length) joinsByIp.delete(k); } joinsByIp.set(ip, [...campaignJoins(ip), Date.now()]); };
 const membersInvite = () => (store.get('settings') || {}).membersInvite !== false;
 const openInvite = i => !i.revoked && (i.multi ? Date.now() < i.expiresAt && (i.uses || []).length < i.max : !i.usedBy);
 function inviteCode(u, group){
   if(!isOwner(u)){
     if(!membersInvite()) throw new Error('The organizer has turned off member invites. Ask them for a link.');
-    const mine = store.values('invite:').find(i => i.by === u.id && i.multi && openInvite(i));
+    const mine = store.values('invite:').find(i => i.by === u.id && i.multi && !i.campaign && openInvite(i));
     if(mine) return mine.code;
     group = true;
   }
   // the organizer's group link stays the same until it fills up, expires or is cancelled, so one link can be shared all day
-  if(group && isOwner(u)){ const cur = store.values('invite:').find(i => i.by === u.id && i.multi && openInvite(i)); if(cur) return cur.code; }
+  if(group && isOwner(u)){ const cur = store.values('invite:').find(i => i.by === u.id && i.multi && !i.campaign && openInvite(i)); if(cur) return cur.code; }
   const code = crypto.randomBytes(9).toString('base64url');
   const max = isOwner(u) ? GROUP_MAX : MEMBER_MAX;
   store.set('invite:' + code, group ? { code, createdAt: Date.now(), by: u.id, multi: true, max, uses: [], expiresAt: Date.now() + (isOwner(u) ? GROUP_DAYS : MEMBER_DAYS) * 864e5 }
@@ -157,7 +182,7 @@ const server = http.createServer((req, res) => {
         acct = acctKey(url.pathname, data);
         if(acct && blocked(acct, 10)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
-        send(res, 200, fn(data, u));
+        send(res, 200, fn(data, u, ip));
       }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); } send(res, 400, { error: e.message || 'Something went wrong.' }); }
     });
     return;
@@ -235,19 +260,31 @@ function clubView(u){
       level: t.level, levelEndsAt: t.levelEndsAt, paused: t.paused, pausedLeft: t.pausedLeft, entrants: t.entrants, remaining: t.remaining,
       places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null } : null,
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
-    members, history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
+    // someone who came in through a public campaign link does not see who invited whom
+    members: u.campaign ? members.map(m => m.id === u.id || !m.invitedBy ? m : { ...m, invitedBy: null }) : members, history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
     chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
-    pushOn: push.hasPush(u.id), membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
+    pushOn: push.hasPush(u.id), membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && !x.campaign && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
   };
   if(isOwner(u)){
-    view.invites = store.values('invite:').filter(openInvite)
+    view.invites = store.values('invite:').filter(i => !i.campaign && openInvite(i))
       .map(i => ({ code: i.code, createdAt: i.createdAt, multi: !!i.multi, used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt, by: i.by }));
+    view.campaigns = campaignReport();
     view.conflicts = conflictPairs();
     const hh = Object.fromEntries(store.values('user:').filter(x => !x.removed && x.household).map(x => [x.id, x.household]));
     view.households = hh;
     view.mutedIds = store.values('user:').filter(x => !x.removed && x.muted).map(x => x.id);
   }
   return view;
+}
+// per campaign link: how many joined, and how many of them have since played at least one hand
+function campaignReport(){
+  const now = Date.now();
+  return store.values('invite:').filter(i => i.campaign).sort((a, b) => b.createdAt - a.createdAt).map(i => {
+    const uses = i.uses || [], joined = uses.length;
+    const status = i.revoked ? 'cancelled' : joined >= i.max ? 'full' : now > i.expiresAt ? 'expired' : 'active';
+    const played = uses.filter(id => ((store.get('pstat:' + id) || {}).hands || 0) > 0).length;
+    return { code: i.code, source: i.campaign.source, createdAt: i.createdAt, max: i.max, joined, remaining: Math.max(0, i.max - joined), expiresAt: i.expiresAt, status, played };
+  });
 }
 const VERSION = (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null;
 

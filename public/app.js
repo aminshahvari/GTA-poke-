@@ -5,11 +5,15 @@ const $ = id => document.getElementById(id);
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const ord = n => n + (['th','st','nd','rd'][(n % 100 - 20) % 10] || ['th','st','nd','rd'][n % 100] || 'th');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+// in-app browsers (Instagram, private tabs) can refuse storage: keep a copy in memory so sign-in still works for this visit
+const memStore = {};
 const local = {
-  get(k, d){ try{ const v = localStorage.getItem('stacked:' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem('stacked:' + k, JSON.stringify(v)); }catch(e){} },
-  del(k){ try{ localStorage.removeItem('stacked:' + k); }catch(e){} }
+  get(k, d){ try{ const v = localStorage.getItem('stacked:' + k); if(v != null) return JSON.parse(v); }catch(e){} return Object.hasOwn(memStore, k) ? memStore[k] : d; },
+  set(k, v){ memStore[k] = v; try{ localStorage.setItem('stacked:' + k, JSON.stringify(v)); }catch(e){} },
+  del(k){ delete memStore[k]; try{ localStorage.removeItem('stacked:' + k); }catch(e){} }
 };
+const inInstagram = /Instagram/i.test(navigator.userAgent || '');
+const cleanName = s => String(s || '').trim().replace(/\s+/g, ' ');
 const showScreen = id => { ['auth','lobby','game'].forEach(s => $(s).hidden = s !== id); keepAwake(id === 'game'); };
 // keep the phone screen on while a table is open, so it doesn't lock and sit you out between hands
 let wakeLock = null, wantAwake = false;
@@ -44,15 +48,46 @@ async function post(path, body){
   return j;
 }
 // welcome: what Blindrise is, then Join (needs an invite link) or Sign in; the forms below are unchanged
+let campaignOk = false;
 function welcomeScreen(){
   showScreen('auth');
   const invite = location.pathname.startsWith('/join/');
+  // a public campaign link (for example from Instagram) explains the club and asks for consent before the name and PIN form
   $('auth').classList.remove('form-open');
-  $('authForm').hidden = true; $('welcome').hidden = false; $('wNote').hidden = true; $('auth').scrollTop = 0;
+  $('authForm').hidden = true; $('welcome').hidden = !!invite && !campaignOk; $('wNote').hidden = true; $('auth').scrollTop = 0;
+  if(invite && !campaignOk) post('/api/campaignInfo', { code: location.pathname.slice(6) }).then(i => { if(i.campaign) campaignScreen(i.open); else $('welcome').hidden = false; }).catch(() => { $('welcome').hidden = false; });
   $('wInvite').hidden = !invite;
   $('wJoin').textContent = invite ? 'Accept invitation' : 'Join Blindrise';
   $('wJoin').onclick = () => { if(invite) authScreen('join'); else { $('wNote').hidden = false; $('wNote').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } };
   $('wSignIn').onclick = () => authScreen('login');
+}
+function campaignScreen(open){
+  showScreen('auth');
+  const f = $('authForm'), before = local.get('campaignJoined', null);
+  $('auth').classList.add('form-open'); $('welcome').hidden = true; f.hidden = false; $('auth').scrollTop = 0;
+  if(!open){
+    f.innerHTML = `<h2>This link has closed</h2><p>This invitation is full or has ended. Members can still sign in below.</p>
+      <button class="btn-red" type="button" id="cSignIn">Sign in</button>`;
+    $('cSignIn').onclick = () => authScreen('login'); f.onsubmit = e => e.preventDefault();
+    return;
+  }
+  f.innerHTML = `<h2>Welcome to Blindrise</h2><p>Before you join, here is what membership means.</p>
+    <ul class="consent-list">
+      <li><b>A private members' club.</b> Blindrise is a small poker club for friends and invited guests.</li>
+      <li><b>Free, no real money.</b> There is no buy-in and no betting. Chips and points have no cash value.</li>
+      <li><b>For adults 19 and over.</b></li>
+      <li><b>What other members see.</b> Your display name, your picture if you add one, your tournament results, and your rating and play stats (such as hands played) are visible to every member.</li>
+      <li><b>Use a nickname.</b> We suggest a first name or nickname, not your full name.</li>
+    </ul>
+    ${before ? '<p class="lux-note consent-again">This phone has already joined Blindrise. If that was you, <button type="button" class="linkbtn" id="cHave">sign in instead</button>.</p>' : ''}
+    <label class="agree"><input type="checkbox" id="cAgree"> <span>I'm 19 or older, I agree to the <button type="button" class="linkbtn" id="cTerms">club rules and prize terms</button>, and I understand members will see my display name, picture and results.</span></label>
+    <div class="err" id="cErr"></div>
+    <button class="btn-red" type="submit" id="cGo">Continue</button>
+    <button type="button" class="linkbtn" id="cLogin">I already have an account</button>`;
+  $('cTerms').onclick = () => modal(`<h2>Club rules and prize terms</h2><div class="terms-modal">${window.LEARN.terms}</div>`, [{ label: 'Close', value: 1, primary: true }]);
+  $('cLogin').onclick = () => authScreen('login');
+  const ch = $('cHave'); if(ch) ch.onclick = () => authScreen('login');
+  f.onsubmit = e => { e.preventDefault(); if(!$('cAgree').checked){ $('cErr').textContent = 'Please tick the box to continue.'; return; } campaignOk = true; authScreen('join'); };
 }
 function authScreen(mode){
   showScreen('auth');
@@ -61,17 +96,17 @@ function authScreen(mode){
   const invite = location.pathname.startsWith('/join/') ? location.pathname.slice(6) : null;
   if(invite && mode !== 'login') mode = 'join';
   const titles = { join: "You're invited to the club", login: 'Welcome back', setup: 'Set up your club', reset: 'Reset the owner PIN' };
-  const blurbs = { join: 'Pick the name your friends will see at the table, and a PIN to sign in with.', login: 'Sign in with your table name and PIN.', setup: 'Enter the setup code, then pick your name and PIN. You become the club owner.', reset: 'For the club owner: enter the setup code from when you created the club, then pick a new PIN. Members who forgot their PIN can ask the owner.' };
+  const blurbs = { join: campaignOk ? 'Pick a display name other members will see (a nickname is best), and a PIN of 4 to 8 digits to sign in with.' : 'Pick the name your friends will see at the table, and a PIN to sign in with.', login: 'Sign in with your table name and PIN.', setup: 'Enter the setup code, then pick your name and PIN. You become the club owner.', reset: 'For the club owner: enter the setup code from when you created the club, then pick a new PIN. Members who forgot their PIN can ask the owner.' };
   f.innerHTML = `<h2>${titles[mode]}</h2><p>${blurbs[mode]}</p>
     ${mode === 'setup' || mode === 'reset' ? '<div class="field"><label for="aCode">Setup code</label><input id="aCode" autocomplete="off"></div>' : ''}
     ${mode === 'reset' ? '' : '<div class="field"><label for="aName">Table name</label><input id="aName" maxlength="16" autocomplete="username" placeholder="e.g. Sean"></div>'}
     <div class="field"><label for="aPin">${mode === 'reset' ? 'New PIN' : 'PIN'} (4 to 8 digits)</label><input id="aPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" placeholder="${mode === 'login' ? 'Your PIN' : 'Choose a PIN'}"></div>
-    ${mode === 'join' || mode === 'setup' ? '<label class="agree"><input type="checkbox" id="aAgree"> <span>I\'m 19 or older and agree to the <button type="button" class="linkbtn" id="termsLink">club rules and prize terms</button>. Free to play; chips and points have no cash value.</span></label>' : ''}
+    ${mode === 'join' && campaignOk ? '' : mode === 'join' || mode === 'setup' ? '<label class="agree"><input type="checkbox" id="aAgree"> <span>I\'m 19 or older and agree to the <button type="button" class="linkbtn" id="termsLink">club rules and prize terms</button>. Free to play; chips and points have no cash value.</span></label>' : ''}
     <div class="err" id="aErr"></div>
     <button class="btn-red" type="submit">${mode === 'join' ? 'Join the club' : mode === 'setup' ? 'Create my club' : mode === 'reset' ? 'Save new PIN' : 'Sign in'}</button>
     ${mode === 'login' ? '<button type="button" class="linkbtn" id="toReset">Forgot your PIN?</button><span class="fine">New here? Ask the club owner for an invite link.</span>' : '<button type="button" class="linkbtn" id="toLogin">I already have an account</button>'}
     ${mode === 'setup' ? '' : '<button type="button" class="linkbtn back" id="toWelcome">‹ Back</button>'}`;
-  const tw = $('toWelcome'); if(tw) tw.onclick = welcomeScreen;
+  const tw = $('toWelcome'); if(tw) tw.onclick = () => campaignOk ? campaignScreen(true) : welcomeScreen();
   const tl = $('toLogin'); if(tl) tl.onclick = () => authScreen('login');
   const tr = $('toReset'); if(tr) tr.onclick = () => authScreen('reset');
   const tm = $('termsLink'); if(tm) tm.onclick = () => modal(`<h2>Club rules and prize terms</h2><div class="terms-modal">${window.LEARN.terms}</div>`, [{ label: 'Close', value: 1, primary: true }]);
@@ -85,11 +120,16 @@ function authScreen(mode){
         await modal(`<h2>New PIN saved</h2><p>Your table name is <b>${esc(r.name)}</b>. Sign in with it and your new PIN next time.</p>`, [{ label: 'OK', value: 1, primary: true }]);
         connect(); return;
       }
-      const body = { name: $('aName').value, pin: $('aPin').value, agree: !!($('aAgree') && $('aAgree').checked) };
+      const body = { name: $('aName').value, pin: $('aPin').value, agree: mode === 'join' && campaignOk ? true : !!($('aAgree') && $('aAgree').checked) };
       if(mode === 'join') local.set('askRemind', 1);
       const r = mode === 'join' ? await post('/api/redeem', { ...body, code: invite }) : mode === 'setup' ? await post('/api/setup', { ...body, code: $('aCode').value.trim() }) : await post('/api/login', body);
       local.set('token', r.token);
       if(location.pathname !== '/') history.replaceState(null, '', '/');
+      if(mode === 'join' && campaignOk) local.set('campaignJoined', Date.now());
+      // Instagram's browser can forget you once it is closed: show the name and PIN to keep, and how to open the club in Safari
+      if(mode === 'join' && inInstagram) await modal(`<h2>You're in. Keep these</h2><p>Instagram's browser may not remember you next time. Sign in with:</p>
+        <div class="keep-box"><span>Name</span><b>${esc(cleanName(body.name))}</b><span>PIN</span><b>${esc(body.pin)}</b></div>
+        <p>For the best experience, open Blindrise in Safari or Chrome: tap <b>•••</b> at the top, then <b>Open in external browser</b>, and go to <b>${esc(location.host)}</b>.</p>`, [{ label: 'Got it', value: 1, primary: true }]);
       connect();
     }catch(err){ $('aErr').textContent = err.message; }
   };
@@ -347,7 +387,37 @@ const demoCard = () => `<div class="card-box demo-box"><span class="eyebrow">Dem
   <p>Play a real game at a 6-max table against 5 practice players, with the same buttons, chat bubbles, antes and clock as a club tournament. It runs only on your phone: nothing is saved and no points are given.</p>
   <div class="btn-row"><button class="btn red big" data-demo>Open demo table</button></div></div>`;
 function directorHTML(){
-  return newsHTML() + demoCard() + conflictsHTML() + directorMainHTML() + prizeAdminHTML();
+  return newsHTML() + demoCard() + conflictsHTML() + directorMainHTML() + campaignHTML() + prizeAdminHTML();
+}
+// public campaign links (for example the Instagram bio): who joined through which link
+function campaignHTML(){
+  const rows = club.campaigns || [], d = t => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const label = { active: 'Active', full: 'Full', expired: 'Expired', cancelled: 'Cancelled' };
+  return `<div class="card-box" id="campaignBox"><span class="eyebrow">Public links · ${rows.length}</span>
+    <div class="btn-row"><button class="btn red" id="campaignBtn">Create public link</button></div>
+    <p class="note">A <b>public link</b> is for a post or a bio, such as Instagram. It has its own cap, end date and source name. People who join with it see a welcome and consent page first, and are <b>not</b> signed up for the open tournament.</p>
+    ${rows.length ? `<div class="table-list camp-list">${rows.map(r => `<div class="trow camp-row" data-source="${esc(r.source)}"><b>${esc(r.source)} <em class="camp-st ${r.status}">${label[r.status]}</em></b>
+      <small><span class="camp-joined">${r.joined} of ${r.max} joined</span> · ${r.remaining} left · ${r.played} played a hand · made ${d(r.createdAt)} · ${r.status === 'expired' ? 'ended' : 'ends'} ${d(r.expiresAt)}</small>
+      <span class="row-btns">${r.status === 'active' ? `<button class="back" data-ccopy="${esc(r.code)}" data-csrc="${esc(r.source)}">Copy</button><button class="back" data-revoke="${esc(r.code)}">Cancel</button>` : ''}</span></div>`).join('')}</div>` : ''}</div>`;
+}
+async function askCampaign(){
+  let source = 'instagram', max = '200', hours = '168';
+  const pm = modal(`<h2>Create a public link</h2><p>For a post or a bio. People who join see a welcome and consent page, and are not signed up for tournaments.</p>
+    <div class="field"><label for="cmSource">Source name</label><input id="cmSource" maxlength="24" value="${source}" autocapitalize="off" autocomplete="off" placeholder="e.g. instagram-oct"></div>
+    <div class="field"><label for="cmMax">Cap (most people who can join)</label><input id="cmMax" type="number" inputmode="numeric" min="1" max="2000" value="${max}"></div>
+    <div class="field"><label for="cmHours">Ends after</label><select id="cmHours" class="sel">${[[1, '1 hour'], [24, '1 day'], [72, '3 days'], [168, '7 days'], [336, '14 days'], [720, '30 days']].map(([h, l]) => `<option value="${h}"${String(h) === hours ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+    <p class="note">Source: 2 to 24 lowercase letters, numbers or dashes. Cap: 1 to 2000.</p>`,
+    [{ label: 'Cancel', value: null }, { label: 'Create link', value: 'go', primary: true }]);
+  $('cmSource').oninput = e => source = e.target.value; $('cmMax').oninput = e => max = e.target.value; $('cmHours').onchange = e => hours = e.target.value;
+  if(await pm !== 'go') return;
+  try{ const r = await post('/api/campaign', { source: source.trim().toLowerCase(), max: +max, hours: +hours }); showCampaign(r.code, source.trim().toLowerCase()); }
+  catch(err){ modal(`<h2>Link not created</h2><p>${esc(err.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
+}
+function showCampaign(code, source){
+  const url = location.origin + '/join/' + code;
+  modal(`<h2>Public link · ${esc(source)}</h2><p>Paste it in your bio or post. You can follow sign-ups and cancel it here in Director.</p>
+    <div class="copy-row"><input id="invUrl" readonly value="${esc(url)}"><button class="btn-ghost" id="copyBtn" style="width:auto;padding:9px 12px">Copy</button></div>`, [{ label: 'Done', value: 1 }]);
+  $('copyBtn').onclick = () => { const i = $('invUrl'); i.select(); (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => $('copyBtn').textContent = 'Copied').catch(() => { try{ document.execCommand('copy'); $('copyBtn').textContent = 'Copied'; }catch(e){} }); };
 }
 function directorMainHTML(){
   const T = club.tourney;
@@ -497,6 +567,8 @@ function wireLobby(){
     if(await modal(`<h2>Remove ${esc(name)}?</h2><p>They are signed out and can't come back without a new invite.</p>`, [{ label: 'Keep', value: false }, { label: 'Remove', value: true, primary: true }])) send({ t: 'remove', uid: b.dataset.remove });
   });
   on('inviteBtn', askInvite);
+  on('campaignBtn', askCampaign);
+  document.querySelectorAll('[data-ccopy]').forEach(b => b.onclick = () => showCampaign(b.dataset.ccopy, b.dataset.csrc));
   on('lateInvite', e => { e.preventDefault(); askInvite(); });
   on('againBtn', () => {
     const T = club.tourney, d = new Date();
