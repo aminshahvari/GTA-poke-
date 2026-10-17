@@ -184,7 +184,7 @@ function contactSheet(x){
   const form = h('form', { class: 'bz-form op-form', novalidate: true },
     h('div', { class: 'op-about' }, typePill(x.type), h('b', null, x.title), h('small', null, 'Posted by ' + x.member)),
     h('label', { class: 'bz-field' }, h('span', null, 'Your message to ' + x.member), ta, counter(ta, 500)),
-    h('p', { class: 'op-privacy' }, 'Only ' + x.member + ' sees this, with your club name. No links, emails or phone numbers here: ' + x.member + ' can reply by sharing their contact details with you.'),
+    h('p', { class: 'op-privacy' }, 'Only ' + x.member + ' sees this, with your club name. No links, social handles, emails or phone numbers here: ' + x.member + ' can reply by sharing their contact details with you.'),
     err, send);
   const close = sheet(x.type === 'need' ? 'Offer to help' : 'Show interest', form);
   form.addEventListener('submit', async e => {
@@ -269,7 +269,7 @@ function renderForm(el){
     h('div', { class: 'bz-field' }, h('span', null, 'Category', h('i', null, ' required')), catChips),
     h('label', { class: 'bz-field' }, h('span', null, 'Details (optional)'), details, counter(details, 600)),
     h('div', { class: 'op-two' }, h('label', { class: 'bz-field' }, h('span', null, 'Area (optional)'), area), h('label', { class: 'bz-field' }, h('span', null, 'Show it for'), exp)),
-    h('p', { class: 'op-privacy' }, 'No links, phone numbers or emails in the listing. Members reach you with a private request, and you choose whether to share your contact details.'),
+    h('p', { class: 'op-privacy' }, 'No links, social handles, phone numbers or emails in the listing. Members reach you with a private request, and you choose whether to share your contact details.'),
     err, h('div', { class: 'bz-stack' }, save, h('button', { class: 'btn big', type: 'button', onclick: () => go(ed ? 'mine' : 'feed') }, 'Cancel')));
   form.addEventListener('submit', async e => {
     e.preventDefault(); err.textContent = ''; save.disabled = true;

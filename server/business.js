@@ -49,7 +49,7 @@ function text(v, key, label, multi){
   if(s.length > MAX[key]) throw bad(`${label} is too long (${MAX[key]} characters at most).`);
   return s;
 }
-// the profile's own words (name, description, services, ...): no web addresses, emails or phone numbers
+// the profile's own words (name, description, services, ...): no web addresses, emails, social handles or phone numbers
 // (server/content.js). Those go in Contact details, where the member chooses what members see.
 const free = (v, key, label, multi) => content.check(text(v, key, label, multi), label, 'Add it under Contact details instead, where you choose what members see.', bad);
 const HOST = /^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(xn--[a-z0-9-]{2,59}|[a-z]{2,63})$/i;

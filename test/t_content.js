@@ -10,7 +10,7 @@ const WebSocket = require('ws');
 const content = require('../server/content');
 
 // ---- the probe matrix: [text, expected kind or null] ----
-const L = 'link', E = 'email', P = 'phone', _ = null;
+const L = 'link', E = 'email', P = 'phone', S = 'social', _ = null;
 const MATRIX = [
   // web addresses
   ['https://example.com', L], ['see http://x.io/abc', L], ['HTTP://X.CO', L], ['www.example.org', L], ['WWW.EXAMPLE.CA', L],
@@ -30,7 +30,18 @@ const MATRIX = [
   ['4 1 6 5 5 5 0 1 0 0', P], ['4-1-6-5-5-5-0-1-0-0', P], ['four one six five five five zero one zero zero', P], ['416 five five five 0100', P],
   ['𝟒𝟏𝟔 𝟓𝟓𝟓 𝟎𝟏𝟎𝟎', P], ['④①⑥-⑤⑤⑤-⓪①⓪⓪', P], ['020 7946 0958', P], ['+61 2 9876 5432', P], ['text me at 416–555–0100', P],
   ['(416)555-0100 ext 5', P], ['416 555 2019', P], ['612 345 678', P], ['06 12 34 56 78', P],
-  // ordinary text that must pass
+  // social handles, profiles and app contact IDs (owner decision, R2-F1 revise); "@yourbusiness on the gram" moved here
+  ['@yourbusiness on the gram', S], ['@riverapl', S], ['Follow @rivera_pl', S], ['IG: rivera_pl', S], ['insta: rivera', S], ['Insta @rivera', S],
+  ['DM me on insta', S], ['dm me on TikTok', S], ['snap: jojo99', S], ['telegram @jojo', S], ['Telegram: @jojo', S], ['kik: jojo', S],
+  ['t.me/jojo', S], ['wa.me/14165550100', S], ['instagram.com/rivera', S], ['facebook.com/rivera', S], ['fb.com/rivera', S], ['tiktok.com/@rivera', S],
+  ['x.com/rivera', S], ['twitter.com/rivera', S], ['linkedin.com/in/rivera', S], ['youtube.com/@rivera', S], ['youtu.be/abc', S], ['snapchat.com/add/jo', S],
+  ['threads.net/@jo', S], ['pinterest.com/jo', S], ['discord.gg/abc', S], ['WhatsApp me', S], ['add me on Snapchat: jo', S], ['Discord: jo#1234', S],
+  ['jo#1234', S], ['WeChat ID: jo_88', S], ['Signal: jojo', S], ['Line ID: jojo', S], ['message us on Facebook', S], ['my snap is jojo99', S],
+  ['text me on whatsapp', S], ['Insta-> rivera', S], ['IG: rivera.', S],
+  // bypass attempts: full-width @, "at sign", (at), spaced and dotted letters, zero-width characters, mixed case, "dot com"
+  ['＠rivera', S], ['at sign rivera', S], ['(at)rivera', S], ['i n s t a: rivera', S], ['I.G: rivera', S], ['iG : RiveraPL', S],
+  ['In\u200bsta: rivera', S], ['@ri\u200bvera', S], ['DM me on i n s t a', S], ['Whats App me', S], ['W-h-a-t-s-A-p-p me', S], ['instagram dot com/rivera', S],
+  ['INSTAGRAM.COM/RIVERA', S], ['ＩＧ： rivera_pl', S], ['t [.] me/jojo', S],
   ['Budget $1,500', _], ['Budget $1500000', _], ['$ 2 500 000 condo', _], ['1 500 000 views', _], ['2.500.000', _], ['12 500 000 budget', _], ['100-200-300 pieces', _], ['Around 1500000 dollars', _],
   ['Since 2019', _], ['2019-2023', _], ['2019 2020 2021', _], ['2026-10-17', _], ['17/10/2026', _], ['10.17.2026', _], ['Oct 17, 2026', _],
   ['9:00-17:00', _], ['9.00-17.00', _], ['0900-1700', _], ['9am-5pm weekdays', _], ['open 24/7', _], ['25% off', _], ['10%-20%', _],
@@ -38,7 +49,13 @@ const MATRIX = [
   ['M5V 2T6', _], ['Toronto, ON M5H 2M9', _], ['90210', _], ['90210-1234', _], ['Unit 12, 45 King St E', _],
   ['Node.js, Vue.js and ASP.NET', _], ['e.g. U.S. clients, i.e. retail', _], ['a.m. to p.m.', _], ['Ph.D. in chemistry', _], ['resume.pdf attached', _],
   ['I fixed it this week.Thanks to all', _], ['Done.It works now', _], ['the dot com era', _], ['polka dot dress', _], ['co-op housing', _],
-  ['Meet at noon', _], ['Find us at the market', _], ['good at Excel', _], ['@yourbusiness on the gram', _], ['Sizes 8, 10 and 12', _],
+  ['Meet at noon', _], ['Find us at the market', _], ['good at Excel', _],  ['Sizes 8, 10 and 12', _],
+  ['We post recipes on Instagram', _], ['Social media marketing', _], ['Facebook ads management', _], ['TikTok content strategy', _],
+  ['@ 5pm', _], ['@5pm', _], ['meet @ the cafe', _], ['C# / F# developer', _], ['#1 bakery', _], ['#torontofood', _], ['Follow us on Instagram', _],
+  ['Instagram: 10k followers', _], ['Facebook: ads and campaigns', _], ['LinkedIn: profile rewrites', _], ['line cook needed', _], ['Signal booster install', _],
+  ['a snap to install', _], ['ig and fb ads', _], ['Telegram bot development', _], ['WhatsApp Business setup', _], ['YouTube channel editing', _],
+  ['Pinterest boards for brands', _], ['LinkedIn profile writing', _], ['discord moderation tips', _], ['Text me through the club', _], ['Rivera & Sons', _],
+  ['Plan B is fine', _], ['Vitamin D and B12', _],
   ['3.5 stars', _], ['v2.0 release', _], ['Room for 6-8 people', _], ['Call me after 6', _], ['1-on-1 coaching', _], ['Need 2 3D printers', _]
 ];
 let fails = 0;
@@ -85,8 +102,8 @@ function wsDo(tok, msgs){
     ws.on('error', rej);
   });
 }
-const SAMPLES = { link: 'see example dot com', email: 'write jo (at) example.com', phone: 'call 416 555 0100' };
-const WORD = { link: /web address/, email: /email address/, phone: /phone number/ };
+const SAMPLES = { link: 'see example dot com', email: 'write jo (at) example.com', phone: 'call 416 555 0100', social: 'IG: rivera_pl' };
+const WORD = { link: /web address/, email: /email address/, phone: /phone number/, social: /social media handle or profile/ };
 
 (async () => {
   const PORT = await freePort(); BASE = 'http://localhost:' + PORT;
@@ -114,6 +131,7 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   // ---- the private request message: no contact details either; the share note carries a phone, never a link ----
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! Text me on 647 555 0199' }, B), /phone number from message/);
   assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! bea@example.com' }, B), /email address from message/);
+  assert.match(await err('oppRequest', { id: a1.id, message: 'Hi! DM me on insta' }, B), /social media handle or profile from message/);
   const rq = (await ok('oppRequest', { id: a1.id, message: 'Hi! I built two decks last year, about 300 sq ft each.' }, B)).request;
   assert.match(await err('oppReply', { id: rq.id, action: 'share', phone: '416-555-0199', note: 'Photos at example.com' }, A), /web address from note/);
   const shared = (await ok('oppReply', { id: rq.id, action: 'share', phone: '416-555-0199', note: 'Or my office 416-555-0101 after 6.' }, A)).request;
@@ -136,10 +154,14 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   await ok('bizPublish', { on: true }, A);
   const seen = (await ok('bizGet', { uid: idA }, B)).business;
   assert.deepStrictEqual(Object.keys(seen.contacts).sort(), ['email', 'website'], 'only the contact details switched on');
-  assert.ok(!JSON.stringify(seen).includes('416-555-0100') && !JSON.stringify(seen).includes('King St'), 'phone and address stay private');
+  assert.ok(!JSON.stringify(seen).includes('416-555-0100') && !JSON.stringify(seen).includes('King St') && !JSON.stringify(seen).includes('rivera_pl'), 'phone, address and Instagram stay private');
+  assert.strictEqual((await ok('bizMine', {}, A)).mine.instagram, 'rivera_pl', 'the dedicated Instagram field still takes a handle');
   // a refused edit leaves the saved profile alone
   await err('bizSave', biz({ services: 'Call 416 555 0100' }), A);
   assert.strictEqual((await ok('bizMine', {}, A)).mine.services, 'Water heaters (40-60 gallon), 2-3 day renos');
+  // switched on, the Instagram handle reaches members, from its own field only
+  await ok('bizSave', biz({ show: { website: true, email: true, instagram: true } }), A);
+  assert.deepStrictEqual((await ok('bizGet', { uid: idA }, B)).business.contacts.instagram, { handle: 'rivera_pl', url: 'https://instagram.com/rivera_pl' });
 
   // ---- visibility: signed-in members only, every answer noindex ----
   const EPS = ['bizList', 'bizGet', 'bizFeed', 'bizMine', 'oppList', 'oppGet', 'oppMine', 'oppBadge'];
@@ -165,6 +187,6 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
   await wsDo(O, [{ t: 'clubs', on: true }]);
   assert.strictEqual((await ok('oppGet', { id: a1.id }, B)).item.id, a1.id, 'open again, data intact');
 
-  console.log(`content rule test passed (${MATRIX.length} probes: ${counts.link} links, ${counts.email} emails, ${counts.phone} phones, ${counts.allowed} allowed; server fields and visibility)`);
+  console.log(`content rule test passed (${MATRIX.length} probes: ${counts.link} links, ${counts.email} emails, ${counts.social} social, ${counts.phone} phones, ${counts.allowed} allowed; server fields and visibility)`);
   srv.kill(); try{ fs.unlinkSync(DATA); }catch(x){} process.exit(0);
 })().catch(e => { console.error(e); if(srv) srv.kill(); try{ fs.unlinkSync(DATA); }catch(x){} process.exit(1); });

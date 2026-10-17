@@ -1,6 +1,7 @@
-// Contact details in what members type into Business Club and Opportunity Club text: web addresses, emails and
-// phone numbers are not allowed there. Members reach each other through the club (contact requests, the opt-in
-// Contact details of a business profile) instead. find(s) returns 'email' | 'link' | 'phone' | null; check() throws.
+// Contact details in what members type into Business Club and Opportunity Club text: web addresses, emails, social
+// handles/profiles and phone numbers are not allowed there. Members reach each other through the club (contact requests,
+// the opt-in Contact details of a business profile) instead. find(s) returns 'email' | 'social' | 'link' | 'phone' | null;
+// check() throws.
 // The text is only read here, never changed: what is saved is exactly what the member typed (after cleaning).
 
 // common TLDs; CAPS ones are a link whatever the case ("Example.COM"), any other ending only in lowercase ("joe.plumbing"),
@@ -18,10 +19,11 @@ const UNIT = /^\s*(?:%|(?:k|m|mm|cm|km|kg|lbs?|sq|sqft|ft|feet|mi|hrs?|hours?|do
 const DOT = new RegExp(`(\\b[a-z0-9-]+)\\s+dot\\s+(?=(?:[a-z0-9-]+\\s+dot\\s+)*(?:${TLD})\\b(?![.-]?\\w))`, 'gi');
 // one copy of the text to look at: compatibility forms folded (ＥＸＡＭＰＬＥ．ＣＯＭ, 𝟒𝟏𝟔), the usual disguises undone
 function prep(s){
-  let t = String(s || '').normalize('NFKC').replace(/[。｡]/g, '.');
+  let t = String(s || '').normalize('NFKC').replace(/[\u00ad\u200b-\u200f\u2060-\u2064\ufeff]/g, '').replace(/[。｡]/g, '.');
   t = t.replace(/\s*[[({<]\s*(?:\.|dot)\s*[\])}>]\s*/gi, '.')                    // example[.]com, example (dot) com
     .replace(DOT, (m, w) => STOP.has(w.toLowerCase()) ? m : w + '.')               // example dot com; not "the dot com era", "polka dot dress"
     .replace(/\s*[[({<]\s*(?:@|at)\s*[\])}>]\s*/gi, '@')                        // jo(at)example.com, jo [at] example
+    .replace(/\b(?:the\s+)?at[\s-]*sign\s*/gi, '@')                                 // "at sign name"
     .replace(/(\b[a-z0-9-]+)(?:\s+\.\s*|\s*\.\s+)(?=(?:com|net|org|ca|io|co|info|biz|us|uk)(?![.-]?\w))/g, '$1.'); // example . com (lowercase only)
   return t;
 }
@@ -72,10 +74,37 @@ function ok(run, before, after){
   return false;
 }
 
-const TESTS = { email, link, phone };
-function find(s, kinds = ['email', 'link', 'phone']){ const t = prep(s); return kinds.find(k => TESTS[k](t)) || null; }
-const WHAT = { link: 'web address', email: 'email address', phone: 'phone number' };
-const TIP = { link: ' If it is not a web address, add a space after the period.', phone: ' For prices or ranges, write them like $1,500 or 2-3 weeks.', email: '' };
+// social media: profile links (instagram.com/x, t.me/x, wa.me/…), handles (@name, "IG: name", "telegram @x",
+// "Discord: name#1234", "WeChat ID: x") and invitations to message on an app ("DM me on insta", "WhatsApp me").
+// A platform named with no identifier is fine ("We post recipes on Instagram", "Facebook ads management", "#torontofood").
+const PLAT = 'instagram|insta|ig|tiktok|tik\\s?tok|tt|snapchat|snap|sc|telegram|tg|whatsapp|whats\\s?app|wa|signal|discord|wechat|weixin|wx|line|kik|threads|twitter|facebook|fb|messenger|linkedin|youtube|yt|pinterest|viber|skype|reddit|twitch|bluesky|mastodon';
+const APP = 'whatsapp|whats\\s?app|telegram|signal|snapchat|snap|wechat|viber|kik|skype|messenger';
+const PROFILE = /\b(?:(?:[a-z]+\.)?(?:instagram|facebook|tiktok|twitter|linkedin|youtube|snapchat|pinterest|telegram|whatsapp|discord(?:app)?|threads|reddit|twitch|bsky)\.[a-z]{2,}|instagr\.am|fb\.(?:com|me|gg)|m\.me|x\.com|youtu\.be|lnkd\.in|pin\.it|t\.me|wa\.me|signal\.me|discord\.gg|line\.me|weixin\.qq\.com)(?![.\w])/i;
+const PLAIN = new Set(['ads', 'ad', 'marketing', 'content', 'strategy', 'management', 'growth', 'posts', 'reels', 'stories', 'and', 'or', 'only', 'page', 'pages', 'account', 'accounts', 'shop', 'campaigns', 'videos', 'live', 'too', 'also']);
+// "IG: name": with id/handle/username or @ always; a bare "Platform: word" only when the word looks like a handle
+// (digits, _ . #) or ends the phrase, so "LinkedIn: profile rewrites" and "Instagram: 10k followers" pass
+const IDTAG = new RegExp(`\\b(?:${PLAT})\\s*(id|handle|user(?:name)?|name|account|@)?\\s*(?:[:=>]|-{1,2}>?|\\bis\\b)\\s*(@?)([a-z0-9_][a-z0-9_.\\-]{0,31}(?:#\\d{4})?)(?=(\\s+[a-z]+)?)`, 'gi');
+const PLATAT = new RegExp(`\\b(?:${PLAT})\\s*@\\s*[a-z0-9_]`, 'i');
+const INVITE = new RegExp(`\\b(?:(?:dm|pm|message|msg|text|add|ping|chat(?:\\s+with)?|contact|reach|hmu|hit\\s+(?:me|us)\\s+up)\\s+(?:(?:me|us)\\s+)?(?:on|at|via|over|through|thru|in)\\s+(?:${PLAT})|(?:${APP})\\s+(?:me|us)\\b|(?:on|via)\\s+(?:${APP})\\s*(?:me|us)?\\s*@?\\s*\\+?\\d)`, 'i');
+function social(t){
+  // letters spelled out one by one: "i n s t a", "W-h-a-t-s-A-p-p"
+  t = t.replace(/\b(?:[a-z][ .\-_*]){1,}[a-z]\b/gi, m => m.replace(/[ .\-_*]/g, ''));
+  if(PROFILE.test(t) || PLATAT.test(t) || INVITE.test(t)) return true;
+  if(/(?:^|[^\w@.#&])@[a-z_][a-z0-9_.]{1,29}(?![\w@])/i.test(t)) return true;  // @name; not "@ 5pm", "@5pm", jo@example.com
+  if(/\b[a-z0-9_.]{2,32}#\d{4}\b/i.test(t)) return true;                         // Discord name#1234; not C#, #1 bakery
+  IDTAG.lastIndex = 0;
+  for(let m; (m = IDTAG.exec(t));){
+    const [, tag, at, id, next] = m;
+    if(PLAIN.has(id.toLowerCase()) || /^\d+[km]?$/i.test(id)) continue;
+    if(tag || at || /[\d_.#]/.test(id) || !next) return true;
+  }
+  return false;
+}
+
+const TESTS = { email, social, link, phone };
+function find(s, kinds = ['email', 'social', 'link', 'phone']){ const t = prep(s); return kinds.find(k => TESTS[k](t)) || null; }
+const WHAT = { link: 'web address', email: 'email address', phone: 'phone number', social: 'social media handle or profile' };
+const TIP = { link: ' If it is not a web address, add a space after the period.', phone: ' For prices or ranges, write them like $1,500 or 2-3 weeks.', email: '', social: '' };
 // the friendly error for a field: which kind of detail to take out, and where it belongs instead
 function message(kind, label, where){ return `Please remove the ${WHAT[kind]} from ${label.toLowerCase()}. ${where}${TIP[kind]}`; }
 function check(s, label, where, fail, kinds){ const k = find(s, kinds); if(k) throw fail(message(k, label, where)); return s; }
