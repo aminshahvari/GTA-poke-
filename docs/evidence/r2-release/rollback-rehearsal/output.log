@@ -1,0 +1,11 @@
+1. live production bf24ceb: owner + two members
+2. upgrade to the r2-release candidate on the same data
+   sessions kept for owner, Alice, Bob; clubs closed for members: true
+   group link made on bf24ceb joins Gina on the candidate; owner gets the same link back: true
+   owner bizSave: ok | owner oppSave: ok | member bizSave while closed: Business Club opens soon.
+   keys 13 -> 24 new prefixes: user name owner session invite biz opp opplimit
+3. roll back to bf24ceb on the same data
+   sessions kept for 4 members, PIN login and invite work, group link still works (Hugo), server ignores R2 keys
+4. forward again to the candidate: R2 data still there
+   group link uses after the round trip: 2 of 100
+rollback rehearsal passed

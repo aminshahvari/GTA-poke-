@@ -1,0 +1,62 @@
+// Upgrade + rollback rehearsal on one data file: live production bf24ceb (Shape A) -> r2-release candidate -> back to bf24ceb -> forward again.
+const { spawn } = require('child_process'); const fs = require('fs'); const assert = require('assert');
+const WebSocket = require('/home/claude/stg/node_modules/ws');
+const DATA = '/tmp/rb_' + process.pid + '.json'; try{ fs.unlinkSync(DATA); }catch(e){}
+const PORT = 4800 + Math.floor(Math.random() * 100), BASE = 'http://127.0.0.1:' + PORT;
+const post = (p, b, t) => fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: JSON.stringify(b || {}) }).then(r => r.json());
+const hello = tok => new Promise((res, rej) => { const ws = new WebSocket(BASE.replace('http', 'ws') + '/ws'); const to = setTimeout(() => { ws.close(); rej(new Error('ws timeout')); }, 8000);
+  ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', token: tok, device: 'rb' })));
+  ws.on('message', m => { m = JSON.parse(m); if(m.t === 'auth' && !m.ok){ clearTimeout(to); ws.close(); res(null); } if(m.t === 'club'){ clearTimeout(to); ws.close(); res(m.club); } }); ws.on('error', e => { clearTimeout(to); rej(e); }); });
+// the owner's group link, made the way the Director button makes it (over the socket, group: true)
+const groupLink = tok => new Promise((res, rej) => { const ws = new WebSocket(BASE.replace('http', 'ws') + '/ws'); const to = setTimeout(() => { ws.close(); rej(new Error('ws timeout')); }, 8000);
+  ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', token: tok, device: 'rb' })));
+  ws.on('message', m => { m = JSON.parse(m); if(m.t === 'club' && !ws.asked){ ws.asked = 1; ws.send(JSON.stringify({ t: 'invite', group: true })); } if(m.t === 'invite'){ clearTimeout(to); ws.close(); res(m); } }); ws.on('error', e => { clearTimeout(to); rej(e); }); });
+let srv;
+async function start(dir, label){ srv = spawn(process.execPath, ['server/index.js'], { cwd: dir, env: { ...process.env, PORT, OWNER_CODE: 'secret', DATA_FILE: DATA, NO_BEACON: '1', STAGING: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let err = ''; srv.stderr.on('data', d => err += d); srv.on('exit', c => { if(c && c !== 143 && c !== null) console.log(label, 'exited', c, err); });
+  for(let i = 0; i < 60; i++){ try{ const r = await fetch(BASE + '/healthz'); if(r.ok) return; }catch(e){} await new Promise(r => setTimeout(r, 200)); } throw new Error(label + ' did not start: ' + err); }
+async function stop(){ await new Promise(r => setTimeout(r, 800)); srv.kill('SIGTERM'); await new Promise(r => srv.on('exit', r)); await new Promise(r => setTimeout(r, 300)); }
+(async () => {
+  console.log('1. live production bf24ceb: owner + two members');
+  await start('/home/claude/rb-live', 'old');
+  const own = await post('setup', { code: 'secret', name: 'Sean', pin: '1234', agree: true });
+  const a = await post('redeem', { code: (await post('invite', {}, own.token)).code, name: 'Alice', pin: '2468', agree: true });
+  const b = await post('redeem', { code: (await post('invite', {}, own.token)).code, name: 'Bob', pin: '1357', agree: true });
+  const gl = await groupLink(own.token), group = gl.code; assert(gl.group && gl.max === 100, 'owner group link is a 100-use link');
+  assert(own.token && a.token && b.token && group); await stop();
+  const keys0 = Object.keys(JSON.parse(fs.readFileSync(DATA, 'utf8'))).length;
+
+  console.log('2. upgrade to the r2-release candidate on the same data');
+  await start('/home/claude/r2-release', 'new');
+  for(const [n, t] of [['owner', own.token], ['Alice', a.token], ['Bob', b.token]]){ const c = await hello(t); assert(c && c.me, n + ' session lost on upgrade'); if(n === 'Alice') assert.strictEqual(c.features && c.features.clubs, false, 'clubs must be closed for members by default'); }
+  console.log('   sessions kept for owner, Alice, Bob; clubs closed for members:', true);
+  console.log('   group link made on bf24ceb joins Gina on the candidate; owner gets the same link back:', (await groupLink(own.token)).code === group);
+  assert((await post('login', { name: 'Alice', pin: '2468' })).token, 'PIN login after upgrade');
+  const g1 = await post('redeem', { code: group, name: 'Gina', pin: '1122', agree: true }); assert(g1.token, 'group link made before the upgrade still works: ' + g1.error);
+  const c = await post('redeem', { code: (await post('invite', {}, own.token)).code, name: 'Cara', pin: '9753', agree: true }); assert(c.token, 'invite after upgrade');
+  const bz = await post('bizSave', { name: 'Rivera Plumbing', category: 'trades', description: 'Leaks fixed fast.', services: 'Repairs', area: 'Toronto', fullName: 'Alex Rivera', jobTitle: 'Owner', categoryOther: '', show: {} }, own.token);
+  const op = await post('oppSave', { type: 'need', title: 'Need a plumber', details: 'Kitchen sink leaks.', category: 'trades', area: 'Toronto' }, own.token);
+  const al = await post('bizSave', { name: 'Alice Co', category: 'trades', description: 'x', services: 'y', area: 'Toronto', fullName: 'Alice', jobTitle: 'Owner', categoryOther: '', show: {} }, a.token);
+  console.log('   owner bizSave:', bz.error || 'ok', '| owner oppSave:', op.error || 'ok', '| member bizSave while closed:', al.error || 'ALLOWED');
+  await stop();
+  const d1 = JSON.parse(fs.readFileSync(DATA, 'utf8')); const keys1 = Object.keys(d1);
+  console.log('   keys', keys0, '->', keys1.length, 'new prefixes:', [...new Set(keys1.map(k => k.split(':')[0]))].join(' '));
+
+  console.log('3. roll back to bf24ceb on the same data');
+  await start('/home/claude/rb-live', 'old-again');
+  for(const [n, t] of [['owner', own.token], ['Alice', a.token], ['Bob', b.token], ['Cara', c.token]]){ const cl = await hello(t); assert(cl && cl.me, n + ' session lost on rollback'); }
+  assert((await post('login', { name: 'Cara', pin: '9753' })).token, 'PIN login after rollback');
+  const g2 = await post('redeem', { code: group, name: 'Hugo', pin: '3344', agree: true }); assert(g2.token, 'group link still works after rollback: ' + g2.error);
+  const d = await post('redeem', { code: (await post('invite', {}, own.token)).code, name: 'Dan', pin: '8642', agree: true }); assert(d.token, 'invite after rollback');
+  console.log('   sessions kept for 4 members, PIN login and invite work, group link still works (Hugo), server ignores R2 keys');
+  await stop();
+  console.log('4. forward again to the candidate: R2 data still there');
+  await start('/home/claude/r2-release', 'new-again');
+  const mine = await post('bizMine', {}, own.token); assert(mine.mine && mine.mine.name === 'Rivera Plumbing', 'business kept through rollback');
+  assert(await hello(d.token), 'member created during rollback works on R2');
+  const final = JSON.parse(fs.readFileSync(DATA, 'utf8'))['invite:' + group];
+  console.log('   group link uses after the round trip:', (final.uses || []).length, 'of', final.max);
+  assert.strictEqual((final.uses || []).length, 2, 'Gina and Hugo both counted on the group link');
+  await stop(); fs.unlinkSync(DATA);
+  console.log('rollback rehearsal passed');
+})().catch(async e => { console.error('FAIL', e.message); try{ srv.kill(); }catch(_){} process.exit(1); });
