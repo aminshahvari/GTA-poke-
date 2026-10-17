@@ -84,7 +84,7 @@ function header(){
   const status = S.mine === undefined ? null : !S.mine ? 'Add your business' : S.mine.published && !S.mine.modHidden ? 'My business · Listed' : 'My business · Not listed';
   return h('div', { class: 'card-box bz-head' },
     h('div', { class: 'bz-head-t' }, h('span', { class: 'hsec-ic biz' }, I('briefcase')), h('div', null,
-      h('span', { class: 'eyebrow bz-eyebrow' }, 'Business Club'),
+      h('span', { class: 'eyebrow bz-eyebrow' }, 'The Exchange · Business Club'),
       h('h2', null, "Members' businesses"))),
     h('p', null, 'Work with people you already play with. Only signed-in club members can see this directory. It has nothing to do with poker results.'),
     h('div', { class: 'btn-row' }, h('button', { class: 'btn bz-gold big', onclick: () => go('mine') }, status || 'My business')));
@@ -475,7 +475,7 @@ function secHead(id, icon, title, sub, link){
 }
 function homeInto(sec){
   const f = S.feed;
-  const head = (total) => secHead('hs-biz', ['briefcase', 'biz'], 'Business', total ? (total === 1 ? '1 member business' : total + ' member businesses') : "Your friends' businesses",
+  const head = (total) => secHead('hs-biz', ['briefcase', 'biz'], 'The Exchange', total ? (total === 1 ? '1 member business' : total + ' member businesses') : "Your friends' businesses",
     total ? ['See all', () => go('list', { seg: 'biz' })] : null);
   // still loading: the header and placeholder cards, so the page doesn't jump when the cards arrive
   if(!f){ sec.replaceChildren(head(0), h('div', { class: 'bz-rail home', 'aria-hidden': 'true' }, [0, 1, 2].map(() => h('span', { class: 'bz-vcard sk' })))); return; }

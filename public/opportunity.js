@@ -294,7 +294,7 @@ function renderMine(el){
   const seg = h('div', { class: 'op-seg small', role: 'tablist' },
     h('button', { type: 'button', role: 'tab', 'aria-selected': String(O.mineTab !== 'sent'), onclick: () => { O.mineTab = 'listings'; renderMine(el); } }, 'My listings', waiting ? h('span', { class: 'op-dot' }, String(waiting)) : null),
     h('button', { type: 'button', role: 'tab', 'aria-selected': String(O.mineTab === 'sent'), onclick: () => { O.mineTab = 'sent'; renderMine(el); } }, 'Requests I sent'));
-  const kids = [bk, h('div', { class: 'card-box bz-head' }, h('span', { class: 'eyebrow bz-eyebrow' }, 'Opportunity Club'), h('h2', null, 'My opportunities'), seg)];
+  const kids = [bk, h('div', { class: 'card-box bz-head' }, h('span', { class: 'eyebrow bz-eyebrow' }, 'The Bulletin · Opportunity Club'), h('h2', null, 'My opportunities'), seg)];
   if(O.mineTab === 'sent'){
     if(!M.sent.length) kids.push(h('div', { class: 'card-box bz-empty' }, h('span', { class: 'bz-empty-art', 'aria-hidden': 'true' }, I('inbox')), h('h3', null, 'No requests yet'), h('p', null, 'When you tap "I can help" or "I\'m interested" on a listing, it shows up here with the reply.'), h('button', { class: 'btn big', onclick: () => go('feed') }, 'Browse listings')));
     for(const r of M.sent) kids.push(sentCard(r));
@@ -383,7 +383,7 @@ function badge(btn, playing){
 let homeData = null, homeAt = 0;
 function homeInto(sec){
   const n = homeData ? homeData.items.length : 0;
-  const head = B.secHead('hs-opp', ['spark', 'opp'], 'Opportunities', n ? (n === 1 ? '1 open listing' : n + ' open listings') : 'Ask the club, or offer a hand', homeData ? [n ? 'See all' : 'Open', () => go('feed')] : null);
+  const head = B.secHead('hs-opp', ['spark', 'opp'], 'The Bulletin', n ? (n === 1 ? '1 open listing' : n + ' open listings') : 'Ask the club, or offer a hand', homeData ? [n ? 'See all' : 'Open', () => go('feed')] : null);
   if(!homeData){ sec.replaceChildren(head, bigButtons(), h('div', { class: 'op-homelist', 'aria-hidden': 'true' }, h('span', { class: 'op-card sk' }), h('span', { class: 'op-card sk' }))); return; }
   const items = homeData.items.slice(0, 4);
   sec.replaceChildren(...[head, bigButtons(),

@@ -177,20 +177,20 @@ function renderLobby(){
   document.querySelector('.app').classList.toggle('wide', tab === 'biz' || (home && clubsVisible && !playing));
   if(tab === 'biz'){ body.replaceChildren(); window.BizClub.render(body); return; }
   if(home) renderHome(body, clubsOn, clubsVisible && !playing);
-  else body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : directorHTML();
+  else body.innerHTML = tab === 'board' ? pageHead('Poker · The Strategy Table', 'Club standings') + boardHTML() : tab === 'learn' ? pageHead('Learn', 'The Salon') + learnHTML() : directorHTML();
   wireLobby();
 }
 // ---------- Home: Poker, then Business, then Opportunities ----------
 // The tournament card always comes first. Business and Opportunities show only when the clubs are open (the owner always
 // sees them) and never while you're seated in a running tournament: then Home is poker only.
-const SECTIONS = [['poker', 'spade', 'Poker'], ['biz', 'briefcase', 'Business'], ['opp', 'spark', 'Opportunities']];
+const SECTIONS = [['poker', 'spade', 'Poker'], ['biz', 'briefcase', 'Exchange'], ['opp', 'spark', 'Bulletin']];
 function homeNavHTML(){
   return `<nav class="home-nav" aria-label="Home sections">${SECTIONS.map(([k, ic, l], i) => `<button type="button" class="hn-${k}" data-hs="${k}" aria-current="${i === 0}">${Icons.svg(ic)}<span>${l}</span></button>`).join('')}</nav>`;
 }
 function pokerHeadHTML(){
   const st = club.tourney && club.tourney.status;
-  const sub = st === 'registering' ? 'Registration open' : st === 'running' ? 'Live now' : 'Club tournaments';
-  return `<div class="hsec-head" id="hs-poker"><span class="hsec-ic poker">${Icons.svg('spade')}</span><div class="hsec-t"><h2>Poker</h2><small class="${st === 'running' ? 'live' : ''}">${sub}</small></div>
+  const sub = 'Poker · ' + (st === 'registering' ? 'Registration open' : st === 'running' ? 'Live now' : 'Club tournaments');
+  return `<div class="hsec-head" id="hs-poker"><span class="hsec-ic poker">${Icons.svg('spade')}</span><div class="hsec-t"><h2>The Strategy Table</h2><small class="${st === 'running' ? 'live' : ''}">${sub}</small></div>
     <button type="button" class="hsec-link" data-gotab="board">Leaderboard${Icons.svg('chev')}</button></div>`;
 }
 // decorative only: two cards and a chip on the tournament card
@@ -232,12 +232,16 @@ function memberHomeHTML(clubsOpen){
   const door = (k, title, sub, on) => on
     ? `<button type="button" class="lx-door lx-${k}" data-lx="${k}"><span class="lx-door-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${LX_IC[k]}</svg></span><span class="lx-door-t"><b>${title}</b><small>${sub}</small></span><svg class="lx-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`
     : `<div class="lx-door lx-${k} soon" aria-disabled="true"><span class="lx-door-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${LX_IC[k]}</svg></span><span class="lx-door-t"><b>${title}</b><small>${sub}</small></span><em>Opening soon</em></div>`;
-  return `<section class="lx-hello" aria-label="Your club">
+  return `<section class="lx-hello" aria-label="The Lounge">
+    <div class="lx-brandline"><span class="eyebrow">Blindrise · Private Members Club</span><span class="lx-lounge">The Lounge</span></div>
     <div class="lx-id">${avHTML(me.id, me.name, 'big')}<div class="lx-id-t"><span class="lx-greet">${greet},</span><h2>${esc(me.name.split(' ')[0])}</h2>
       <div class="lx-id-meta">${me.owner ? '<span class="lx-role">Club director</span>' : '<span class="lx-role">Member</span>'}${tierPill(m)}${pts != null ? `<span class="lx-pts"><b class="num">${fmt(pts)}</b> points</span>` : ''}</div></div></div>
-    <div class="lx-doors">${door('poker', 'Poker Club', poker, true)}${door('biz', 'Business Club', "Members' businesses, shared in trust", clubsOpen)}${door('opp', 'Opportunity Club', 'Ask the club for help, or offer it', clubsOpen)}${door('scan', 'Card Scanner', 'Turn a business card into your profile', clubsOpen)}</div>
+    <div class="lx-doors">${door('poker', 'The Strategy Table', 'Poker · ' + poker, true)}${door('biz', 'The Exchange', "Business Club · members' businesses", clubsOpen)}${door('opp', 'The Bulletin', 'Opportunity Club · ask for help, or offer it', clubsOpen)}${door('scan', 'Business Card Scanner', 'Turn a business card into your profile', clubsOpen)}</div>
+    <p class="lx-motto"><b>Pull Up a Chair.</b> Good Company. Meaningful Connections.</p>
   </section>`;
 }
+// a quiet page title for Leaderboard and Learn, in the club's own names
+const pageHead = (eyebrow, title) => `<header class="lx-pagehead"><span class="eyebrow">${eyebrow}</span><h2>${title}</h2></header>`;
 $('lobbyBody').addEventListener('click', e => {
   const d = e.target.closest('[data-lx]'); if(!d) return;
   const k = d.dataset.lx;
@@ -400,7 +404,7 @@ function boardHTML(){
   }));
   const rows = [...agg.values()].sort((a, b) => b.pts - a.pts || b.wins - a.wins);
   if(boardSeg === 'prizes') return prizesHTML();
-  return `<div class="seg2">${[['board','Leaderboard'],['prizes','Prizes']].map(([k, l]) => `<button data-bseg="${k}" aria-pressed="${boardSeg === k}">${l}</button>`).join('')}</div><div class="card-box"><span class="eyebrow">Club leaderboard</span>
+  return `<div class="seg2">${[['board','Leaderboard'],['prizes','Prizes']].map(([k, l]) => `<button data-bseg="${k}" aria-pressed="${boardSeg === k}">${l}</button>`).join('')}</div><div class="card-box"><span class="eyebrow">Recognition for good play</span>
     <div class="seg2 small">${[['week','This week'],['month','30 days'],['all','All time']].map(([k, l]) => `<button data-range="${k}" aria-pressed="${boardRange === k}">${l}</button>`).join('')}</div>
     ${rows.length ? `<table class="tbl dark"><thead><tr><th>#</th><th>Player</th><th>Played</th><th>Wins</th><th>Cashes</th><th>Points</th></tr></thead><tbody>
       ${rows.map((r, i) => `<tr class="${r.uid === club.me.id ? 'me' : ''}"><td>${i + 1}</td><td><span class="lb-name" data-prof="${esc(r.uid)}">${avHTML(r.uid, nameOf(r.uid), 'xs')}${esc(nameOf(r.uid))}</span></td><td class="num">${r.played}</td><td class="num">${r.wins}</td><td class="num">${r.cashes}</td><td class="num">${r.pts}</td></tr>`).join('')}</tbody></table>`

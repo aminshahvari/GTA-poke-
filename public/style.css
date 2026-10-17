@@ -1327,7 +1327,7 @@ label.btn{display:flex;align-items:center;justify-content:center;gap:8px;cursor:
   --lx-ink:#070b14; --lx-ink2:#0b1222; --lx-navy:#111a2e; --lx-navy2:#17223b; --lx-navy3:#1e2a47;
   --lx-gold:#d8b46a; --lx-gold-hi:#f1dfb0; --lx-gold-deep:#9c7a3c; --lx-ivory:#f4eee2; --lx-mute:#a3abbb; --lx-mute2:#7d879b;
   --lx-hair:rgba(241,223,176,.13); --lx-hair2:rgba(241,223,176,.26); --lx-glass:linear-gradient(160deg,rgba(255,255,255,.065),rgba(255,255,255,.018));
-  --lx-emerald:#3fae7a; --lx-garnet:#b3343c;
+  --lx-stone:#b9b1a3; --lx-stone-deep:#8a8377; --lx-emerald:#3fae7a; --lx-garnet:#b3343c;
   --lx-gold-grad:linear-gradient(180deg,#f3e2b6 0%,#ddb96f 52%,#c09a52 100%);
   /* type */
   --lx-serif:"Cormorant Garamond","Iowan Old Style","Palatino Linotype",Georgia,serif;
@@ -1412,7 +1412,7 @@ body{background:var(--lx-ink)}
 #lobby .seg2.small button{font-size:13px;padding:6px 4px;min-width:0}
 #lobby .form label{font-family:var(--cond);font-size:var(--lx-t-xs);letter-spacing:.16em;text-transform:uppercase;color:var(--lx-gold)}
 #lobby input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),#lobby select,#lobby textarea,#modalRoot input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),#modalRoot select,#modalRoot textarea{
-  min-height:var(--lx-tap);background:rgba(5,8,15,.6);border:1px solid var(--lx-hair2);border-radius:12px;color:var(--lx-ivory)}
+  min-height:var(--lx-tap);background-color:rgba(5,8,15,.6);border:1px solid var(--lx-hair2);border-radius:12px;color:var(--lx-ivory)}
 #lobby input:focus,#lobby select:focus,#lobby textarea:focus,#modalRoot input:focus,#modalRoot select:focus,#modalRoot textarea:focus{outline:none;border-color:var(--lx-gold);box-shadow:0 0 0 3px rgba(216,180,106,.18)}
 #lobby details>summary,#modalRoot details>summary{min-height:var(--lx-tap)}
 #lobby .row-btns,#lobby .btn-row{gap:var(--lx-s2)}
@@ -1603,7 +1603,7 @@ body{background:var(--lx-ink)}
   #lobby .hsec-t h2{font-size:23px}
 }
 /* narrow phones: the gold crest alone, so your whole name fits beside it */
-@media (max-width:380px){#lobby .mini-logo .lx-word{display:none}}
+@media (max-width:400px){#lobby .mini-logo .lx-word{display:none}}
 @media (prefers-reduced-motion:reduce){#lobby *,#modalRoot *{transition:none!important}}
 #lobby .av.xs,#modalRoot .av.xs{font-size:11px}
 
@@ -1643,3 +1643,44 @@ body{background:var(--lx-ink)}
 }
 #game .turnrow{position:relative;z-index:3}
 #modalRoot .glass{grid-template-columns:minmax(0,1fr)}
+
+/* ---------- brand direction: The Lounge, ivory and stone accents, editorial type, calm (nothing pulses) ---------- */
+#lobby,#modalRoot{--need:#e6d3a8;--need-soft:rgba(230,211,168,.1);--need-line:rgba(230,211,168,.4)}
+#lobby .op-card-ic,#lobby .op-dhead .op-card-ic{background:rgba(230,211,168,.1);color:var(--lx-gold-hi);border:1px solid rgba(230,211,168,.35)}
+#lobby .offer>.op-card-ic,#lobby .op-dhead .op-card-ic.offer,#lobby .op-detail.offer .op-card-ic{background:rgba(63,174,122,.12);color:#8fe6c4;border-color:rgba(63,174,122,.4)}
+#lobby .hsec-t small.live::before{animation:none}
+#lobby .lx-hello{gap:20px;padding-top:4px}
+#lobby .lx-brandline{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--lx-hair)}
+#lobby .lx-brandline .eyebrow{color:var(--lx-stone);letter-spacing:.18em}
+#lobby .lx-lounge{font-family:var(--lx-serif);font-style:italic;font-size:17px;color:var(--lx-gold-hi);white-space:nowrap}
+#lobby .lx-greet{color:var(--lx-stone)}
+#lobby .lx-door-t small{color:var(--lx-stone)}
+#lobby .lx-door.lx-poker,#lobby .lx-door.lx-scan{grid-column:1/-1;grid-template-columns:auto 1fr auto;align-items:center;align-content:center}
+#lobby .lx-door.lx-scan{min-height:76px}
+#lobby .lx-scan .lx-chev{display:block}
+#lobby .lx-door{min-height:116px}
+#lobby .lx-motto{margin:4px 0 0;text-align:center;font-size:13px;letter-spacing:.04em;color:var(--lx-stone)}
+#lobby .lx-motto b{display:block;font-family:var(--lx-serif);font-style:italic;font-weight:500;font-size:24px;letter-spacing:.01em;color:var(--lx-ivory);margin-bottom:2px}
+#lobby .lx-motto::before{content:"";display:block;width:56px;height:1px;margin:0 auto 14px;background:linear-gradient(90deg,transparent,var(--lx-gold),transparent)}
+#lobby .lx-pagehead{display:grid;gap:2px;padding:4px 2px 6px}
+#lobby .lx-pagehead .eyebrow{color:var(--lx-stone)}
+#lobby .lx-pagehead h2{margin:0;font-family:var(--lx-serif);font-weight:600;font-size:34px;line-height:1.05;color:var(--lx-ivory);letter-spacing:.005em}
+#lobby .lx-pagehead h2::after{content:"";display:block;width:44px;height:1px;margin-top:10px;background:var(--lx-gold)}
+#lobby .note{border-left-color:var(--lx-stone-deep)}
+#lobby .card-box p,#lobby .hsec-t small{color:#b3b6bd}
+/* table seats: monogram avatars with a lit face and a gold hairline, refined plates, clear but calm status colours
+   (sizes unchanged, so the seat layout solver is unaffected) */
+#game .av{border-color:#0a0f1b;background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.26),rgba(255,255,255,0) 58%),var(--c,#555);box-shadow:0 0 0 1px rgba(216,180,106,.55),0 4px 10px rgba(0,0,0,.55);letter-spacing:.02em}
+#game .av.tiered{box-shadow:0 0 0 2px var(--ring),0 4px 10px rgba(0,0,0,.55)}
+#game .plate{border-radius:10px;box-shadow:inset 0 1px 0 rgba(241,223,176,.14),0 4px 12px rgba(0,0,0,.5)}
+#game .nm{letter-spacing:.01em}
+#game .st{color:var(--lx-gold-hi)}
+#game .seat.hero .plate{border-color:rgba(216,180,106,.6)}
+#game .seat.folded .av,#game .seat.folded .plate{filter:grayscale(.7)}
+#game .badge{background:#24304f;color:var(--lx-ivory);box-shadow:inset 0 0 0 1px rgba(241,223,176,.2)}
+#game .badge.act-call,#game .badge.act-check{background:#2a7a56;color:#effff7;box-shadow:none}
+#game .badge.act-all-in{background:#9e2a31;color:#fff2f2;box-shadow:none}
+#game .badge.hand{background:#1b2643;color:var(--lx-gold-hi);box-shadow:inset 0 0 0 1px rgba(216,180,106,.4)}
+#game .badge.won{background:var(--lx-gold-grad);color:#1a1408;box-shadow:none}
+#game .pot{color:var(--lx-gold-hi)}
+#lobby .tbl td:first-child,#lobby .statgrid b,#lobby .bigpts,#game .lvl b,#modalRoot .prof .statgrid b{font-variant-numeric:lining-nums tabular-nums}

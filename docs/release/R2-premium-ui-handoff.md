@@ -27,10 +27,36 @@ The Welcome screen's midnight navy, champagne gold and glass now run through eve
   - No blur or animation was added to the table.
 - **Profile and dialogs.** Navy glass sheets with serif titles. A pre-existing 320 px sideways overflow in the profile sheet is fixed.
 
+## Brand direction applied (founder, via coordinator)
+
+These change user-facing labels only. Routes, element ids, API fields and handlers are unchanged.
+
+- **The Lounge** is the member home. It carries the brand line ("Blindrise · Private Members Club", "Pull Up a Chair.", "Good Company. Meaningful Connections.") and the tab is now named Lounge.
+- **The Strategy Table** always appears together with "Poker". The door reads "Poker · …", the Home section is "The Strategy Table" with "Poker · Club tournaments", and the leaderboard page is "Poker · The Strategy Table / Club standings".
+- **The Exchange** is Business Club, both on the tab and in the headings ("The Exchange · Business Club").
+- **The Bulletin** is Opportunity Club. The Business tab's inner segments still read "Businesses" and "Opportunities", so tests and members can still find them.
+- **The Salon** is Learn, both on the tab and in the page title.
+- **Business Card Scanner** keeps its name.
+- **Look:** midnight navy and champagne gold, with ivory and stone accents, serif editorial headings and generous spacing.
+- **Calm:** nothing pulses. The "live" dot no longer blinks on Home, and there are no urgency badges.
+- **Leaderboard:** presented as "Recognition for good play". Points are unchanged.
+- **Wording:** no copy implies that Blindrise endorses or guarantees any business or listing.
+- **Photography:** monogram avatars with a lit face and a gold hairline. No photos and no new image origins.
+
+## Remaining work
+
+- Real member and club photography, once it is licensed.
+- The Business tab's inner segment labels: they could take the new names after the tests that use them are updated.
+- A real-iPhone pass on the preview service.
+
 ## JS changes (presentation only)
 
-- `public/app.js`: `memberHomeHTML()` and a click handler for its doors (`[data-lx]`). `renderHome` prepends it. It reads only `club.me`, `club.tourney`, `club.shop` and `memberOf()`.
-- `public/business.js`: `BizClub.show(seg)`, which opens the Business tab on `biz`, `opp` or `scan`, the same views the existing buttons open.
+- `public/app.js`:
+  - `memberHomeHTML()` and a click handler for its doors (`[data-lx]`). `renderHome` prepends it. It reads only `club.me`, `club.tourney`, `club.shop` and `memberOf()`.
+  - `pageHead()` titles on Leaderboard and Learn.
+  - Label strings: the Home section names and the poker section heading.
+- `public/opportunity.js`: two label strings.
+- `public/business.js`: two label strings, and `BizClub.show(seg)`, which opens the Business tab on `biz`, `opp` or `scan`, the same views the existing buttons open.
 - `public/index.html`: inline SVG icons inside the tab buttons (labels wrapped in `<span>`), and the crest in the top bar.
 
 ## Tests (see the commit message for the exact counts)
