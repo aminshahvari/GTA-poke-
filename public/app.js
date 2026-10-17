@@ -159,7 +159,7 @@ function renderLobby(){
   if(!club) return;
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   const body = $('lobbyBody');
-  body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : picNudgeHTML() + eventHTML() + friendsHTML();
+  body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : comingHTML() + picNudgeHTML() + eventHTML() + friendsHTML();
   wireLobby();
 }
 // Start times for a quick tournament: now, or a time later today (tomorrow if it has passed).
@@ -179,6 +179,16 @@ function friendsHTML(){
     <div class="btn-row"><button class="btn red big" data-invite>Invite friends</button></div></div>`;
 }
 document.addEventListener('click', e => { if(e.target.closest('[data-invite]')) askInvite(); });
+// Announcement only: these features are being tested and are not part of the poker game, points or results.
+function comingHTML(){
+  if(local.get('comingSoon1', 0)) return '';
+  return `<div class="card-box coming-box"><span class="eyebrow">Coming soon</span><h3>Two new members-only clubs</h3>
+    <p><b>Business Club:</b> share your business card with fellow members and find their businesses.</p>
+    <p><b>Opportunity Club:</b> a members-only board for jobs, services and deals.</p>
+    <p class="note">Both are being tested now and will open here soon. They are separate from the tournament: no effect on games, points or the leaderboard.</p>
+    <div class="btn-row"><button class="btn" data-comingok>Got it</button></div></div>`;
+}
+document.addEventListener('click', e => { if(e.target.closest('[data-comingok]')){ local.set('comingSoon1', 1); renderLobby(); } });
 function picNudgeHTML(){
   const m = memberOf(club.me.id);
   if(!m || m.av || local.get('picNudge', 0) > 2) return '';
