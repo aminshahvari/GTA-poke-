@@ -5,7 +5,7 @@ Claude, 2026-10-17. Prepared on the owner's request (15:57 UTC). **Waiting for t
 ## Current state (read 2026-10-17)
 - `staging` = `8919df3e06dc24b2c1417229ecc2055765d95ea8` (live, deploy `dep-db9pi4psrm7s739pgagg`). c0daed4 is **not** deployed.
 - `main` = `d00b59278427fe2ae315a700f2966b8941c1d5d3` (production, untouched).
-- Target: `c0daed48c9b78f38811fc479bb324ddfda2adb20`, Muse F1 re-audit **PASS** (`MUSE-AUDIT-F1-*` on r2-dev, §9).
+- Target: `c0daed48c9b78f38811fc479bb324ddfda2adb20`, Muse F1 re-audit **PASS** (`MUSE-REPORT-f1-reaudit-2026-10-17.md`, §9).
 
 ## Delta 8919df3 → c0daed4 (code only)
 `server/content.js` (+48/-4) and `test/t_content.js` (+19). No other code; no package change; no schema/data change. c0daed4 is a direct descendant of 8919df3 (fast-forward).
