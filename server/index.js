@@ -111,6 +111,10 @@ const api = {
   // Opportunity Club ("I need help" / "I can help" listings inside Business Club): see server/opportunity.js
   ...opportunity.api
 };
+// Business Club + Opportunity Club: closed to members until the owner opens them in the Director tab (the owner can always use them).
+// Staging opens them by default so they can be tested; CLUBS_DEFAULT=on does the same for local test runs.
+const clubsOn = () => { const s = store.get('settings') || {}; return typeof s.clubsOn === 'boolean' ? s.clubsOn : process.env.STAGING === '1' || process.env.CLUBS_DEFAULT === 'on'; };
+const clubsClosedFor = u => !!u && !isOwner(u) && !clubsOn();
 const GROUP_MAX = 100, GROUP_DAYS = 30, MEMBER_DAYS = 7;
 // Members can invite friends too (the owner can switch that off). A member's link joins at most MEMBER_MAX people,
 // and asking again hands back the member's open link instead of piling up new ones.
@@ -170,6 +174,7 @@ const server = http.createServer((req, res) => {
         acct = acctKey(url.pathname, data);
         if(acct && blocked(acct, 10)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
+        if(extra && clubsClosedFor(u)) return send(res, 403, { error: 'Business Club opens soon.' }, undefined, extra);
         send(res, 200, fn(data, u), undefined, extra);
       }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); } send(res, [401, 403, 404, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.' }, undefined, extra); }
     });
@@ -184,7 +189,8 @@ const server = http.createServer((req, res) => {
   // Business Club logos: only with the member's token (sent by fetch, not a plain <img> link)
   const bl = /^\/bizlogo\/(u[0-9a-f]{12})$/.exec(url.pathname);
   if(bl){
-    const r = business.logoFor(bl[1], userByToken(req.headers.authorization?.replace(/^Bearer /, '')));
+    const lu = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
+    const r = clubsClosedFor(lu) ? { status: 404 } : business.logoFor(bl[1], lu);
     if(r.status !== 200) return send(res, r.status, 'Not found', 'text/plain', NOINDEX);
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
@@ -259,7 +265,7 @@ function clubView(u){
       places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null } : null,
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
     members, history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
-    chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
+    features: { clubs: clubsOn() }, chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
     pushOn: push.hasPush(u.id), membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
   };
   if(isOwner(u)){
@@ -371,6 +377,7 @@ wss.on('connection', (ws, req) => {
         case 'fair': { const id = String(m.id || ''), cur = club.T(), h = store.get('history:' + id);
           const t = cur && cur.id === id ? cur : h ? { ...h, status: 'finished' } : null;
           sendWS(ws, { t: 'fair', report: t ? fair.report(t) : null }); } break;
+        case 'clubs': own(u); store.set('settings', { ...(store.get('settings') || {}), clubsOn: !!m.on }); broadcastClub(); break;
         case 'chatOff': own(u); store.set('settings', { ...(store.get('settings') || {}), chatOff: !!m.off }); broadcastClub(); break;
         case 'mute': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner') store.set('user:' + x.id, { ...x, muted: !!m.muted }); broadcastClub(); } break;
         case 'back': club.back(u.id); break;

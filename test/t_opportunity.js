@@ -7,7 +7,7 @@ const { spawn } = require('child_process');
 const WebSocket = require('ws');
 const PORT = 4200 + Math.floor(Math.random() * 50), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_opp_' + process.pid + '.json';
-const env = { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '' };
+const env = { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUBS_DEFAULT: 'on' };
 let srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env, stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function call(p, body, tok){

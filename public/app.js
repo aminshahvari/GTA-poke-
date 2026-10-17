@@ -162,20 +162,25 @@ const pchip = (uid, removable) => `<span class="pchip ${uid === club.me.id ? 'me
 const when = ms => new Date(ms).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 function renderLobby(){
   if(!club) return;
-  document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   const body = $('lobbyBody');
+  // Business Club and Opportunity Club stay hidden from members until the owner opens them (Director tab); the owner can always preview
+  const clubsOn = !!(club.features && club.features.clubs), clubsVisible = clubsOn || club.me.owner;
+  const bizTab = document.querySelector('#tabs [data-tab="biz"]');
+  bizTab.hidden = !clubsVisible;
+  if(tab === 'biz' && !clubsVisible) tab = 'event';
+  document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   // Opportunity Club: a small count of requests waiting for my answer on the Business tab; never while seated in a running tournament
-  window.OppClub.badge(document.querySelector('#tabs [data-tab="biz"]'), !!(club.myTable && club.tourney && club.tourney.status === 'running'));
+  if(clubsVisible) window.OppClub.badge(bizTab, !!(club.myTable && club.tourney && club.tourney.status === 'running'));
   document.querySelector('.app').classList.toggle('wide', tab === 'biz');
   if(tab === 'biz'){ body.replaceChildren(); window.BizClub.render(body); return; }
-  body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : picNudgeHTML() + eventHTML() + friendsHTML();
-  if(tab !== 'board' && tab !== 'learn' && !(tab === 'director' && club.me.owner)) bizHome(body);
+  body.innerHTML = tab === 'board' ? boardHTML() : tab === 'learn' ? learnHTML() : tab === 'director' && club.me.owner ? directorHTML() : (clubsOn ? '' : comingHTML()) + picNudgeHTML() + eventHTML() + friendsHTML();
+  if(clubsVisible && tab !== 'board' && tab !== 'learn' && !(tab === 'director' && club.me.owner)) bizHome(body);
   wireLobby();
 }
 // Home: Business Club's "Meet the Members" goes right under the tournament card. Hidden while you're seated in a running tournament.
 function bizHome(body){
   const sec = document.createElement('div'); sec.className = 'bz-homewrap';
-  const cards = [...body.children].filter(c => c.classList.contains('card-box') && !c.classList.contains('pic-nudge') && !c.classList.contains('next-box'));
+  const cards = [...body.children].filter(c => c.classList.contains('card-box') && !c.classList.contains('pic-nudge') && !c.classList.contains('next-box') && !c.classList.contains('coming-box'));
   if(cards[0]) cards[0].after(sec); else body.append(sec);
   const playing = !!(club.myTable && club.tourney && club.tourney.status === 'running');
   window.BizClub.mountHome(sec, playing);
@@ -200,6 +205,16 @@ function friendsHTML(){
     <div class="btn-row"><button class="btn red big" data-invite>Invite friends</button></div></div>`;
 }
 document.addEventListener('click', e => { if(e.target.closest('[data-invite]')) askInvite(); });
+// Announcement only: these features are being tested and are not part of the poker game, points or results.
+function comingHTML(){
+  if(local.get('comingSoon1', 0)) return '';
+  return `<div class="card-box coming-box"><span class="eyebrow">Coming soon</span><h3>Two new members-only clubs</h3>
+    <p><b>Business Club:</b> share your business card with fellow members and find their businesses.</p>
+    <p><b>Opportunity Club:</b> a members-only board for jobs, services and deals.</p>
+    <p class="note">Both are being tested now and will open here soon. They are separate from the tournament: no effect on games, points or the leaderboard.</p>
+    <div class="btn-row"><button class="btn" data-comingok>Got it</button></div></div>`;
+}
+document.addEventListener('click', e => { if(e.target.closest('[data-comingok]')){ local.set('comingSoon1', 1); renderLobby(); } });
 function picNudgeHTML(){
   const m = memberOf(club.me.id);
   if(!m || m.av || local.get('picNudge', 0) > 2) return '';
@@ -324,7 +339,14 @@ const demoCard = () => `<div class="card-box demo-box"><span class="eyebrow">Dem
   <p>Play a real game at a 6-max table against 5 practice players, with the same buttons, chat bubbles, antes and clock as a club tournament. It runs only on your phone: nothing is saved and no points are given.</p>
   <div class="btn-row"><button class="btn red big" data-demo>Open demo table</button></div></div>`;
 function directorHTML(){
-  return newsHTML() + demoCard() + conflictsHTML() + directorMainHTML() + prizeAdminHTML();
+  return newsHTML() + demoCard() + conflictsHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
+}
+// Business Club + Opportunity Club: off until the owner opens them; while off only the owner sees them (to try them out)
+function clubsSwitchHTML(){
+  const on = !!(club.features && club.features.clubs);
+  return `<div class="card-box"><span class="eyebrow">Business Club &amp; Opportunity Club</span>
+    <p class="note">${on ? 'Open: every member can see and use them.' : 'Closed: only you can see them. Members see the Coming soon card.'} They never affect games, points or the leaderboard.</p>
+    <div class="btn-row"><button class="btn${on ? '' : ' red'}" id="clubsBtn">${on ? 'Close them to members' : 'Open them to members'}</button></div></div>`;
 }
 function directorMainHTML(){
   const T = club.tourney;
@@ -446,6 +468,7 @@ function wireLobby(){
   document.querySelectorAll('[data-sealinfo]').forEach(a => a.onclick = e => { e.preventDefault(); tab = 'learn'; learnSeg = 'fair'; renderLobby(); });
   document.querySelectorAll('[data-mute]').forEach(b => b.onclick = () => send({ t: 'mute', uid: b.dataset.mute, muted: b.dataset.on !== '1' }));
   on2('chatOffBtn', () => send({ t: 'chatOff', off: !club.chatOff }));
+  on2('clubsBtn', () => { const on = !!(club.features && club.features.clubs); if(confirm(on ? 'Close Business Club and Opportunity Club to members? Their posts stay saved.' : 'Open Business Club and Opportunity Club to every member now?')) send({ t: 'clubs', on: !on }); });
   on2('memInvBtn', () => send({ t: 'membersInvite', on: !club.membersInvite }));
   document.querySelectorAll('[data-bseg]').forEach(b => b.onclick = () => { boardSeg = b.dataset.bseg; renderLobby(); });
   document.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => send({ t: 'skillq', rid: b.dataset.claim }));
