@@ -282,7 +282,9 @@ function clubView(u){
       level: t.level, levelEndsAt: t.levelEndsAt, paused: t.paused, pausedLeft: t.pausedLeft, entrants: t.entrants, remaining: t.remaining,
       places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null } : null,
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
-    members, history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
+    // who invited whom is for the owner only: a member's payload carries no inviter for anyone (Muse P10)
+    members: isOwner(u) ? members : members.map(m => m.invitedBy ? { ...m, invitedBy: null } : m),
+    history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
     features: { clubs: clubsOn() }, chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
     pushOn: push.hasPush(u.id), membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
   };
