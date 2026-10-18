@@ -21,6 +21,20 @@ const extrasKey = () => atFinal() ? 'extrasFinal' : 'extras';
 const extrasLeft = uid => { const t = T(), n = t && t[extrasKey()] && t[extrasKey()][uid]; return n == null ? (atFinal() ? FINAL_EXTRAS : EXTRAS) : n; };
 const AWAY_BANK = FAST ? 300 : 2500;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Table extras: show or muck after an uncontested pot, a set pause between hands, rabbit hunt.
+// Off unless the server runs with GAMEPLAY_OPTIONS=1 (or STAGING=1), and then only in a tournament the owner turned them on for.
+const GP = () => process.env.GAMEPLAY_OPTIONS === '1' || process.env.STAGING === '1';
+const PAUSES = [2, 3, 4, 5, 6];
+function gpOpts(o, keep){
+  if(!GP()) return {};
+  const on = (v, was) => v === undefined ? !!was : v === true || v === 'on';
+  const pause = o.handPause === undefined ? (keep && keep.handPause) || 0 : +o.handPause;
+  return keep
+    ? { showMuck: on(o.showMuck, keep.showMuck), rabbit: on(o.rabbit, keep.rabbit), handPause: PAUSES.includes(pause) ? pause : 0 }
+    : { ...(on(o.showMuck) ? { showMuck: true } : {}), ...(on(o.rabbit) ? { rabbit: true } : {}), ...(PAUSES.includes(pause) ? { handPause: pause } : {}) };
+}
+const gpOn = k => { const t = T(); return GP() && !!t && t[k] === true; };
+const pauseSec = () => { const t = T(); return GP() && t && PAUSES.includes(t.handPause) ? t.handPause : 0; };
 const fmt = n => Math.round(n).toLocaleString('en-US');
 
 let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(){} };
@@ -48,7 +62,9 @@ function payoutPcts(n){
 function pointsFor(n, place){ const pct = payoutPcts(n)[place - 1]; return pct ? Math.max(2, Math.round(pct * n / 10)) : 1; }
 
 // ---------- registration ----------
-function create({ name, stack, levelMin, startAt, repeat, anteMode, actSec, tableSize, lateLevels, helper }){
+function create(o){
+  const { name, stack: stack0, levelMin: levelMin0, startAt, repeat, anteMode, actSec, tableSize, lateLevels, helper } = o;
+  let stack = stack0, levelMin = levelMin0;
   const t = T();
   if(t && (t.status === 'running')) throw new Error('A tournament is already running.');
   stack = [10000, 20000, 30000, 50000, 60000, 100000].includes(+stack) ? +stack : 30000;
@@ -56,12 +72,13 @@ function create({ name, stack, levelMin, startAt, repeat, anteMode, actSec, tabl
   store.set('tourney', { id: 't' + Date.now(), status: 'registering', name: String(name || 'Club Tournament').slice(0, 60), stack, levelMin,
     startAt: startAt ? +startAt : null, repeat: ['daily', 'weekly'].includes(repeat) ? repeat : 'none', regs: [], createdAt: Date.now(),
     anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : 20,
-    tableSize: SIZES.includes(+tableSize) ? +tableSize : 9, lateLevels: LATE.includes(+lateLevels) ? +lateLevels : 0, helper: helper !== false && helper !== 'off' });
+    tableSize: SIZES.includes(+tableSize) ? +tableSize : 9, lateLevels: LATE.includes(+lateLevels) ? +lateLevels : 0, helper: helper !== false && helper !== 'off', ...gpOpts(o) });
   hooks.onClub();
   hooks.onNotice('open', T());
 }
 // change a tournament that is still taking sign-ups, keeping everyone who joined
-function edit({ name, stack, levelMin, startAt, repeat, anteMode, actSec, lateLevels, helper }){
+function edit(o){
+  const { name, stack, levelMin, startAt, repeat, anteMode, actSec, lateLevels, helper } = o;
   const t = T();
   if(!t || t.status !== 'registering') throw new Error('Only a tournament that has not started can be changed.');
   const at = startAt ? +startAt : null;
@@ -69,7 +86,7 @@ function edit({ name, stack, levelMin, startAt, repeat, anteMode, actSec, lateLe
     levelMin: Math.max(1, Math.min(60, Math.round(+levelMin || t.levelMin))), startAt: at, repeat: at && ['daily', 'weekly'].includes(repeat) ? repeat : 'none',
     anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : t.actSec, tableSize: 9,
     lateLevels: LATE.includes(+lateLevels) ? +lateLevels : t.lateLevels, helper: helper !== false && helper !== 'off',
-    reminded: at === t.startAt ? t.reminded : false });
+    reminded: at === t.startAt ? t.reminded : false, ...gpOpts(o, t) });
   hooks.onClub();
 }
 function join(uid){
@@ -221,17 +238,62 @@ function tableIO(tb){
         await Promise.race([store.flush().catch(() => {}), sleep(1000)]);
       }
       if(!running) return;
-      publish(tb);
       const h = tb.g.hand;
+      if(type === 'showdown' && h && h.result) resultExtras(tb, h);
+      publish(tb);
       // Pacing close to the big online rooms: quick between actions, a beat longer on an all-in run-out.
       const runout = h && h.players.filter(E.canAct).length < 2;
       const wait = { deal: 900, action: 250, collect: 300, board: runout ? 1100 : 650, showdown: h && h.result && h.result.showdown ? 4500 : 1800 }[type] || 0;
+      if(type === 'showdown' && h && h.result && GP()) return resultWait(tb, h, wait);
       if(wait) await sleep(wait * SPEED);
     },
     async think(){},
     heroAction: (p, L) => ask(tb, p, L)
   };
 }
+// ---------- table extras, after the pot is pushed ----------
+// The turn and river that were never dealt, drawn exactly as the table would have drawn them (burn, card), from this
+// hand's committed deck. Only for a hand that ended on the flop or the turn; nothing is drawn from the deck that matters.
+function rabbitCards(h){
+  const n = h.board.length; if(n < 3 || n > 4) return null;
+  const d = h.deck.slice(), out = [];
+  for(let k = n; k < 5; k++){ d.pop(); out.push(d.pop()); }
+  return out;
+}
+function resultExtras(tb, h){
+  if(gpOn('rabbit') && !h.result.showdown){ const r = rabbitCards(h); if(r) h.rabbit = r; }
+  const winner = h.players.filter(p => !p.folded);
+  if(gpOn('showMuck') && !h.result.showdown && winner.length === 1) tb.show = { uid: winner[0].uid, hand: h.no, cards: null, done: false, until: 0 };
+}
+// How long the result stays up. A set pause is the time from the pot being pushed to the next deal (the table always
+// idles 1.2 s between hands); a showdown never gets less than today's 4.5 s so the hands can be read.
+const resultMs = (x, showdown, offer, base) => {
+  const ms = x ? (showdown ? Math.max(4500, x * 1000 - 1200) : Math.max(800, x * 1000 - 1200)) : base;
+  return offer ? Math.max(ms, 2500) : ms; // the winner needs a moment to decide
+};
+async function resultWait(tb, h, base){
+  const s = tb.show && tb.show.hand === h.no ? tb.show : null, ms = resultMs(pauseSec(), h.result.showdown, !!s, base);
+  if(!s){ if(ms) await sleep(ms * SPEED); return; }
+  const end0 = Date.now() + ms * SPEED;
+  // a show near the end of the window stays up long enough to be seen; not in hand-for-hand, where every table's
+  // result wait follows the same fixed rule
+  while(running && !tb.broken){ const left = Math.max(end0, hfh.on ? 0 : s.until) - Date.now(); if(left <= 0) break; await sleep(Math.min(left, 100)); }
+  s.done = true;
+}
+// The winner of an uncontested pot shows one card, both, or mucks. Only once the pot is awarded and before the next deal.
+function show(uid, msg){
+  const tb = msg && tables.get(msg.tid), s = tb && tb.show, h = tb && tb.g.hand;
+  if(!s || s.done || s.cards || s.uid !== uid || !tb.inHand || !h || !h.result || h.no !== msg.hand || s.hand !== h.no) return false;
+  const pick = Array.isArray(msg.cards) ? msg.cards : null;
+  const ok = pick && pick.length <= 2 && pick.every(i => i === 0 || i === 1) && new Set(pick).size === pick.length;
+  if(!ok) return false;
+  s.cards = pick.slice().sort();
+  if(pick.length) s.until = Date.now() + 2000 * SPEED; else s.done = true;
+  publish(tb);
+  return true;
+}
+const shownByChoice = (tb, h, p) => { const s = tb.show; return s && s.cards && s.cards.length && s.hand === h.no && s.uid === p.uid && h.result ? [0, 1].map(j => s.cards.includes(j) ? E.cardStr(p.cards[j]) : null) : null; };
+
 async function ask(tb, p, L){
   await waitUnpaused();
   if(!running) return { t: 'fold' };
@@ -312,7 +374,7 @@ async function loop(tb){
     if(live.length < 2){ if(hfh.on){ hfh.done.add(tb.tid); hfhCheck(); } publish(tb); await sleep(1000 * Math.max(SPEED, .2)); continue; }
     g.level = T().level; g.levelMsLeft = 1; g.anteMode = T().anteMode;
     tb.handStart = Object.fromEntries(live.map(p => [p.uid, p.stack]));
-    tb.inHand = true;
+    tb.inHand = true; tb.show = null;
     let out;
     try{ out = await E.playHand(g, tableIO(tb)); }
     catch(e){ console.error('hand failed', tb.tid, e); tb.inHand = false; await sleep(1000); continue; }
@@ -452,7 +514,7 @@ function scheduleNext(t){
   let next = t.startAt + step; while(next < Date.now()) next += step;
   setTimeout(() => {
     const cur = T(); if(cur && (cur.status === 'running' || cur.status === 'registering')) return;
-    create({ name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat, anteMode: t.anteMode, actSec: t.actSec, tableSize: t.tableSize, lateLevels: t.lateLevels, helper: t.helper });
+    create({ name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat, anteMode: t.anteMode, actSec: t.actSec, tableSize: t.tableSize, lateLevels: t.lateLevels, helper: t.helper, showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0 });
   }, FAST ? 50 : 15000);
 }
 // Starts a scheduled tournament on time.
@@ -479,14 +541,16 @@ function snapshot(tb){
       const inHand = live && h.players.includes(p);
       return { uid: p.uid, name: p.name, stack: p.stack, inHand, bet: inHand ? p.bet : 0, folded: inHand && p.folded, allIn: inHand && p.allIn,
         act: inHand ? p.act : '', lastAmt: inHand ? (p.lastAmt || 0) : 0, won: inHand && res ? (p.won || 0) : 0,
-        shown: inHand && p.shown && !p.folded ? p.cards.map(E.cardStr) : null, cat: inHand && res && res.showdown && !p.folded && p.shown ? E.CAT[E.category(p.val)] : '', away: !!p.away };
+        shown: inHand && p.shown && !p.folded ? p.cards.map(E.cardStr) : inHand && res && tb.show ? shownByChoice(tb, h, p) : null, cat: inHand && res && res.showdown && !p.folded && p.shown ? E.CAT[E.category(p.val)] : '', away: !!p.away };
     }),
     size: size(), allowed: allowedSeats(), cur: live ? h.currentBet : 0, board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((s, p) => s + p.bet, 0) : 0,
     btn: g.btn, blinds: E.levelFor(t.level || 0, t.anteMode),
     acting: live && tb.acting ? tb.acting.seat : -1, actUid: live && tb.acting ? tb.acting.uid : null, seq: tb.acting ? tb.acting.seq : tb.seq,
     deadline: tb.acting ? tb.acting.deadline : 0, bank: tb.acting ? tb.acting.ms : actMs(), usingBank: !!(tb.acting && tb.acting.usingBank), extras: tb.acting ? extrasLeft(tb.acting.uid) : 0, legal: tb.acting ? tb.acting.legal : null,
     result: res ? { lines: resultLines(g, h), winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null,
-    note: tb.note || ''
+    note: tb.note || '',
+    ...(res && h.rabbit ? { rabbit: h.rabbit.map(E.cardStr) } : {}),
+    ...(res && tb.show && tb.show.hand === h.no ? { showOffer: { uid: tb.show.uid, done: !!(tb.show.done || tb.show.cards) } } : {})
   };
 }
 function cardsFor(tid, uid){
@@ -525,4 +589,4 @@ function totalChips(){
 }
 
 module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, edit, join, leave, cancel, start, resume, pause, unpause, act, extend, back,
-  snapshot, cardsFor, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK };
+  snapshot, cardsFor, show, gp: GP, _extras: { resultMs, rabbitCards, resultExtras }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK };

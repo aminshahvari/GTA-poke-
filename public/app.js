@@ -336,7 +336,7 @@ function eventMainHTML(){
     const mine = T.regs.includes(club.me.id);
     return `<div class="card-box"><span class="status-pill">Registration open</span>${mine ? ' <span class="status-pill reg">✓ You\'re registered</span>' : ''}<h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Starts</small><b>${T.startAt ? esc(when(T.startAt)) : 'When the owner starts it'}</b></div><div><small>Stack</small><b>${fmt(T.stack)}</b></div><div><small>Levels</small><b>${T.levelMin} min</b></div></div>
-      <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act. Every player has 3 extra-time cards (+30 seconds each) for the tournament, and a fresh 5 at the final table.</p>
+      <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act. Every player has 3 extra-time cards (+30 seconds each) for the tournament, and a fresh 5 at the final table.${extrasNote(T)}</p>
       ${T.repeat !== 'none' ? `<p class="note">Repeats ${T.repeat === 'daily' ? 'every day' : 'every week'} at this time.</p>` : ''}
       <p>${T.regs.length} joined</p>
       <div class="plist">${T.regs.map(u => pchip(u, false)).join('') || '<span class="note">Nobody has joined yet.</span>'}</div>
@@ -438,6 +438,13 @@ function clubsSwitchHTML(){
     <p class="note">${on ? 'Open: every member can see and use them.' : 'Closed: only you can see them. Members see the Coming soon card.'} They never affect games, points or the leaderboard.</p>
     <div class="btn-row"><button class="btn${on ? '' : ' red'}" id="clubsBtn">${on ? 'Close them to members' : 'Open them to members'}</button></div></div>`;
 }
+// table extras (show or muck, rabbit hunt, pause between hands): only offered where the server allows them
+const extrasOn = () => !!(club && club.features && club.features.tableExtras);
+function extrasNote(T){
+  if(!extrasOn() || !T) return '';
+  const x = [T.showMuck ? 'the winner of an uncontested pot may show one or both cards' : '', T.rabbit ? 'the unused turn and river are shown when a hand ends early' : '', T.handPause ? `${T.handPause} seconds between hands` : ''].filter(Boolean);
+  return x.length ? ` Table extras: ${x.join('; ')}.` : '';
+}
 function directorMainHTML(){
   const T = club.tourney;
   const members = `<div class="card-box"><span class="eyebrow">Members · ${club.members.length}</span>
@@ -466,6 +473,9 @@ function directorMainHTML(){
         <div class="two"><label>Ante<select id="nAnte">${opt('each', 'Every player', P ? P.anteMode : 'each')}${opt('bb', 'Big blind (WSOP)', P ? P.anteMode : 'each')}</select></label>
         <label>Time to act<select id="nAct">${[10, 15, 20, 30].map(v => opt(v, v + ' seconds', P ? P.actSec : 20)).join('')}</select></label></div>
         <label>Hand helper<select id="nHelper">${opt('on', 'On: show hand strength and win chance', P && P.helper === false ? 'off' : 'on')}${opt('off', 'Off (pro mode)', P && P.helper === false ? 'off' : 'on')}</select></label>
+        ${extrasOn() ? `<div class="two"><label>Show or muck<select id="nShow">${opt('off', 'Off', P && P.showMuck ? 'on' : 'off')}${opt('on', 'Winner may show', P && P.showMuck ? 'on' : 'off')}</select></label>
+        <label>Rabbit hunt<select id="nRabbit">${opt('off', 'Off', P && P.rabbit ? 'on' : 'off')}${opt('on', 'Show the unused cards', P && P.rabbit ? 'on' : 'off')}</select></label></div>
+        <label>Pause between hands<select id="nPause">${[[0, 'Standard (about 3 seconds)'], [2, '2 seconds'], [3, '3 seconds'], [4, '4 seconds'], [5, '5 seconds'], [6, '6 seconds']].map(([v, l]) => opt(v, l, P ? P.handPause || 0 : 0)).join('')}</select></label>` : ''}
         <div class="two"><label>Start<select id="nWhen">${opt('manual', 'When I press Start', at)}${opt('at', 'At a set time', at)}</select></label>
         <label>Repeat<select id="nRepeat">${[['none', 'Just once'], ['daily', 'Every day'], ['weekly', 'Every week']].map(([v, l]) => opt(v, l, P ? P.repeat : 'none')).join('')}</select></label></div>
         <label id="atWrap"${at === 'at' ? '' : ' hidden'}>Start time<input type="datetime-local" id="nAt" value="${local}"></label>
@@ -591,7 +601,7 @@ function wireLobby(){
   on('lateInvite', e => { e.preventDefault(); askInvite(); });
   on('againBtn', () => {
     const T = club.tourney, d = new Date();
-    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: $('againAt') && $('againAt').value ? +$('againAt').value : null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: 9, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true });
+    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: $('againAt') && $('againAt').value ? +$('againAt').value : null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: 9, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true, ...(extrasOn() && T ? { showMuck: !!T.showMuck, rabbit: !!T.rabbit, handPause: T.handPause || 0 } : {}) });
     send({ t: 'join' }); tab = 'event';
   });
   on('newCustomBtn', () => { tab = 'director'; renderLobby(); });
@@ -601,7 +611,7 @@ function wireLobby(){
     nf.onsubmit = e => {
       e.preventDefault();
       const at = $('nWhen').value === 'at' ? new Date($('nAt').value).getTime() : null;
-      send({ t: editingT ? 'edit' : 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value, helper: $('nHelper').value });
+      send({ t: editingT ? 'edit' : 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value, helper: $('nHelper').value, ...(extrasOn() ? { showMuck: $('nShow').value, rabbit: $('nRabbit').value, handPause: +$('nPause').value } : {}) });
       if(editingT){ editingT = false; toast('Tournament updated.'); } else tab = 'event';
     };
     on('editBack', () => { editingT = false; renderLobby(); });
@@ -1052,6 +1062,8 @@ function renderTable(){
   let b = '';
   for(let i = 0; i < 5; i++){
     const c = d.board[i] != null ? cs(d.board[i]) : null;
+    const rb = c == null && d.rabbit && res ? d.rabbit[i - d.board.length] : null;
+    if(rb){ b += cardHTML(cs(rb), 'board rabbit', 'title="Rabbit hunt: this card was not dealt"'); continue; }
     if(c == null){ b += '<div class="slot"></div>'; continue; }
     const key = `bd${handKey}-${i}`, isNew = !seen.has(key); seen.add(key);
     const hl = res && res.showdown && winCards.size ? (winCards.has(c) ? 'wincard' : 'dim') : '';
@@ -1081,7 +1093,7 @@ function renderTable(){
       hole = [0, 1].map(j => {
         const key = `h${handKey}-${s}-${j}`, isNew = !seen.has(key); seen.add(key);
         const anim = isNew && d.street === 0 && !res ? `dl" style="--fx:${cx - sx}px;--fy:${cy - sy}px;animation-delay:${(j * 9 + s) * 50}ms` : '';
-        const c = p.shown ? cs(p.shown[j]) : (isMe && mine ? mine[j] : null);
+        const c = p.shown && p.shown[j] != null ? cs(p.shown[j]) : (isMe && mine ? mine[j] : null);
         const hl = res && res.showdown && winCards.size && c != null ? (winCards.has(c) ? ' wincard' : ' dim') : '';
         if(isMe) return cardHTML(c, `hero ${p.folded ? 'dim' : ''}${hl === ' dim' ? '' : hl} ${anim}`);
         if(c != null) return cardHTML(c, `show${hl === ' dim' ? '' : hl}`); // a losing hand stays fully readable at showdown
@@ -1152,6 +1164,10 @@ function renderControls(d, mySeat, mine){
   let line, pre = '';
   const T = club.tourney, out = T && (T.places || []).find(r => r.uid === club.me.id);
   if(!meSeat) line = out ? `You finished ${ord(out.place)}. Watching Table ${d.n}.` : `Watching Table ${d.n}.`;
+  else if(d.showOffer && d.showOffer.uid === club.me.id && d.result && !d.result.showdown){
+    line = d.showOffer.done ? (meSeat.shown ? 'You showed your hand.' : 'You mucked.') : 'You won the pot. Show your cards?';
+    if(!d.showOffer.done) pre = `<div class="preacts showmuck"><button data-show="0">Show left</button><button data-show="1">Show right</button><button data-show="0,1">Show both</button><button data-show="">Muck</button></div>`;
+  }
   else if(meSeat.away) line = `You're sitting out, so your hands fold automatically. <button class="btn green" id="backBtn" style="margin-left:6px;padding:6px 12px">I'm back</button>`;
   else if(myTurn) line = 'Sending your action…';
   else if(meSeat.inHand && !meSeat.folded){
@@ -1171,6 +1187,11 @@ function renderControls(d, mySeat, mine){
   else line = d.phase === 'hand' ? 'You play from the next hand.' : 'Shuffling up…';
   c.innerHTML = `<div class="info-line">${line}</div>${pre}`;
   const bb = $('backBtn'); if(bb) bb.onclick = () => send({ t: 'back' });
+  c.querySelectorAll('[data-show]').forEach(btn => btn.onclick = () => {
+    const cards = btn.dataset.show ? btn.dataset.show.split(',').map(Number) : [];
+    send({ t: 'show', tid: d.tid, hand: d.handNo, cards });
+    c.querySelectorAll('[data-show]').forEach(x => x.disabled = true);
+  });
   c.querySelectorAll('[data-pre]').forEach(btn => btn.onclick = () => {
     const k = btn.dataset.pre;
     preAct = preAct && preAct.kind === k ? null : { kind: k, key: streetKey, amt: +btn.dataset.amt };

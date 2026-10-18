@@ -53,7 +53,7 @@ async function deckForHand(t, tid, handNo){
 
 // Who got which cards (and the board so far), keyed so the finished hand overwrites its own deal-time record.
 const fkey = (tourneyId, rec) => `fair:${tourneyId}:${rec.tid}:${String(rec.hand).padStart(5, '0')}:${rec.at}`;
-const snap = (rec, h, live) => ({ ...rec, ...(live ? { live: true } : {}), players: h.players.map(p => ({ uid: p.uid, name: p.name, cards: p.cards.slice() })), board: h.board.slice() });
+const snap = (rec, h, live) => ({ ...rec, ...(live ? { live: true } : {}), players: h.players.map(p => ({ uid: p.uid, name: p.name, cards: p.cards.slice() })), board: h.board.slice(), ...(h.rabbit ? { rabbit: h.rabbit.slice() } : {}) });
 // At the deal and each new street: save the deal as it stands, marked live, so a deal cut off by a restart stays on record.
 function saveDeal(tourneyId, rec, h){ store.set(fkey(tourneyId, rec), snap(rec, h, true)); }
 // After the hand: the complete record, so the deck can be checked once the seed is revealed.
