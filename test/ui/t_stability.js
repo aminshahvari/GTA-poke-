@@ -83,7 +83,8 @@ async function measure(pg){
     document.querySelectorAll('#seats .seat').forEach(s => { seats[s.dataset.uid] = r(s.querySelector('.av')); });
     return { area: r(document.getElementById('tableArea')), felt: r(document.querySelector('#tableArea .felt')), board: r(document.getElementById('board')),
       controls: r(document.getElementById('controls')), dock: r(document.getElementById('dock')), seats,
-      hero: (() => { const cs = [...document.querySelectorAll('#seats .seat.hero .hole .card')].map(r).filter(Boolean); return cs.length ? [0, Math.min(...cs.map(c => c[1])), 0, Math.max(...cs.map(c => c[1] + c[3])) - Math.min(...cs.map(c => c[1]))] : null; })(), cls: window.__cls || 0, shifts: (window.__shifts || []).slice() };
+      hero: (() => { const cs = [...document.querySelectorAll('#seats .seat.hero .hole .card')].map(r).filter(Boolean); if(!cs.length) return null; const l = Math.min(...cs.map(c => c[0])), t = Math.min(...cs.map(c => c[1]));
+        return [l, t, Math.max(...cs.map(c => c[0] + c[2])) - l, Math.max(...cs.map(c => c[1] + c[3])) - t]; })(), cls: window.__cls || 0, shifts: (window.__shifts || []).slice() };
   });
 }
 // the felt and every seat compared with a reference measurement
@@ -191,7 +192,8 @@ const moved = (a, b) => !a || !b ? Infinity : Math.max(...a.map((v, i) => Math.a
       const b2 = await measure(pg);
       check(moved(b0.felt, b2.felt) <= TOL && await pg.locator('#aRaise').isVisible(), `${tag}: Back closes the raise panel and the table is where it was`);
       // the hero's cards are above the dock, not under it, in every step of the hand
-      const hid = rows.filter(m => m.hero && m.dock && m.hero[1] + m.hero[3] > m.dock[1] + .5).map(m => m.step);
+      const cover = (a, b) => a[0] < b[0] + b[2] - .5 && b[0] < a[0] + a[2] - .5 && a[1] < b[1] + b[3] - .5 && b[1] < a[1] + a[3] - .5;
+      const hid = rows.filter(m => m.hero && m.dock && cover(m.hero, m.dock)).map(m => m.step);
       check(!hid.length, `${tag}: your cards stay clear of the action bar${hid.length ? ' (covered at ' + hid.join(', ') + ')' : ''}`);
     }
     all[tag] = rows;
