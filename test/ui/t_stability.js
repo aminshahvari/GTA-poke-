@@ -6,7 +6,8 @@
 //  - the felt, the board and the seats move at most 1 px from the first state, as a player and as a spectator
 //  - the action area's top edge stays put (the bottom dock keeps its height)
 //  - layout shift (PerformanceObserver 'layout-shift', the CLS score) stays near zero
-// Sizes: 320x568, 375x667, 390x844, 393x852, 430x932 and landscape 844x390.
+// Sizes: 320x568, 375x667, 390x844, 393x852, 430x932 and landscape 956x440, 844x390, 956x370 (an in-app
+// browser's bars), 667x375 and 568x320.
 // And, for a seated player at each portrait size, during one hand:
 //  - the browser's bars: the screen gets 90 px shorter (Safari's toolbar sliding in) and then back: the felt and
 //    the seats stay put and keep their size, and the action bar stays on screen
@@ -27,7 +28,7 @@ const DATA = require('os').tmpdir() + '/t_stab_' + process.pid + '.json';
 const srv = spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const REPORT = process.env.REPORT === '1', SHOTS = process.env.SHOTS || '';
-const SIZES = [[320, 568], [375, 667], [390, 844], [393, 852], [430, 932], [844, 390]].filter(v => !process.env.ONLY || process.env.ONLY === v.join('x'));
+const SIZES = [[320, 568], [375, 667], [390, 844], [393, 852], [430, 932], [956, 440], [844, 390], [956, 370], [667, 375], [568, 320]].filter(v => !process.env.ONLY || process.env.ONLY === v.join('x'));
 const TOL = 1, CLS_MAX = 0.01;
 const api = async (p, body) => { const j = await (await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })).json(); if(j.error) throw new Error(p + ': ' + j.error); return j; };
 const fails = [];

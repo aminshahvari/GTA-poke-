@@ -648,8 +648,10 @@ function inLook(area, look, f){
   area.classList.toggle('compact', look !== ''); area.classList.toggle('mini', look === 'mini'); area.classList.remove('tight');
   try{ return f(); } finally { cls.forEach((c, i) => area.classList.toggle(c, was[i])); }
 }
+// which sideways layout the table is in ('' upright), part of every cached size and layout
+const landKey = () => { const g = $('game'); return g.classList.contains('land') ? (g.classList.contains('land-s') ? 's' : 'l') : ''; };
 function seatSizes(area, look, bet){
-  const key = `${look}:${bet}:${area.style.getPropertyValue('--cw')}`;
+  const key = `${look}:${bet}:${area.style.getPropertyValue('--cw')}:${landKey()}`;
   if(SIZES.has(key)) return SIZES.get(key);
   const S = inLook(area, look, () => {
     const txt = '<div class="nm">Wwwwwwwwwwwwww</div><div class="st num">8,888,888</div>', badge = '<span class="badge act-raise">Raise 888,888</span>', at = 'style="left:0;top:0"';
@@ -682,7 +684,7 @@ function tableGeo(n, bet = '8,888'){
   const a = $('tableArea'), W = a.clientWidth || 360, H = a.clientHeight || 520, pot = $('pot'), msg = $('msg');
   // the pot and the message line get a fixed room (a six-digit pot, one line of text), whatever they say right
   // now, so the layout is the same for the whole hand and nothing moves when the result is written under the board
-  const key = `${n}:${W}:${H}:${bet}`;
+  const key = `${n}:${W}:${H}:${bet}:${landKey()}`;
   if(GEO && GEO.key === key) return GEO;
   // the area changes between a few sizes during a hand (your turn, the raise panel), so keep the recent layouts
   if(GEOS.has(key)) return GEO = GEOS.get(key);
@@ -691,6 +693,8 @@ function tableGeo(n, bet = '8,888'){
   // (on a phone each look first tries the broad oval with the side seats on the rail's inner edge, then a slightly
   // longer one, then both with the side seats on the rail, before the seats get smaller: readable seats matter more
   // than the last bit of width)
+  // sideways the seats at the bottom corners carry their badge under the plate, so the bottom keeps room for that too
+  const LAND = $('game').classList.contains('land');
   const shapes = W < 470 ? [[1.2, 1], [1.3, 1], [1.2, 0], [1.3, 0]] : [[0, 0]];
   const looks = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3]])
     .flatMap(([l, q]) => shapes.map(([k, inset]) => [l, q, k, inset]));
@@ -712,7 +716,7 @@ function tableGeo(n, bet = '8,888'){
     // edge, the top ones `top` px from the top, and your seat `bot` px from the bottom. In a phone-width column
     // the side seats sit `ins` px further in, on the rail's inner edge, so the felt can be that much wider.
     const ins = inset ? Math.round(Math.min(se.hw * .4, 18)) : 0;
-    const top = Math.max(se.up + 2 - rail / 2, look ? 0 : 50), bot = Math.max(he.down + 4 - rail / 2, look ? 0 : 64), side = Math.max(se.hw + 2, look ? 0 : 46) - ins;
+    const top = Math.max(se.up + (LAND ? 8 : 2) - rail / 2, look ? 0 : 50), bot = Math.max((LAND ? Math.max(he.down, se.down) + 8 : he.down + 4) - rail / 2, look ? 0 : 64), side = Math.max(se.hw + 2, look ? 0 : 46) - ins;
     let fw = Math.min(W - 2 * side + rail, 760), fh = H - top - bot;
     // a real table's proportions: on a phone held upright a broad oval only a little taller than wide (the
     // height left over is shared above and below it); long when there's room; on a wide screen the shape stays
@@ -765,7 +769,7 @@ function tableGeo(n, bet = '8,888'){
     // overlap with what's there; seats and cards count most, then other chips, then the pot and the message
     const overlap = (x, y, hw, hh, list) => list.reduce((t, [X, Y, w, h, wt = 3]) => t + wt * Math.max(0, hw + w + 3 - Math.abs(x - X)) * Math.max(0, hh + h + 3 - Math.abs(y - Y)), 0);
     // chips and the button always stay nearer their own seat than any other, so it's clear whose they are
-    const [hc] = S.hero, anchors = seats.map((q, i) => i ? [q.x, q.y] : [q.x + hc[0], q.y + hc[1]]);
+    const [hc, hp] = S.hero, side0 = hc[0] + hc[2] < hp[0] + hp[2] - 4, anchors = seats.map((q, i) => i ? [q.x, q.y] : [q.x + hc[0], q.y + hc[1]]);
     const mine = (x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || Math.hypot(x - X, y - Y) > d); };
     // the button may also sit off the felt, beside its seat, as long as it stays in the table area
     const onArea = (x, y, hw, hh) => x >= hw + 1 && x <= W - hw - 1 && y >= hh + 1 && y <= H - hh - 1;
@@ -795,7 +799,7 @@ function tableGeo(n, bet = '8,888'){
       }
       const betBoxes = boxes.concat(placed), dh = S.dealer;
       const dealers = seats.map((q, k) => {
-        if(k === 0) return place(q.x + hc[0] + hc[2] + dh + 4, q.y + hc[1] - hc[3] + 22, 0, 1, dh, dh, betBoxes, k, true, quick);
+        if(k === 0) return place(q.x + Math.max(hc[0] + hc[2], side0 ? hp[0] + hp[2] : -Infinity) + dh + 4, q.y + hc[1] - hc[3] + 22, 0, 1, dh, dh, betBoxes, k, true, quick);
         const d = front(q) + dh + 4, tx = -q.ny, ty = q.nx;
         return place(q.x - q.nx * d - tx * 40, q.y - q.ny * d - ty * 40, q.nx, q.ny, dh, dh, betBoxes, k, true, quick);
       });
@@ -1075,8 +1079,8 @@ function reserveDock(seated){
     const p = document.createElement('div');
     p.className = 'dock'; p.setAttribute('aria-hidden', 'true');
     p.style.cssText = 'position:absolute;left:0;right:0;bottom:0;height:auto;visibility:hidden;pointer-events:none';
-    p.innerHTML = (seated ? `<div class="helper${helperMin ? ' min' : ''}"><div class="h-top"><b class="h-name">Wg</b><span class="h-eq">88%<small> to win vs 8</small></span></div>${helperMin ? '' : `<div class="h-bar"><i></i></div><div class="h-line">Wg${g.classList.contains('land') ? '<br>Wg<br>Wg' : g.classList.contains('h700') ? '' : '<br>Wg'}</div>`}</div>` : '')
-      + `<div class="controls">${seated ? `<div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="act-main" style="--n:3"><button class="act-btn fold"><b>Fold</b></button><button class="act-btn call"><b>Call</b><span class="num">88,888</span></button><button class="act-btn raise"><b>Raise</b><span>Choose amount</span></button></div>` : '<div class="info-line">Wg</div>'}</div>`
+    p.innerHTML = (seated ? `<div class="helper${helperMin ? ' min' : ''}"><div class="h-top"><b class="h-name">Wg</b><span class="h-eq"><i class="h-w">Win</i>88%<small> to win vs 8</small></span></div>${helperMin ? '' : `<div class="h-bar"><i></i></div><div class="h-line">Wg<br>Wg${g.classList.contains('land') ? '<br>Wg' : ''}</div>`}</div>` : '')
+      + `<div class="controls">${seated ? `<div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="act-main" style="--n:3"><button class="act-btn fold"><b>Fold</b></button><button class="act-btn call"><b>Call</b><span class="num">88,888</span></button><button class="act-btn raise"><b>Raise</b><span>Choose amount</span></button></div>` : `<div class="info-line">Wg${g.classList.contains('land') ? '<br>Wg' : ''}</div>`}</div>`
       // the other state a seated player's bar has: the waiting line with the pre-action buttons
       + (seated ? '<div class="controls"><div class="info-line">Wg</div><div class="preacts"><button><i></i>Fold</button><button><i></i>Call 88,888</button><button><i></i>Call any</button></div></div>' : '');
     g.appendChild(p); const hp = p.querySelector('.helper'), cs = [...p.querySelectorAll('.controls')].map(c => c.offsetHeight), ch = Math.max(...cs);
@@ -1104,8 +1108,11 @@ function newLock(d){
   if(LOCK && LOCK.w === g.clientWidth && LOCK.hand === hand) return false;
   const H = window.innerHeight; g.classList.toggle('h700', H <= 700); g.classList.toggle('h600', H <= 600);
   // a phone held sideways: the table takes the full width on the left and the action bar stands beside it
-  const land = window.innerWidth > H && H <= 600 && window.innerWidth >= 640;
+  const land = window.innerWidth > H && H <= 600 && window.innerWidth >= 560;
   if(g.classList.contains('land') !== land){ g.classList.toggle('land', land); LOCK = null; }
+  // the smallest phones sideways (iPhone SE): your cards go back above your plate, smaller, so the bottom row of
+  // a full table has the width it needs
+  g.classList.toggle('land-s', land && window.innerWidth < 700);
   // on the shortest screens the header is one row: the chat and Lobby buttons move up beside the clock
   const hb = g.querySelector('.hdr-btns'), home = g.querySelector(H <= 600 ? '.clock' : '.stats');
   if(hb && hb.parentNode !== home) home.appendChild(hb);
@@ -1689,9 +1696,30 @@ function drawsOf(hole, board){
   if(straightOuts) parts.push(straightOuts >= 8 ? 'open-ended straight draw' : 'gutshot straight draw');
   const outs = flushOuts + straightOuts;
   if(!outs) return '';
-  const pct = board.length === 3 ? Math.min(outs * 4, 100) : outs * 2;
-  return `${parts.join(' + ')} · ${outs} outs (about ${pct}% to hit${board.length === 3 ? ' by the river' : ' on the river'})`;
+  return drawHTML(parts, outs, board.length);
 }
+// The helper's two hints as markup built only from fixed words and numbers (no names or other user text), so the
+// layout test can ask for their longest forms too. A draw's chance to hit is written out in full, and as a short
+// "~N%" that short screens show instead, so the hint fits the helper's two lines there.
+function drawHTML(parts, outs, boardLen){
+  const pct = boardLen === 3 ? Math.min(outs * 4, 100) : outs * 2;
+  return `${esc(parts.join(' + '))} · ${outs} outs<span class="h-odds"> (about ${pct}% to hit${boardLen === 3 ? ' by the river' : ' on the river'})</span><span class="h-odds-s"> · ~${pct}%</span>`;
+}
+// your turn's advice from your chance to win (eq) and what calling costs; '' when there's nothing to say
+function adviceFor(eq, L, boardLen){
+  if(eq == null || !L) return ['', ''];
+  const have = `<span class="h-have">, you have ${Math.round(eq * 100)}%</span>`;
+  if(!L.canCheck){
+    const need = L.toCall / (L.pot + L.toCall), n = Math.round(need * 100);
+    if(eq >= need + .05) return [`Call needs ${n}%${have}: calling pays.${eq > .65 ? ' You can raise for value.' : ''}`, 'good'];
+    if(eq >= need - .03) return [`Close: call needs ${n}%${have}.`, 'mid'];
+    return [`Call needs ${n}%${have}: folding is fine.`, 'bad'];
+  }
+  return [eq > .6 ? 'Strong: bet for value.' : eq > .4 ? 'Medium: a small bet or a check both work.' : (boardLen === 5 ? 'Weak: check, no need to put more in.' : 'Weak: check and see a free card.'),
+    eq > .6 ? 'good' : eq > .4 ? 'mid' : 'bad'];
+}
+// read-only, for the layout test: the hints' markup for any inputs
+window.__helperText = Object.freeze({ adviceFor, drawHTML });
 function equityFor(key, hole, board, nOpp){
   if(eqCache.has(key)) return eqCache.get(key);
   eqCache.set(key, null);
@@ -1714,25 +1742,14 @@ function renderHelper(d, me, mine){
   const name = board.length ? madeName(mine, board) : preName(mine);
   const draw = drawsOf(mine, board);
   const L = d.legal && d.actUid === club.me.id ? d.legal : null;
-  let advice = '', tone = '';
-  if(eq != null){
-    if(L && !L.canCheck){
-      const need = L.toCall / (L.pot + L.toCall);
-      if(eq >= need + .05){ advice = `Call needs ${Math.round(need * 100)}%<span class="h-have">, you have ${Math.round(eq * 100)}%</span>: calling pays.${eq > .65 ? ' You can raise for value.' : ''}`; tone = 'good'; }
-      else if(eq >= need - .03){ advice = `Close: call needs ${Math.round(need * 100)}%<span class="h-have">, you have ${Math.round(eq * 100)}%</span>.`; tone = 'mid'; }
-      else { advice = `Call needs ${Math.round(need * 100)}%<span class="h-have">, you have ${Math.round(eq * 100)}%</span>: folding is fine.`; tone = 'bad'; }
-    } else if(L){
-      advice = eq > .6 ? 'Strong: bet for value.' : eq > .4 ? 'Medium: a small bet or a check both work.' : (board.length === 5 ? 'Weak: check, no need to put more in.' : 'Weak: check and see a free card.');
-      tone = eq > .6 ? 'good' : eq > .4 ? 'mid' : 'bad';
-    }
-  }
+  const [advice, tone] = adviceFor(eq, L, board.length);
   const pct = eq == null ? '…' : Math.round(eq * 100) + '%';
   const bar = eq == null ? 0 : Math.round(eq * 100);
   el.hidden = false;
   el.className = 'helper' + (helperMin ? ' min' : '');
-  el.innerHTML = `<div class="h-top"><b class="h-name">${esc(name)}</b><span class="h-eq ${eq == null ? '' : eq > .5 ? 'good' : eq > .3 ? 'mid' : 'bad'}">${pct}<small> to win vs ${nOpp}</small></span></div>
+  el.innerHTML = `<div class="h-top"><b class="h-name">${esc(name)}</b><span class="h-eq ${eq == null ? '' : eq > .5 ? 'good' : eq > .3 ? 'mid' : 'bad'}"><i class="h-w">Win</i>${pct}<small> to win vs ${nOpp}</small></span></div>
     ${helperMin ? '' : `<div class="h-bar"><i style="width:${bar}%"></i></div>
-    ${advice ? `<div class="h-line ${tone}">💡 ${advice}</div>` : draw ? `<div class="h-line">🎯 ${esc(draw)}</div>` : ''}`}`;
+    ${advice ? `<div class="h-line ${tone}">💡 ${advice}</div>` : draw ? `<div class="h-line">🎯 ${draw}</div>` : ''}`}`;
   el.onclick = () => { helperMin = !helperMin; try{ localStorage.setItem('stacked:helper', helperMin ? 'min' : ''); }catch(e){} renderTable(); };
 }
 
@@ -1760,7 +1777,7 @@ function demoSnap(){
     cur: live ? h.currentBet : 0, board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((a, p) => a + p.bet, 0) : 0,
     btn: g.btn, blinds: E.levelFor(g.level, 'each'), acting: demo.acting ? demo.acting.seat : -1, actUid: demo.acting ? demo.acting.uid : null, seq: demo.seq,
     deadline: demo.acting ? demo.acting.deadline : 0, bank: 20000, usingBank: false, legal: demo.acting ? demo.acting.legal : null,
-    result: res ? { lines, winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null, note: demo.note || ''
+    result: res ? { lines, winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null, note: live ? '' : demo.note || ''
   };
 }
 function demoPublish(){
