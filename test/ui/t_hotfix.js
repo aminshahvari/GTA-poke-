@@ -22,8 +22,18 @@ async function signedIn(browser, tok, [w, h]){
   return pg;
 }
 
+// wait until the server answers /healthz instead of a fixed pause (slow machines start later)
+async function serverReady(ms = 20000){
+  const end = Date.now() + ms;
+  while(Date.now() < end){
+    try{ const r = await fetch(BASE + '/healthz'); if(r.ok) return; }catch(e){}
+    await sleep(150);
+  }
+  throw new Error('server did not become ready within ' + ms + ' ms');
+}
+
 (async () => {
-  await sleep(1500);
+  await serverReady();
   const dir = await post('login', { name: 'Test Director', pin: '246810' });
   // two members make their own invite links (as Soltan and Sisi did); the director also has a group and a personal link
   for(const [n, pin] of [['Test Player 01', '135711'], ['Test Player 02', '135722']]){
@@ -88,6 +98,31 @@ async function signedIn(browser, tok, [w, h]){
     await pg.click('#tabs [data-tab=event]').catch(() => {}); await sleep(400);
     check(await pg.evaluate(() => !document.querySelector('#lobbyBody .demo-box')), 'owner Home: no extra practice card (owner has it in Director)');
     await pg.close(); }
+  // seated in a running tournament: the member's Home must not offer the practice table
+  { const WebSocket = require('ws');
+    const sock = tok => new Promise((res, rej) => { const ws = new WebSocket(BASE.replace('http', 'ws') + '/ws'), c = { ws, club: null };
+      ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', token: tok, device: 'hf-' + Math.random() })));
+      ws.on('message', raw => { const m = JSON.parse(raw); if(m.t === 'club'){ c.club = m.club; if(!c.ready){ c.ready = true; res(c); } } });
+      ws.on('error', rej); });
+    const until = async (f, ms = 15000) => { const end = Date.now() + ms; while(Date.now() < end){ if(f()) return true; await sleep(100); } return false; };
+    const mem2 = await post('login', { name: 'Test Player 02', pin: '135722' });
+    const [own, p1, p2] = await Promise.all([sock(dir.token), sock(mem.token), sock(mem2.token)]);
+    own.ws.send(JSON.stringify({ t: 'create', name: 'Hotfix check', stack: 30000, levelMin: 20, tableSize: 9 }));
+    await until(() => own.club.tourney && own.club.tourney.status === 'registering');
+    p1.ws.send(JSON.stringify({ t: 'join' })); p2.ws.send(JSON.stringify({ t: 'join' }));
+    await until(() => (own.club.tourney.regs || []).length >= 2 || own.club.tourney.entrants >= 2);
+    own.ws.send(JSON.stringify({ t: 'start' }));
+    const running = await until(() => p1.club.tourney && p1.club.tourney.status === 'running' && p1.club.myTable);
+    check(running, 'member is seated in a running tournament');
+    const pg = await signedIn(browser, mem.token, [390, 844]); await sleep(600);
+    // a seated player opens on the table; go back to the Lounge the way a player would
+    if(await pg.locator('#lobbyBtn').isVisible().catch(() => false)){ await pg.click('#lobbyBtn'); await sleep(500); }
+    await pg.click('#tabs [data-tab=event]').catch(() => {}); await sleep(500);
+    check(await pg.evaluate(() => !!document.querySelector('#lobbyBody #hs-poker')), 'member seated in a running tournament: Home is showing');
+    check(await pg.evaluate(() => !document.querySelector('#lobbyBody [data-demo]')), 'member seated in a running tournament: no practice card on Home');
+    await pg.close();
+    own.ws.send(JSON.stringify({ t: 'cancel' })); await sleep(300);
+    [own, p1, p2].forEach(c => c.ws.close()); }
   await browser.close(); srv.kill(); try{ require('fs').unlinkSync(DATA); }catch(e){}
   console.log(`\n${oks} ok, ${fails} failed`); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); srv.kill(); process.exit(1); });
