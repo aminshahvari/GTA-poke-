@@ -644,8 +644,8 @@ const GEOS = new Map();
 const SIZES = new Map();
 // measure something with the table area dressed in a given look for a moment
 function inLook(area, look, f){
-  const cls = ['compact', 'mini', 'tight'], was = cls.map(c => area.classList.contains(c));
-  area.classList.toggle('compact', look !== ''); area.classList.toggle('mini', look === 'mini'); area.classList.remove('tight');
+  const cls = ['compact', 'mini', 'micro', 'tight'], was = cls.map(c => area.classList.contains(c));
+  area.classList.toggle('compact', look !== ''); area.classList.toggle('mini', look === 'mini' || look === 'micro'); area.classList.toggle('micro', look === 'micro'); area.classList.remove('tight');
   try{ return f(); } finally { cls.forEach((c, i) => area.classList.toggle(c, was[i])); }
 }
 // which sideways layout the table is in ('' upright), part of every cached size and layout
@@ -662,7 +662,7 @@ function seatSizes(area, look, bet){
       + `<div class="bet num" ${at}>${chipsIcon(3)}${bet}</div><div class="bet num tight" ${at}>${chipsIcon(3)}${bet}</div><div class="dealer" ${at}>D</div>`;
     area.appendChild(p);
     const o = p.getBoundingClientRect(), box = els => {
-      const r = els.map(e => e.getBoundingClientRect()), l = Math.min(...r.map(q => q.left)), t = Math.min(...r.map(q => q.top)), rr = Math.max(...r.map(q => q.right)), b = Math.max(...r.map(q => q.bottom));
+      const r = els.filter(e => e.getClientRects().length).map(e => e.getBoundingClientRect()), l = Math.min(...r.map(q => q.left)), t = Math.min(...r.map(q => q.top)), rr = Math.max(...r.map(q => q.right)), b = Math.max(...r.map(q => q.bottom));
       return [(l + rr) / 2 - o.left, (t + b) / 2 - o.top, (rr - l) / 2, (b - t) / 2];
     };
     const [seat, hero] = p.querySelectorAll('.seat'), [b1, b2] = p.querySelectorAll('.bet');
@@ -696,19 +696,21 @@ function tableGeo(n, bet = '8,888'){
   // sideways the seats at the bottom corners carry their badge under the plate, so the bottom keeps room for that too
   const LAND = $('game').classList.contains('land');
   const shapes = W < 470 ? [[1.2, 1], [1.3, 1], [1.2, 0], [1.3, 0]] : [[0, 0]];
-  const looks = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3]])
-    .flatMap(([l, q]) => shapes.map(([k, inset]) => [l, q, k, inset]));
+  const looks = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3], ['micro', 1], ['micro', .6], ['micro', .3]])
+    .flatMap(([l, q]) => shapes.map(([k, inset]) => [l, q, k, inset, 1.18]))
+    // (the micro seats may also give up some of the extra room either side of yours, for the seats along the top)
+    .concat(n >= 6 ? [['micro', .6], ['micro', .3]].flatMap(([l, q]) => shapes.map(([k, inset]) => [l, q, k, inset, 1.06])) : []);
   let best = null;
-  for(const [look, sq, k, inset] of looks){ const L = layout(look, sq, false, k, inset); if(!best || L.cost <= best.cost) best = L; if(!L.cost) break; }
+  for(const [look, sq, k, inset, g] of looks){ const L = layout(look, sq, false, k, inset, g); if(!best || L.cost <= best.cost) best = L; if(!L.cost) break; }
   // no clean layout anywhere: search the roomiest look that seats everyone harder, for the fewest overlaps
-  if(best.cost) best = layout(best.look, best.sq, true, best.k, best.inset);
+  if(best.cost) best = layout(best.look, best.sq, true, best.k, best.inset, best.g);
   GEO = { ...best, key, W, H, betAt: k => best.bets[k], dealerAt: k => best.dealers[k] };
   if(GEOS.size > 12) GEOS.delete(GEOS.keys().next().value);
   if(a.clientWidth) GEOS.set(key, GEO);
   return GEO;
 
-  function layout(look, sq, thorough, k, inset){
-    const S = seatSizes(a, look, bet), mini = look === 'mini', compact = look !== '';
+  function layout(look, sq, thorough, k, inset, g){
+    const S = seatSizes(a, look, bet), mini = look === 'mini' || look === 'micro', compact = look !== '';
     const ext = bs => ({ hw: Math.max(...bs.map(([x, , w]) => Math.abs(x) + w)), up: Math.max(...bs.map(([, y, , h]) => h - y)), down: Math.max(...bs.map(([, y, , h]) => y + h)) });
     const se = ext(S.seat), he = ext(S.hero);
     const rail = Math.round(Math.max(10, Math.min(18, Math.min(W, H) * .036)));
@@ -737,7 +739,7 @@ function tableGeo(n, bet = '8,888'){
     const P = parts.reduce((t, q) => t + q[0], 0);
     const at = d => { for(const [len, f] of parts){ if(d <= len + 1e-6) return f(d); d -= len; } return parts[0][1](0); };
     // evenly spaced, with a little extra room either side of the hero's wider seat at a full table
-    const gap = n >= 6 ? P / n * 1.18 : P / n, along = i => i === 0 ? 0 : n === 2 ? P / 2 : gap + (i - 1) * (P - 2 * gap) / (n - 2);
+    const gap = n >= 6 ? P / n * g : P / n, along = i => i === 0 ? 0 : n === 2 ? P / 2 : gap + (i - 1) * (P - 2 * gap) / (n - 2);
     const seats = Array.from({ length: n }, (_, i) => { const [x, y, nx, ny] = at(along(i)); return { x: cx + x, y: cy + y, nx, ny }; });
     // on a long table the hero's cards reach into the felt, so the board sits a little higher
     const tall = fh > fw, by0 = tall ? cy : cy - Math.min(28, fh * .08);
@@ -752,7 +754,11 @@ function tableGeo(n, bet = '8,888'){
       pot.innerHTML = chipsIcon(3) + 'Pot 888,888'; msg.innerHTML = '<div>8</div>'; msg.style.maxWidth = msgHalf * 2 + 'px';
       try{ return [pot.offsetWidth, pot.offsetHeight, msg.offsetHeight]; } finally { pot.innerHTML = pv; msg.innerHTML = mv; msg.style.maxWidth = mx; }
     }), mw = msgHalf * 2;
-    const middle = by => [[cx, by, boardHalf, bh], [cx, by - bh - 6 - ph0 / 2, pw0 / 2, ph0 / 2, 1], [cx, by + bh + 6 + mh / 2, mw / 2, mh / 2, 1]];
+    // (when the felt is too short for the pot above the board, sideways or on the shortest screens, the pot may sit
+    // at the board's left instead, the two centred together)
+    const bxOf = side => side ? cx + (pw0 + 8) / 2 : cx;
+    const middle = (by, side) => { const bx = bxOf(side); return [[bx, by, boardHalf, bh], side ? [bx - boardHalf - 8 - pw0 / 2, by, pw0 / 2, ph0 / 2, 1] : [bx, by - bh - 6 - ph0 / 2, pw0 / 2, ph0 / 2, 1], [bx, by + bh + 6 + mh / 2, mw / 2, mh / 2, 1]]; };
+    const sides = [false, true];
     // seats that touch each other mean this look is too big for the area
     const touch = (A, B) => A.some(([x, y, w, h]) => B.some(([X, Y, ww, hh]) => Math.abs(x - X) < w + ww + 1 && Math.abs(y - Y) < h + hh + 1));
     let clash = 0;
@@ -793,7 +799,12 @@ function tableGeo(n, bet = '8,888'){
         let x0, y0, nx = q.nx, ny = q.ny;
         if(k === 0){ nx = 0; ny = 1; [x0, y0] = tall ? [q.x, q.y + hc[1] - hc[3] - ph - 5] : [q.x + hc[0] - hc[2] - pw - 9, q.y + hc[1] - hc[3] + 18]; }
         else { const d = front(q) + 6 + Math.abs(q.nx) * pw + Math.abs(q.ny) * ph; x0 = q.x - q.nx * d; y0 = q.y - q.ny * d; }
-        bets[k] = place(x0, y0, nx, ny, pw, ph, boxes.concat(placed), k, false, quick);
+        // your own chips may also sit just off the felt beside your plate (as the dealer button may) when the felt in
+        // front of your cards has no clean spot left, on the smallest screens
+        const f0 = fails, list = boxes.concat(placed);
+        bets[k] = place(x0, y0, nx, ny, pw, ph, list, k, false, true) || (k === 0 ? place(q.x, q.y + hp[1], nx, ny, pw, ph, list, k, true, true) : null);
+        fails = f0;
+        if(!bets[k]) bets[k] = place(x0, y0, nx, ny, pw, ph, list, k, false, quick);
         if(!bets[k]) return null;
         placed.push([...bets[k], pw, ph, 2]);
       }
@@ -808,18 +819,18 @@ function tableGeo(n, bet = '8,888'){
     // a clean layout: the board where it belongs, else a little higher or lower; chips placed seat by seat round
     // the table, the other way round, or top seats first; then the same with a size smaller chip labels
     const round = seats.map((q, i) => i), orders = [round, [0].concat(round.slice(1).reverse()), round.slice().sort((i, j) => seats[i].y - seats[j].y)];
-    const geo = { look, sq, k, inset, compact, mini, rail, cx, cy, tall, msgW: msgHalf * 2, fw, fh, seats, bw };
-    if(!clash) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]) for(const dy of [0, -10, 10, -20, 20]){
-      const by = by0 + dy, mid = middle(by);
+    const geo = { look, sq, k, inset, g, compact, mini, rail, cx, cy, tall, msgW: msgHalf * 2, fw, fh, seats, bw };
+    if(!clash) for(const side of sides) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]) for(const dy of [0, -10, 10, -20, 20]){
+      const by = by0 + dy, mid = middle(by, side);
       if(seatBoxes.some(b => touch(b, mid))) continue;
-      for(const order of orders){ const L = solve(lab, seatBoxes.flat().concat(mid), order, true); if(L) return { ...geo, cost: 0, by, tight, bets: L.bets, dealers: L.dealers }; }
+      for(const order of orders){ const L = solve(lab, seatBoxes.flat().concat(mid), order, true); if(L) return { ...geo, cost: 0, by, bx: bxOf(side), tight, potSide: side, bets: L.bets, dealers: L.dealers }; }
     }
     // nothing clean: when searching hard, the least crowded way of all; else just say how far off this look is
     if(!thorough) return { ...geo, cost: clash ? clash * 100 + 99 : 50 };
     let best = null;
-    for(const dy of [0, -10, 10]) for(const order of orders) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]){
-      const by = by0 + dy, mid = middle(by), L = solve(lab, seatBoxes.flat().concat(mid), order), cost = (clash + seatBoxes.filter(b => touch(b, mid)).length) * 100 + L.fails;
-      if(!best || cost < best.cost) best = { ...geo, cost, by, tight, bets: L.bets, dealers: L.dealers };
+    for(const side of sides) for(const dy of [0, -10, 10]) for(const order of orders) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]){
+      const by = by0 + dy, mid = middle(by, side), L = solve(lab, seatBoxes.flat().concat(mid), order), cost = (clash + seatBoxes.filter(b => touch(b, mid)).length) * 100 + L.fails;
+      if(!best || cost < best.cost) best = { ...geo, cost, by, bx: bxOf(side), tight, potSide: side, bets: L.bets, dealers: L.dealers };
     }
     return best;
   }
@@ -835,7 +846,7 @@ function layoutOf(d){
   const rel = s => (allowed.indexOf(s) - base + n) % n;
   return { allowed, rel, G, posOf: s => pxToPct([G.seats[rel(s)].x, G.seats[rel(s)].y]), betOf: s => G.betAt(rel(s)), dealerOf: s => G.dealerAt(rel(s)) };
 }
-const centerPx = () => GEO ? [GEO.cx, GEO.by] : pctToPx([50, 45]);
+const centerPx = () => GEO ? [GEO.bx, GEO.by] : pctToPx([50, 45]);
 const reducedMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 // An element's centre inside the table area (for a seat's avatar), or null.
 function avatarPx(uid){
@@ -1173,9 +1184,9 @@ function renderTable(){
   area.style.setProperty('--bw', G.bw + 'px');
   const felt = area.querySelector('.felt');
   felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px`;
-  area.querySelector('.center').style.cssText = `left:${G.cx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
+  area.querySelector('.center').style.cssText = `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
   $('msg').style.maxWidth = G.msgW + 'px';
-  area.classList.toggle('tall', G.tall); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini);
+  area.classList.toggle('tall', G.tall); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini); area.classList.toggle('micro', G.look === 'micro'); area.classList.toggle('pot-side', !!G.potSide);
   if(!d.result) $('fx').querySelectorAll('.winpile').forEach(e => { if(e.dataset.hand !== d.tid + ':' + d.handNo){ e.classList.add('gone'); setTimeout(() => e.remove(), 400); } });
   const mc = myCards.get(d.tid), mine = mc && mc.hand === d.handNo ? mc.cards.map(cs) : null;
   const nick = seatNicks(d.seats.filter(Boolean).map(p => p.name));

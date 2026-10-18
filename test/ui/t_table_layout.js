@@ -49,13 +49,14 @@ function tableFor(me, n){
 async function measure(pg){
   return pg.evaluate(() => {
     const r = el => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+    const drawn = el => !!el && el.getClientRects().length > 0;
     const u = rs => ({ l: Math.min(...rs.map(x => x.l)), t: Math.min(...rs.map(x => x.t)), r: Math.max(...rs.map(x => x.r)), b: Math.max(...rs.map(x => x.b)) });
     const seats = [...document.querySelectorAll('#seats .seat')].map(s => ({ name: (s.querySelector('.nm') || {}).textContent || '?', hero: s.classList.contains('hero'),
-      box: u([s.querySelector('.av'), s.querySelector('.plate'), ...s.querySelectorAll('.badge, .hole .card')].filter(Boolean).map(r)),
+      box: u([s.querySelector('.av'), s.querySelector('.plate'), ...s.querySelectorAll('.badge, .hole .card')].filter(drawn).map(r)),
       // the name plate with the name, stack and action badge (your seat: with your avatar too; another seat's two
       // small card backs tuck behind the top of its avatar by design), and the hole cards, each on their own
-      plate: u([s.classList.contains('hero') && s.querySelector('.av'), s.querySelector('.plate'), ...s.querySelectorAll('.badge')].filter(Boolean).map(r)),
-      cards: (cs => cs.length ? u(cs) : null)([...s.querySelectorAll('.hole .card')].map(r)) }));
+      plate: u([s.classList.contains('hero') && s.querySelector('.av'), s.querySelector('.plate'), ...s.querySelectorAll('.badge')].filter(drawn).map(r)),
+      cards: (cs => cs.length ? u(cs) : null)([...s.querySelectorAll('.hole .card')].filter(drawn).map(r)) }));
     const bets = [...document.querySelectorAll('#tableArea .bet')].filter(b => b.offsetParent && getComputedStyle(b).visibility !== 'hidden').map(r);
     // what the page could be scrolled by, and the safe area the test asked for (--sa-* set on the page)
     const cs = getComputedStyle(document.documentElement), sa = k => parseFloat(cs.getPropertyValue('--test-sa-' + k)) || 0;

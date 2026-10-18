@@ -94,6 +94,16 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .table-area.mini .seat.hero .av{width:26px;height:26px;font-size:11px}
 .table-area.mini .seat.hero .nm{font-size:10.5px}
 .table-area.mini .seat.hero .st{font-size:12px}
+/* the last resort of a full table on the smallest screens ('micro', tried only when the mini seats don't fit): the
+   mini seats a little narrower, without another player's two card backs over the avatar: a small card mark on the
+   plate's top edge, beside the avatar, says they're still in the hand (only your own cards matter; names stay
+   10 px, stacks 11 px) */
+.table-area.micro .seat:not(.hero){width:58px}
+.table-area.micro .seat:not(.hero) .plate{min-width:54px}
+.table-area.micro .seat:not(.hero) .nm{max-width:52px}
+.table-area.micro .seat:not(.hero)>.hole:not(.shown){display:none}
+.table-area.micro .seat:not(.hero):not(.folded):has(>.hole:not(.shown) .card) .plate::after{content:'';position:absolute;top:-11px;right:6px;width:6px;height:8px;border-radius:1.5px;
+  background:linear-gradient(135deg,#2c3a5a,#1a2238);box-shadow:0 0 0 1px var(--gold,#c9a45c),2px -1px 0 0 #1a2238,2px -1px 0 1px var(--gold,#c9a45c)}
 .table-area.mini .pot{font-size:12px;min-height:20px;padding:2px 9px 2px 4px;gap:4px}
 .table-area.mini .pot .chips,.table-area.mini .pot .chips i{width:13px;height:13px}
 .table-area.mini .msg{font-size:10.5px;line-height:1.3}
@@ -108,6 +118,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 /* the board sits exactly where the layout puts it; the pot rides above it and the message below, at their own size */
 .center .pot{position:absolute;left:50%;bottom:100%;margin-bottom:6px;transform:translateX(-50%);width:max-content}
 .center .msg{position:absolute;left:50%;top:100%;margin-top:6px;transform:translateX(-50%);width:max-content}
+/* (a short sideways felt: the pot at the board's left, 8 px from it, as the layout placed it) */
+.table-area.pot-side .center .pot{bottom:auto;top:50%;left:auto;right:calc(50% + var(--bw) * 2.5 + 14px);margin:0;transform:translateY(-50%)}
 .pot{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.38);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);padding:3px 12px 3px 5px;border-radius:99px;font-weight:700;font-size:14px;color:var(--gold);min-height:24px}
 .board{display:flex;gap:3px}
 .slot{width:var(--bw);height:calc(var(--bw)*1.4);border-radius:5px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.08)}
