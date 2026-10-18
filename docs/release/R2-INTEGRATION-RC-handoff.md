@@ -2,9 +2,70 @@
 
 Claude, 2026-10-18, ~16:50 UTC (12:50 EDT). Ordered by the founder's "Final integration directive" and "Tournament night emergency directive" (16:12–16:14 UTC).
 
-**Candidate app SHA: `330863f5e3f132bd650f7bb43de78f1e79f8f4af`** on branch `r2-integration` (updated ~17:50 UTC; it supersedes `443a27f`, which failed the founder's iPhone landscape check). Any later commit on this branch is docs-only or test-only. Verify with `git diff 330863f <head> -- public server package.json package-lock.json` = empty.
+**Candidate app SHA: `958e7c0`** on branch `r2-integration` (updated ~18:44 UTC). It supersedes `330863f` (round 1) and `443a27f`, which failed the founder's iPhone landscape check. Any later commit on this branch is docs-only or test-only. Verify with `git diff 958e7c0 <head> -- public server package.json package-lock.json` = empty.
 
-## Landscape iPhone fix (`330863f`): the new candidate
+## Round 2 (`958e7c0`): the current candidate
+`958e7c0` builds on `330863f`. It closes the 6 remaining `t_table_layout` failures with layout changes, not with test thresholds. It also merges the sibling gameplay-UI branch (`origin/r2-int-gameplay-ui`, `a6ecb98`), which brings:
+- stricter chip and dealer-button ownership;
+- the whole live pot;
+- no stale action pill on the acting seat;
+- one action per turn (double-tap lock);
+- `t_positions`.
+
+See `docs/release/GAMEPLAY-UI-FIXES-handoff.md` for those.
+
+The merge had one conflict, at the chip-ownership anchors in `tableGeo`. I kept the sibling's rule (hero anchored at the centre of cards and plate together, a 12 % + 3 px margin) and re-added `hp` and `side0`, which this branch uses for the hero's cards beside the plate.
+
+It is still client and tests only: `git diff 443a27f 958e7c0 -- server package.json package-lock.json` is empty.
+
+### Layout changes
+- **`micro` look:** tried only after every normal, compact and mini layout fails to fit cleanly. In practice that means full tables on the smallest screens: 320×500, 568×320 and 320×568 at 7–9 players.
+  - Other players' two card backs are not drawn. A small card mark on the plate's top edge, beside the avatar, shows they are still in the hand. Your own cards are unchanged.
+  - Opponent seats are a little narrower (58 px), with the same 10 px names and 11 px stacks as mini.
+  - Chip labels are slimmer (9.5 px, the size mini's tight labels already used).
+  - It is also tried with a little less extra room either side of your seat, which gives the seats along the top more room.
+- **Pot at the board's left:** used when the felt is too short for the pot above the board. Board and pot are centred together, and it is allowed only when both fit the felt's width. This fixes 812×320 at 4 players, where the top seat's badge touched the board.
+- **Chip placement:**
+  - Your own chips may sit just off the felt beside your plate when the felt in front of your cards has no clean spot.
+  - When a chip has no clean spot in the normal search, the layout takes the nearest clean spot on a 4 px grid (on the felt, or just off it beside its seat) before accepting one on top of a seat.
+  - Every spot still obeys the 12 % + 3 px ownership rule, so `t_positions` stays green.
+- **Seat measurement** ignores elements that are not drawn (`seatSizes`).
+
+### Test changes in round 2
+- `t_table_layout` and `t_table_small` ignore undrawn elements when they measure seats. A hidden card has a zero box at the page's corner, which would otherwise read as a seat outside the table. No threshold changed in round 2.
+- **AC1, as checked:** "every seat's cards vs its own plate" means **zero overlap between each player's hole cards and that same player's name plate, stack and badge.**
+  - `t_table_layout` checks every seat's cards against every seat's plate box, its own included, at every size and 2–9 players.
+  - For your seat the plate box also includes your avatar.
+  - Other players' card backs tuck behind the top of their own avatar by design, and the `micro` look doesn't draw them.
+
+### Results on `958e7c0` (Chromium, production font cache)
+| Test | Result |
+|---|---|
+| `t_table_layout`, full matrix, 19 sizes × 2–9 players | **2304 / 0** |
+| `t_positions` | 356 / 0 |
+| `t_stability` | 210 / 0, 0.0 px felt, seat and board movement, including rotation mid-hand |
+| `t_hotfix` | 50 / 0 |
+| `t_premium_ui` | 296 / 0 |
+| `t_clubs_closed` | 25 / 0 |
+| `t_mobile_ux`, `t_table_small`, `t_welcome` | pass |
+| `npm test` (incl. `t_invite_privacy` 7/0) | exit 0 |
+| `t_sim 3000` | random-action 3000 tournaments / 30,981 hands, 0 problems; 3000 AI tournaments, 0 problems |
+
+**Timing of runs:** `t_table_small` was re-run after its measurement fix. The only edit after these runs is two CSS comments.
+
+### Screenshots
+Updated after round 2, in `/mnt/project-files/blindrise/overnight/table-redesign/landscape-fix/`:
+- `contact-before-after.png` and `pair-*.png`;
+- `after/`;
+- `after-extra/`: 844×340, 812×320@44, 568×320, 320×568, 320×500 and 390×844 at 4, 6, 7 and 9 players.
+
+### Limits
+- No Safari or WebKit run, and no real-device check. The founder's iPhone acceptance is still required.
+- On the smallest screens with a full table, the pot can sit at the board's left, partly on the rail, and chips or the D button can sit just off the felt beside their seat.
+
+`blindrise-preview` was not moved by this work. The coordinator put `330863f` on it for an early iPhone look.
+
+## Landscape iPhone fix, round 1 (`330863f`)
 `443a27f` **failed the founder's iPhone landscape check** (16:54 UTC; screenshot `owner-iphone-landscape-443a27f.png`). Muse confirmed the defect in `MUSE-DEFECT-landscape-hero-overlap-2026-10-18.md` (`42f9764`). **Do not approve `443a27f`.**
 
 `330863f` sits on `42f9764`. It is client and tests only: `git diff 443a27f 330863f -- server package.json package-lock.json` is empty.
@@ -77,8 +138,8 @@ All in `/mnt/project-files/blindrise/overnight/table-redesign/landscape-fix/`:
 - `after-extra/`: 844×340, 812×320@44, 568×320, 320×568 and 390×844;
 - `owner-report-443a27f.png`: the founder's screenshot.
 
-### Known limits (open; not hidden by the test)
-These are the 6 `t_table_layout` failures, all on sizes added in this round:
+### Known limits of round 1 (all closed in round 2, see above)
+These were the 6 `t_table_layout` failures on `330863f`, all on sizes added in round 1:
 - **320×500, 7–9 players** (iPhone SE 1st gen upright with Safari's bars):
   - 7 players: Ben's and Christina's seats touch;
   - 8–9 players: a 200 chip stack touches the edge of your cards.
@@ -89,9 +150,9 @@ These are the 6 `t_table_layout` failures, all on sizes added in this round:
   - no Safari or WebKit run, and no real-device check;
   - the founder's iPhone acceptance is still required.
 
-`blindrise-preview` was **not** moved. It still serves `443a27f`.
+`blindrise-preview` was not moved by this fix; the coordinator later put `330863f` on it.
 
-## Composition (as of `443a27f`; `330863f` adds the client fix above)
+## Composition (as of `443a27f`; `330863f` and `958e7c0` add the client fixes and the gameplay-UI merge above)
 | Part | SHA | Muse status |
 |---|---|---|
 | Stabilization RC (viewport, practice card, invite rows) | `8eee0a5` | PASS (`1f61b65`) |
