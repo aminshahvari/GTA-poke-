@@ -70,8 +70,10 @@ const api = {
     const u = createUser(name, pin, 'owner'); store.set('owner', u.id);
     return { token: newSession(u.id) };
   },
-  redeem({ code, name, pin, agree }){
+  redeem({ code, name, pin, agree, email, emailOk }, _, ip){
     const inv = store.get('invite:' + code);
+    // campaign links exist only while campaigns are switched on; otherwise such an invite is treated as unknown
+    if(inv && inv.campaign && !campaignsOn()) throw new Error('This invite link has already been used or was cancelled. Ask for a new one.');
     const dead = !inv || inv.revoked || (inv.multi ? (inv.uses || []).length >= inv.max || Date.now() > inv.expiresAt : inv.usedBy);
     if(inv && !dead && inv.by && inv.by !== store.get('owner') && !membersInvite()) throw new Error('Member invites are switched off right now. Ask the organizer for a link.');
     if(dead) throw new Error(inv && inv.multi ? 'This group link is full, expired or was cancelled. Ask the organizer for a new one.' : 'This invite link has already been used or was cancelled. Ask for a new one.');
@@ -79,12 +81,16 @@ const api = {
     if(!validName(name)) throw new Error('Pick a name with 2 to 16 letters or numbers.');
     if(store.get('name:' + name.toLowerCase())) throw new Error('That name is taken. Try another.');
     if(!validPin(pin)) throw new Error('Pick a PIN of 4 to 8 digits.');
-    if(agree !== true) throw new Error('Please confirm you are 19 or older and agree to the club rules.');
+    if(agree !== true) throw new Error(inv.campaign ? 'Please tick the box to confirm you are 19 or older and agree to the club rules.' : 'Please confirm you are 19 or older and agree to the club rules.');
+    const contact = inv.campaign ? campaignEmail(email, emailOk) : null;
+    if(inv.campaign && campaignJoins(ip).length >= CAMPAIGN_IP_HOUR) throw new Error('Too many new accounts were made from this connection. Try again in an hour.');
     const u = createUser(name, pin, 'member');
-    if(inv.by) store.set('user:' + u.id, { ...u, invitedBy: inv.by });
-    // the link is usually sent for a tournament: sign the new player up for it straight away
+    if(inv.by) store.set('user:' + u.id, { ...u, invitedBy: inv.by, ...(inv.campaign ? { campaign: inv.campaign.source } : {}) });
+    if(contact) store.set('contact:' + u.id, contact);
+    // the link is usually sent for a tournament: sign the new player up for it straight away (not for a public campaign link)
     const t = club.T();
-    if(t && (t.status === 'registering' || (t.status === 'running' && club.lateOpen()))) try{ club.join(u.id); }catch(e){}
+    if(!inv.campaign && t && (t.status === 'registering' || (t.status === 'running' && club.lateOpen()))) try{ club.join(u.id); }catch(e){}
+    if(inv.campaign) campaignJoined(ip);
     store.set('invite:' + code, inv.multi ? { ...inv, uses: [...(inv.uses || []), u.id] } : { ...inv, usedBy: u.id, usedAt: Date.now() });
     broadcastClub();
     return { token: newSession(u.id) };
@@ -105,6 +111,43 @@ const api = {
     return { token: newSession(id), name: u.name };
   },
   invite(_, u){ return { code: inviteCode(u) }; },
+  // a public campaign link (for example a printed card at a venue): owner only, its own cap, expiry and source label, no tournament sign-up
+  campaign({ source, max, hours }, u){
+    campaignsGate();
+    if(!isOwner(u)) throw new Error('Only the club owner can do that.');
+    source = String(source || '').trim().toLowerCase();
+    if(!SLUG.test(source)) throw new Error('Name the source with 2 to 24 lowercase letters, numbers or dashes, for example celestia.');
+    max = Number(max); hours = Number(hours);
+    if(!Number.isInteger(max) || max < 1 || max > CAMPAIGN_MAX) throw new Error('Pick a cap of 1 to ' + CAMPAIGN_MAX + ' people.');
+    if(!Number.isFinite(hours) || hours < 1 || hours > CAMPAIGN_HOURS) throw new Error('Pick an expiry of 1 hour to 30 days.');
+    const code = crypto.randomBytes(9).toString('base64url');
+    store.set('invite:' + code, { code, createdAt: Date.now(), by: u.id, multi: true, campaign: { source }, max, uses: [], expiresAt: Date.now() + Math.round(hours * 3600e3) });
+    broadcastClub();
+    return { code };
+  },
+  // point the printed path /v/<source> at one of the owner's open campaign links with that source (or clear it with code: null)
+  vmap({ slug, code }, u){
+    campaignsGate();
+    if(!isOwner(u)) throw new Error('Only the club owner can do that.');
+    slug = String(slug || '');
+    if(!SLUG.test(slug)) throw new Error('Pick a path of 2 to 24 lowercase letters, numbers or dashes.');
+    if(code == null){ store.del('vpath:' + slug); broadcastClub(); return { ok: true }; }
+    const inv = typeof code === 'string' && CODE.test(code) && store.get('invite:' + code);
+    if(!inv || !inv.campaign || inv.campaign.source !== slug || !openInvite(inv)) throw new Error('Pick an active public link whose source is ' + slug + '.');
+    store.set('vpath:' + slug, { code, updatedAt: Date.now(), by: u.id });
+    broadcastClub();
+    return { ok: true };
+  },
+  // the join page asks whether its link is a public campaign link, to show the welcome and consent screen first.
+  // It reveals only the source label (the venue line on the welcome page) and whether the link is open, and counts one landing view.
+  campaignInfo({ code }){
+    campaignsGate();
+    const inv = typeof code === 'string' && CODE.test(code) && store.get('invite:' + code);
+    if(!inv || !inv.campaign) return { campaign: false };
+    const open = openInvite(inv);
+    if(open) bump(inv.campaign.source, 'views');
+    return { campaign: true, open, source: inv.campaign.source, venue: VENUES[inv.campaign.source] || null, emailConsent: EMAIL_CONSENT.text };
+  },
   status(){ return { hasOwner: !!owner() }; },
   pushKey(){ return { key: push.publicKey() }; },
   push(sub, u){ if(!u) throw new Error('Sign in first.'); push.subscribe(u.id, sub); broadcastClub(); return { ok: true }; },
@@ -134,12 +177,12 @@ const openInvite = i => !i.revoked && (i.multi ? Date.now() < i.expiresAt && (i.
 function inviteCode(u, group){
   if(!isOwner(u)){
     if(!membersInvite()) throw new Error('The organizer has turned off member invites. Ask them for a link.');
-    const mine = store.values('invite:').find(i => i.by === u.id && i.multi && openInvite(i));
+    const mine = store.values('invite:').find(i => i.by === u.id && i.multi && !i.campaign && openInvite(i));
     if(mine) return mine.code;
     group = true;
   }
   // the organizer's group link stays the same until it fills up, expires or is cancelled, so one link can be shared all day
-  if(group && isOwner(u)){ const cur = store.values('invite:').find(i => i.by === u.id && i.multi && openInvite(i)); if(cur) return cur.code; }
+  if(group && isOwner(u)){ const cur = store.values('invite:').find(i => i.by === u.id && i.multi && !i.campaign && openInvite(i)); if(cur) return cur.code; }
   const code = crypto.randomBytes(9).toString('base64url');
   const max = isOwner(u) ? GROUP_MAX : MEMBER_MAX;
   store.set('invite:' + code, group ? { code, createdAt: Date.now(), by: u.id, multi: true, max, uses: [], expiresAt: Date.now() + (isOwner(u) ? GROUP_DAYS : MEMBER_DAYS) * 864e5 }
@@ -147,6 +190,74 @@ function inviteCode(u, group){
   return code;
 }
 const invitedCount = uid => store.values('user:').filter(x => !x.removed && x.invitedBy === uid).length;
+
+// ---------- public campaign links and the printed /v/<source> path ----------
+// Off unless the server runs with CAMPAIGNS=1 (or STAGING=1). Off, the endpoints answer 404 like any unknown one,
+// /v/ is an unknown path, existing campaign invites cannot be redeemed, and no payload carries campaign data.
+const campaignsOn = () => process.env.CAMPAIGNS === '1' || process.env.STAGING === '1';
+const campaignsGate = () => { if(!campaignsOn()){ const e = new Error('Not found'); e.status = 404; throw e; } };
+// at most CAMPAIGN_MAX joins and 30 days per link, and at most CAMPAIGN_IP_HOUR new accounts per connection per hour
+const CAMPAIGN_MAX = 2000, CAMPAIGN_HOURS = 30 * 24, CAMPAIGN_IP_HOUR = +process.env.CAMPAIGN_IP_HOUR || 5;
+const SLUG = /^[a-z0-9-]{2,24}$/, CODE = /^[A-Za-z0-9_-]{12}$/;
+// the venue line shown on the welcome page for a source; only the venue's name, never an offer or a club
+const VENUES = { celestia: 'Celestia Restaurant & Lounge' };
+const joinsByIp = new Map();
+const campaignJoins = ip => (joinsByIp.get(ip) || []).filter(t => Date.now() - t < 3600e3);
+const campaignJoined = ip => { if(joinsByIp.size > 5000) for(const k of joinsByIp.keys()){ if(!campaignJoins(k).length) joinsByIp.delete(k); } joinsByIp.set(ip, [...campaignJoins(ip), Date.now()]); };
+// aggregate counters per source: plain integers, no address, time, device or person
+const bump = (source, k) => { const c = store.get('cstat:' + source) || {}; store.set('cstat:' + source, { ...c, [k]: (c[k] || 0) + 1 }); };
+// the optional email: only with its own unticked consent box; the exact wording and its version are kept with it
+const EMAIL_CONSENT = { v: 1, text: 'Blindrise may email me about club events. I can ask the club owner to remove my email at any time.' };
+function campaignEmail(email, ok){
+  email = String(email || '').trim();
+  if(!email) return null;
+  if(email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('That email does not look right. Leave it empty if you prefer.');
+  if(ok !== true) throw new Error('Tick the email box to share your email, or leave the email empty.');
+  return { email, consent: { ...EMAIL_CONSENT, at: Date.now() } };
+}
+// per campaign link, for the owner: visits, joins, who joined (with an email only if they opted in), tournaments, return visits
+function campaignReport(){
+  const now = Date.now(), all = store.values('history:'), t = club.T();
+  const inTourney = id => (t && (t.regs || []).includes(id)) || all.some(h => (h.results || []).some(r => r.uid === id));
+  return store.values('invite:').filter(i => i.campaign).sort((a, b) => b.createdAt - a.createdAt).map(i => {
+    const ids = i.uses || [], us = ids.map(id => store.get('user:' + id)).filter(x => x && !x.removed);
+    const status = i.revoked ? 'cancelled' : ids.length >= i.max ? 'full' : now > i.expiresAt ? 'expired' : 'active';
+    return { code: i.code, source: i.campaign.source, createdAt: i.createdAt, max: i.max, joined: ids.length, remaining: Math.max(0, i.max - ids.length), expiresAt: i.expiresAt, status,
+      played: us.filter(x => inTourney(x.id)).length, returned: us.filter(x => x.campRet).length, emails: us.filter(x => store.get('contact:' + x.id)).length,
+      members: us.map(x => ({ name: x.name, email: (store.get('contact:' + x.id) || {}).email || null })) };
+  });
+}
+function campaignSources(){
+  const srcs = new Set([...store.values('invite:').filter(i => i.campaign).map(i => i.campaign.source), ...store.keys('vpath:').map(k => k.slice(6))]);
+  return [...srcs].sort().map(s => { const c = store.get('cstat:' + s) || {}, vp = store.get('vpath:' + s), inv = vp && store.get('invite:' + vp.code);
+    return { source: s, visits: c.visits || 0, views: c.views || 0, path: vp ? { code: vp.code, open: !!(inv && inv.campaign && openInvite(inv)) } : null }; });
+}
+// a member who joined through a campaign link and comes back on a later day within 30 days counts once as returned
+function campaignReturn(u){
+  if(!campaignsOn() || !u.campaign || u.campRet) return;
+  const age = Date.now() - u.createdAt;
+  if(age > 20 * 3600e3 && age <= 30 * 864e5) store.set('user:' + u.id, { ...store.get('user:' + u.id), campRet: true });
+}
+// GET /v/<slug>: a fixed redirect to the mapped open campaign link, else one neutral page; never cached, rate limited
+const vHits = new Map();
+const vLimited = ip => { const now = Date.now(), a = (vHits.get(ip) || []).filter(x => now - x < 60e3); if(vHits.size > 5000) vHits.clear(); a.push(now); vHits.set(ip, a); return process.env.FAST !== '1' && a.length > 60; };
+const V_HEAD = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' };
+const V_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Blindrise</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b1220;color:#f4eee2;font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif;text-align:center;padding:24px;box-sizing:border-box}
+h1{font:600 30px/1.1 "Cormorant Garamond",Georgia,serif;letter-spacing:.2em;color:#d8b46a;margin:0 0 18px}p{margin:0 0 26px;color:#a3abbb}
+a{display:inline-block;padding:13px 28px;border-radius:999px;border:1px solid rgba(241,223,176,.35);color:#f1dfb0;text-decoration:none}</style></head>
+<body><main><h1>BLINDRISE</h1><p>This invitation is not active right now.</p><a href="/">Sign in</a></main></body></html>`;
+function vPath(req, res, slug){
+  const neutral = code => { res.writeHead(code, { 'Content-Type': 'text/html; charset=utf-8', ...SECURITY, ...V_HEAD }); res.end(V_PAGE); };
+  if(vLimited(clientIp(req))) return neutral(429);
+  if(!SLUG.test(slug)) return neutral(200);
+  const vp = store.get('vpath:' + slug);
+  if(!vp) return neutral(200);
+  bump(slug, 'visits');
+  const inv = typeof vp.code === 'string' && CODE.test(vp.code) && store.get('invite:' + vp.code);
+  if(!inv || !inv.campaign || inv.campaign.source !== slug || !openInvite(inv)) return neutral(200);
+  res.writeHead(302, { Location: '/join/' + vp.code, ...SECURITY, ...V_HEAD }); res.end();
+}
 
 // ---------- HTTP ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.wasm': 'application/wasm', '.gz': 'application/octet-stream' };
@@ -186,7 +297,7 @@ const server = http.createServer((req, res) => {
         if(RECOVERY.includes(url.pathname) && (blocked('rec' + ip, RECOVERY_IP) || blocked('rec:all', RECOVERY_ALL))) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
         if(extra && clubsClosedFor(u)) return send(res, 403, { error: 'Business Club opens soon.' }, undefined, extra);
-        send(res, 200, fn(data, u), undefined, extra);
+        send(res, 200, fn(data, u, ip), undefined, extra);
       }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); if(RECOVERY.includes(url.pathname) && /setup code/.test(e.message)){ recordFailure('rec' + ip); recordFailure('rec:all'); } } send(res, [401, 403, 404, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.' }, undefined, extra); }
     });
     return;
@@ -205,6 +316,8 @@ const server = http.createServer((req, res) => {
     if(r.status !== 200) return send(res, r.status, 'Not found', 'text/plain', NOINDEX);
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
+  const vm = /^\/v\/([^/]*)$/.exec(url.pathname);
+  if(vm && campaignsOn()){ let slug = ''; try{ slug = decodeURIComponent(vm[1]); }catch(e){} return vPath(req, res, slug); }
   let file = url.pathname === '/' || url.pathname === '/login' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
   if(file === 'engine.js') return fs.readFile(path.join(__dirname, 'engine.js'), (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES['.js']));
   const full = path.join(PUBLIC, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
@@ -286,11 +399,13 @@ function clubView(u){
     members: isOwner(u) ? members : members.map(m => m.invitedBy ? { ...m, invitedBy: null } : m),
     history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
     features: { clubs: clubsOn() }, chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
-    pushOn: push.hasPush(u.id), membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
+    pushOn: push.hasPush(u.id), membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && !x.campaign && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
   };
   if(isOwner(u)){
-    view.invites = store.values('invite:').filter(openInvite)
+    view.invites = store.values('invite:').filter(i => !i.campaign && openInvite(i))
       .map(i => ({ code: i.code, createdAt: i.createdAt, multi: !!i.multi, used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt, by: i.by }));
+    // public campaign links, only while campaigns are on (otherwise the owner's payload is exactly as before)
+    if(campaignsOn()){ view.campaigns = campaignReport(); view.campaignSources = campaignSources(); }
     view.conflicts = conflictPairs();
     const hh = Object.fromEntries(store.values('user:').filter(x => !x.removed && x.household).map(x => [x.id, x.household]));
     view.households = hh;
@@ -380,7 +495,7 @@ wss.on('connection', (ws, req) => {
     if(m.t === 'hello'){
       const u = userByToken(m.token);
       if(!u) return sendWS(ws, { t: 'auth', ok: false });
-      ws.user = u; ws.sess = sha(m.token); remember(u, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); sendWS(ws, { t: 'auth', ok: true });
+      ws.user = u; ws.sess = sha(m.token); remember(u, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); campaignReturn(u); sendWS(ws, { t: 'auth', ok: true });
       sendWS(ws, { t: 'club', club: clubView(u) });
       const mine = club.tableOf(u.id); if(mine){ pushTable(mine); chatLogFor(ws, mine); }
       return;
