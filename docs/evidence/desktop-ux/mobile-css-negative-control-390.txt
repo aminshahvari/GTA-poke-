@@ -1,0 +1,5 @@
+FAIL 390x844 lounge: every computed style identical to the base stylesheet (615 element boxes, 1 differ)
+FAIL 390x844 leaderboard: every computed style identical to the base stylesheet (738 element boxes, 1 differ)
+FAIL 390x844 profile: every computed style identical to the base stylesheet (966 element boxes, 1 differ)
+FAIL 390x844 director: every computed style identical to the base stylesheet (1071 element boxes, 1 differ)
+FAIL 390x844 table: every computed style identical to the base stylesheet (786 element boxes, 1 differ)

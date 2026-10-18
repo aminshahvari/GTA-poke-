@@ -1,0 +1,200 @@
+ok   320x568 lounge: phone column fills the screen (320 px)
+ok   320x568 nav: event tab visible and big enough
+ok   320x568 nav: board tab visible and big enough
+ok   320x568 nav: learn tab visible and big enough
+ok   320x568 lounge: every computed style identical to the base stylesheet (615 element boxes)
+ok   320x568 lounge: no sideways scroll
+ok   320x568 Leaderboard tab opens
+ok   320x568 leaderboard: every computed style identical to the base stylesheet (738 element boxes)
+ok   320x568 leaderboard: no sideways scroll
+ok   320x568 profile dialog fits (288 px)
+ok   320x568 profile: every computed style identical to the base stylesheet (966 element boxes)
+ok   320x568 profile: no sideways scroll
+ok   320x568 Director tab opens
+ok   320x568 director: every computed style identical to the base stylesheet (1071 element boxes)
+ok   320x568 director: no sideways scroll
+ok   320x568 table: aFold on screen
+ok   320x568 table: aCall on screen
+ok   320x568 table: aRaise on screen
+ok   320x568 table: 9 seats drawn
+KNOWN 320x568 table: every seat between the header and the controls, inside the window — 5 out: 100,254,220,342 | -5,192,79,281 | 75,102,159,192 | 161,109,245,186 | 241,192,325,281 (header 127, controls 335)
+ok   320x568 table: no two avatars overlap
+ok   320x568 table: every computed style identical to the base stylesheet (786 element boxes)
+ok   320x568 table: no sideways scroll
+ok   375x667 lounge: phone column fills the screen (375 px)
+ok   375x667 nav: event tab visible and big enough
+ok   375x667 nav: board tab visible and big enough
+ok   375x667 nav: learn tab visible and big enough
+ok   375x667 lounge: every computed style identical to the base stylesheet (615 element boxes)
+ok   375x667 lounge: no sideways scroll
+ok   375x667 Leaderboard tab opens
+ok   375x667 leaderboard: every computed style identical to the base stylesheet (738 element boxes)
+ok   375x667 leaderboard: no sideways scroll
+ok   375x667 profile dialog fits (343 px)
+ok   375x667 profile: every computed style identical to the base stylesheet (966 element boxes)
+ok   375x667 profile: no sideways scroll
+ok   375x667 Director tab opens
+ok   375x667 director: every computed style identical to the base stylesheet (1071 element boxes)
+ok   375x667 director: no sideways scroll
+ok   375x667 table: aFold on screen
+ok   375x667 table: aCall on screen
+ok   375x667 table: aRaise on screen
+ok   375x667 table: 9 seats drawn
+KNOWN 375x667 table: every seat between the header and the controls, inside the window — 2 out: 95,113,179,202 | 196,119,280,196 (header 127, controls 451)
+ok   375x667 table: no two avatars overlap
+ok   375x667 table: every computed style identical to the base stylesheet (786 element boxes)
+ok   375x667 table: no sideways scroll
+ok   390x844 lounge: phone column fills the screen (390 px)
+ok   390x844 nav: event tab visible and big enough
+ok   390x844 nav: board tab visible and big enough
+ok   390x844 nav: learn tab visible and big enough
+ok   390x844 lounge: every computed style identical to the base stylesheet (615 element boxes)
+ok   390x844 lounge: no sideways scroll
+ok   390x844 Leaderboard tab opens
+ok   390x844 leaderboard: every computed style identical to the base stylesheet (738 element boxes)
+ok   390x844 leaderboard: no sideways scroll
+ok   390x844 profile dialog fits (358 px)
+ok   390x844 profile: every computed style identical to the base stylesheet (966 element boxes)
+ok   390x844 profile: no sideways scroll
+ok   390x844 Director tab opens
+ok   390x844 director: every computed style identical to the base stylesheet (1071 element boxes)
+ok   390x844 director: no sideways scroll
+ok   390x844 table: aFold on screen
+ok   390x844 table: aCall on screen
+ok   390x844 table: aRaise on screen
+ok   390x844 table: 9 seats drawn
+ok   390x844 table: every seat between the header and the controls, inside the window
+ok   390x844 table: no two avatars overlap
+ok   390x844 table: every computed style identical to the base stylesheet (786 element boxes)
+ok   390x844 table: no sideways scroll
+ok   430x932 lounge: phone column fills the screen (430 px)
+ok   430x932 nav: event tab visible and big enough
+ok   430x932 nav: board tab visible and big enough
+ok   430x932 nav: learn tab visible and big enough
+ok   430x932 lounge: every computed style identical to the base stylesheet (615 element boxes)
+ok   430x932 lounge: no sideways scroll
+ok   430x932 Leaderboard tab opens
+ok   430x932 leaderboard: every computed style identical to the base stylesheet (738 element boxes)
+ok   430x932 leaderboard: no sideways scroll
+ok   430x932 profile dialog fits (398 px)
+ok   430x932 profile: every computed style identical to the base stylesheet (966 element boxes)
+ok   430x932 profile: no sideways scroll
+ok   430x932 Director tab opens
+ok   430x932 director: every computed style identical to the base stylesheet (1071 element boxes)
+ok   430x932 director: no sideways scroll
+ok   430x932 table: aFold on screen
+ok   430x932 table: aCall on screen
+ok   430x932 table: aRaise on screen
+ok   430x932 table: 9 seats drawn
+ok   430x932 table: every seat between the header and the controls, inside the window
+ok   430x932 table: no two avatars overlap
+ok   430x932 table: every computed style identical to the base stylesheet (786 element boxes)
+ok   430x932 table: no sideways scroll
+ok   768x1024 lounge: tablet content uses the width (720 px)
+ok   768x1024 nav: event tab visible and big enough
+ok   768x1024 nav: board tab visible and big enough
+ok   768x1024 nav: learn tab visible and big enough
+ok   768x1024 lounge: no sideways scroll
+ok   768x1024 Leaderboard tab opens
+ok   768x1024 leaderboard: no sideways scroll
+ok   768x1024 profile dialog fits and stays dialog-sized (520 px)
+ok   768x1024 profile: no sideways scroll
+ok   768x1024 Director tab opens
+ok   768x1024 director: no sideways scroll
+ok   768x1024 table: aFold on screen
+ok   768x1024 table: aCall on screen
+ok   768x1024 table: aRaise on screen
+ok   768x1024 table: 9 seats drawn
+ok   768x1024 table: every seat between the header and the controls, inside the window
+ok   768x1024 table: no two avatars overlap
+ok   768x1024 table: no sideways scroll
+ok   1024x768 lounge: desktop content is wide (976 px, 900..1240)
+ok   1024x768 nav: event tab visible and big enough
+ok   1024x768 nav: board tab visible and big enough
+ok   1024x768 nav: learn tab visible and big enough
+ok   1024x768 lounge: the four doors sit in one or two rows (2)
+ok   1024x768 lounge: no sideways scroll
+ok   1024x768 Leaderboard tab opens
+ok   1024x768 leaderboard: no sideways scroll
+ok   1024x768 profile dialog fits and stays dialog-sized (520 px)
+ok   1024x768 profile: no sideways scroll
+ok   1024x768 Director tab opens
+ok   1024x768 director: no sideways scroll
+ok   1024x768 table: aFold on screen
+ok   1024x768 table: aCall on screen
+ok   1024x768 table: aRaise on screen
+ok   1024x768 table: 9 seats drawn
+ok   1024x768 table: every seat between the header and the controls, inside the window
+ok   1024x768 table: no two avatars overlap
+ok   1024x768 table: no sideways scroll
+ok   1280x800 lounge: desktop content is wide (1200 px, 900..1240)
+ok   1280x800 nav: event tab visible and big enough
+ok   1280x800 nav: board tab visible and big enough
+ok   1280x800 nav: learn tab visible and big enough
+ok   1280x800 lounge: the four doors sit in one or two rows (2)
+ok   1280x800 lounge: no sideways scroll
+ok   1280x800 Leaderboard tab opens
+ok   1280x800 leaderboard: no sideways scroll
+ok   1280x800 profile dialog fits and stays dialog-sized (520 px)
+ok   1280x800 profile: no sideways scroll
+ok   1280x800 Director tab opens
+ok   1280x800 director: no sideways scroll
+ok   1280x800 table: aFold on screen
+ok   1280x800 table: aCall on screen
+ok   1280x800 table: aRaise on screen
+ok   1280x800 table: 9 seats drawn
+ok   1280x800 table: every seat between the header and the controls, inside the window
+ok   1280x800 table: no two avatars overlap
+ok   1280x800 table: avatars are desktop-sized (48 px)
+ok   1280x800 table: board cards are desktop-sized (63 px)
+ok   1280x800 table: no sideways scroll
+ok   1440x900 lounge: desktop content is wide (1200 px, 900..1240)
+ok   1440x900 nav: event tab visible and big enough
+ok   1440x900 nav: board tab visible and big enough
+ok   1440x900 nav: learn tab visible and big enough
+ok   1440x900 lounge: the four doors sit in one or two rows (2)
+ok   1440x900 lounge: no sideways scroll
+ok   1440x900 Leaderboard tab opens
+ok   1440x900 leaderboard: no sideways scroll
+ok   1440x900 profile dialog fits and stays dialog-sized (520 px)
+ok   1440x900 profile: no sideways scroll
+ok   1440x900 Director tab opens
+ok   1440x900 director: no sideways scroll
+ok   1440x900 table: aFold on screen
+ok   1440x900 table: aCall on screen
+ok   1440x900 table: aRaise on screen
+ok   1440x900 table: 9 seats drawn
+ok   1440x900 table: every seat between the header and the controls, inside the window
+ok   1440x900 table: no two avatars overlap
+ok   1440x900 table: avatars are desktop-sized (54 px)
+ok   1440x900 table: board cards are desktop-sized (70 px)
+ok   1440x900 table: no sideways scroll
+ok   1920x1080 lounge: desktop content is wide (1200 px, 900..1240)
+ok   1920x1080 nav: event tab visible and big enough
+ok   1920x1080 nav: board tab visible and big enough
+ok   1920x1080 nav: learn tab visible and big enough
+ok   1920x1080 lounge: the four doors sit in one or two rows (2)
+ok   1920x1080 lounge: no sideways scroll
+ok   1920x1080 Leaderboard tab opens
+ok   1920x1080 leaderboard: no sideways scroll
+ok   1920x1080 profile dialog fits and stays dialog-sized (520 px)
+ok   1920x1080 profile: no sideways scroll
+ok   1920x1080 Director tab opens
+ok   1920x1080 director: no sideways scroll
+ok   1920x1080 table: aFold on screen
+ok   1920x1080 table: aCall on screen
+ok   1920x1080 table: aRaise on screen
+ok   1920x1080 table: 9 seats drawn
+ok   1920x1080 table: every seat between the header and the controls, inside the window
+ok   1920x1080 table: no two avatars overlap
+ok   1920x1080 table: avatars are desktop-sized (64 px)
+ok   1920x1080 table: board cards are desktop-sized (78 px)
+ok   1920x1080 table: no sideways scroll
+ok   felt 1024 px wide window: felt 729 px >= 590 px at 768
+ok   felt 1280 px wide window: felt 779 px >= 729 px at 1024
+ok   felt 1440 px wide window: felt 935 px >= 779 px at 1280
+ok   felt 1920 px wide window: felt 1215 px >= 935 px at 1440
+ok   felt at 1920 is at least twice as wide as on a 390 phone (1215 vs 313)
+felt sizes (window, w, h): 320/256/151  375/301/237  390/313/379  430/346/444  768/590/507  1024/729/297  1280/779/321  1440/935/390  1920/1215/516
+
+195 ok, 0 failed, 2 known (phones, unchanged from production)
