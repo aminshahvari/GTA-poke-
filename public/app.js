@@ -758,7 +758,7 @@ function tableGeo(n, bet = '8,888'){
     // at the board's left instead, the two centred together)
     const bxOf = side => side ? cx + (pw0 + 8) / 2 : cx;
     const middle = (by, side) => { const bx = bxOf(side); return [[bx, by, boardHalf, bh], side ? [bx - boardHalf - 8 - pw0 / 2, by, pw0 / 2, ph0 / 2, 1] : [bx, by - bh - 6 - ph0 / 2, pw0 / 2, ph0 / 2, 1], [bx, by + bh + 6 + mh / 2, mw / 2, mh / 2, 1]]; };
-    const sides = [false, true];
+    const sides = pw0 + 8 + 2 * boardHalf <= fw - 2 * rail - 12 ? [false, true] : [false];
     // seats that touch each other mean this look is too big for the area
     const touch = (A, B) => A.some(([x, y, w, h]) => B.some(([X, Y, ww, hh]) => Math.abs(x - X) < w + ww + 1 && Math.abs(y - Y) < h + hh + 1));
     let clash = 0;
@@ -787,6 +787,12 @@ function tableGeo(n, bet = '8,888'){
       for(const m of [Math.min(hw, hh) + 2, -rail / 2]) for(const [dd, tt] of steps){ const x = x0 - nx * dd + tx * tt, y = y0 - ny * dd + ty * tt; if(ok(x, y, m) && !hits(x, y, hw, hh, list)) return [x, y]; }
       // no clean spot: give up at once when only a clean layout will do, else the least crowded spot on the felt
       fails++; if(quick) return null;
+      // (any clean spot round it, on the felt or just off it beside its own seat, beats one on top of a seat: the
+      // nearest one on a 4 px grid)
+      let gb = null, gd = Infinity;
+      for(let gx = -120; gx <= 120; gx += 4) for(let gy = -120; gy <= 120; gy += 4){ const x = x0 + gx, y = y0 + gy, d = gx * gx + gy * gy;
+        if(d < gd && (inside(x, y, -rail / 2) || onArea(x, y, hw, hh)) && mine(x, y, own) && !hits(x, y, hw, hh, list)){ gb = [x, y]; gd = d; } }
+      if(gb) return gb;
       // (still always nearer its own seat than any other: off the felt or crowded beats looking like someone else's)
       let best = null, bc = Infinity;
       for(const [dd, tt] of steps){ const x = x0 - nx * dd + tx * tt, y = y0 - ny * dd + ty * tt; if(!mine(x, y, own)) continue;
