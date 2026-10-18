@@ -112,6 +112,24 @@ async function viewportMatrix(pg, [w, h], tag, push){
   check(inside && await onScreen('#aCall', w), `${tag}: turned to landscape (${h}x${w}): every seat and the action buttons are on screen`);
   m = await set(w, h, 1);
   check(drift(ref, m) <= TOL, `${tag}: turned back to portrait: every seat is where it was (${drift(ref, m).toFixed(1)} px)`);
+  // the same turns the way iPhone Safari reports them: the new width arrives at once, the new height only later
+  // (no event of its own), mid-hand. The table must end up laid out exactly as for a normal turn.
+  const lateTurn = async (W, H, oldH) => {
+    await pg.evaluate(oh => { const d = Object.getOwnPropertyDescriptor(window, 'innerHeight') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerHeight');
+      window.__ih = d; Object.defineProperty(window, 'innerHeight', { get: () => oh, configurable: true }); }, oldH);
+    await pg.setViewportSize({ width: W, height: H }); await pg.evaluate(() => window.dispatchEvent(new Event('orientationchange')));
+    await sleep(120);
+    await pg.evaluate(() => Object.defineProperty(window, 'innerHeight', window.__ih));
+    if(process.env.DBG) console.log('innerHeight now', await pg.evaluate(() => window.innerHeight), 'want', H);
+    await sleep(1200); return measure(pg);
+  };
+  const cls = () => pg.evaluate(() => ['land', 'h700', 'h600'].map(c => document.getElementById('game').classList.contains(c)).join());
+  m = await set(h, w); const landRef = m, landCls = await cls();
+  m = await set(w, h);
+  m = await lateTurn(h, w, h);
+  check(drift(landRef, m) <= TOL && await cls() === landCls, `${tag}: turned to landscape, size reported late (iPhone): laid out as a normal turn (${drift(landRef, m).toFixed(1)} px, ${await cls()} vs ${landCls})`);
+  m = await lateTurn(w, h, w);
+  check(drift(ref, m) <= TOL, `${tag}: turned back to portrait, size reported late (iPhone): every seat is where it was (${drift(ref, m).toFixed(1)} px)`);
   // the keyboard, from the chat box
   await pg.click('#chatBtn'); await sleep(250); await pg.focus('#chatInput');
   const kbH = h - 300;

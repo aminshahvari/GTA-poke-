@@ -1138,7 +1138,7 @@ function newLock(d){
   // on the shortest screens the header is one row: the chat and Lobby buttons move up beside the clock
   const hb = g.querySelector('.hdr-btns'), home = g.querySelector(H <= 600 ? '.clock' : '.stats');
   if(hb && hb.parentNode !== home) home.appendChild(hb);
-  LOCK = { w: g.clientWidth, hand, h: 0 };
+  LOCK = { w: g.clientWidth, hand, h: 0, iw: window.innerWidth, ih: H };
   return true;
 }
 function lockArea(){
@@ -1429,6 +1429,26 @@ function tickClock(){
 }
 setInterval(tickClock, 200);
 window.addEventListener('resize', () => { if(view === 'table') renderTable(); });
+// iPhone Safari reports a turned screen's new size late (after the resize/orientationchange events have fired), so
+// the table was laid out for the old shape and kept it: look again a few times while the turn settles. A screen
+// that only got taller or shorter (the toolbar, the keyboard) keeps its held layout; a turned one (a new width) is laid
+// out anew.
+let TURN = [], TURNW = window.innerWidth;
+function settleTurn(){
+  TURN.forEach(clearTimeout);
+  TURN = [60, 200, 450, 900].map((ms, i, all) => setTimeout(() => {
+    if(view === 'table'){
+      // the screen really turned (its width is not the one it settled at last time): while the turn settles, a
+      // height arriving late decides the layout again too
+      if(LOCK && window.innerWidth !== TURNW && (LOCK.iw !== window.innerWidth || LOCK.ih !== window.innerHeight)) LOCK = null;
+      renderTable();
+    }
+    if(i === all.length - 1) TURNW = window.innerWidth;
+  }, ms));
+}
+window.addEventListener('orientationchange', settleTurn);
+if(screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', settleTurn);
+window.addEventListener('resize', () => { if(window.innerWidth !== TURNW) settleTurn(); });
 // the layout measures text, so measure again once the web fonts have arrived (the table keeps its held height)
 if(document.fonts) document.fonts.addEventListener('loadingdone', () => { SIZES.clear(); GEOS.clear(); DOCKS.clear(); GEO = null; if(view === 'table') renderTable(); });
 // the table area also changes size without the window doing so (the action bar, the raise panel or the hand
