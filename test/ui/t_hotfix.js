@@ -43,7 +43,7 @@ async function signedIn(browser, tok, [w, h]){
     }));
     const member = rows.filter(r => /'s link$/.test(r.name));
     check(member.length >= 2, `${vp[0]}px: member link rows shown (${member.length})`);
-    for(const r of rows) check(r.lines <= 2 && r.w >= 48, `${vp[0]}px: "${r.name}" readable (${r.w}px wide, ${r.lines} line${r.lines === 1 ? '' : 's'})`);
+    for(const r of rows) check(r.lines <= 2 && r.w >= 96, `${vp[0]}px: "${r.name}" readable (${r.w}px wide, ${r.lines} line${r.lines === 1 ? '' : 's'})`);
     check(rows.some(r => r.name === 'Group link') && rows.some(r => r.name === 'Unused invite'), `${vp[0]}px: group and personal rows still listed`);
     check(await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${vp[0]}px: no sideways scroll on Director`);
     if(SHOTS){ await pg.locator('#lobby .table-list').first().scrollIntoViewIfNeeded(); await sleep(200); await pg.screenshot({ path: path.join(SHOTS, `invites-${vp[0]}.png`) }); }

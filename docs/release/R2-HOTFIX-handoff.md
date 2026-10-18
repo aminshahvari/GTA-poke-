@@ -29,3 +29,10 @@ CSS only, no data. Render rollback to the `5c7ee11` deploy `dep-dba1ktbrjlhs73c6
 ## Addition: practice table on members' Home (founder request, 01:56 UTC)
 Members only found the demo under Salon → Lessons; the owner has it in Director. `renderHome` now adds the same "Try a practice table" card to members' Lounge, except while they are seated in a running tournament. The owner's Home is unchanged. Client only (`public/app.js`, 3 lines).
 Tests: t_hotfix 39 ok / 0 failed (adds: card shown at 320/390, practice table opens, no sideways scroll, owner Home without the extra card); t_premium_ui 295/0; t_clubs_closed 25/0; t_mobile_ux pass; t_welcome pass; npm test exit 0.
+
+## Re-audit fix: "Unused invite" row (Muse overnight report, Area 6)
+Muse ran `t_hotfix` on `fcabb5d` and got 38 ok / 1 failed. At 375 px an "Unused invite" row squeezed to 54 px and 3 lines, because the fix only covered rows with `data-group="1"`. Claude's run passed only because its threshold was 48 px and its fonts were slightly narrower: it measured 53 px and 2 lines.
+- Fix: the two rules now select every invite row (`.trow:has(> [data-copy])`): group, member and single links. Other `.trow` rows are unchanged. The change is CSS only, the same 2 lines with a broader selector.
+- Test tightened: an invite name must be at least 96 px wide and at most 2 lines. On `fcabb5d` the tightened test fails: 36 ok / 3 failed ("Unused invite" is 79 px at 320, 53 px at 375 and 68 px at 390). On this head it passes: 39 ok / 0 failed ("Unused invite" is 158/133/148/188 px, 1 line, at 320/375/390/430).
+- Regression on this head: `npm test` exit 0; t_premium_ui 295/0; t_clubs_closed 25/0; t_mobile_ux passed; t_welcome passed. All UI tests ran with the real IBM Plex font cache (`FONTS_DIR`).
+- Still untested on real Safari or WebKit (only Chromium is available here). `:has()` needs iOS 15.4 or later.
