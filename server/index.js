@@ -280,12 +280,13 @@ function clubView(u){
     me: { id: u.id, name: u.name, owner: isOwner(u) },
     tourney: t ? { id: t.id, status: t.status, name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: t.startAt, repeat: t.repeat, regs: t.regs,
       level: t.level, levelEndsAt: t.levelEndsAt, paused: t.paused, pausedLeft: t.pausedLeft, entrants: t.entrants, remaining: t.remaining,
-      places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null } : null,
+      places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null,
+      ...(club.gp() ? { showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0 } : {}) } : null,
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
     // who invited whom is for the owner only: a member's payload carries no inviter for anyone (Muse P10)
     members: isOwner(u) ? members : members.map(m => m.invitedBy ? { ...m, invitedBy: null } : m),
     history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
-    features: { clubs: clubsOn() }, chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
+    features: { clubs: clubsOn(), ...(club.gp() ? { tableExtras: true } : {}) }, chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
     pushOn: push.hasPush(u.id), membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
   };
   if(isOwner(u)){
@@ -393,6 +394,7 @@ wss.on('connection', (ws, req) => {
         case 'watch': ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(ws.watch); chatLogFor(ws, ws.watch); } break;
         case 'act': club.act(u.id, m); break;
         case 'extend': club.extend(u.id); break;
+        case 'show': club.show(u.id, m); break;
         case 'chat': case 'throw': chat(ws, u, m); break;
         case 'fair': { const id = String(m.id || ''), cur = club.T(), h = store.get('history:' + id);
           const t = cur && cur.id === id ? cur : h ? { ...h, status: 'finished' } : null;

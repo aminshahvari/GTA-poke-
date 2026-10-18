@@ -39,7 +39,9 @@
       const deck = await deckFrom(`${rep.seed}|${h.beacon}|${h.tid}|${h.hand}`);
       const exp = dealt(deck, h.players.length, h.board.length);
       const match = h.players.every((p, i) => p.cards[0] === exp.hole[i][0] && p.cards[1] === exp.hole[i][1])
-        && h.board.every((c, i) => c === exp.board[i]);
+        && h.board.every((c, i) => c === exp.board[i])
+        // rabbit hunt: the cards shown after a hand ended early must be the ones the deck would have dealt next
+        && (!h.rabbit || h.rabbit.every((c, i) => c === dealt(deck, h.players.length, 5).board[h.board.length + i]));
       out.hands.push({ ...h, match });
       if(match) out.ok++; else out.bad++;
       if(!h.round) out.local++;
