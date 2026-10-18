@@ -56,9 +56,9 @@ Nothing in sections 1–6 depends on its content.
 | Feature | Branch @ SHA | State |
 |---|---|---|
 | Members' Lounge practice-table card, Director invite rows fixed at 320–430 px | `r2-hotfix` @ `06dd2e5` | Muse CONDITIONAL on `fcabb5d`; the condition is fixed in `06dd2e5` and needs a re-audit |
-| Mobile viewport stability (dvh, visualViewport) | `mobile-stability` (in progress) | not delivered yet; Muse Area 1 FAIL until it is |
-| Table layout redesign for 2–9 players | `table-redesign` (in progress, stacked on mobile-stability) | not delivered |
-| Show Cards, hand-to-hand delay, Rabbit Hunt, default-off | `gameplay-options` (in progress) | not delivered; Muse's fairness conditions are filed (`d9836df` Area 6) |
+| Mobile viewport stability (dvh, visualViewport) | `mobile-stability` @ `a6ef217` | Muse-verified on branch (`aed6f2c` §2c); not yet combined with `06dd2e5` |
+| Table layout redesign for 2–9 players | `table-redesign` @ `1cb2b89` (stacked on mobile-stability) | delivered 05:24 UTC; not yet audited |
+| Show Cards, hand-to-hand delay, Rabbit Hunt, default-off | `gameplay-options` @ `e391f8d` | Muse PASS on branch (`aed6f2c` §2c); activation needs owner decisions |
 | Public campaign signup link (consent notice, PIN reminder, who-joined report) | `public-onboarding` @ `8b2b1fa` | Muse PASS (`91bfd7f`), but built on the old Shape A `bf24ceb`: it must be rebased onto R2 and delta-audited |
 | Desktop responsive layout (CSS-only, ≥768 px) | `desktop-ux` @ `ad3b30f` | not audited; built on `5838e14`, so it needs a port to R2 |
 | Feedback Hub (members send Bug/Idea/UX notes; owner inbox) | `r2-feedback` @ `67ed7fc` | Muse PASS (`fd7c911`, 31 probes); never released |
@@ -77,7 +77,7 @@ Nothing in sections 1–6 depends on its content.
 
 1. **Viewport jump on iPhone (P0).** Muse reproduced it: going from 844 to 754 px viewport height moves the table area −90 px and the hero seat −80 px, and seats rescale from 100 to 88 px (`MUSE-REPORT-overnight-audit-2026-10-18.md` Area 2; `d9836df` Area 1). The cause is in code: `html,body,.app{height:100%}`, the table is `flex:1`, and there is no `dvh` and no `visualViewport` handling. The fix is in progress on `mobile-stability` and will land on `r2-hotfix` as one SHA for Muse.
 2. **Real-device Safari check (P0, owner).** All browser evidence is Chromium. The founder's 12-step phone smoke test (`docs/release/R2-DEPLOY-RUNBOOK.md` §4) on the live build is still owed (Muse remaining risk 3).
-3. **Lounge hotfix: practice card and invite rows (P0).** Done on `r2-hotfix` `06dd2e5`: `t_hotfix` 39/0, and the stricter test fails on `fcabb5d` (36/3). It awaits Muse's re-audit.
+3. **Lounge hotfix: practice card and invite rows (P0).** Done on `r2-hotfix` `06dd2e5`: `t_hotfix` 39/0, and the stricter test fails on `fcabb5d` (36/3). Muse PASS on `06dd2e5` (`aed6f2c` §2c).
 4. **Test harness reliability (P1).** `t_table_small` at 320×568 measures the animated chips after a fixed 700 ms, which is flaky under load (Muse `d9836df` Area 2). The fix is to wait for the animation to end before measuring.
 5. **Campaign link rebase (P1).** `8b2b1fa` needs a rebase onto R2 before any public onboarding, then a delta audit.
 6. **Desktop port (P2).** Port `ad3b30f` onto R2, then Muse audits it. Desktop is not the primary device.

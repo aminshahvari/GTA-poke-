@@ -14,7 +14,7 @@ Line numbers refer to `server/index.js` at `5c7ee11` unless another file is name
 | Item | Label | Evidence |
 |---|---|---|
 | Stable mobile layout | PARTIAL | Static sizes pass (`t_mobile_ux`, `t_premium_ui` 295/0). The iPhone viewport jump is reproduced by Muse; the fix is on the `mobile-stability` branch (in progress) and goes to `r2-hotfix` |
-| Polished social game interface | IMPLEMENTED | Premium navy/gold, Muse PASS `bad2324`. Table redesign for 2–9 is on `table-redesign` (in progress) |
+| Polished social game interface | IMPLEMENTED | Premium navy/gold, Muse PASS `bad2324`. Table redesign for 2–9 is on `table-redesign` `1cb2b89` (pushed 05:24 UTC, stacked on `mobile-stability`; not yet audited) |
 | Real iPhone Safari verification | NOT VERIFIED | Only Chromium is available to Claude. The owner's phone smoke test is still owed |
 | **Email onboarding** | PROPOSED | **No email exists anywhere in sign-up or sign-in.** Identity is display name + 4–8 digit PIN (`redeem`, `:73`). The only `email` in the server is an optional Business Club contact field (`server/business.js:22,78`). No mail sending, and no member PIN recovery |
 | Invitation links | IMPLEMENTED | Single, owner group (100 people / 30 days) and member (10 / 7 days) links; revoke; auto-join tournament (`:73-90`, `:128-149`, `:433`). Used live on Oct 17 |
@@ -49,7 +49,7 @@ Line numbers refer to `server/index.js` at `5c7ee11` unless another file is name
 |---|---|---|
 | Free tournaments, chat, throws, Learn | IMPLEMENTED | `server/club.js`, `:307-330`, `public/learn.js` |
 | Points / rewards shop | IMPLEMENTED | `server/rewards.js`: points come only from finishing places; not transferable; skill-testing question. **Note:** these are game-outcome-linked rewards. Principle 10 applies to new engagement features; the existing shop is covered by the legal notes and is unchanged |
-| Show Cards / hand delay / Rabbit Hunt | PARTIAL | `gameplay-options` `e391f8d`, default-off behind `GAMEPLAY_OPTIONS`; fairness parity 3,000/3,000; awaiting Muse |
+| Show Cards / hand delay / Rabbit Hunt | PARTIAL | `gameplay-options` `e391f8d`, default-off behind `GAMEPLAY_OPTIONS`; fairness parity 3,000/3,000; Muse PASS on branch (`aed6f2c` §2c) |
 | Trivia, team challenges, icebreakers, introductions | PROPOSED | — |
 
 ## Phase 5: Commercialization
