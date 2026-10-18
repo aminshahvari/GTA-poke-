@@ -1,4 +1,4 @@
-// Who invited whom: the owner sees it for every member; a member sees only their own inviter, never anyone else's.
+// Who invited whom: the owner sees it for every member; a member's payload carries no inviter for anyone, themselves included.
 const assert = require('assert');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
@@ -30,11 +30,11 @@ let n = 0; const check = (c, msg) => { assert.ok(c, msg); n++; console.log('ok  
 
   check(by(ownerV, 'Alex') === oid && by(ownerV, 'Cyrus') === oid && by(ownerV, 'Bita') === aid, 'owner sees every member\'s inviter');
   const bV = await clubView(B);
-  check(by(bV, 'Bita') === aid, 'a member sees their own inviter');
+  check(by(bV, 'Bita') === null, 'a member\'s payload does not carry even their own inviter');
   check(by(bV, 'Alex') === null && by(bV, 'Cyrus') === null, 'a member does not see other members\' inviters');
   const cV = await clubView(C);
   check(by(cV, 'Bita') === null && by(cV, 'Alex') === null, 'an unrelated member sees no inviter for anyone else');
-  check(!cV.members.some(m => m.id !== cV.me.id && m.invitedBy), 'no other member\'s inviter in a member payload at all');
+  check(![bV, cV].some(v => v.members.some(m => m.invitedBy)), 'no invitedBy anywhere in member payloads');
   const aV = await clubView(A);
   check(by(aV, 'Bita') === null && aV.invitedCount === 1, 'the inviter sees only a count of who joined through them, not the names');
   check(cV.members.length === ownerV.members.length, 'members still see the full member list');

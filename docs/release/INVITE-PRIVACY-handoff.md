@@ -8,7 +8,7 @@ Claude, 2026-10-18. This is a separate workstream on branch `invite-privacy`, cu
 - So any member could read, from the UI or the raw payload, who invited every other member. The `profile` message (`server/index.js:410`) does not carry it.
 
 ## Fix (3 lines in `server/index.js`, client unchanged)
-In `clubView`, the owner still gets the full list. For anyone else, every other member's `invitedBy` is set to `null`, and a member still sees their own inviter. The client already treats a missing inviter as "show nothing", so a member sees "invited by …" only on their own profile. The inviter still gets `invitedCount` (a number, existing field). No stored data changes and no migration is needed; the shared `membersView` memo is not mutated (entries are copied).
+In `clubView`, the owner still gets the full list. For anyone else, every member's `invitedBy`, their own included, is set to `null`. This matches Muse's P10 (strategy-integration audit `aed6f2c`): "a member payload contains no `invitedBy`". The client already treats a missing inviter as "show nothing", so members no longer see "invited by …" on any profile; the Director list is unchanged. The inviter still gets `invitedCount` (a number, existing field). No stored data changes and no migration is needed; the shared `membersView` memo is not mutated (entries are copied).
 
 ## Tests
 - New `test/t_invite_privacy.js`, added to `npm test`: 7 ok / 0 failed. On `06dd2e5` without the fix it fails at "a member does not see other members' inviters".
