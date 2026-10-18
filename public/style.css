@@ -1481,6 +1481,10 @@ body{background:var(--lx-ink)}
 #lobby .trow .back{flex:none}
 #lobby .trow{flex-wrap:wrap}
 #lobby .trow b{min-width:0;overflow-wrap:anywhere}
+/* invite links with a joined count (group and member links): name and buttons on the first line, the count below,
+   so the name is never squeezed to one letter per line on a phone */
+#lobby .trow:has(> [data-group="1"]) b{flex:1 1 0;min-width:min(6em,100%);overflow-wrap:normal}
+#lobby .trow:has(> [data-group="1"]) small{order:3;flex:1 0 100%}
 
 /* ---------- Business Club and Opportunity Club ---------- */
 #lobby .bz-head,#lobby .op-detail,#lobby .bz-detail,#lobby .bz-mine{border-radius:var(--lx-r-lg)}
