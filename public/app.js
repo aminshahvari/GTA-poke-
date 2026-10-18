@@ -1075,7 +1075,7 @@ function reserveDock(seated){
     const p = document.createElement('div');
     p.className = 'dock'; p.setAttribute('aria-hidden', 'true');
     p.style.cssText = 'position:absolute;left:0;right:0;bottom:0;height:auto;visibility:hidden;pointer-events:none';
-    p.innerHTML = (seated ? `<div class="helper${helperMin ? ' min' : ''}"><div class="h-top"><b class="h-name">Wg</b><span class="h-eq">88%<small> to win vs 8</small></span></div>${helperMin ? '' : `<div class="h-bar"><i></i></div><div class="h-line">Wg${g.classList.contains('h700') ? '' : '<br>Wg'}</div>`}</div>` : '')
+    p.innerHTML = (seated ? `<div class="helper${helperMin ? ' min' : ''}"><div class="h-top"><b class="h-name">Wg</b><span class="h-eq">88%<small> to win vs 8</small></span></div>${helperMin ? '' : `<div class="h-bar"><i></i></div><div class="h-line">Wg${g.classList.contains('land') ? '<br>Wg<br>Wg' : g.classList.contains('h700') ? '' : '<br>Wg'}</div>`}</div>` : '')
       + `<div class="controls">${seated ? `<div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="act-main" style="--n:3"><button class="act-btn fold"><b>Fold</b></button><button class="act-btn call"><b>Call</b><span class="num">88,888</span></button><button class="act-btn raise"><b>Raise</b><span>Choose amount</span></button></div>` : '<div class="info-line">Wg</div>'}</div>`
       // the other state a seated player's bar has: the waiting line with the pre-action buttons
       + (seated ? '<div class="controls"><div class="info-line">Wg</div><div class="preacts"><button><i></i>Fold</button><button><i></i>Call 88,888</button><button><i></i>Call any</button></div></div>' : '');
@@ -1718,9 +1718,9 @@ function renderHelper(d, me, mine){
   if(eq != null){
     if(L && !L.canCheck){
       const need = L.toCall / (L.pot + L.toCall);
-      if(eq >= need + .05){ advice = `Call needs ${Math.round(need * 100)}%, you have ${Math.round(eq * 100)}%: calling pays.${eq > .65 ? ' You can raise for value.' : ''}`; tone = 'good'; }
-      else if(eq >= need - .03){ advice = `Close: call needs ${Math.round(need * 100)}%, you have ${Math.round(eq * 100)}%.`; tone = 'mid'; }
-      else { advice = `Call needs ${Math.round(need * 100)}%, you have ${Math.round(eq * 100)}%: folding is fine.`; tone = 'bad'; }
+      if(eq >= need + .05){ advice = `Call needs ${Math.round(need * 100)}%<span class="h-have">, you have ${Math.round(eq * 100)}%</span>: calling pays.${eq > .65 ? ' You can raise for value.' : ''}`; tone = 'good'; }
+      else if(eq >= need - .03){ advice = `Close: call needs ${Math.round(need * 100)}%<span class="h-have">, you have ${Math.round(eq * 100)}%</span>.`; tone = 'mid'; }
+      else { advice = `Call needs ${Math.round(need * 100)}%<span class="h-have">, you have ${Math.round(eq * 100)}%</span>: folding is fine.`; tone = 'bad'; }
     } else if(L){
       advice = eq > .6 ? 'Strong: bet for value.' : eq > .4 ? 'Medium: a small bet or a check both work.' : (board.length === 5 ? 'Weak: check, no need to put more in.' : 'Weak: check and see a free card.');
       tone = eq > .6 ? 'good' : eq > .4 ? 'mid' : 'bad';
@@ -1732,7 +1732,7 @@ function renderHelper(d, me, mine){
   el.className = 'helper' + (helperMin ? ' min' : '');
   el.innerHTML = `<div class="h-top"><b class="h-name">${esc(name)}</b><span class="h-eq ${eq == null ? '' : eq > .5 ? 'good' : eq > .3 ? 'mid' : 'bad'}">${pct}<small> to win vs ${nOpp}</small></span></div>
     ${helperMin ? '' : `<div class="h-bar"><i style="width:${bar}%"></i></div>
-    ${advice ? `<div class="h-line ${tone}">💡 ${esc(advice)}</div>` : draw ? `<div class="h-line">🎯 ${esc(draw)}</div>` : ''}`}`;
+    ${advice ? `<div class="h-line ${tone}">💡 ${advice}</div>` : draw ? `<div class="h-line">🎯 ${esc(draw)}</div>` : ''}`}`;
   el.onclick = () => { helperMin = !helperMin; try{ localStorage.setItem('stacked:helper', helperMin ? 'min' : ''); }catch(e){} renderTable(); };
 }
 

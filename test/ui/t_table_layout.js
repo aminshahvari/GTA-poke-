@@ -105,6 +105,15 @@ const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b -
       check(!out.length, `${tag}: every seat inside the screen and the table area${out.length ? ' — ' + out.join(', ') : ''}`);
       check(m.hero && m.hero.t >= -.5 && m.hero.b <= h + .5 && !hit(m.hero, m.dock, .5), `${tag}: your cards are on screen, clear of the action bar`);
       check(m.btns.every(b => b && b.t >= -.5 && b.b <= h + .5), `${tag}: Fold / Call / Raise on screen`);
+      // the hand helper: its advice is never cut off, and the chance to win shows once (not again inside the advice
+      // where the figure sits right above or beside it on a short screen or sideways)
+      const hl = await pg.evaluate(() => { const el = document.querySelector('#helper:not([hidden])'); if(!el) return null;
+        const line = el.querySelector('.h-line'), have = el.querySelector('.h-have'), eq = el.querySelector('.h-eq');
+        const shown = x => !!x && x.getClientRects().length > 0 && getComputedStyle(x).display !== 'none';
+        return { clipped: el.scrollHeight > el.clientHeight + 1 || (!!line && (line.scrollHeight > line.clientHeight + 1 || line.scrollWidth > line.clientWidth + 1)),
+          line: !!line, twice: shown(have) && shown(eq) && document.getElementById('game').classList.contains('h700'), text: line ? line.textContent : '' }; });
+      check(hl && hl.line, `${tag}: the helper shows its advice`);
+      if(hl && hl.line){ check(!hl.clipped, `${tag}: the helper's advice is not cut off ("${hl.text.trim()}")`); check(!hl.twice, `${tag}: the chance to win shows once`); }
       if(upright) check(ratio >= FELT_MIN && ratio <= FELT_MAX, `${tag}: felt height/width ${ratio.toFixed(2)} within ${FELT_MIN}-${FELT_MAX}`);
       else check(ratio <= LAND_MAX, `${tag}: felt height/width ${ratio.toFixed(2)} <= ${LAND_MAX} (sideways: wider than tall)`);
       console.log(`     ${tag}: felt ${Math.round(m.felt.r - m.felt.l)}x${Math.round(m.felt.b - m.felt.t)} (h/w ${ratio.toFixed(2)}), seats ${m.look || 'normal'}, table area ${Math.round(m.area.r - m.area.l)}x${Math.round(m.area.b - m.area.t)}`);

@@ -1740,3 +1740,11 @@ body{background:var(--lx-ink)}
 #game.land .dock{grid-column:2;grid-row:3;align-self:end;margin-top:0;padding-left:4px}
 #game.land .dock .controls{padding-left:6px;padding-right:10px}
 #game.land .dock .helper{margin-left:6px;margin-right:10px}
+/* sideways, the dock column is narrow but tall: the helper keeps its hand name and chance to win on the first row and
+   its advice gets up to three full lines under them, instead of one line cut off mid-sentence. On short screens
+   (and sideways) the chance to win sits right above or beside the advice, so the advice drops its own "you have N%"
+   and the figure shows once. */
+#game.land .helper{grid-template-columns:minmax(0,1fr) auto}
+#game.land .helper .h-name{display:block;grid-column:1;grid-row:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#game.land .helper .h-line{grid-column:1/-1;grid-row:2;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+#game.h700 .helper .h-have{display:none}
