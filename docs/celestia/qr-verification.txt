@@ -1,0 +1,7 @@
+ok   PDF rendered at 300 dpi: 1821x2550 px -> 'https://gta-poker.onrender.com/v/celestia'
+ok   PNG preview: 1819x2550 px -> 'https://gta-poker.onrender.com/v/celestia'
+ok   whole card scaled to 1080 px wide: 1080x1512 px -> 'https://gta-poker.onrender.com/v/celestia'
+ok   whole card scaled to 720 px wide: 720x1008 px -> 'https://gta-poker.onrender.com/v/celestia'
+ok   whole card scaled to 540 px wide: 540x756 px -> 'https://gta-poker.onrender.com/v/celestia'
+ok   simulated phone photo (tilted, blurred, darker, JPEG 70): 1000x1400 px -> 'https://gta-poker.onrender.com/v/celestia'
+6 decoded exactly, 0 failed; expected 'https://gta-poker.onrender.com/v/celestia'
