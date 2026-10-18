@@ -1714,8 +1714,9 @@ body{background:var(--lx-ink)}
 /* a seat is anchored by its avatar and name plate: the hole cards sit above it out of the flow, so a seat doesn't
    move when its cards are dealt, folded away or turned face up at showdown */
 #game .seat>.hole{position:absolute;left:50%;bottom:100%;transform:translateX(-50%);width:max-content}
-/* the line under the board has two lines of room on the felt; more would run into the seats below */
-#game .center .msg{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+/* the line under the board has one line of room on the felt; more would run into the seats below (a finished
+   hand's whole result is written in the bar under the table) */
+#game .center .msg{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden}
 #game .center .msg>div{display:inline}
 #game .center .msg>div+div::before{content:' · '}
 /* the shortest screens (iPhone SE 1st gen, phones held sideways): one header row, the clock with the chat and Lobby
@@ -1729,3 +1730,13 @@ body{background:var(--lx-ink)}
 #game.h600 .blinds b{font-size:14px}
 #game.h600 .time b{font-size:20px}
 #game.h600 .lvl{min-width:40px;padding:2px 6px}
+/* ---------- table redesign: a phone held sideways ----------
+   The table takes the whole width on the left (not the 540 px column) and the dock (helper + action bar) stands
+   in a column on the right, so the felt gets the full height under the one-row header. */
+.app:has(> #game.land:not([hidden])){max-width:none}
+#game.land{display:grid;grid-template-columns:minmax(0,1fr) min(300px,36%);grid-template-rows:auto auto minmax(0,1fr)}
+#game.land .clock{grid-column:1/-1;grid-row:1}
+#game.land .table-area{grid-column:1;grid-row:3}
+#game.land .dock{grid-column:2;grid-row:3;align-self:end;margin-top:0;padding-left:4px}
+#game.land .dock .controls{padding-left:6px;padding-right:10px}
+#game.land .dock .helper{margin-left:6px;margin-right:10px}
