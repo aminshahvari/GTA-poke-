@@ -73,6 +73,21 @@ async function signedIn(browser, tok, [w, h]){
     check(worst.top <= 0, `${vp[0]}px demo table: top seat's cards stay below the info bar (worst ${worst.top.toFixed(1)}px over)`);
     await pg.close();
   }
+  // members see the practice table on Home (the owner keeps it in Director)
+  const mem = await post('login', { name: 'Test Player 01', pin: '135711' });
+  for(const vp of [[320, 568], [390, 844]]){
+    const pg = await signedIn(browser, mem.token, vp); await sleep(600);
+    const btn = pg.locator('#lobbyBody [data-demo]').first();
+    check(await btn.isVisible().catch(() => false), `${vp[0]}px member Home: practice table card shown`);
+    await btn.click().catch(() => {}); await sleep(1500);
+    check(await pg.evaluate(() => !!document.querySelector('#game .felt') && getComputedStyle(document.getElementById('game')).display !== 'none'), `${vp[0]}px member Home: practice table opens`);
+    check(await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${vp[0]}px member Home: no sideways scroll`);
+    await pg.close();
+  }
+  { const pg = await signedIn(browser, dir.token, [390, 844]); await sleep(600);
+    await pg.click('#tabs [data-tab=event]').catch(() => {}); await sleep(400);
+    check(await pg.evaluate(() => !document.querySelector('#lobbyBody .demo-box')), 'owner Home: no extra practice card (owner has it in Director)');
+    await pg.close(); }
   await browser.close(); srv.kill(); try{ require('fs').unlinkSync(DATA); }catch(e){}
   console.log(`\n${oks} ok, ${fails} failed`); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); srv.kill(); process.exit(1); });

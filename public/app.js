@@ -203,7 +203,9 @@ function renderHome(body, clubsOn, showClubs){
   if(cards[0] && cards[0].classList.contains('next-box') && cards[1] && !cards[1].querySelector('table')) n = 2;
   const main = cards.slice(0, n).find(c => !c.classList.contains('next-box') && c.querySelector('.status-pill'));
   if(main){ main.classList.add('poker-hero'); main.insertAdjacentHTML('afterbegin', HERO_ART); }
-  const extra = document.createElement('div'); extra.innerHTML = (clubsOn ? '' : comingHTML()) + picNudgeHTML();
+  // members get the practice table on Home too (the owner has it in Director); not while seated in a running tournament
+  const seated = !!(club.myTable && club.tourney && club.tourney.status === 'running');
+  const extra = document.createElement('div'); extra.innerHTML = (clubsOn ? '' : comingHTML()) + (club.me.owner || seated ? '' : demoCard()) + picNudgeHTML();
   body.innerHTML = memberHomeHTML(clubsOn || club.me.owner) + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
   body.append(...cards.slice(0, n), ...[...extra.children]);
   if(showClubs){

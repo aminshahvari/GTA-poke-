@@ -25,3 +25,7 @@ Evidence: `docs/evidence/r2-hotfix/before-*.png` and `after-*.png` (invite rows 
 
 ## Rollback
 CSS only, no data. Render rollback to the `5c7ee11` deploy `dep-dba1ktbrjlhs73c6fdig`, then `git revert` on `main`.
+
+## Addition: practice table on members' Home (founder request, 01:56 UTC)
+Members only found the demo under Salon → Lessons; the owner has it in Director. `renderHome` now adds the same "Try a practice table" card to members' Lounge, except while they are seated in a running tournament. The owner's Home is unchanged. Client only (`public/app.js`, 3 lines).
+Tests: t_hotfix 39 ok / 0 failed (adds: card shown at 320/390, practice table opens, no sideways scroll, owner Home without the extra card); t_premium_ui 295/0; t_clubs_closed 25/0; t_mobile_ux pass; t_welcome pass; npm test exit 0.
