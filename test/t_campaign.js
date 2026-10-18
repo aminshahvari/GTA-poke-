@@ -129,6 +129,9 @@ const campaign = (token, source, max, hours) => post('/api/campaign', { source, 
   eq([by('instagram-oct').joined, by('instagram-oct').remaining, by('instagram-oct').max], [3, 0, 3], 'report counts for instagram-oct');
   eq([by('ip-test').joined, by('ip-test').remaining], [6, 94], 'report counts for ip-test');
   eq(by('rush').joined, 10, 'report counts the concurrent joins exactly');
+  eq(by('instagram-oct').members.slice().sort(), ['Camp One', 'Camp Three', 'Camp Two'], 'report lists who joined through each link');
+  ok(rep.every(r => r.members.length === r.joined), 'every report count equals the members it lists');
+  eq(by('rush').members.slice().sort(), rush.map((r, i) => r.token ? 'Rush ' + i : null).filter(Boolean).sort(), 'the rush list is exactly the 10 who got accounts');
   ok(rep.every(r => r.code && r.createdAt && r.expiresAt && typeof r.played === 'number'), 'report has code, created, expires and played');
 
   // ---- expiry (move the expiry into the past on disk and restart) ----
@@ -143,6 +146,14 @@ const campaign = (token, source, max, hours) => post('/api/campaign', { source, 
   ok((await join(camp5, 'After Expiry')).error, 'an expired campaign link stops working');
   eq((await session(owner)).view().campaigns.find(r => r.source === 'expiring').status, 'expired', 'report shows it expired');
   ok((await post('/api/login', { name: 'Camp One', pin: '4321' })).token, 'campaign members keep their accounts across a restart');
+
+  // ---- failures on a dead campaign link still count toward the /api/redeem rate limit, and the message stays generic ----
+  const hammer = '203.0.113.77', tries = [];
+  for(let i = 0; i < 31; i++) tries.push(await join(camp5, 'Hammer ' + i, hammer));
+  ok(tries.slice(0, 30).every(r => r.status === 400 && /full, expired or was cancelled/.test(r.error)), 'a dead campaign link gives the generic full/expired/cancelled message');
+  ok(tries.slice(0, 30).every(r => !/Camp|Director|instagram|expiring/i.test(r.error)), 'the refusal names no member and no source');
+  eq(tries[30].status, 429, 'after 30 failed tries from one connection, /api/redeem answers 429');
+  ok((await join(camp5, 'Hammer Again', '203.0.113.78')).status === 400, 'another connection is not blocked');
 
   console.log(`campaign test passed (${passed} checks)`);
   srv.kill(); try{ fs.unlinkSync(DATA); }catch(e){} process.exit(0);

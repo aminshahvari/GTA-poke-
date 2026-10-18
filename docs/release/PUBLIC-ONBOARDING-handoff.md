@@ -4,7 +4,7 @@ Branch `public-onboarding`, based on production `bf24ceb`. **Not deployed, not m
 
 ## Facts verified in code (production `bf24ceb`, `server/index.js`)
 
-Muse's report was not visible to this session. Muse should confirm each line below independently.
+Muse's reconciliation (`MUSE-CRITERIA-campaign-invite-2026-10-17.md`, `4c0cd22` on `r2-dev`) agrees with each line below: own PIN of 4 to 8 digits, no email, personal links single-use, owner group links 100 / 30 days, member links 10 / 7 days, auto-enrol on every redeem today.
 
 - **PIN:** 4 to 8 digits (`validPin`, line 23). There is no shared password. Each person picks their own display name and PIN, and the link is the only shared thing.
 - **Owner links** come in two kinds.
@@ -35,14 +35,17 @@ Existing personal, group and member links behave exactly as before, including au
 
 ### Consent page (campaign links only)
 
-- **Content:** "Welcome to Blindrise", then five cards:
+- **Content:** "Welcome to Blindrise", then eight cards:
   1. A private members' club.
   2. Free, no real money: no buy-in and no betting, and chips and points have no cash value.
   3. For adults 19 and over.
   4. What other members see: display name, picture if added, tournament results, and rating and play stats such as hands played.
-  5. Use a nickname, not your full name.
+  5. Membership is visible: other members can see that you are a member.
+  6. Contact details stay private: contact details and business are visible only if you choose to publish or share them.
+  7. Invitation-only: apart from this public link, the club is private and joined by invitation.
+  8. Use a nickname, not your full name.
 - **One checkbox:** 19+, club rules and prize terms (opens the existing terms modal), and understanding what members see. Continue is refused until it is ticked.
-- **Join form:** the next form does not ask a second time, and its prompt suggests a nickname.
+- **Join form:** the next form does not ask a second time. Its prompt suggests a nickname and says to remember the PIN, because there is no email reset and in-app browsers may not keep you signed in.
 - **Closed link:** if the link is full, expired or cancelled, the page says "This link has closed" and offers Sign in.
 - **Device hint:** if this phone already joined through a public link (a soft per-device `localStorage` hint), a note offers "sign in instead". It is a nudge, not a block.
 - **Ordinary invites:** these still open the ordinary welcome with "Accept invitation".
@@ -65,7 +68,21 @@ Each campaign shows:
 
 Re-sign-in counts were **not** added. That would need a new write on every login.
 
-## Server changes, itemized (`server/index.js`, +48 / −11)
+## C1–C7 self-check against Muse's criteria (`4c0cd22`)
+
+Done by Claude after the first submission `7a78d7d`. Three gaps were found and fixed in the follow-up commit (C3, C5, C6). Line numbers refer to the head of this branch.
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| C1 | Campaign link = group link with a label; label stored on the invite, shown in Director, recorded on each member, never exposed to other members | PASS | `server/index.js` `campaign()` stores `campaign:{source}` on a `multi` invite (~line 99–110); `redeem()` writes `campaign: source` on the new user record (line 74). `clubView` member objects carry only id, name, role, createdAt, invitedBy, av, tier, color, score (line 249), so the tag never leaves the server except in the owner-only `campaigns` report. `t_campaign`: "no … campaign tag in the view", "members carry only …". |
+| C2 | Campaign joins never auto-enrol; personal and group links keep today's behavior | PASS | `redeem()` line 77 `!inv.campaign && …`. `t_campaign`: "campaign joiner was NOT signed up"; ordinary group/personal/member links still join the open tournament (same file). Invite UI copy for ordinary group links is unchanged and still accurate. Mutation check documented below. |
+| C3 | Join-time reveal notice: name and avatar visible; members see you are a member; contact details and business only if you choose; private and invitation-only beyond this campaign; 19+/rules agreement stays | **GAP → fixed** | First submission covered name, picture, results and stats, but did not say that membership is visible, that contact details and business stay private unless shared, or that the club is invitation-only beyond the link. Three items added to the consent list (`public/app.js` ~line 75–84). The 19+/rules checkbox is unchanged. `t_campaign_ui` now asserts all of them at 320, 375, 390 and 430. |
+| C4 | Cap and expiry enforced in redeem; immediate revocation; global name uniqueness; existing `/api/redeem` failure limit still applies; generic refusals; exactly one join at cap−1 under a race | PASS | Cap/expiry/revoked in the unchanged `dead` check (line 64); refusal text unchanged and generic ("full, expired or was cancelled"). Revoke is the existing WS `revoke` (line 421), effective on the next redeem. Name check unchanged (line 69). Failure limit unchanged (lines 180, 186). Redeem is synchronous on Node's single thread, so the cap check and the use-append cannot interleave. `t_campaign`: 50 parallel joins at cap 10 give exactly 10; a cancelled link stops at once; expired link refused; **new:** 30 failed tries on a dead campaign link from one connection get the generic message naming no member or source, the 31st gets 429, another connection is unaffected. |
+| C5 | Director sees joins, cap, expiry and the joined members per link; counts equal actual members | **GAP → fixed** | First submission showed counts but not who joined. `campaignReport()` now returns the joined members' names (owner-only, line 286) and the Director row has a "Who joined (N)" fold-out (`public/app.js` line 404). `t_campaign`: names listed per link, every count equals the list length, and the race list is exactly the 10 who got accounts. A member removed later drops out of the list while the joined count keeps them. |
+| C6 | Join works in Instagram's in-app browser: no popups, no new-tab dependence, first-party storage only; join screen reminds to remember the PIN | **GAP → fixed** | No popup or new tab in the join flow (only the post-join WhatsApp/Telegram share links, unrelated). Storage access is wrapped, and joining works with storage blocked (`t_campaign_ui`). First submission reminded about the PIN only after joining (Instagram note, line 133); the join screen itself now says "Remember your PIN: there is no email reset, and in-app browsers such as Instagram's may not keep you signed in" (line 102), asserted at all four widths. |
+| C7 | Scope fence: server changes only on invite/redeem, the member source field and the Director campaign UI; no engine, gameplay, schema, F1 or club changes | PASS | `git diff bf24ceb -- server` touches only `server/index.js`: `redeem`, new `campaign`/`campaignInfo`, invite filters, the `ip` argument to API handlers, the members' `invitedBy` mask for campaign joiners, and the owner-only report. No other server file, no store schema change (one additive invite field and one additive user field), no engine, F1 or club change. `package.json` only appends `t_campaign` to `npm test`. |
+
+## Server changes, itemized (`server/index.js`, +49 / −11)
 
 1. **`redeem(data, _, ip)`:**
    - Receives the caller's IP (from `cf-connecting-ip`, the same source as the existing limits).
@@ -82,7 +99,7 @@ Re-sign-in counts were **not** added. That would need a new write on every login
 7. **`clubView`:**
    - For a member who joined by a campaign link, other members' `invitedBy` is sent as `null`.
    - The owner's `view.invites` leaves out campaign links; they appear in the new owner-only `view.campaigns` instead.
-8. **New `campaignReport()`:** owner only, sent as `view.campaigns`.
+8. **New `campaignReport()`:** owner only, sent as `view.campaigns`. Each row also lists the names of the members who joined through it (C5).
 
 There are no engine, gameplay, store, dependency or schema changes.
 
@@ -139,8 +156,8 @@ There are no engine, gameplay, store, dependency or schema changes.
 
 | Run | Result |
 |---|---|
-| `npm test` (now ends with `t_campaign`) | **pass**: evaluator all passed; rules 42/0; sim, server, coach, players, push, extra-time and security passed; **campaign 68 checks** |
-| `test/ui/t_campaign_ui.js` (320, 375, 390, 430 + Instagram iPhone UA + Instagram with storage blocked) | **pass, 12 groups** |
+| `npm test` (now ends with `t_campaign`) | **pass**: evaluator all passed; rules 42/0; sim, server, coach, players, push, extra-time and security passed; **campaign 75 checks** (68 in `7a78d7d`, +7 for C4 and C5) |
+| `test/ui/t_campaign_ui.js` (320, 375, 390, 430 + Instagram iPhone UA + Instagram with storage blocked) | **pass, 12 groups** (now also checks the C3 notice items, the C6 PIN reminder and the C5 who-joined list) |
 | `test/ui/t_welcome.js` | **pass** |
 | `test/ui/t_premium_ui.js` | **207 ok / 1 failed**. This is the known pre-existing item: at 320×568 the table's Chat and Lobby buttons are 32 px tall. That screen was not touched. |
 

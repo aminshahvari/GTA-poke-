@@ -77,6 +77,9 @@ function campaignScreen(open){
       <li><b>Free, no real money.</b> There is no buy-in and no betting. Chips and points have no cash value.</li>
       <li><b>For adults 19 and over.</b></li>
       <li><b>What other members see.</b> Your display name, your picture if you add one, your tournament results, and your rating and play stats (such as hands played) are visible to every member.</li>
+      <li><b>Membership is visible.</b> Other members can see that you are a member.</li>
+      <li><b>Contact details stay private.</b> Your contact details and business are visible only if you choose to publish or share them.</li>
+      <li><b>Invitation-only.</b> Apart from this public link, the club is private and joined by invitation.</li>
       <li><b>Use a nickname.</b> We suggest a first name or nickname, not your full name.</li>
     </ul>
     ${before ? '<p class="lux-note consent-again">This phone has already joined Blindrise. If that was you, <button type="button" class="linkbtn" id="cHave">sign in instead</button>.</p>' : ''}
@@ -96,7 +99,7 @@ function authScreen(mode){
   const invite = location.pathname.startsWith('/join/') ? location.pathname.slice(6) : null;
   if(invite && mode !== 'login') mode = 'join';
   const titles = { join: "You're invited to the club", login: 'Welcome back', setup: 'Set up your club', reset: 'Reset the owner PIN' };
-  const blurbs = { join: campaignOk ? 'Pick a display name other members will see (a nickname is best), and a PIN of 4 to 8 digits to sign in with.' : 'Pick the name your friends will see at the table, and a PIN to sign in with.', login: 'Sign in with your table name and PIN.', setup: 'Enter the setup code, then pick your name and PIN. You become the club owner.', reset: 'For the club owner: enter the setup code from when you created the club, then pick a new PIN. Members who forgot their PIN can ask the owner.' };
+  const blurbs = { join: campaignOk ? 'Pick a display name other members will see (a nickname is best), and a PIN of 4 to 8 digits to sign in with. Remember your PIN: there is no email reset, and in-app browsers such as Instagram\'s may not keep you signed in.' : 'Pick the name your friends will see at the table, and a PIN to sign in with.', login: 'Sign in with your table name and PIN.', setup: 'Enter the setup code, then pick your name and PIN. You become the club owner.', reset: 'For the club owner: enter the setup code from when you created the club, then pick a new PIN. Members who forgot their PIN can ask the owner.' };
   f.innerHTML = `<h2>${titles[mode]}</h2><p>${blurbs[mode]}</p>
     ${mode === 'setup' || mode === 'reset' ? '<div class="field"><label for="aCode">Setup code</label><input id="aCode" autocomplete="off"></div>' : ''}
     ${mode === 'reset' ? '' : '<div class="field"><label for="aName">Table name</label><input id="aName" maxlength="16" autocomplete="username" placeholder="e.g. Sean"></div>'}
@@ -398,6 +401,7 @@ function campaignHTML(){
     <p class="note">A <b>public link</b> is for a post or a bio, such as Instagram. It has its own cap, end date and source name. People who join with it see a welcome and consent page first, and are <b>not</b> signed up for the open tournament.</p>
     ${rows.length ? `<div class="table-list camp-list">${rows.map(r => `<div class="trow camp-row" data-source="${esc(r.source)}"><b>${esc(r.source)} <em class="camp-st ${r.status}">${label[r.status]}</em></b>
       <small><span class="camp-joined">${r.joined} of ${r.max} joined</span> · ${r.remaining} left · ${r.played} played a hand · made ${d(r.createdAt)} · ${r.status === 'expired' ? 'ended' : 'ends'} ${d(r.expiresAt)}</small>
+      ${r.members && r.members.length ? `<details class="camp-members"><summary>Who joined (${r.members.length})</summary><small>${r.members.map(esc).join(', ')}</small></details>` : ''}
       <span class="row-btns">${r.status === 'active' ? `<button class="back" data-ccopy="${esc(r.code)}" data-csrc="${esc(r.source)}">Copy</button><button class="back" data-revoke="${esc(r.code)}">Cancel</button>` : ''}</span></div>`).join('')}</div>` : ''}</div>`;
 }
 async function askCampaign(){

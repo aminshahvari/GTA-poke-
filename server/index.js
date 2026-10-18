@@ -283,7 +283,8 @@ function campaignReport(){
     const uses = i.uses || [], joined = uses.length;
     const status = i.revoked ? 'cancelled' : joined >= i.max ? 'full' : now > i.expiresAt ? 'expired' : 'active';
     const played = uses.filter(id => ((store.get('pstat:' + id) || {}).hands || 0) > 0).length;
-    return { code: i.code, source: i.campaign.source, createdAt: i.createdAt, max: i.max, joined, remaining: Math.max(0, i.max - joined), expiresAt: i.expiresAt, status, played };
+    const members = uses.map(id => store.get('user:' + id)).filter(x => x && !x.removed).map(x => x.name);
+    return { code: i.code, source: i.campaign.source, createdAt: i.createdAt, max: i.max, joined, remaining: Math.max(0, i.max - joined), expiresAt: i.expiresAt, status, played, members };
   });
 }
 const VERSION = (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null;

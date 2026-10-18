@@ -45,7 +45,7 @@ function ownerView(token, msg){
       await p.goto(BASE + '/join/' + code); await p.waitForSelector('#authForm:not([hidden]) #cAgree');
       assert(await p.isHidden('#welcome'), tag + ' ordinary welcome is not shown for a campaign link');
       const text = await p.textContent('#authForm');
-      for(const [re, what] of [[/private members' club/i, 'private club'], [/Free, no real money/, 'free, no real money'], [/19 and over/, '19+'], [/display name, your picture/, 'what members see'], [/not your full name/, 'nickname advice']]) assert(re.test(text), tag + ' consent text missing: ' + what);
+      for(const [re, what] of [[/private members' club/i, 'private club'], [/Free, no real money/, 'free, no real money'], [/19 and over/, '19+'], [/display name, your picture/, 'what members see'], [/not your full name/, 'nickname advice'], [/can see that you are a member/, 'membership visible'], [/contact details and business are visible only if you choose/, 'contact details private'], [/club is private and joined by invitation/, 'invitation-only']]) assert(re.test(text), tag + ' consent text missing: ' + what);
       assert.strictEqual(await p.locator('#authForm input[type=checkbox]').count(), 1, tag + ' one consent checkbox');
       await noHScroll(p, tag + ' consent'); await allInside(p, '#authForm button, #authForm li, #authForm label', tag + ' consent');
       if(SHOTS) await p.waitForTimeout(800), await p.screenshot({ path: `${SHOTS}/consent-${tag}.png`, fullPage: true });
@@ -53,7 +53,7 @@ function ownerView(token, msg){
       assert(await p.isVisible('#cAgree'), tag + ' Continue without the box stays on consent');
       await p.check('#cAgree'); await p.click('#cGo'); await p.waitForSelector('#authForm:not([hidden]) #aName');
       assert.strictEqual(await p.locator('#aAgree').count(), 0, tag + ' join form does not ask a second time');
-      assert(/nickname/.test(await p.textContent('#authForm p')), tag + ' join form suggests a nickname');
+      { const jp = await p.textContent('#authForm p'); assert(/nickname/.test(jp), tag + ' join form suggests a nickname'); assert(/Remember your PIN/.test(jp), tag + ' join form reminds to remember the PIN'); }
       await noHScroll(p, tag + ' join'); await allInside(p, '#authForm button, #authForm input', tag + ' join');
       if(SHOTS) await p.waitForTimeout(500), await p.screenshot({ path: `${SHOTS}/join-${tag}.png` });
       await p.fill('#aName', name); await p.fill('#aPin', '2468'); await p.click('#authForm button[type=submit]');
@@ -99,6 +99,8 @@ function ownerView(token, msg){
       await p.click('#tabs [data-tab=director]'); await p.waitForSelector('#campaignBox .camp-row[data-source="instagram-oct"]');
       const row = (await p.textContent('#campaignBox .camp-row[data-source="instagram-oct"]')).replace(/\s+/g, ' ');
       assert(row.includes(`${joined.length} of 50 joined`) && row.includes(`${50 - joined.length} left`) && /Active/.test(row), 'report row: ' + row);
+      await p.click('#campaignBox .camp-row[data-source="instagram-oct"] .camp-members summary');
+      { const who = await p.textContent('#campaignBox .camp-row[data-source="instagram-oct"] .camp-members small'); for(const n of joined) assert(who.includes(n), 'who-joined list misses ' + n); }
       ok(`Director report: instagram-oct shows ${joined.length} of 50 joined`);
       await p.locator('#campaignBox').scrollIntoViewIfNeeded();
       if(SHOTS) await p.waitForTimeout(500), await p.locator('#campaignBox').screenshot({ path: `${SHOTS}/director-report-390.png` });
