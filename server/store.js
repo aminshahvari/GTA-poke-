@@ -98,4 +98,56 @@ const freeze = () => { frozen = true; };
 const health = () => ({ mode: file ? 'file' : pool ? 'postgres' : null, epoch, leaseLost: lost, dirty: dirty.size,
   lastWriteError: lastWriteError && { message: lastWriteError.message, ageMs: Date.now() - lastWriteError.at } });
 
-module.exports = { init, get, set, del, keys, values, flush, freeze, health, onLost: fn => { onLost = fn; } };
+// ---------- club switching (CLUB_SWITCHING=1 or STAGING=1 only; production uses the plain store above) ----------
+// One deployment can hold several clubs that share one identity (name + PIN). A club sees the store through scoped(id):
+// identity keys (accounts, names, sessions, pictures, push subscriptions, club list) are shared; everything else
+// (tournaments, history, invites, settings, rewards, Exchange, stats, fairness records) lives under 'club:<id>:'.
+// The default club 'main' keeps today's unprefixed keys, so existing data is read exactly as it is.
+// Membership: an account belongs to 'main' unless it has noMain: true; it belongs to another club when
+// user.clubs[id] exists. A club only ever sees its own members, with that club's role, invitedBy, muted, household
+// and removed fields, so one club's code cannot read or write another club's members or data.
+const SHARED = ['user:', 'name:', 'session:', 'avatar:', 'push:', 'clubdef:'];
+const SHARED_EXACT = ['vapid', LEASE];
+const MEM = ['role', 'invitedBy', 'muted', 'household', 'removed', 'joinedAt'];
+const isShared = k => SHARED_EXACT.includes(k) || SHARED.some(p => k.startsWith(p));
+function scoped(cid){
+  const main = cid === 'main', pre = main ? '' : 'club:' + cid + ':';
+  const isUser = k => k.startsWith('user:');
+  const view = u => {
+    if(!u) return undefined;
+    if(main){ if(u.noMain) return undefined; if(!u.clubs) return u; const { clubs, ...rest } = u; return rest; }
+    const m = u.clubs && u.clubs[cid]; if(!m) return undefined;
+    const out = {}; for(const [k, v] of Object.entries(u)) if(k !== 'clubs' && k !== 'noMain' && !MEM.includes(k)) out[k] = v;
+    return { ...out, ...m };
+  };
+  const s = {
+    get(k){ if(isUser(k)) return view(get(k)); return isShared(k) ? get(k) : get(pre + k); },
+    set(k, v){
+      if(isUser(k)){
+        const cur = get(k);
+        if(main){ set(k, cur && cur.clubs ? { ...v, clubs: cur.clubs } : v); return v; }
+        if(!cur || !(cur.clubs && cur.clubs[cid])) throw new Error('Not a member of this club.');
+        const m = {}; for(const f of MEM) if(v[f] !== undefined) m[f] = v[f];
+        set(k, { ...cur, clubs: { ...cur.clubs, [cid]: m } }); // a club changes only its own membership fields
+        return v;
+      }
+      if(isShared(k)){ if(!main && k.startsWith('name:')) return v; return set(k, v); } // a club cannot claim or free a name
+      return set(pre + k, v);
+    },
+    del(k){
+      if(isUser(k)) return; // accounts are never deleted through a club
+      if(isShared(k)){ if(!main && k.startsWith('name:')) return; return del(k); }
+      return del(pre + k);
+    },
+    keys(prefix){
+      if(isUser(prefix) || 'user:'.startsWith(prefix) && prefix) return keys(prefix).filter(k => !isUser(k) || view(get(k)));
+      if(isShared(prefix)) return keys(prefix);
+      return main ? keys(prefix).filter(k => !k.startsWith('club:')) : keys(pre + prefix).map(k => k.slice(pre.length));
+    },
+    values(prefix){ return s.keys(prefix).map(k => s.get(k)); },
+    flush, freeze, health, init, onLost: fn => { onLost = fn; }, id: cid
+  };
+  return s;
+}
+
+module.exports = { init, get, set, del, keys, values, flush, freeze, health, onLost: fn => { onLost = fn; }, scoped };

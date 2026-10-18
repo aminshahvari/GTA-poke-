@@ -44,7 +44,7 @@ function hue(s){ let x = 0; for(const c of String(s)) x = (x * 31 + c.charCodeAt
 const mono = name => String(name || '?').replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter(w => w && !/^(the|and|of|&)$/i.test(w)).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '★';
 function getLogo(uid, v){
   const k = uid + ':' + v;
-  if(!logos.has(k)) logos.set(k, fetch('/bizlogo/' + encodeURIComponent(uid), { headers: { authorization: 'Bearer ' + (C.token() || '') } })
+  if(!logos.has(k)) logos.set(k, fetch('/bizlogo/' + encodeURIComponent(uid), { headers: { authorization: 'Bearer ' + (C.token() || ''), ...(C.clubHeader ? C.clubHeader() : {}) } })
     .then(r => r.ok ? r.blob() : null).then(b => b && b.type === 'image/jpeg' ? URL.createObjectURL(b) : null).catch(() => null));
   return logos.get(k);
 }
