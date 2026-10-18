@@ -764,9 +764,12 @@ function tableGeo(n, bet = '8,888'){
     let fails = 0;
     // overlap with what's there; seats and cards count most, then other chips, then the pot and the message
     const overlap = (x, y, hw, hh, list) => list.reduce((t, [X, Y, w, h, wt = 3]) => t + wt * Math.max(0, hw + w + 3 - Math.abs(x - X)) * Math.max(0, hh + h + 3 - Math.abs(y - Y)), 0);
-    // chips and the button always stay nearer their own seat than any other, so it's clear whose they are
-    const [hc] = S.hero, anchors = seats.map((q, i) => i ? [q.x, q.y] : [q.x + hc[0], q.y + hc[1]]);
-    const mine = (x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || Math.hypot(x - X, y - Y) > d); };
+    // chips and the button always stay clearly nearer their own seat than any other, so it's clear whose they are
+    // (your own seat by the middle of its cards and name plate together: chips beside your plate read as yours)
+    const [hc] = S.hero, hu = (f, g) => g(...S.hero.map(([x, y, w, h]) => f(x, y, w, h)));
+    const ha = [(hu((x, y, w) => x - w, Math.min) + hu((x, y, w) => x + w, Math.max)) / 2, (hu((x, y, w, h) => y - h, Math.min) + hu((x, y, w, h) => y + h, Math.max)) / 2];
+    const anchors = seats.map((q, i) => i ? [q.x, q.y] : [q.x + ha[0], q.y + ha[1]]);
+    const mine = (x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || Math.hypot(x - X, y - Y) > d * 1.12 + 3); };
     // the button may also sit off the felt, beside its seat, as long as it stays in the table area
     const onArea = (x, y, hw, hh) => x >= hw + 1 && x <= W - hw - 1 && y >= hh + 1 && y <= H - hh - 1;
     function place(x0, y0, nx, ny, hw, hh, list, own, free, quick){
@@ -774,9 +777,11 @@ function tableGeo(n, bet = '8,888'){
       for(const m of [Math.min(hw, hh) + 2, -rail / 2]) for(const [dd, tt] of steps){ const x = x0 - nx * dd + tx * tt, y = y0 - ny * dd + ty * tt; if(ok(x, y, m) && !hits(x, y, hw, hh, list)) return [x, y]; }
       // no clean spot: give up at once when only a clean layout will do, else the least crowded spot on the felt
       fails++; if(quick) return null;
-      let best = [x0, y0], bc = Infinity;
-      for(const [dd, tt] of steps){ const x = x0 - nx * dd + tx * tt, y = y0 - ny * dd + ty * tt; if(!ok(x, y, -rail / 2)) continue; const c = overlap(x, y, hw, hh, list) + tt * .5; if(c < bc){ bc = c; best = [x, y]; } }
-      return best;
+      // (still always nearer its own seat than any other: off the felt or crowded beats looking like someone else's)
+      let best = null, bc = Infinity;
+      for(const [dd, tt] of steps){ const x = x0 - nx * dd + tx * tt, y = y0 - ny * dd + ty * tt; if(!mine(x, y, own)) continue;
+        const c = overlap(x, y, hw, hh, list) + tt * .5 + (ok(x, y, -rail / 2) ? 0 : 1e6); if(c < bc){ bc = c; best = [x, y]; } }
+      return best || [(x0 + anchors[own][0]) / 2, (y0 + anchors[own][1]) / 2];
     }
     // how far in front of a seat's centre its edge is, towards the middle of the table
     const front = q => Math.abs(q.nx) * se.hw + Math.abs(q.ny) * (q.ny > 0 ? se.up : se.down);
@@ -1147,7 +1152,10 @@ function renderTable(){
   area.style.setProperty('--cw', Math.max(30, Math.min(46, area.clientWidth * .1)) + 'px');
   const res = d.result, winCards = new Set((res && res.showdown ? res.winCards : []).map(cs));
   const handKey = d.tid + ':' + d.handNo;
-  $('pot').innerHTML = !res && d.pot > 0 ? `${chipsIcon(3)}Pot ${chipFmt(d.pot, 1e6)}` : '';
+  // the whole live pot: what's in the middle plus this street's bets still in front of the seats (the coach's pot
+  // odds count the same total; when the bets are swept in they leave the seats as they join d.pot, so nothing counts twice)
+  const potAll = (d.pot || 0) + d.seats.reduce((t, p) => t + (p && p.inHand ? p.bet || 0 : 0), 0);
+  $('pot').innerHTML = !res && potAll > 0 ? `${chipsIcon(3)}Pot ${chipFmt(potAll, 1e6)}` : '';
   $('pot').style.visibility = $('pot').innerHTML ? 'visible' : 'hidden';
   let b = '';
   for(let i = 0; i < 5; i++){
@@ -1190,12 +1198,13 @@ function renderTable(){
         return cardHTML(null, `mini ${anim}`);
       }).join('');
     }
+    const acting = d.acting === s;
     let badge = '';
     if(res && p.won > 0) badge = '<span class="badge won">Winner</span>';
     else if(res && res.showdown && p.cat) badge = `<span class="badge hand">${esc(p.cat)}</span>`;
     else if(p.away) badge = '<span class="badge">Away</span>';
-    else if(p.act){ const amt = (p.act === 'Raise' || p.act === 'Bet') ? ' ' + fmt(p.lastAmt) : ''; badge = `<span class="badge act-${p.act.toLowerCase().replace(/[^a-z]+/g, '-')}">${esc(p.act)}${amt}</span>`; }
-    const acting = d.acting === s;
+    // the seat whose turn it is shows no pill from its last action (that CALL is history); the gold ring marks it
+    else if(p.act && !acting){ const amt = (p.act === 'Raise' || p.act === 'Bet') ? ' ' + fmt(p.lastAmt) : ''; badge = `<span class="badge act-${p.act.toLowerCase().replace(/[^a-z]+/g, '-')}">${esc(p.act)}${amt}</span>`; }
     const stackTxt = p.inHand && p.allIn && !res ? 'All-in' : fmt(p.stack);
     const cls = `seat ${isMe ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
     const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
@@ -1283,8 +1292,21 @@ function renderControls(d, mySeat, mine){
     if(navigator.vibrate) try{ navigator.vibrate(15); }catch(e){}
   });
 }
+// One action per turn: the first tap locks the buttons (a second tap, or a pre-action racing the button, sends
+// nothing) until the table moves on. If nothing has moved after a few seconds (a lost message), the buttons come
+// back so the action can be sent again; the server takes only the first action for a turn.
+let actLockTimer = 0;
 function sendAction(d, a){
-  lastSent = d.tid + ':' + d.handNo + ':' + d.seq;
+  const key = d.tid + ':' + d.handNo + ':' + d.seq;
+  if(lastSent === key) return;
+  lastSent = key;
+  $('controls').querySelectorAll('button').forEach(b => { b.disabled = true; });
+  clearTimeout(actLockTimer);
+  actLockTimer = setTimeout(() => {
+    const t = tables.get(d.tid);
+    if(lastSent !== key || !t || t.tid + ':' + t.handNo + ':' + t.seq !== key || t.actUid !== club.me.id) return;
+    lastSent = null; $('controls').dataset.turn = ''; if(view === 'table' && watchTid === d.tid) renderTable();
+  }, 4000);
   if(d.tid === 'demo' && demo){ if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){} $('controls').innerHTML = '<div class="info-line">…</div>'; return demo.answer(a); }
   const words = { fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' };
   $('controls').innerHTML = `<div class="info-line">${words[a.t] || ''}${a.t === 'raise' ? ' to ' + fmt(a.to) : ''} · sending…</div>`;
