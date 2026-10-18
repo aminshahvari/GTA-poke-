@@ -73,7 +73,7 @@ In `/mnt/project-files/blindrise/celestia/`, with copies in `docs/celestia/`:
 | `test/t_campaign_off.js` (new, in `npm test`) | **13 checks** passed: off behaviour as above. With `BASELINE` set to a checkout of `8eee0a5`: **20 checks**. The owner's club view is identical to `8eee0a5` on the same data; members' views are identical apart from invite privacy (`invitedBy` null); `/v/celestia`, `/join/…` and `/` give the same statuses; `/api/campaignInfo` gives the same answer. |
 | `npm test` | exit 0 |
 | `test/ui/t_celestia_ui.js` (new) | **29 ok / 0 failed**. At 320, 390 and 430 px:<br>• `/v/celestia` → welcome and consent, with the venue and brand lines and the forbidden-claims regex clean;<br>• no sideways scroll;<br>• Continue needs the box;<br>• the join form has an optional email with an unticked box, and an email without the box is refused;<br>• the member lands in the Lounge.<br>The Director report then shows 3 scans, 3 views, 3 joined, 1 email, 0 played, 0 returned. Screenshots are in `docs/evidence/celestia/`. |
-| Existing UI suites on this head | see the commit message / evidence log (`t_hotfix`, `t_premium_ui`, `t_clubs_closed`, `t_welcome`, `t_mobile_ux`, `t_table_small`, `t_stability`) |
+| Existing UI suites on `9edd938` (code identical to this head) | t_hotfix 39/0, t_premium_ui 296/0, t_clubs_closed 25/0, t_stability 146/0, t_welcome, t_mobile_ux and t_table_small passed (real IBM Plex font cache) |
 
 ## For Muse
 1. **Criteria to apply:**
