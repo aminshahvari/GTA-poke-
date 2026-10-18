@@ -1259,54 +1259,44 @@ label.btn{display:flex;align-items:center;justify-content:center;gap:8px;cursor:
 .me-chip .back{white-space:nowrap}
 
 /* ---------- the table on short phones: a slimmer header and action bar leave the felt more room ---------- */
-@media (max-height:700px){
-  .clock{padding:5px 12px 4px}
-  .lvl{padding:2px 8px}
-  .lvl b{font-size:18px}
-  .time b{font-size:22px}
-  .blinds b{font-size:15px}
-  .stats{padding:3px 12px}
-  .stats .menu-btn{padding:4px 9px}
-  .act-btn{min-height:50px}
-  .act-btn b{font-size:17px}
-  .act-btn span{font-size:14px}
-  .sizing{padding:7px 8px;gap:7px}
-  .sizing .amt b{font-size:20px}
-  .sz-presets button{padding:6px 0}
-  .sz-slider .step{width:36px;height:36px;font-size:20px}
-  .stats b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .controls{min-height:96px;padding-top:4px}
-  .helper{padding:6px 10px;gap:4px;font-size:12.5px}
+/* (was @media (max-height:700px): now a class app.js sets on #game when a hand starts, so these sizes hold for the hand) */
+  :where(#game.h700) .clock{padding:5px 12px 4px}
+  :where(#game.h700) .lvl{padding:2px 8px}
+  :where(#game.h700) .lvl b{font-size:18px}
+  :where(#game.h700) .time b{font-size:22px}
+  :where(#game.h700) .blinds b{font-size:15px}
+  :where(#game.h700) .stats{padding:3px 12px}
+  :where(#game.h700) .stats .menu-btn{padding:4px 9px}
+  :where(#game.h700) .act-btn{min-height:50px}
+  :where(#game.h700) .act-btn b{font-size:17px}
+  :where(#game.h700) .act-btn span{font-size:14px}
+  :where(#game.h700) .sizing{padding:7px 8px;gap:7px}
+  :where(#game.h700) .sizing .amt b{font-size:20px}
+  :where(#game.h700) .sz-presets button{padding:6px 0}
+  :where(#game.h700) .sz-slider .step{width:36px;height:36px;font-size:20px}
+  :where(#game.h700) .stats b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  :where(#game.h700) .controls{min-height:96px;padding-top:4px}
+  :where(#game.h700) .helper{padding:6px 10px;gap:4px;font-size:12.5px}
   /* the raise amount still shows on the Raise button */
-  .sizing .amt{display:none}
-}
+  :where(#game.h700) .sizing .amt{display:none}
 /* iPhone SE (1st gen) class */
-@media (max-height:600px){
-  /* on your turn the header's second row (table, average stack, chat, lobby) steps aside until you've acted,
-     and the whole header while the raise panel is open */
-  #game:has(.act-main) .stats,#game:has(.sizing) .clock{display:none}
+/* (was @media (max-height:600px): now a class app.js sets on #game when a hand starts, so these sizes hold for the hand) */
   /* the hand helper in one row: its advice (or the hand's name) beside the chance to win */
-  .helper{grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:8px}
-  .helper .h-top{display:contents}
-  .helper .h-bar,.helper .h-eq small,.helper:has(.h-line) .h-name{display:none}
-  .helper .h-name{font-size:13px}
-  .helper .h-eq{grid-column:2;grid-row:1;font-size:15px}
-  .helper .h-line{grid-column:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .helper .h-line+.h-line{display:none}
-  .act-btn{min-height:46px}
-  .xtime{padding:4px 10px}
-  .turnrow{min-height:26px}
-}
+  :where(#game.h600) .helper{grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:8px}
+  :where(#game.h600) .helper .h-top{display:contents}
+  :where(#game.h600) .helper .h-bar,:where(#game.h600) .helper .h-eq small,:where(#game.h600) .helper:has(.h-line) .h-name{display:none}
+  :where(#game.h600) .helper .h-name{font-size:13px}
+  :where(#game.h600) .helper .h-eq{grid-column:2;grid-row:1;font-size:15px}
+  :where(#game.h600) .helper .h-line{grid-column:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  :where(#game.h600) .helper .h-line+.h-line{display:none}
+  :where(#game.h600) .act-btn{min-height:46px}
+  :where(#game.h600) .xtime{padding:4px 10px}
+  :where(#game.h600) .turnrow{min-height:26px}
 @media (max-width:360px){
   .sz-presets{grid-template-columns:repeat(auto-fit,minmax(46px,1fr));gap:5px}
   .sz-presets button{font-size:13px}
   .act-btn.raise span:not(.num){font-size:11px;white-space:nowrap}
   .blinds b{font-size:14px}
-}
-/* choosing a raise amount on a phone: the hand helper and the header's second row (table, average stack, chat,
-   lobby) step aside while the panel is open, so the table keeps its room; Back brings them straight back */
-@media (max-height:860px){
-  #game:has(.sizing) .helper,#game:has(.sizing) .stats{display:none}
 }
 
 /* small phones: your name wraps onto two short lines instead of turning into "Test…" */
@@ -1541,7 +1531,7 @@ body{background:var(--lx-ink)}
 #game .lvl{background:transparent;border:1px solid rgba(216,180,106,.55);color:var(--lx-gold-hi);border-radius:12px}
 #game .lvl small{font-size:var(--lx-t-xs);letter-spacing:.12em;text-transform:uppercase;color:var(--lx-gold)}
 #game .lvl b{font-family:var(--lx-serif);font-weight:600;color:var(--lx-ivory)}
-@media (min-height:701px){#game .lvl b{font-size:26px}}
+#game:where(:not(.h700)) .lvl b{font-size:26px}
 #game .blinds b{color:var(--lx-ivory)}
 #game .time b{color:var(--lx-gold-hi);font-weight:500}
 #game .time small,#game .stats small{color:var(--lx-mute2)}
@@ -1700,3 +1690,42 @@ body{background:var(--lx-ink)}
   .topbar .mini-logo{font-size:18px}
   .me-chip .back{padding-left:8px;padding-right:8px}
 }
+
+/* ---------- a steady table on phones (mobile-stability) ----------
+   The felt is laid out for the room the table area has, so that room must not change during a hand. The header
+   rows keep one line each, and the bottom dock (hand helper + action bar) keeps the height app.js reserves for it
+   (reserveDock): its contents sit at its bottom, and a taller panel (choosing a raise amount) grows upward over
+   the table instead of pushing it. The page height follows the visible screen (dvh) where the browser knows it. */
+@supports (height:100dvh){ html,body{height:100dvh} }
+#game .dock{flex:none;margin-top:auto;display:flex;flex-direction:column;justify-content:flex-end;position:relative;z-index:25;min-height:0}
+#game .dock .controls{flex:none;min-height:var(--ctl-h,0)}
+#game .dock .helper{flex:none;height:var(--hlp-h,auto);align-content:start;overflow:hidden}
+#game:has(.sizing) .helper{visibility:hidden}
+#game .stats small,#game .stats b,#game .blinds b,#game .blinds small,#game .time small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#game .stats>div,#game .clock>div{min-width:0}
+/* the helper shows one hint (your turn's advice, else a draw) in at most two lines (one on a short screen) */
+#game .helper .h-line{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#game.h700 .helper .h-line{-webkit-line-clamp:1}
+#game.h600 .helper .h-line{display:block}
+/* the chat sheet never gets too short for its message box (a short screen with the keyboard open) */
+.chat-sheet{max-height:max(34vh,190px);max-height:max(34dvh,190px)}
+.chat-log{max-height:13dvh}
+.modal .glass{max-height:88dvh}
+/* a seat is anchored by its avatar and name plate: the hole cards sit above it out of the flow, so a seat doesn't
+   move when its cards are dealt, folded away or turned face up at showdown */
+#game .seat>.hole{position:absolute;left:50%;bottom:100%;transform:translateX(-50%);width:max-content}
+/* the line under the board has two lines of room on the felt; more would run into the seats below */
+#game .center .msg{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#game .center .msg>div{display:inline}
+#game .center .msg>div+div::before{content:' · '}
+/* the shortest screens (iPhone SE 1st gen, phones held sideways): one header row, the clock with the chat and Lobby
+   buttons beside it, so the table gets the room of the second row (table, average stack, rank) for the whole game */
+#game.h600 .stats{display:none}
+#game.h600 .clock{grid-template-columns:auto minmax(0,1fr) auto auto}
+#game.h600 .clock{gap:6px;padding-left:8px;padding-right:8px}
+#game.h600 .clock .hdr-btns{display:flex;gap:6px}
+#game.h600 .clock .menu-btn{padding:0 8px;font-size:12px;letter-spacing:.04em}
+#game.h600 .lvl{min-width:44px}
+#game.h600 .blinds b{font-size:14px}
+#game.h600 .time b{font-size:20px}
+#game.h600 .lvl{min-width:40px;padding:2px 6px}

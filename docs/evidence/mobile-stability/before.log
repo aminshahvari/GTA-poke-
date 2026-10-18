@@ -1,0 +1,160 @@
+FAIL 320x568 player: opening the raise panel moves nothing on the felt (56.0 px)
+ok   320x568 player: the raise panel's confirm button is on screen
+ok   320x568 player: Back closes the raise panel and the table is where it was
+ok   320x568 player: your cards stay clear of the action bar
+     320x568 player: felt 45.0px  board 39.5px  seats 40.1px (p3 at "turn off")  table area height range 44.6px  CLS 0.2030
+FAIL 320x568 player: the felt stays put through the hand (moved 45.0 px)
+FAIL 320x568 player: every seat stays put (moved 40.1 px, worst p3 at "turn off")
+FAIL 320x568 player: the board stays put (moved 39.5 px)
+FAIL 320x568 player: the table area keeps its size (height range 44.6 px)
+FAIL 320x568 player: layout shift during the hand 0.2030 <= 0.01
+ok   320x568 player: the action bar is inside the screen at "my turn"
+ok   320x568 player: the action bar is inside the screen at "my turn flop"
+FAIL 320x568 player: toolbar in (320x478) mid-hand: the table doesn't move or rescale (91.0 px)
+ok   320x568 player: toolbar in: the action buttons stay on screen
+ok   320x568 player: toolbar out again: the table is where it was (0.0 px)
+FAIL 320x568 player: toolbar hidden (320x648) mid-hand: the table doesn't move or rescale (60.5 px)
+ok   320x568 player: turned to landscape (568x320): every seat and the action buttons are on screen
+ok   320x568 player: turned back to portrait: every seat is where it was (0.0 px)
+FAIL 320x568 player: chat keyboard open (320x268): the table doesn't move or rescale (215.6 px)
+FAIL 320x568 player: chat keyboard open: the chat box is on screen
+ok   320x568 player: chat closed on the short screen: the action buttons are reachable
+ok   320x568 player: keyboard closed: the table is where it was (0.0 px), page not scrolled (0)
+     320x568 spectator: felt 0.0px  board 0.0px  seats 5.1px (p1 at "bet badge")  table area height range 0.0px  CLS 0.0000
+ok   320x568 spectator: the felt stays put through the hand (moved 0.0 px)
+FAIL 320x568 spectator: every seat stays put (moved 5.1 px, worst p1 at "bet badge")
+ok   320x568 spectator: the board stays put (moved 0.0 px)
+ok   320x568 spectator: the table area keeps its size (height range 0.0 px)
+ok   320x568 spectator: layout shift during the hand 0.0000 <= 0.01
+FAIL 375x667 player: opening the raise panel moves nothing on the felt (40.0 px)
+ok   375x667 player: the raise panel's confirm button is on screen
+ok   375x667 player: Back closes the raise panel and the table is where it was
+ok   375x667 player: your cards stay clear of the action bar
+     375x667 player: felt 59.9px  board 45.8px  seats 74.7px (u1162d7b471c8 at "fold")  table area height range 77.9px  CLS 0.1463
+FAIL 375x667 player: the felt stays put through the hand (moved 59.9 px)
+FAIL 375x667 player: every seat stays put (moved 74.7 px, worst u1162d7b471c8 at "fold")
+FAIL 375x667 player: the board stays put (moved 45.8 px)
+FAIL 375x667 player: the table area keeps its size (height range 77.9 px)
+FAIL 375x667 player: layout shift during the hand 0.1463 <= 0.01
+ok   375x667 player: the action bar is inside the screen at "my turn"
+ok   375x667 player: the action bar is inside the screen at "my turn flop"
+FAIL 375x667 player: toolbar in (375x577) mid-hand: the table doesn't move or rescale (67.3 px)
+ok   375x667 player: toolbar in: the action buttons stay on screen
+ok   375x667 player: toolbar out again: the table is where it was (0.0 px)
+FAIL 375x667 player: toolbar hidden (375x747) mid-hand: the table doesn't move or rescale (43.7 px)
+ok   375x667 player: turned to landscape (667x375): every seat and the action buttons are on screen
+ok   375x667 player: turned back to portrait: every seat is where it was (0.0 px)
+FAIL 375x667 player: chat keyboard open (375x367): the table doesn't move or rescale (240.6 px)
+ok   375x667 player: chat keyboard open: the chat box is on screen
+ok   375x667 player: chat closed on the short screen: the action buttons are reachable
+ok   375x667 player: keyboard closed: the table is where it was (0.0 px), page not scrolled (0)
+     375x667 spectator: felt 0.0px  board 30.0px  seats 17.2px (p4 at "showdown")  table area height range 0.0px  CLS 0.0050
+ok   375x667 spectator: the felt stays put through the hand (moved 0.0 px)
+FAIL 375x667 spectator: every seat stays put (moved 17.2 px, worst p4 at "showdown")
+FAIL 375x667 spectator: the board stays put (moved 30.0 px)
+ok   375x667 spectator: the table area keeps its size (height range 0.0 px)
+ok   375x667 spectator: layout shift during the hand 0.0050 <= 0.01
+FAIL 390x844 player: opening the raise panel moves nothing on the felt (69.4 px)
+ok   390x844 player: the raise panel's confirm button is on screen
+ok   390x844 player: Back closes the raise panel and the table is where it was
+ok   390x844 player: your cards stay clear of the action bar
+     390x844 player: felt 77.8px  board 39.5px  seats 78.6px (u1162d7b471c8 at "showdown")  table area height range 78.5px  CLS 0.0513
+FAIL 390x844 player: the felt stays put through the hand (moved 77.8 px)
+FAIL 390x844 player: every seat stays put (moved 78.6 px, worst u1162d7b471c8 at "showdown")
+FAIL 390x844 player: the board stays put (moved 39.5 px)
+FAIL 390x844 player: the table area keeps its size (height range 78.5 px)
+FAIL 390x844 player: layout shift during the hand 0.0513 <= 0.01
+ok   390x844 player: the action bar is inside the screen at "my turn"
+ok   390x844 player: the action bar is inside the screen at "my turn flop"
+FAIL 390x844 player: toolbar in (390x754) mid-hand: the table doesn't move or rescale (90.0 px)
+ok   390x844 player: toolbar in: the action buttons stay on screen
+ok   390x844 player: toolbar out again: the table is where it was (0.0 px)
+FAIL 390x844 player: toolbar hidden (390x924) mid-hand: the table doesn't move or rescale (67.5 px)
+ok   390x844 player: turned to landscape (844x390): every seat and the action buttons are on screen
+ok   390x844 player: turned back to portrait: every seat is where it was (0.0 px)
+FAIL 390x844 player: chat keyboard open (390x544): the table doesn't move or rescale (241.7 px)
+ok   390x844 player: chat keyboard open: the chat box is on screen
+ok   390x844 player: chat closed on the short screen: the action buttons are reachable
+ok   390x844 player: keyboard closed: the table is where it was (0.0 px), page not scrolled (0)
+     390x844 spectator: felt 0.0px  board 10.0px  seats 6.2px (p0 at "fold")  table area height range 0.0px  CLS 0.0008
+ok   390x844 spectator: the felt stays put through the hand (moved 0.0 px)
+FAIL 390x844 spectator: every seat stays put (moved 6.2 px, worst p0 at "fold")
+FAIL 390x844 spectator: the board stays put (moved 10.0 px)
+ok   390x844 spectator: the table area keeps its size (height range 0.0 px)
+ok   390x844 spectator: layout shift during the hand 0.0008 <= 0.01
+FAIL 393x852 player: opening the raise panel moves nothing on the felt (69.4 px)
+ok   393x852 player: the raise panel's confirm button is on screen
+ok   393x852 player: Back closes the raise panel and the table is where it was
+ok   393x852 player: your cards stay clear of the action bar
+     393x852 player: felt 74.6px  board 39.5px  seats 76.4px (u1162d7b471c8 at "fold")  table area height range 78.5px  CLS 0.0159
+FAIL 393x852 player: the felt stays put through the hand (moved 74.6 px)
+FAIL 393x852 player: every seat stays put (moved 76.4 px, worst u1162d7b471c8 at "fold")
+FAIL 393x852 player: the board stays put (moved 39.5 px)
+FAIL 393x852 player: the table area keeps its size (height range 78.5 px)
+FAIL 393x852 player: layout shift during the hand 0.0159 <= 0.01
+ok   393x852 player: the action bar is inside the screen at "my turn"
+ok   393x852 player: the action bar is inside the screen at "my turn flop"
+FAIL 393x852 player: toolbar in (393x762) mid-hand: the table doesn't move or rescale (90.0 px)
+ok   393x852 player: toolbar in: the action buttons stay on screen
+ok   393x852 player: toolbar out again: the table is where it was (0.0 px)
+FAIL 393x852 player: toolbar hidden (393x932) mid-hand: the table doesn't move or rescale (65.8 px)
+ok   393x852 player: turned to landscape (852x393): every seat and the action buttons are on screen
+ok   393x852 player: turned back to portrait: every seat is where it was (0.0 px)
+FAIL 393x852 player: chat keyboard open (393x552): the table doesn't move or rescale (242.0 px)
+ok   393x852 player: chat keyboard open: the chat box is on screen
+ok   393x852 player: chat closed on the short screen: the action buttons are reachable
+ok   393x852 player: keyboard closed: the table is where it was (0.0 px), page not scrolled (0)
+     393x852 spectator: felt 0.0px  board 10.0px  seats 6.2px (p1 at "bet badge")  table area height range 0.0px  CLS 0.0008
+ok   393x852 spectator: the felt stays put through the hand (moved 0.0 px)
+FAIL 393x852 spectator: every seat stays put (moved 6.2 px, worst p1 at "bet badge")
+FAIL 393x852 spectator: the board stays put (moved 10.0 px)
+ok   393x852 spectator: the table area keeps its size (height range 0.0 px)
+ok   393x852 spectator: layout shift during the hand 0.0008 <= 0.01
+FAIL 430x932 player: opening the raise panel moves nothing on the felt (148.0 px)
+ok   430x932 player: the raise panel's confirm button is on screen
+ok   430x932 player: Back closes the raise panel and the table is where it was
+ok   430x932 player: your cards stay clear of the action bar
+     430x932 player: felt 56.8px  board 39.5px  seats 67.5px (u1162d7b471c8 at "fold")  table area height range 78.5px  CLS 0.0745
+FAIL 430x932 player: the felt stays put through the hand (moved 56.8 px)
+FAIL 430x932 player: every seat stays put (moved 67.5 px, worst u1162d7b471c8 at "fold")
+FAIL 430x932 player: the board stays put (moved 39.5 px)
+FAIL 430x932 player: the table area keeps its size (height range 78.5 px)
+FAIL 430x932 player: layout shift during the hand 0.0745 <= 0.01
+ok   430x932 player: the action bar is inside the screen at "my turn"
+ok   430x932 player: the action bar is inside the screen at "my turn flop"
+FAIL 430x932 player: toolbar in (430x842) mid-hand: the table doesn't move or rescale (90.0 px)
+ok   430x932 player: toolbar in: the action buttons stay on screen
+ok   430x932 player: toolbar out again: the table is where it was (0.0 px)
+FAIL 430x932 player: toolbar hidden (430x1012) mid-hand: the table doesn't move or rescale (56.9 px)
+ok   430x932 player: turned to landscape (932x430): every seat and the action buttons are on screen
+ok   430x932 player: turned back to portrait: every seat is where it was (0.0 px)
+FAIL 430x932 player: chat keyboard open (430x632): the table doesn't move or rescale (262.7 px)
+ok   430x932 player: chat keyboard open: the chat box is on screen
+ok   430x932 player: chat closed on the short screen: the action buttons are reachable
+ok   430x932 player: keyboard closed: the table is where it was (0.0 px), page not scrolled (0)
+     430x932 spectator: felt 0.0px  board 0.0px  seats 6.2px (p1 at "bet badge")  table area height range 0.0px  CLS 0.0000
+ok   430x932 spectator: the felt stays put through the hand (moved 0.0 px)
+FAIL 430x932 spectator: every seat stays put (moved 6.2 px, worst p1 at "bet badge")
+ok   430x932 spectator: the board stays put (moved 0.0 px)
+ok   430x932 spectator: the table area keeps its size (height range 0.0 px)
+ok   430x932 spectator: layout shift during the hand 0.0000 <= 0.01
+FAIL 844x390 player: opening the raise panel moves nothing on the felt (54.0 px)
+ok   844x390 player: the raise panel's confirm button is on screen
+ok   844x390 player: Back closes the raise panel and the table is where it was
+ok   844x390 player: your cards stay clear of the action bar
+     844x390 player: felt 39.5px  board 49.5px  seats 46.2px (p2 at "showdown")  table area height range 44.6px  CLS 0.1188
+FAIL 844x390 player: the felt stays put through the hand (moved 39.5 px)
+FAIL 844x390 player: every seat stays put (moved 46.2 px, worst p2 at "showdown")
+FAIL 844x390 player: the board stays put (moved 49.5 px)
+FAIL 844x390 player: the table area keeps its size (height range 44.6 px)
+FAIL 844x390 player: layout shift during the hand 0.1188 <= 0.01
+ok   844x390 player: the action bar is inside the screen at "my turn"
+ok   844x390 player: the action bar is inside the screen at "my turn flop"
+     844x390 spectator: felt 0.0px  board 10.0px  seats 6.7px (p2 at "showdown")  table area height range 0.0px  CLS 0.0007
+ok   844x390 spectator: the felt stays put through the hand (moved 0.0 px)
+FAIL 844x390 spectator: every seat stays put (moved 6.7 px, worst p2 at "showdown")
+FAIL 844x390 spectator: the board stays put (moved 10.0 px)
+ok   844x390 spectator: the table area keeps its size (height range 0.0 px)
+ok   844x390 spectator: layout shift during the hand 0.0007 <= 0.01
+
+84 ok, 62 failed
