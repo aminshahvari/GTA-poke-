@@ -1095,3 +1095,88 @@ body{background:var(--lx-ink)}
 /* 320 px fix (Muse MINOR-2): dialog buttons wrap instead of overflowing the sheet */
 .modal .row{flex-wrap:wrap}
 .modal .row>button{flex:1 1 auto;width:auto;min-width:0}
+
+/* ==========================================================================================================
+   Desktop responsive layout (desktop-ux). Presentation only, and only from 768 px wide: phones (up to 430 px)
+   render exactly as before. Tablets and laptops use the whole window instead of the 540 px phone column:
+   - 768 px and up: the app fills the window; content sits in a centred column (up to 1200 px) with the same gutters
+   - 1024 px and up: the bottom tab bar becomes a top navigation inside the header; the Lounge doors sit in two rows;
+     the Strategy Table is sized to the window (wide felt, larger seats, cards and pot) and its controls are centred
+   - 1280 px and up: the Lounge lays its cards out in two columns under the welcome
+   Uses only existing classes and ids (and :has() for the Lounge), so it can be carried over to another build as one block.
+   ========================================================================================================== */
+@media (min-width:768px){
+  :root{ --dk-col:1200px; --dk-gut:max(24px,calc((100% - var(--dk-col)) / 2)); }
+  .app{max-width:none}
+  /* lobby: header, body and tab bar line up on one centred column */
+  #lobby .topbar{padding-left:var(--dk-gut);padding-right:var(--dk-gut)}
+  #lobby .scroll{padding-left:var(--dk-gut);padding-right:var(--dk-gut);gap:16px}
+  #lobby .tabs{padding-left:var(--dk-gut);padding-right:var(--dk-gut)}
+  #lobby .mini-logo{font-size:15px}
+  /* dialogs keep a readable width; the profile and invite sheets get a little more room */
+  #modalRoot .glass{width:min(520px,100%)}
+  /* table chat: a floating panel at the side instead of a full-width bottom sheet */
+  .chat-sheet{left:auto;right:24px;bottom:24px;width:min(420px,calc(100% - 48px));border-radius:16px;border:1px solid var(--lx-hair2);box-shadow:var(--lx-shadow)}
+  .toast{bottom:28px}
+  /* table: header rows span the window but their contents follow the centred column */
+  #game .clock,#game .stats{padding-left:var(--dk-gut);padding-right:var(--dk-gut)}
+  #game .helper,#game .coachtip{width:min(760px,calc(100% - 48px));margin-left:auto;margin-right:auto}
+  #game .controls{padding-left:max(24px,calc((100% - 760px) / 2));padding-right:max(24px,calc((100% - 760px) / 2))}
+  /* the felt keeps a table's proportions: as wide as the window allows, but never wider than the height suggests */
+  #game .table-area{width:min(calc(100% - 48px),calc((100dvh - 300px) * 1.9));margin:8px auto 4px;align-self:center}
+}
+@media (min-width:1024px){
+  /* top navigation: the same four tab buttons, moved from the bottom bar into the header row */
+  #lobby{display:grid;grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}
+  #lobby .topbar{grid-row:1;grid-column:1;min-height:68px;padding-top:6px;padding-bottom:6px}
+  #lobby .tabs{grid-row:1;grid-column:1;order:0;justify-self:center;align-self:center;z-index:3;min-height:0;padding:0;gap:4px;background:transparent;border:0;box-shadow:none}
+  #lobby .tabs button{flex:0 0 auto;flex-direction:row;gap:8px;min-width:112px;min-height:44px;padding:0 16px;border-radius:var(--lx-r-pill);font-size:12.5px;letter-spacing:.1em}
+  #lobby .tabs button svg{width:18px;height:18px}
+  #lobby .tabs button:hover{color:var(--lx-ivory);background:rgba(241,223,176,.05)}
+  #lobby .tabs button[aria-selected="true"]{background:rgba(216,180,106,.1);box-shadow:inset 0 0 0 1px rgba(216,180,106,.38)}
+  #lobby .tabs button[aria-selected="true"]::before{display:none}
+  #lobby .scroll{grid-row:2;grid-column:1;padding-top:28px;padding-bottom:48px;gap:20px}
+  /* the Lounge: the welcome on one line, the Strategy Table door full width, the three other doors in one row */
+  #lobby .lx-hello{gap:24px}
+  #lobby .lx-doors{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+  #lobby .lx-door.lx-poker{grid-column:1/-1;min-height:132px;padding:22px 26px}
+  #lobby .lx-poker .lx-door-ic{width:60px;height:60px}
+  #lobby .lx-poker .lx-door-t b{font-size:32px}
+  #lobby .lx-poker .lx-door-t small{font-size:15px}
+  #lobby .lx-door.lx-scan{grid-column:auto;grid-template-columns:none;align-items:stretch;align-content:space-between;min-height:150px}
+  #lobby .lx-door{min-height:150px;padding:18px}
+  #lobby .lx-door-t b{font-size:23px}
+  #lobby .lx-door-t small{font-size:13.5px}
+  #lobby .lx-scan .lx-chev{display:none}
+  #lobby .lx-motto{margin-top:4px}
+  #lobby .lx-pagehead h2{font-size:42px}
+  /* the Strategy Table: larger seats, cards, pot and message, scaled from the phone layout */
+  #game{--dk-seat:1.2;--dk-center:1.25}
+  #game .seat{transform:translate(-50%,-50%) scale(var(--dk-seat))}
+  #game .center{transform:translate(-50%,-50%) scale(var(--dk-center));width:56%}
+  #game .dealer{transform:translate(-50%,-50%) scale(1.25)}
+  #game .stats b{font-size:17px}
+  /* room above the felt for the top seats' cards, which sit higher than the ring once seats are scaled up */
+  #game .table-area{margin-top:calc(var(--dk-seat) * 40px - 16px)}
+  #game .actions{gap:12px}
+  #game .actions button{min-height:60px;font-size:16px}
+}
+@media (min-width:1280px){
+  /* the Lounge: cards in two columns under the full-width welcome (Leaderboard, Salon and Director keep one column) */
+  #lobby .scroll:has(> .lx-hello){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;align-items:start;column-gap:24px;row-gap:20px}
+  #lobby .scroll:has(> .lx-hello) > .lx-hello{grid-column:1/-1}
+}
+/* larger seats only where the window is tall enough for them (the felt's height is what limits them) */
+@media (min-width:1280px) and (min-height:860px){
+  #game{--dk-seat:1.35;--dk-center:1.4}
+}
+@media (min-width:1600px) and (min-height:1000px){
+  #game{--dk-seat:1.6;--dk-center:1.55}
+}
+/* Leaderboard, Salon and Director read better on a narrower column (forms and tables do not stretch to 1200 px) */
+@media (min-width:1024px){
+  #lobby:has(#tabs [data-tab=board][aria-selected=true]) .scroll,
+  #lobby:has(#tabs [data-tab=learn][aria-selected=true]) .scroll,
+  #lobby:has(#dirTab[aria-selected=true]) .scroll{padding-left:max(24px,calc((100% - 1000px) / 2));padding-right:max(24px,calc((100% - 1000px) / 2))}
+  #game .bet{font-size:13.5px}
+}
