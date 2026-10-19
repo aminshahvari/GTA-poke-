@@ -4,7 +4,7 @@ Written 2026-10-19 against production `main` `4423a07`. **Every item below is de
 
 | # | Item | Doc | Status | Code today | Depends on |
 |---|---|---|---|---|---|
-| 1 | Free-social-play notice + persistent label | [P1-SOCIAL-PLAY-NOTICE.md](P1-SOCIAL-PLAY-NOTICE.md) | design only | candidate on branch `social-play-notice` (not merged, not audited) | — |
+| 1 | Free-social-play notice + persistent label | [P1-SOCIAL-PLAY-NOTICE.md](P1-SOCIAL-PLAY-NOTICE.md) | design only | candidate on branch `social-play-notice` `91bb563` (not merged, not audited) | — |
 | 2 | Independent clubs, shared identity | [P1-INDEPENDENT-CLUBS.md](P1-INDEPENDENT-CLUBS.md) | design only | foundation on branch `club-switching-fix` `139a7c4`, flag-off, Muse delta audit pending | `noMain` guard decision |
 | 3 | Email registration, existing accounts kept | [P1-EMAIL-REGISTRATION.md](P1-EMAIL-REGISTRATION.md) | design only | none | email provider + domain approval |
 | 4 | Business Club: consent-based B2B introductions | [P1-B2B-SUPPORT.md](P1-B2B-SUPPORT.md) | design only | Exchange directory in production; no introductions | — |
