@@ -1936,9 +1936,10 @@ body{background:var(--lx-ink)}
 #game .seat[data-side=l] .badge{left:auto;right:0;transform:none}
 #game .seat[data-side=r] .badge{left:0;transform:none}
 #game .seat[data-side]>.hole{display:flex;left:50%;bottom:42%;transform:translateX(-50%);margin:0;z-index:0}
-#game .seat[data-side=l]>.hole:not(.shown){left:auto;right:42%;bottom:26%;transform:none}
-#game .seat[data-side=r]>.hole:not(.shown){left:42%;bottom:26%;transform:none}
-#game .seat[data-side] .card.mini{--w:19px}
+#game .seat[data-side=l]>.hole:not(.shown){left:auto;right:26%;bottom:60%;transform:none}
+#game .seat[data-side=r]>.hole:not(.shown){left:26%;bottom:60%;transform:none}
+#game .seat[data-side] .card.mini{--w:23px}
+#game .seat[data-side=t] .card.mini{--w:19px}
 #game .seat[data-side]>.hole:not(.shown) .card.mini:first-child{transform:rotate(-10deg)}
 #game .seat[data-side]>.hole:not(.shown) .card.mini+.card.mini{margin-left:-8px;transform:rotate(10deg)}
 #game .seat[data-side=t]>.hole:not(.shown){bottom:auto;top:45%;transform:translate(-50%,-50%);width:58px;justify-content:space-between}
@@ -1948,13 +1949,18 @@ body{background:var(--lx-ink)}
 #game .table-area.mini .seat[data-side] .av{width:30px;height:30px;font-size:11px}
 #game .table-area.mini .seat[data-side] .nm{font-size:9.5px;max-width:48px}
 #game .table-area.mini .seat[data-side] .st{font-size:10.5px}
-#game .table-area.mini .seat[data-side] .card.mini{--w:16px}
+#game .table-area.mini .seat[data-side] .card.mini{--w:20px}
+#game .table-area.mini .seat[data-side=t] .card.mini{--w:16px}
 #game .seat[data-side=tl]>.hole:not(.shown){left:auto;right:46%;bottom:auto;top:8%;transform:none}
 #game .seat[data-side=tr]>.hole:not(.shown){left:46%;bottom:auto;top:8%;transform:none}
 #game .table-area.micro .seat[data-side] .av{width:26px;height:26px;font-size:10px}
 #game .table-area.micro .seat[data-side] .nm{font-size:9px;max-width:44px}
 #game .table-area.micro .seat[data-side] .st{font-size:10px}
-#game .table-area.micro .seat[data-side] .card.mini{--w:14px}
+#game .table-area.micro .seat[data-side] .card.mini{--w:16px}
+/* (the smallest seats keep their cards beside the avatar, outward, which takes no height between seats) */
+#game .table-area.micro .seat[data-side=l]>.hole:not(.shown){right:42%;bottom:26%}
+#game .table-area.micro .seat[data-side=r]>.hole:not(.shown){left:42%;bottom:26%}
+#game .table-area.micro .seat[data-side=t] .card.mini{--w:14px}
 #game .seat[data-side]>.hole.shown{bottom:88%;z-index:3}
 #game .seat[data-side^=t]>.hole.shown{bottom:auto;top:88%}
 
@@ -1982,3 +1988,5 @@ body{background:var(--lx-ink)}
 #game.ovl .seat.hero .card.hero{--w:calc(var(--cw)*1.05)}
 #game.ovl .seat.hero .card.hero:first-child{transform:rotate(-4deg);margin-right:-6px}
 #game.ovl .seat.hero .card.hero+.card.hero{transform:rotate(4deg)}
+#game.ovl .seat.hero .badge{left:calc(100% + 6px);bottom:auto;top:50%;transform:translateY(-50%)}
+#game .table-area.oval .felt::after{top:var(--wm,74%)}

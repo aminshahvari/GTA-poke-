@@ -682,7 +682,7 @@ function seatSizes(area, look, bet){
     const oval = {}; ov.forEach(e => { oval[e.dataset.side] = [box([...e.querySelectorAll('.hole .card, .av')]), box([...e.querySelectorAll('.plate, .badge')])]; });
     const S = { seat: [box([...seat.querySelectorAll('.hole .card, .av')]), box([...seat.querySelectorAll('.plate, .badge')])],
       hero: [box([...hero.querySelectorAll('.hole .card')]), box([...hero.querySelectorAll('.plate, .badge')])],
-      bet: box([b1]).slice(2), tight: box([b2]).slice(2), dealer: box([p.querySelector('.dealer')])[2], oval, av: box([ov[0].querySelector('.av')])[2] };
+      bet: box([b1]).slice(2), tight: box([b2]).slice(2), dealer: box([p.querySelector('.dealer')])[2], oval, heroPlate: box([hero.querySelector('.plate')]), av: box([ov[0].querySelector('.av')])[2] };
     p.remove(); return S;
   });
   // (nothing to measure while the table is off screen, so don't keep that)
@@ -770,8 +770,8 @@ function tableGeo(n, bet = '8,888'){
     // and your name plate over the rail, in the middle above the action bar)
     let heroAt = null, dockBox = null, floor = 0, ovTop = 0;
     if(WPT){
-      const O = S.oval, [, hp] = S.hero, hl = Math.min(...S.hero.map(([x, , w]) => x - w)), hr = Math.max(...S.hero.map(([x, , w]) => x + w)), hb = Math.max(...S.hero.map(([, y, , h]) => y + h));
-      heroAt = [W / 2 - (hl + hr) / 2, H - 4 - hb]; floor = heroAt[1] + hp[1] - hp[3];
+      const O = S.oval, hp = S.heroPlate, hb = Math.max(...S.hero.map(([, y, , h]) => y + h));
+      heroAt = [W / 2 - hp[0], H - 4 - hb]; floor = heroAt[1] + hp[1] - hp[3];
       // (the felt's top: a seat at the top of the rail, its plate over it, 2 px from the top of the table area)
       ovTop = Math.max(...O.t.map(([, y, , h]) => h - y)) + 2 - rail / 2;
       // as wide as the side seats' plates leave room for, each plate just off the felt and on the screen; height
@@ -925,7 +925,7 @@ function tableGeo(n, bet = '8,888'){
         const q = seats[k];
         let x0, y0, nx = q.nx, ny = q.ny;
         if(k === 0){ nx = 0; ny = 1; [x0, y0] = tall ? [q.x, q.y + hc[1] - hc[3] - ph - 5] : [q.x + hc[0] - hc[2] - pw - 9, q.y + hc[1] - hc[3] + 18]; }
-        else { const d = front(q) + 6 + Math.abs(q.nx) * pw + Math.abs(q.ny) * ph; x0 = q.x - q.nx * d; y0 = q.y - q.ny * d; }
+        else { const d = front(q) + (q.side ? 3 : 6) + Math.abs(q.nx) * pw + Math.abs(q.ny) * ph; x0 = q.x - q.nx * d; y0 = q.y - q.ny * d; }
         // your own chips may also sit just off the felt beside your plate (as the dealer button may) when the felt in
         // front of your cards has no clean spot left, on the smallest screens
         const f0 = fails, list = boxes.concat(placed);
@@ -946,7 +946,7 @@ function tableGeo(n, bet = '8,888'){
     // a clean layout: the board where it belongs, else a little higher or lower; chips placed seat by seat round
     // the table, the other way round, or top seats first; then the same with a size smaller chip labels
     const round = seats.map((q, i) => i), orders = [round, [0].concat(round.slice(1).reverse()), round.slice().sort((i, j) => seats[i].y - seats[j].y)];
-    const geo = { look, sq, k, inset, g, nar, compact, mini, rail, cx, cy, tall, msgW: msgHalf * 2, fw, fh, seats, bw };
+    const geo = { look, sq, k, inset, g, nar, compact, mini, rail, cx, cy, tall, msgW: msgHalf * 2, fw, fh, seats, bw, mline: bh + 6 + mh / 4 };
     if(!clash) for(const side of sides) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]) for(const dy of WPT ? [0, 10, -10, -20, -30, -40, -55, -70, -85, -100, -120, -140, -160] : [0, -10, 10, -20, 20]){
       const by = by0 + dy, mid = middle(by, side);
       // (the board with room to spare: the pot, board and message are drawn as one stack centred on `by`, so the board
@@ -1042,7 +1042,8 @@ function cardHTML(c, cls = '', extra = ''){
   const s = E.suitOf(c), red = s === 1 || s === 2, r = E.RANKS[E.rankOf(c) - 2];
   return `<div class="card ${red ? 'red' : ''} ${cls}" ${extra}><span class="r">${r === 'T' ? '10' : r}</span><span class="s1">${E.SUITS[s]}</span><span class="s2">${E.SUITS[s]}</span></div>`;
 }
-const initials = n => String(n || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+// (a one-word name shows its first two letters, Dev as De: a lone D on an avatar reads as the dealer button)
+const initials = n => { const w = String(n || '?').trim().split(/\s+/); return w.length > 1 ? w.slice(0, 2).map(x => x[0]).join('').toUpperCase() : w[0].slice(0, 1).toUpperCase() + w[0].slice(1, 2).toLowerCase(); };
 const chipsIcon = (n = 3) => `<span class="chips">${'<i></i>'.repeat(n)}</span>`;
 const COLORS = ['#3b6fb6','#7a5aa6','#2f8a8f','#3d8a62','#b07a2a','#5a6fc2','#4b6680','#8a6a5c','#b0505a'];
 const colorOf = uid => { let h = 0; for(const c of String(uid)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
@@ -1251,7 +1252,7 @@ function reserveDock(seated){
       + (seated ? '<div class="controls"><div class="info-line">Wg</div><div class="preacts"><button><i></i>Fold</button><button><i></i>Call 88,888</button><button><i></i>Call any</button></div></div>' : '');
     // and, upright, the raise panel (which takes the helper's place too): the dock is as tall as the taller of the two,
     // so the panel opens inside it and never over your own seat
-    const sz = seated && !g.classList.contains('land') && !g.classList.contains('h600') ? '<div class="controls"><div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="sizing"><div class="amt"><small>Raise to</small><b class="num">88,888</b><span class="num">88 BB</span></div><div class="sz-presets"><button>2.5 BB</button><button>3 BB</button><button>Pot</button><button>All-in</button></div><div class="sz-slider"><button class="step">−</button><input type="range"><button class="step">+</button></div></div><div class="act-main" style="--n:2"><button class="act-btn back"><b>Back</b></button><button class="act-btn raise"><b>Raise</b><span class="num">88,888</span></button></div></div>' : '';
+    const sz = seated && !g.classList.contains('land') && (!g.classList.contains('h600') || g.classList.contains('ovl')) ? '<div class="controls"><div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="sizing"><div class="amt"><small>Raise to</small><b class="num">88,888</b><span class="num">88 BB</span></div><div class="sz-presets"><button>2.5 BB</button><button>3 BB</button><button>Pot</button><button>All-in</button></div><div class="sz-slider"><button class="step">−</button><input type="range"><button class="step">+</button></div></div><div class="act-main" style="--n:2"><button class="act-btn back"><b>Back</b></button><button class="act-btn raise"><b>Raise</b><span class="num">88,888</span></button></div></div>' : '';
     g.appendChild(p); const hp = p.querySelector('.helper'), cs = [...p.querySelectorAll('.controls')].map(c => c.offsetHeight), ch = Math.max(...cs);
     const full = p.offsetHeight - cs.reduce((t, x) => t + x, 0) + ch, hh = hp ? hp.offsetHeight : 0;
     // (measured after the rest: a raise panel anywhere in the game hides the helper)
@@ -1416,9 +1417,8 @@ function renderTable(){
   const LY = layoutOf(d), posOf = LY.posOf, G = LY.G;
   area.style.setProperty('--bw', G.bw + 'px');
   const felt = area.querySelector('.felt');
-  // (the felt's name sits on the empty felt under the board: on the WPT table, whose felt runs on past the screen,
-  // halfway between the board and your cards)
-  const wm = G.low ? `;--wm:${((G.by + G.low) / 2 - (G.cy - G.fh / 2)) / G.fh * 100}%` : '';
+  // (on the oval the felt's name sits on the message line under the board, which the layout keeps clear of chips)
+  const wm = G.inset === 6 ? `;--wm:${(G.by + G.mline - (G.cy - G.fh / 2)) / G.fh * 100}%` : '';
   felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px${wm}`;
   area.querySelector('.center').style.cssText = `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
   $('msg').style.maxWidth = G.msgW + 'px';
