@@ -1919,3 +1919,55 @@ body{background:var(--lx-ink)}
 #game.wpt .center>.helper.open .h-eq small{display:inline}
 #game.wpt .center>.helper.open .h-line{-webkit-line-clamp:4}
 #game.wpt .controls:has(.sizing) .turnrow{display:none}
+/* the compact WPT pill: the other seats a little smaller, so 6 to 9 of them fit round it without crowding the pot */
+/* the oval table, upright on a phone (as WPT and WSOP): each seat on the rail, its avatar in the middle of the rail,
+   its two cards fanned behind the avatar and its name plate off the felt, under the avatar and out to its side on the
+   sides, over it at the top; --sx/--sy move the plate further out where the felt curves under it */
+#game .seat[data-side]{width:auto;display:block}
+#game .seat[data-side] .av{width:36px;height:36px;font-size:13px;z-index:2}
+#game .seat[data-side] .plate{position:absolute;top:calc(100% - 5px);margin:0;min-width:0;width:max-content;padding:4px 6px 2px;transform:translate(var(--sx,0px),var(--sy,0px))}
+#game .seat[data-side] .nm{font-size:10px;max-width:54px}
+#game .seat[data-side] .st{font-size:11px}
+#game .seat[data-side=l] .plate{right:calc(50% - 7px)}
+#game .seat[data-side=r] .plate{left:calc(50% - 7px)}
+#game .seat[data-side^=t] .plate{top:auto;bottom:calc(100% + 4px);left:50%;transform:translate(calc(-50% + var(--sx,0px)),var(--sy,0px))}
+#game .seat[data-side] .badge{font-size:8px;letter-spacing:.02em;padding:1px 3px;bottom:-14px}
+#game .seat[data-side^=t] .badge{bottom:auto;top:-14px}
+#game .seat[data-side=l] .badge{left:auto;right:0;transform:none}
+#game .seat[data-side=r] .badge{left:0;transform:none}
+#game .seat[data-side]>.hole{display:flex;left:50%;bottom:42%;transform:translateX(-50%);margin:0;z-index:0}
+#game .seat[data-side=l]>.hole:not(.shown){left:auto;right:42%;bottom:26%;transform:none}
+#game .seat[data-side=r]>.hole:not(.shown){left:42%;bottom:26%;transform:none}
+#game .seat[data-side] .card.mini{--w:19px}
+#game .seat[data-side]>.hole:not(.shown) .card.mini:first-child{transform:rotate(-10deg)}
+#game .seat[data-side]>.hole:not(.shown) .card.mini+.card.mini{margin-left:-8px;transform:rotate(10deg)}
+#game .seat[data-side=t]>.hole:not(.shown){bottom:auto;top:45%;transform:translate(-50%,-50%);width:58px;justify-content:space-between}
+#game .seat[data-side=t]>.hole:not(.shown) .card.mini:first-child{transform:rotate(-24deg)}
+#game .seat[data-side=t]>.hole:not(.shown) .card.mini+.card.mini{margin-left:0;transform:rotate(24deg)}
+#game .seat[data-side] .plate::after{display:none}
+#game .table-area.mini .seat[data-side] .av{width:30px;height:30px;font-size:11px}
+#game .table-area.mini .seat[data-side] .nm{font-size:9.5px;max-width:48px}
+#game .table-area.mini .seat[data-side] .st{font-size:10.5px}
+#game .table-area.mini .seat[data-side] .card.mini{--w:16px}
+#game .seat[data-side=tl]>.hole:not(.shown){left:auto;right:46%;bottom:auto;top:8%;transform:none}
+#game .seat[data-side=tr]>.hole:not(.shown){left:46%;bottom:auto;top:8%;transform:none}
+#game .table-area.micro .seat[data-side] .av{width:26px;height:26px;font-size:10px}
+#game .table-area.micro .seat[data-side] .nm{font-size:9px;max-width:44px}
+#game .table-area.micro .seat[data-side] .st{font-size:10px}
+#game .table-area.micro .seat[data-side] .card.mini{--w:14px}
+#game .seat[data-side]>.hole.shown{bottom:88%;z-index:3}
+#game .seat[data-side^=t]>.hole.shown{bottom:auto;top:88%}
+
+/* (the oval's dock: the raise panel takes the timer's row and the helper's line, its amount on the Raise button, so the
+   dock is no taller with it open and the table keeps the room) */
+#game.ovl .sizing{grid-template-columns:44px minmax(0,1fr) 44px;grid-template-rows:44px 26px;padding:5px 6px 2px;gap:4px 6px}
+#game.ovl .sz-slider{display:contents}
+#game.ovl .sz-slider .step:first-child{grid-column:1;grid-row:1}
+#game.ovl .sz-presets{grid-column:2;grid-row:1}
+#game.ovl .sz-slider .step:last-child{grid-column:3;grid-row:1}
+#game.ovl .sz-slider input{grid-column:1/4;grid-row:2;align-self:center}
+#game.ovl .sz-slider input::-webkit-slider-thumb{width:24px;height:24px}
+#game.ovl .sizing .amt{display:none}
+#game.ovl .controls:has(.sizing) .turnrow{display:none}
+#game.ovl .sz-presets button{min-height:44px;padding:0}
+#game.ovl .sz-slider .step{width:44px;height:44px}

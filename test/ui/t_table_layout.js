@@ -8,9 +8,13 @@
 //    wide (not the 320 px SE, which keeps the oval of 6fcfcb1) the tall stadium, at least STAD_MIN (1.2) and filling
 //    the screen down to the action bar (at most DOCK_GAP px between your seat, its badge included, and the bar);
 //    held sideways it is clearly wider than tall (at most 0.8)
-//  - the WPT table (upright, under 470 px wide, taller than 600 px): the felt spans at least WPT_W (78%) of the width
-//    and reaches the bottom of the screen, the part that shows WPT_MIN-WPT_MAX (1.3-2.1) times as tall as wide; your
-//    seat is at the bottom left, and the action column (and the raise panel in it) covers no seat and no card
+//  - the oval table (upright, under 470 px wide), the owner's reference and Muse's correction brief (Issue #4):
+//    R1 the whole felt and rail on screen, its foot above the action bar and clear of every control and your plate;
+//    R2 height / width OVAL_MIN-OVAL_MAX (1.35-1.5); R3 a rail RAIL_MIN-RAIL_MAX (14-18) px wide; R4 each other seat's
+//    avatar centred on the rail (within RAIL_TOL px of its middle), its plate and badge off the green, its card backs
+//    at most a quarter on the green, no seat over another; R6 your plate under the felt in the middle, your cards
+//    over the bottom rail; R7 Fold / Call / Raise in one row under the table, the helper one line in the dock until
+//    tapped open; the raise panel (in the dock) leaves your seat clear
 //  - the winner line on the felt, for a split and for side pots, is written whole and clear of every seat
 // The table state is written into the page's own socket (routeWebSocket), as t_stability does.
 // PLAYWRIGHT=/path/to/playwright-core CHROMIUM=/path/to/chromium node test/ui/t_table_layout.js
@@ -36,7 +40,7 @@ const SIZES = (process.env.SIZES || DEF).split(',').reduce((a, v) => { if(/^\d+x
   .map(v => { const [wh, ins] = v.split('@'), [w, h] = wh.split('x').map(Number), [l = 0, r = 0, b = 0] = ins ? ins.split(',').map(Number) : []; return [w, h, { l, r, b }, v]; })
   .filter(v => !process.env.ONLY || process.env.ONLY === v[3]);
 const NS = (process.env.NS || '2,3,4,5,6,7,8,9').split(',').map(Number);
-const WPT_W = .78, WPT_MIN = 1.3, WPT_MAX = 2.1, FELT_MIN = .75, FELT_SHORT = .75, FELT_MAX = 1.8, STAD_MIN = 1.2, DOCK_GAP = 24, LAND_MAX = .8;
+const OVAL_MIN = 1.35, OVAL_MAX = 1.5, RAIL_MIN = 14, RAIL_MAX = 18, RAIL_TOL = 6, PEEK = .25, FELT_MIN = .75, FELT_SHORT = .75, FELT_MAX = 1.8, STAD_MIN = 1.2, DOCK_GAP = 24, LAND_MAX = .8;
 const api = async (p, body) => { const j = await (await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })).json(); if(j.error) throw new Error(p + ': ' + j.error); return j; };
 const fails = [];
 let oks = 0;
@@ -75,7 +79,7 @@ async function measure(pg){
     const btn = id => { const e = document.getElementById(id); return e ? r(e) : null; };
     return { felt: r(document.querySelector('#tableArea .felt')), area: r(document.getElementById('tableArea')), dock: document.getElementById('dock') ? r(document.getElementById('dock')) : r(document.getElementById('controls')),
       board: slots.length ? u(slots) : null, seats, hero: (() => { const cs = [...document.querySelectorAll('#seats .seat.hero .hole .card')].map(r); return cs.length ? u(cs) : null; })(),
-      btns: ['aFold', 'aCall', 'aRaise'].map(btn), bets, scroll, safe, controls, wide, land: document.getElementById('game').classList.contains('land'), wpt: document.getElementById('game').classList.contains('wpt'), clockH: document.querySelector('#game .clock').getBoundingClientRect().height, look: ['mini', 'compact'].find(c => document.getElementById('tableArea').classList.contains(c)) || '' };
+      btns: ['aFold', 'aCall', 'aRaise'].map(btn), bets, scroll, safe, controls, wide, land: document.getElementById('game').classList.contains('land'), oval: document.getElementById('tableArea').classList.contains('oval'), clockH: document.querySelector('#game .clock').getBoundingClientRect().height, look: ['mini', 'compact'].find(c => document.getElementById('tableArea').classList.contains(c)) || '' };
   });
 }
 const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b - pad && b.t < a.b - pad;
@@ -154,10 +158,11 @@ const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b -
       check(m.scroll.x <= 0 && m.scroll.y <= 0 && m.scroll.gx <= 0, `${tag}: nothing scrolls (${m.scroll.x}/${m.scroll.y}/${m.scroll.gx})${m.wide.length ? ' ' + m.wide.join(' ') : ''}`);
       // the hand helper: its advice is never cut off, and the chance to win shows once (not again inside the advice
       // where the figure sits right above or beside it on a short screen or sideways)
-      // (in the WPT column the helper is one small line until it is tapped open)
-      if(m.wpt){ const one = await pg.evaluate(() => { const el = document.querySelector('#helper:not([hidden])'); return !!el && !el.querySelector('.h-line') && el.getBoundingClientRect().height <= 40; });
-        check(one, `${tag}: the helper is one small line in the action column`);
-        await pg.click('#helper').catch(() => {}); await sleep(250); }
+      // (on the oval the helper is one small line in the dock, the hand and the chance to win, until it is tapped open)
+      if(m.oval){ const one = await pg.evaluate(() => { const el = document.querySelector('#helper:not([hidden])'), d = document.getElementById('dock').getBoundingClientRect(), b = el && el.getBoundingClientRect();
+          return !!el && !el.querySelector('.h-line') && !!el.querySelector('.h-eq') && b.height <= 44 && b.top >= d.top - .5 && b.bottom <= d.bottom + .5; });
+        check(one, `${tag}: the helper is one small line in the dock (R7)`);
+        await pg.click('#helper').catch(() => {}); await sleep(300); }
       const hl = await pg.evaluate(() => { const el = document.querySelector('#helper:not([hidden])'); if(!el) return null;
         const line = el.querySelector('.h-line'), have = el.querySelector('.h-have'), eq = el.querySelector('.h-eq');
         const shown = x => !!x && x.getClientRects().length > 0 && getComputedStyle(x).display !== 'none';
@@ -178,22 +183,17 @@ const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b -
           if(cut || twice) bad.push((cut ? 'cut: ' : 'twice: ') + line.textContent); }
         line.innerHTML = was; line.className = wc; return bad; });
       check(worst && !worst.length, `${tag}: every helper hint fits, the chance to win once${worst && worst.length ? ' — ' + worst.join(' | ') : ''}`);
-      if(m.wpt){ await pg.click('#helper').catch(() => {}); await sleep(250);
-        check(await pg.evaluate(() => !document.querySelector('#helper.open')), `${tag}: a second tap closes the helper`); }
+      if(m.oval){ await pg.click('#helper').catch(() => {}); await sleep(300);
+        check(await pg.evaluate(() => !!document.querySelector('#helper.min')), `${tag}: a second tap closes the helper`); }
       // the raise panel opens over the bottom of the table, never over your own seat (your name and stack); its
       // confirm button is on screen. (Known limit, not checked: on the 320 px wide iPhone SE 1st gen the panel still
       // covers the lowest 6-8 px of your plate, its stack bar; that phone keeps the oval layout of 6fcfcb1)
-      if(upright && w >= 360){
+      if(upright && (w >= 360 || m.oval)){
         await pg.click('#aRaise'); try{ await pg.waitForSelector('.sizing', { timeout: 3000 }); }catch(e){} await sleep(300);
         const z = await pg.evaluate(() => { const r = e => e && e.getBoundingClientRect(), hs = document.querySelector('#seats .seat.hero');
           const pl = hs && [hs.querySelector('.av'), hs.querySelector('.plate')].map(r), go = r(document.getElementById('szGo'));
           return { ctl: r(document.getElementById('controls')).top, seat: pl ? Math.max(...pl.map(b => b.bottom)) : 1e9, go: go && go.bottom, sizing: !!document.querySelector('.sizing') }; });
-        if(m.wpt){ const cov = await pg.evaluate(() => { const r = e => { const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; }, c = r(document.getElementById('controls'));
-            const hit = (a, b) => a.l < b.r - .5 && b.l < a.r - .5 && a.t < b.b - .5 && b.t < a.b - .5;
-            return [...document.querySelectorAll('#seats .seat')].filter(q => [q.querySelector('.av'), q.querySelector('.plate'), ...q.querySelectorAll('.badge, .hole .card')].filter(Boolean).some(e => hit(r(e), c)))
-              .map(q => (q.querySelector('.nm') || {}).textContent); });
-          check(z.sizing && !cov.length, `${tag}: the raise panel covers no seat and no card${cov.length ? ' — ' + cov.join(', ') : ''}`); }
-        else check(z.sizing && z.ctl >= z.seat - .5, `${tag}: the raise panel leaves your seat clear (panel top ${Math.round(z.ctl)}, seat bottom ${Math.round(z.seat)})`);
+        check(z.sizing && z.ctl >= z.seat - .5, `${tag}: the raise panel leaves your seat clear (panel top ${Math.round(z.ctl)}, seat bottom ${Math.round(z.seat)})`);
         check(z.go && z.go <= h + .5, `${tag}: the raise panel's confirm button is on screen`);
         await pg.click('#szBack').catch(() => {}); await sleep(250);
       }
@@ -213,15 +213,42 @@ const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b -
         check(!on.length, `${tag}: the ${kind} winner line is clear of every seat and card${on.length ? ` — line ${['l', 't', 'r', 'b'].map(k => Math.round(r.box[k]))} over ${on.map(q => ['l', 't', 'r', 'b'].map(k => Math.round(q[k]))).join(' / ')}` : ''}`);
       }
       const fmin = h < 800 ? FELT_SHORT : FELT_MIN;
-      if(m.wpt){
-        const fw = m.felt.r - m.felt.l, shown = (Math.min(m.felt.b, m.area.b) - m.felt.t) / fw, hb = m.seats.find(q => q.hero);
-        check(fw >= WPT_W * w && m.felt.b >= m.area.b - .5, `${tag}: the felt spans the screen (${Math.round(fw)} of ${w} px wide) down to its bottom edge`);
-        check(shown >= WPT_MIN && shown <= WPT_MAX, `${tag}: the felt that shows is ${shown.toFixed(2)} times as tall as wide (${WPT_MIN}-${WPT_MAX})`);
-        check(hb && hb.box.l <= w * .1 && hb.box.r <= m.dock.l && hb.box.b >= m.area.b - 40, `${tag}: your seat at the bottom left, beside the action column`);
+      if(m.oval){
+        const o = await pg.evaluate(() => { const r = e => { const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; }, felt = document.querySelector('#tableArea .felt');
+          const seat = q => ({ name: (q.querySelector('.nm') || {}).textContent, hero: q.classList.contains('hero'), av: r(q.querySelector('.av')),
+            plates: [q.querySelector('.plate'), ...q.querySelectorAll('.badge')].filter(e => e && e.getClientRects().length).map(r),
+            backs: [...q.querySelectorAll('.hole:not(.shown) .card')].filter(e => e.getClientRects().length).map(r), cards: [...q.querySelectorAll('.hole .card')].filter(e => e.getClientRects().length).map(r) });
+          const ctl = [...document.querySelectorAll('#dock button, #dock input, #helper, #playLine')].filter(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden').map(r);
+          return { rw: parseFloat(getComputedStyle(felt).getPropertyValue('--rw')), seats: [...document.querySelectorAll('#seats .seat')].map(seat), ctl, dock: r(document.getElementById('dock')), vw: innerWidth, vh: innerHeight }; });
+        const F = m.felt, fw = F.r - F.l, fh = F.b - F.t, fcx = (F.l + F.r) / 2, fcy = (F.t + F.b) / 2;
+        // the felt and its rail as a stadium (straight sides, round ends): the distance from a point to the shape
+        // inset by k px, and whether a box reaches into it
+        const stad = k => { const a = fw / 2 - k, b = fh / 2 - k, rr = Math.min(a, b); return { a, b, rr, sx: a - rr, sy: b - rr }; };
+        const dist = (S, x, y) => { const qx = Math.max(0, Math.abs(x - fcx) - S.sx), qy = Math.max(0, Math.abs(y - fcy) - S.sy); return Math.hypot(qx, qy) - S.rr; };
+        const into = (S, q) => { const dx = Math.max(0, Math.max(q.l - fcx, fcx - q.r) - S.sx), dy = Math.max(0, Math.max(q.t - fcy, fcy - q.b) - S.sy); return Math.hypot(dx, dy) < S.rr - .5; };
+        const green = stad(o.rw), mid = stad(o.rw / 2);
+        const share = q => { let a = 0, t = 0; for(let x = q.l + .5; x < q.r; x++) for(let y = q.t + .5; y < q.b; y++){ t++; if(dist(green, x, y) < 0) a++; } return t ? a / t : 0; };
+        const ctlOver = o.ctl.filter(q => q.t < F.b - .5 && into(stad(0), q));
+        check(F.l >= -.5 && F.t >= m.area.t - .5 && F.r <= w + .5 && F.b <= o.dock.t + .5 && !ctlOver.length,
+          `${tag}: R1 the whole table on screen, its foot (${Math.round(F.b)}) above the dock (${Math.round(o.dock.t)}) and clear of every control${ctlOver.length ? ' — ' + ctlOver.length + ' over it' : ''}`);
+        check(fh / fw >= OVAL_MIN - .01 && fh / fw <= OVAL_MAX + .01, `${tag}: R2 height/width ${(fh / fw).toFixed(2)} within ${OVAL_MIN}-${OVAL_MAX}`);
+        check(o.rw >= RAIL_MIN && o.rw <= RAIL_MAX, `${tag}: R3 a rail ${o.rw} px wide (${RAIL_MIN}-${RAIL_MAX})`);
+        const others = o.seats.filter(q => !q.hero);
+        const offRail = others.filter(q => Math.abs(dist(mid, (q.av.l + q.av.r) / 2, (q.av.t + q.av.b) / 2)) > RAIL_TOL).map(q => `${q.name} ${dist(mid, (q.av.l + q.av.r) / 2, (q.av.t + q.av.b) / 2).toFixed(1)}`);
+        check(!offRail.length, `${tag}: R4a every avatar centred on the rail (within ${RAIL_TOL} px)${offRail.length ? ' — ' + offRail.join(', ') : ''}`);
+        const onGreen = others.filter(q => q.plates.some(p => into(green, p))).map(q => q.name);
+        check(!onGreen.length, `${tag}: R4b no plate or badge on the green${onGreen.length ? ' — ' + onGreen.join(', ') : ''}`);
+        const flat = others.filter(q => q.backs.some(c => share(c) > PEEK)).map(q => `${q.name} ${Math.round(Math.max(...q.backs.map(share)) * 100)}%`);
+        check(!flat.length, `${tag}: R4c card backs behind the avatars, at most ${PEEK * 100}% over the green${flat.length ? ' — ' + flat.join(', ') : ''}`);
+        const me = o.seats.find(q => q.hero), mp = me && me.plates[0], mc = me && me.cards.length ? { l: Math.min(...me.cards.map(c => c.l)), r: Math.max(...me.cards.map(c => c.r)), t: Math.min(...me.cards.map(c => c.t)), b: Math.max(...me.cards.map(c => c.b)) } : null;
+        check(mp && Math.abs((mp.l + mp.r) / 2 - fcx) <= 2 && mp.t >= F.b - .5 && mc && Math.abs((mc.l + mc.r) / 2 - fcx) <= 2 && mc.t < F.b - o.rw && mc.b > F.b - o.rw - .5,
+          `${tag}: R6 your plate under the felt in the middle, your cards over the bottom rail`);
+        const [bf, bc, br] = m.btns;
+        check(bf && bc && br && Math.abs(bf.t - bc.t) < 1 && Math.abs(bc.t - br.t) < 1 && bf.r <= bc.l && bc.r <= br.l && bf.t >= F.b, `${tag}: R7 Fold / Call / Raise in one row under the table`);
       }
       else if(upright) check(ratio >= fmin && ratio <= FELT_MAX, `${tag}: felt height/width ${ratio.toFixed(2)} within ${fmin}-${FELT_MAX}`);
       else check(ratio <= LAND_MAX, `${tag}: felt height/width ${ratio.toFixed(2)} <= ${LAND_MAX} (sideways: wider than tall)`);
-      if(upright && w >= 360 && w < 470 && !m.wpt){
+      if(upright && w >= 360 && w < 470 && !m.oval){
         const hb = m.seats.find(q => q.hero), gap = hb ? m.dock.t - hb.box.b : 1e9;
         check(ratio >= STAD_MIN, `${tag}: the tall stadium (height/width ${ratio.toFixed(2)} >= ${STAD_MIN})`);
         check(gap <= DOCK_GAP, `${tag}: the table reaches down to the action bar (${Math.round(gap)} px between your seat and the bar, at most ${DOCK_GAP})`);
