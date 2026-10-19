@@ -51,11 +51,34 @@ function welcomeScreen(){
   const invite = location.pathname.startsWith('/join/');
   $('auth').classList.remove('form-open');
   $('authForm').hidden = true; $('welcome').hidden = !!invite && !campaignOk; $('wNote').hidden = true; $('auth').scrollTop = 0;
-  if(invite && !campaignOk) post('/api/campaignInfo', { code: location.pathname.slice(6) }).then(i => { if(i.campaign){ campaign = i; campaignScreen(); } else $('welcome').hidden = false; }).catch(() => { $('welcome').hidden = false; });
+  if(invite && !campaignOk) campaignLookup(location.pathname.slice(6));
   $('wInvite').hidden = !invite;
   $('wJoin').textContent = invite ? 'Accept invitation' : 'Join Blindrise';
   $('wJoin').onclick = () => { if(invite) authScreen('join'); else { $('wNote').hidden = false; $('wNote').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } };
   $('wSignIn').onclick = () => authScreen('login');
+}
+// Fails closed: only a definite answer shows the ordinary invitation (campaigns off: 404 like any unknown endpoint; or
+// "not a campaign link"). A network error, a server error or an unreadable answer never falls back to the join form.
+async function campaignLookup(code){
+  let r = null, j = null;
+  try{
+    r = await fetch('/api/campaignInfo', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) });
+    j = await r.json();
+  }catch(e){}
+  if(r && r.status === 404 && j && j.error === 'Not found'){ $('welcome').hidden = false; return; }
+  if(r && r.ok && j && j.campaign === false){ $('welcome').hidden = false; return; }
+  if(r && r.ok && j && j.campaign === true && (j.open === false || typeof j.consent === 'string')){ campaign = j; campaignScreen(); return; }
+  campaignUnavailable();
+}
+function campaignUnavailable(){
+  showScreen('auth');
+  const f = $('authForm');
+  $('auth').classList.add('form-open'); $('welcome').hidden = true; f.hidden = false; $('auth').scrollTop = 0;
+  f.innerHTML = `<h2>This invitation could not be opened</h2><p>Check your connection and try again. Members can still sign in.</p>
+    <button class="btn-red" type="button" id="cRetry">Try again</button>
+    <button type="button" class="linkbtn" id="cSignIn">Sign in</button>`;
+  $('cRetry').onclick = () => { $('auth').classList.remove('form-open'); welcomeScreen(); };
+  $('cSignIn').onclick = () => authScreen('login'); f.onsubmit = e => e.preventDefault();
 }
 function campaignScreen(){
   showScreen('auth');
@@ -122,14 +145,18 @@ function authScreen(mode){
         connect(); return;
       }
       const body = { name: $('aName').value, pin: $('aPin').value, agree: mode === 'join' && campaignOk ? true : !!($('aAgree') && $('aAgree').checked) };
-      if(mode === 'join' && campaignOk){ const em = $('aEmail').value.trim(); if(em){ body.email = em; body.emailOk = $('aEmailOk').checked; } }
+      if(mode === 'join' && campaignOk){ body.consent = campaign.consent; const em = $('aEmail').value.trim(); if(em){ body.email = em; body.emailOk = $('aEmailOk').checked; } }
       if(mode === 'join') local.set('askRemind', 1);
       const r = mode === 'join' ? await post('/api/redeem', { ...body, code: invite }) : mode === 'setup' ? await post('/api/setup', { ...body, code: $('aCode').value.trim() }) : await post('/api/login', body);
       local.set('token', r.token);
       if(location.pathname !== '/') history.replaceState(null, '', '/');
       if(mode === 'join' && campaignOk){ local.set('campaignJoined', Date.now()); $('auth').classList.remove('campaign'); }
       connect();
-    }catch(err){ $('aErr').textContent = err.message; }
+    }catch(err){
+      // the server refused the campaign consent (for example after a restart): back to the welcome and consent page
+      if(mode === 'join' && campaignOk && /welcome page/.test(err.message)){ campaignOk = false; campaign = null; $('auth').classList.remove('campaign'); welcomeScreen(); return; }
+      $('aErr').textContent = err.message;
+    }
   };
 }
 

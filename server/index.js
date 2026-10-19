@@ -70,7 +70,7 @@ const api = {
     const u = createUser(name, pin, 'owner'); store.set('owner', u.id);
     return { token: newSession(u.id) };
   },
-  redeem({ code, name, pin, agree, email, emailOk }, _, ip){
+  redeem({ code, name, pin, agree, email, emailOk, consent }, _, ip){
     const inv = store.get('invite:' + code);
     // campaign links exist only while campaigns are switched on; otherwise such an invite is treated as unknown
     if(inv && inv.campaign && !campaignsOn()) throw new Error('This invite link has already been used or was cancelled. Ask for a new one.');
@@ -82,6 +82,9 @@ const api = {
     if(store.get('name:' + name.toLowerCase())) throw new Error('That name is taken. Try another.');
     if(!validPin(pin)) throw new Error('Pick a PIN of 4 to 8 digits.');
     if(agree !== true) throw new Error(inv.campaign ? 'Please tick the box to confirm you are 19 or older and agree to the club rules.' : 'Please confirm you are 19 or older and agree to the club rules.');
+    // fail closed: a campaign join must carry the consent token the welcome and consent page received for this link and
+    // this version of the notice; missing, malformed, another link's or an old version's token is refused before anything is stored
+    if(inv.campaign && !campaignConsentOk(code, consent)) throw new Error(CONSENT_AGAIN);
     const contact = inv.campaign ? campaignEmail(email, emailOk) : null;
     if(inv.campaign && campaignJoins(ip).length >= CAMPAIGN_IP_HOUR) throw new Error('Too many new accounts were made from this connection. Try again in an hour.');
     const u = createUser(name, pin, 'member');
@@ -145,8 +148,10 @@ const api = {
     const inv = typeof code === 'string' && CODE.test(code) && store.get('invite:' + code);
     if(!inv || !inv.campaign) return { campaign: false };
     const open = openInvite(inv);
-    if(open) bump(inv.campaign.source, 'views');
-    return { campaign: true, open, source: inv.campaign.source, venue: VENUES[inv.campaign.source] || null, emailConsent: EMAIL_CONSENT.text };
+    if(!open) return { campaign: true, open: false };
+    bump(inv.campaign.source, 'views');
+    // the consent token goes only to the page that shows the disclosures; the join sends it back (see redeem)
+    return { campaign: true, open, source: inv.campaign.source, venue: VENUES[inv.campaign.source] || null, emailConsent: EMAIL_CONSENT.text, consent: campaignConsentToken(code) };
   },
   status(){ return { hasOwner: !!owner() }; },
   pushKey(){ return { key: push.publicKey() }; },
@@ -192,9 +197,10 @@ function inviteCode(u, group){
 const invitedCount = uid => store.values('user:').filter(x => !x.removed && x.invitedBy === uid).length;
 
 // ---------- public campaign links and the printed /v/<source> path ----------
-// Off unless the server runs with CAMPAIGNS=1 (or STAGING=1). Off, the endpoints answer 404 like any unknown one,
+// Off unless the server runs with CAMPAIGNS=1 exactly. STAGING=1 does NOT switch them on (owner directive, 19 Oct): staging
+// tests campaigns only when CAMPAIGNS=1 is set there too. Off, the endpoints answer 404 like any unknown one,
 // /v/ is an unknown path, existing campaign invites cannot be redeemed, and no payload carries campaign data.
-const campaignsOn = () => process.env.CAMPAIGNS === '1' || process.env.STAGING === '1';
+const campaignsOn = () => process.env.CAMPAIGNS === '1';
 const campaignsGate = () => { if(!campaignsOn()){ const e = new Error('Not found'); e.status = 404; throw e; } };
 // at most CAMPAIGN_MAX joins and 30 days per link, and at most CAMPAIGN_IP_HOUR new accounts per connection per hour
 const CAMPAIGN_MAX = 2000, CAMPAIGN_HOURS = 30 * 24, CAMPAIGN_IP_HOUR = +process.env.CAMPAIGN_IP_HOUR || 5;
@@ -207,6 +213,12 @@ const campaignJoined = ip => { if(joinsByIp.size > 5000) for(const k of joinsByI
 // aggregate counters per source: plain integers, no address, time, device or person
 const bump = (source, k) => { const c = store.get('cstat:' + source) || {}; store.set('cstat:' + source, { ...c, [k]: (c[k] || 0) + 1 }); };
 // the optional email: only with its own unticked consent box; the exact wording and its version are kept with it
+// The welcome and consent page's notice version, and a per-process key for its consent token: HMAC(code | version).
+// A restart issues a new key, so a join started before it is sent back to the welcome page (fails closed, nothing stored).
+const CAMPAIGN_CONSENT_V = 1, CONSENT_KEY = crypto.randomBytes(32);
+const CONSENT_AGAIN = 'Please read the welcome page for this invitation and tick its box again before joining.';
+const campaignConsentToken = code => 'c' + CAMPAIGN_CONSENT_V + '.' + crypto.createHmac('sha256', CONSENT_KEY).update(code + '|' + CAMPAIGN_CONSENT_V).digest('base64url');
+const campaignConsentOk = (code, t) => { if(typeof t !== 'string' || t.length > 100) return false; const a = Buffer.from(t), b = Buffer.from(campaignConsentToken(code)); return a.length === b.length && crypto.timingSafeEqual(a, b); };
 const EMAIL_CONSENT = { v: 1, text: 'Blindrise may email me about club events. I can ask the club owner to remove my email at any time.' };
 function campaignEmail(email, ok){
   email = String(email || '').trim();
@@ -240,7 +252,7 @@ function campaignReturn(u){
 }
 // GET /v/<slug>: a fixed redirect to the mapped open campaign link, else one neutral page; never cached, rate limited
 const vHits = new Map();
-const vLimited = ip => { const now = Date.now(), a = (vHits.get(ip) || []).filter(x => now - x < 60e3); if(vHits.size > 5000) vHits.clear(); a.push(now); vHits.set(ip, a); return process.env.FAST !== '1' && a.length > 60; };
+const vLimited = ip => { const now = Date.now(), a = (vHits.get(ip) || []).filter(x => now - x < 60e3); if(vHits.size > 5000) vHits.clear(); a.push(now); vHits.set(ip, a); return a.length > 60; };
 const V_HEAD = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' };
 const V_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Blindrise</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b1220;color:#f4eee2;font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif;text-align:center;padding:24px;box-sizing:border-box}

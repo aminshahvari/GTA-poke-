@@ -37,7 +37,7 @@ Branch `celestia-campaign`, cut from the stabilization candidate `r2-hotfix` `8e
    - **came back:** signed in again more than 20 hours and at most 30 days after joining, counted once per person.
    
    Counters are plain integers in `cstat:<source>`, with no address, time, device or person; "came back" is one flag on the member record. Empty states show 0, and nothing is estimated.
-6. **Off switch.** Everything above is active only with `CAMPAIGNS=1` or `STAGING=1`, and production has neither. With campaigns off:
+6. **Off switch.** Everything above is active only with `CAMPAIGNS=1`, and production does not set it. (Superseded 19 Oct: `STAGING=1` no longer switches campaigns on, and campaign consent now fails closed; see `CELESTIA-REMEDIATION-handoff.md`.) With campaigns off:
    - `/api/campaign`, `/api/vmap` and `/api/campaignInfo` answer exactly like an unknown endpoint (`404 {"error":"Not found"}`);
    - `/v/...` is an unknown path (404, no redirect);
    - a campaign invite left in the data cannot be redeemed;
