@@ -58,6 +58,8 @@
       <p class="lux-foot">Private · Invite only · Free to play</p>
     </div>
     <form class="glass" id="authForm" hidden></form>
+    <!-- a club's public join page (/join/<club-slug>), filled by app.js -->
+    <div class="club-join-box" id="clubJoin" hidden></div>
   </div>
 </section>
 
@@ -120,6 +122,8 @@
 <div id="modalRoot"></div>
 <div id="offline" class="offline" hidden>Reconnecting…</div>
 <canvas id="confetti" hidden></canvas>
+<!-- the QR sheet the owner prints from Director; shown only when printing -->
+<div id="qrPrint" class="qr-print" aria-hidden="true"></div>
 <script src="/engine.js"></script>
 <script src="/learn.js"></script>
 <script src="/fair-verify.js"></script>

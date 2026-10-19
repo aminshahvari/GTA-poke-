@@ -7,3 +7,5 @@ fc54a973687325599214294ec90ea9665309cbdf6ca727c43a64651f24e923f7  tesseract-5.1.
 5db58ea4d1bd4256be81e8ae3b4fa226c4625dfba1850b1b3308dbf3700e9929  tesseract-5.1.1/tesseract-core-lstm.wasm
 c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08  tesseract-5.1.1/LICENSE-core
 45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91  tessdata-eng-1.0.0/eng.traineddata.gz
+79ec86f82856005b1c887905cfccfcfbec3821ca61c7fd5a952faa5f778f791c  qrcode-generator-2.0.4/qrcode.js
+3dd00fd654fbf0d6a1b686afe46e39544e6453efa416241b09ce87df039675da  qrcode-generator-2.0.4/LICENSE

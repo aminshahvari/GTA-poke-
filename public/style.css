@@ -823,6 +823,65 @@ body{font-size:15px;letter-spacing:0}
   #auth.form-open .lux-mark{width:44px;height:44px}
 }
 
+/* ---------- a club's public join page (/join/<club-slug>): the club's own name leads, the Blindrise brand steps aside ---------- */
+#auth.club-join .lux-brand{display:none}
+#auth.club-join .lux-wrap{display:flex;width:min(440px,100%);padding-top:max(28px,env(safe-area-inset-top));padding-bottom:28px}
+#auth .club-join-box{display:grid}
+#auth .cj-load{text-align:center;color:var(--mu)}
+#auth .cj-card{display:grid;gap:14px;justify-items:center;text-align:center;padding:26px 20px 18px;border-radius:22px;color:var(--iv);
+  background:linear-gradient(165deg,rgba(28,38,62,.86),rgba(12,18,32,.9));border:1px solid rgba(241,223,176,.18);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 24px 60px rgba(0,0,0,.45);animation:luxUp .6s cubic-bezier(.2,.7,.2,1) both}
+#auth .cj-av{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);font-weight:600;font-size:32px;color:#1a1408;letter-spacing:.02em;
+  background:linear-gradient(180deg,#f3e2b6 0%,#ddb96f 52%,#c09a52 100%);box-shadow:0 0 0 1px rgba(241,223,176,.5),0 0 0 6px rgba(216,180,106,.12),0 12px 30px rgba(216,180,106,.25)}
+#auth .cj-eyebrow{font-family:var(--cond);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--g)}
+#auth .cj-title{margin:0;font-family:var(--serif);font-weight:600;font-size:clamp(28px,8.4vw,36px);line-height:1.1;color:var(--iv);text-wrap:balance}
+#auth .cj-title em{font-style:italic;color:var(--g2)}
+#auth .cj-lead{margin:0;color:var(--mu);font-size:14.5px}
+#auth .cj-perks{list-style:none;margin:0;padding:0;display:grid;gap:8px;width:100%;text-align:left}
+#auth .cj-perks li{position:relative;padding:10px 12px 10px 36px;border-radius:12px;font-size:14px;line-height:1.35;color:var(--iv);background:rgba(255,255,255,.035);border:1px solid rgba(241,223,176,.1)}
+#auth .cj-perks li::before{content:"";position:absolute;left:14px;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:var(--g);box-shadow:0 0 10px rgba(216,180,106,.6)}
+#auth .cj-form{display:grid;gap:12px;width:100%;text-align:left}
+#auth .cj-field{display:grid;gap:6px}
+#auth .cj-field span{font-family:var(--cond);color:var(--g);font-size:11px;letter-spacing:.18em;text-transform:uppercase}
+#auth .cj-field input{width:100%;font-size:16px;background:rgba(5,8,15,.6);border:1px solid rgba(241,223,176,.18);border-radius:12px;color:var(--iv);padding:13px 14px}
+#auth .cj-field input:focus{outline:none;border-color:var(--g);box-shadow:0 0 0 3px rgba(216,180,106,.18)}
+#auth .cj-field input::placeholder{color:rgba(163,171,187,.6)}
+#auth .cj-agree{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.45;color:var(--mu)}
+#auth .cj-agree input{margin-top:2px;width:20px;height:20px;flex:none;accent-color:var(--g)}
+#auth .cj-form .err{min-height:0}
+#auth .cj-form .err:empty{display:none}
+#auth .cj-form .lux-btn{letter-spacing:.14em}
+#auth .cj-form .lux-btn:disabled{opacity:.6}
+#auth .cj-done{display:grid;gap:4px;width:100%;padding:16px;border-radius:14px;border:1px solid rgba(216,180,106,.38);background:rgba(216,180,106,.08)}
+#auth .cj-done b{font-family:var(--serif);font-size:24px;font-weight:600;color:var(--g2)}
+#auth .cj-done span{color:var(--iv);font-size:14px}
+#auth .cj-fine{margin:0;font-family:var(--cond);font-size:11.5px;letter-spacing:.06em;color:rgba(163,171,187,.85);line-height:1.4}
+#auth .cj-fine + .cj-fine{margin-top:-8px}
+
+/* ---------- the owner's join QR card (Director) ---------- */
+.qr-card .qr-club{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center}
+.qr-card .qr-club div{display:grid;gap:2px;min-width:0}
+.qr-card .qr-club b{font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qr-card .qr-club small{color:var(--muted)}
+.qr-card .qr-av{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:18px;color:#1a1408;background:linear-gradient(180deg,#f3e2b6,#c09a52)}
+#lobby .qr-card .status-pill.live{background:rgba(79,209,161,.12);border-color:rgba(79,209,161,.55);color:var(--good)}
+.qr-card .qr-box{justify-self:center;padding:10px;border-radius:14px;background:#fff;box-shadow:0 0 0 1px rgba(216,180,106,.45),0 10px 30px rgba(0,0,0,.35)}
+.qr-card .qr-box canvas{display:block;width:min(240px,62vw);height:auto;image-rendering:pixelated}
+.qr-card .qr-url{margin:0;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;word-break:break-all;color:var(--gold)}
+.qr-card .qr-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.qr-card .qr-acts .btn{width:100%;min-width:0;margin:0;padding-left:6px;padding-right:6px}
+.qr-card .qr-leads summary{cursor:pointer;color:var(--muted);font-size:14px}
+.qr-card .qr-leads .table-list{margin-top:8px}
+
+/* printing the join QR: only the sheet goes to paper */
+.qr-print{display:none}
+@media print{
+  body.print-qr > *:not(.qr-print){display:none !important}
+  body.print-qr{background:#fff !important;padding:0 !important}
+  body.print-qr .qr-print{display:block;text-align:center}
+  body.print-qr .qr-print img{width:100%;max-width:16cm;height:auto}
+}
+
 .staging-banner{position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:99;background:#b8161f;color:#fff;font:600 11px/1 system-ui,sans-serif;letter-spacing:.08em;padding:4px 10px;border-radius:0 0 8px 8px;pointer-events:none}
 
 /* ---------- Business Club: members' businesses. Champagne-gold accent inside the slate palette ---------- */

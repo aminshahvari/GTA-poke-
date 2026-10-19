@@ -95,6 +95,65 @@ function authScreen(mode){
   };
 }
 
+// ---------- a club's public join page: /join/<club-slug> ----------
+// Invite codes on /join/ are always 12 characters and club slugs never are, so any other /join/ path is a club's join page.
+// The visitor leaves an email for that club only. The box must be ticked, and the server also needs the token that came
+// with the consent text (fails closed). Joining twice with the same email gives the same answer and keeps one record.
+let joinSlug = (() => { const m = /^\/join\/([a-z0-9-]{3,40})\/?$/.exec(location.pathname); return m && m[1].length !== 12 ? m[1] : null; })();
+const clubTitle = name => /\bclub$/i.test(name) ? name : name + ' Club';
+async function clubJoinScreen(){
+  showScreen('auth');
+  const a = $('auth'), box = $('clubJoin');
+  a.classList.add('club-join'); a.classList.remove('form-open');
+  $('welcome').hidden = true; $('authForm').hidden = true; box.hidden = false; a.scrollTop = 0;
+  box.innerHTML = '<p class="cj-load">Loading…</p>';
+  let info;
+  try{ info = await post('/api/joinInfo', { slug: joinSlug }); }catch(e){ info = { club: false, error: e.message }; }
+  const member = '<button type="button" class="linkbtn" id="cjMember">Already a member? Sign in</button>';
+  if(!info.club){
+    box.innerHTML = `<div class="cj-card"><h2 class="cj-title">${info.error ? "This page didn't load" : 'This club link is not active'}</h2>
+      <p class="cj-lead">${info.error ? esc(info.error) : 'Ask the club owner for a new link or QR code.'}</p>${member}</div>`;
+    $('cjMember').onclick = leaveJoin; return;
+  }
+  document.title = 'Join the ' + clubTitle(info.name);
+  box.innerHTML = `<div class="cj-card">
+    <div class="cj-av" aria-hidden="true">${esc(info.initials)}</div>
+    <span class="cj-eyebrow">Private club on Blindrise</span>
+    <h2 class="cj-title">Join the <em>${esc(clubTitle(info.name))}</em></h2>
+    <ul class="cj-perks"><li>Free poker nights and club tournaments</li><li>Meet the people in the club</li><li>Event news by email, from this club only</li></ul>
+    <form class="cj-form" id="cjForm" novalidate>
+      <label class="cj-field" for="cjEmail"><span>Email</span><input id="cjEmail" type="email" inputmode="email" autocomplete="email" maxlength="254" placeholder="you@example.com"></label>
+      <label class="cj-agree"><input type="checkbox" id="cjAgree"> <span>${esc(info.consent.text)}</span></label>
+      <div class="err" id="cjErr" role="alert"></div>
+      <button class="lux-btn" type="submit" id="cjGo">JOIN THE CLUB</button>
+    </form>
+    <p class="cj-fine">Free social play · No betting · No real money</p>
+    <p class="cj-fine">Your email goes to this club only — never shared with other clubs.</p>
+    ${member}</div>`;
+  $('cjMember').onclick = leaveJoin;
+  $('cjForm').onsubmit = async e => {
+    e.preventDefault();
+    const err = $('cjErr'), email = $('cjEmail').value.trim();
+    err.textContent = '';
+    if(!/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email)){ err.textContent = 'Please enter a valid email address.'; return; }
+    // fail closed on the phone too: nothing is sent until the box is ticked
+    if(!$('cjAgree').checked){ err.textContent = 'Please tick the box to agree, then tap Join.'; return; }
+    $('cjGo').disabled = true;
+    try{
+      await post('/api/joinClub', { slug: info.slug, email, agree: true, token: info.token });
+      $('cjForm').outerHTML = `<div class="cj-done" id="cjDone" role="status"><b>You're on the list</b><span>${esc(clubTitle(info.name))} has your email and will let you know about club events.</span></div>`;
+    }catch(x){ err.textContent = x.message; $('cjGo').disabled = false; }
+  };
+}
+function leaveJoin(){
+  joinSlug = null;
+  history.replaceState(null, '', '/');
+  document.title = DOC_TITLE;
+  $('auth').classList.remove('club-join'); $('clubJoin').hidden = true; $('clubJoin').innerHTML = '';
+  if(local.get('token', null)) connect(); else authScreen('login');
+}
+const DOC_TITLE = document.title;
+
 // ---------- connection ----------
 let ws = null, club = null, retry = 0;
 const tables = new Map();
@@ -106,6 +165,7 @@ window.BizClub.init({ post, toast, token: () => local.get('token', ''), me: () =
   confirm: (title, text, ok) => modal(`<h2>${esc(title)}</h2><p>${esc(text)}</p>`, [{ label: 'Cancel', value: false }, { label: esc(ok), value: true, primary: true }]) });
 function connect(){
   const token = local.get('token', null);
+  if(joinSlug) return clubJoinScreen();
   if(!token && location.pathname.startsWith('/join/')) return welcomeScreen();
   if(!token){ return post('/api/status', {}).then(s => s.hasOwner ? welcomeScreen() : authScreen('setup')).catch(() => welcomeScreen()); }
   if(ws) try{ ws.close(); }catch(e){}
@@ -429,7 +489,89 @@ const demoCard = () => `<div class="card-box demo-box"><span class="eyebrow">Dem
   <p>Play a real game at a 6-max table against 5 practice players, with the same buttons, chat bubbles, antes and clock as a club tournament. It runs only on your phone: nothing is saved and no points are given.</p>
   <div class="btn-row"><button class="btn red big" data-demo>Open demo table</button></div></div>`;
 function directorHTML(){
-  return newsHTML() + demoCard() + conflictsHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
+  return newsHTML() + demoCard() + conflictsHTML() + joinQrHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
+}
+// ---------- the owner's join QR (Director) ----------
+// Each club the owner runs gets a QR code of its public join address, drawn here on the phone from that address only
+// (pinned qrcode-generator in /vendor/, loaded the first time it's needed). Nothing about the code is stored.
+let qrLib = null, qrLeadsOpen = false;
+const loadQr = () => qrLib || (qrLib = new Promise((res, rej) => {
+  if(window.qrcode) return res(window.qrcode);
+  const s = document.createElement('script'); s.src = '/vendor/qrcode-generator-2.0.4/qrcode.js';
+  s.onload = () => res(window.qrcode); s.onerror = () => { qrLib = null; rej(new Error("The QR code didn't load. Check your connection.")); };
+  document.head.appendChild(s);
+}));
+const joinUrl = c => location.origin + c.path;
+const qrInitials = name => (String(name).match(/[\p{L}\p{N}]+/gu) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+function joinQrHTML(){
+  if(!club.joinQr) return '';
+  return club.joinQr.map((c, i) => `<div class="card-box qr-card"><span class="eyebrow">Join QR · ${esc(clubTitle(c.name))}</span>
+    <div class="qr-club"><span class="qr-av" aria-hidden="true">${esc(qrInitials(c.name))}</span><div><b>${esc(c.name)}</b><small>${c.members} member${c.members === 1 ? '' : 's'}</small></div>${c.live ? '<span class="status-pill live" title="The join page is open">LIVE</span>' : ''}</div>
+    <div class="qr-box"><canvas data-qr="${i}" role="img" aria-label="QR code for ${esc(joinUrl(c))}"></canvas></div>
+    <p class="qr-url">${esc(joinUrl(c))}</p>
+    <div class="btn-row qr-acts"><button class="btn red" data-qshare="${i}">Share</button><button class="btn" data-qdl="${i}">Download</button><button class="btn" data-qprint="${i}">Print</button></div>
+    <p class="note">Anyone who scans it can leave their email for the ${esc(clubTitle(c.name))}, with their consent. It doesn't make an account or sign anyone in, and their email is never shared with another club.</p>
+    <details class="qr-leads"><summary>Email sign-ups · ${c.leads.length}</summary>${c.leads.length ? `<div class="table-list">${c.leads.map(l => `<div class="trow"><b>${esc(l.email)}</b><small>${new Date(l.at).toLocaleDateString()}</small></div>`).join('')}</div>` : '<p class="note">No sign-ups yet.</p>'}</details></div>`).join('');
+}
+// a QR code onto a canvas: black on white, 4 modules of quiet zone, error correction M
+function drawQr(canvas, text, px){
+  const q = window.qrcode(0, 'M'); q.addData(text); q.make();
+  const n = q.getModuleCount(), size = n + 8, scale = Math.max(2, Math.floor(px / size));
+  canvas.width = canvas.height = size * scale;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, canvas.width, canvas.height); g.fillStyle = '#000';
+  for(let r = 0; r < n; r++) for(let k = 0; k < n; k++) if(q.isDark(r, k)) g.fillRect((k + 4) * scale, (r + 4) * scale, scale, scale);
+  return canvas;
+}
+// the printable/downloadable sheet: the club's name, the code and its address
+function qrPoster(c){
+  const W = 1200, H = 1500, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#0b1424'; g.textAlign = 'center';
+  g.font = '600 64px "IBM Plex Sans", system-ui, sans-serif'; g.fillText('Join the ' + clubTitle(c.name), W / 2, 150, W - 120);
+  g.font = '400 36px "IBM Plex Sans", system-ui, sans-serif'; g.fillStyle = '#4a5468'; g.fillText('Scan with your phone camera', W / 2, 215);
+  const q = drawQr(document.createElement('canvas'), joinUrl(c), 1000);
+  g.imageSmoothingEnabled = false; g.drawImage(q, (W - 1000) / 2, 270, 1000, 1000);
+  g.fillStyle = '#0b1424'; g.font = '500 38px "IBM Plex Sans", system-ui, sans-serif'; g.fillText(joinUrl(c), W / 2, 1340, W - 120);
+  g.fillStyle = '#4a5468'; g.font = '400 30px "IBM Plex Sans", system-ui, sans-serif'; g.fillText('Free social play · No betting · No real money', W / 2, 1410, W - 120);
+  return cv;
+}
+const posterBlob = c => new Promise(res => qrPoster(c).toBlob(res, 'image/png'));
+const qrFile = c => c.slug + '-join-qr.png';
+async function wireJoinQr(){
+  const boxes = document.querySelectorAll('[data-qr]');
+  if(!boxes.length) return;
+  try{ await loadQr(); }catch(e){ boxes.forEach(b => b.replaceWith(Object.assign(document.createElement('p'), { className: 'note', textContent: e.message }))); return; }
+  boxes.forEach(cv => { const c = club.joinQr[+cv.dataset.qr]; if(c) drawQr(cv, joinUrl(c), 600); });
+  // the image to share is made now, so tapping Share can hand it over straight away (iPhone needs that)
+  const files = new Map();
+  club.joinQr.forEach((c, i) => posterBlob(c).then(blob => blob && files.set(i, new File([blob], qrFile(c), { type: 'image/png' }))));
+  document.querySelectorAll('.qr-leads').forEach(d => { d.open = qrLeadsOpen; d.ontoggle = () => { qrLeadsOpen = d.open; }; });
+  const pick = b => club.joinQr[+(b.dataset.qshare ?? b.dataset.qdl ?? b.dataset.qprint)];
+  document.querySelectorAll('[data-qshare]').forEach(b => b.onclick = async () => {
+    const c = pick(b), url = joinUrl(c), text = `Join the ${clubTitle(c.name)} on Blindrise. Free social play, no betting, no real money:`;
+    if(navigator.share){
+      const file = files.get(+b.dataset.qshare);
+      const withFile = file && navigator.canShare && navigator.canShare({ files: [file] });
+      return navigator.share(withFile ? { title: 'Join the ' + clubTitle(c.name), text, url, files: [file] } : { title: 'Join the ' + clubTitle(c.name), text, url }).catch(() => {});
+    }
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast('Join link copied.')).catch(() => toast(url));
+  });
+  document.querySelectorAll('[data-qdl]').forEach(b => b.onclick = async () => {
+    const c = pick(b), href = URL.createObjectURL(await posterBlob(c));
+    const a = Object.assign(document.createElement('a'), { href, download: qrFile(c) });
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(href), 60000);
+  });
+  document.querySelectorAll('[data-qprint]').forEach(b => b.onclick = () => {
+    const c = pick(b), sheet = $('qrPrint');
+    sheet.innerHTML = '';
+    sheet.appendChild(Object.assign(document.createElement('img'), { src: qrPoster(c).toDataURL('image/png'), alt: 'QR code for ' + joinUrl(c) }));
+    document.body.classList.add('print-qr');
+    const done = () => { document.body.classList.remove('print-qr'); window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    setTimeout(() => { window.print(); setTimeout(done, 1000); }, 50);
+  });
 }
 // Business Club + Opportunity Club: off until the owner opens them; while off only the owner sees them (to try them out)
 function clubsSwitchHTML(){
@@ -563,6 +705,7 @@ function wireLearn(){
 
 function wireLobby(){
   wireLearn();
+  wireJoinQr();
   document.querySelectorAll('[data-demo]').forEach(b => b.onclick = startDemo);
   document.querySelectorAll('[data-fair]').forEach(b => b.onclick = () => { b.disabled = true; b.textContent = 'Checking…'; send({ t: 'fair', id: b.dataset.fair }); });
   document.querySelectorAll('[data-sealinfo]').forEach(a => a.onclick = e => { e.preventDefault(); tab = 'learn'; learnSeg = 'fair'; renderLobby(); });

@@ -13,6 +13,7 @@ const coach = require('./coach');
 const push = require('./push');
 const business = require('./business');
 const opportunity = require('./opportunity');
+const joinqr = require('./joinqr');
 
 const PORT = +process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -119,7 +120,9 @@ const api = {
   // Business Club (members-only directory, separate from poker): see server/business.js
   ...business.api,
   // Opportunity Club ("I need help" / "I can help" listings inside Business Club): see server/opportunity.js
-  ...opportunity.api
+  ...opportunity.api,
+  // club join page and QR code (/join/<club-slug>): see server/joinqr.js
+  ...joinqr.api
 };
 // Business Club + Opportunity Club: closed to members until the owner opens them in the Director tab (the owner can always use them).
 // Staging opens them by default so they can be tested; CLUBS_DEFAULT=on does the same for local test runs.
@@ -186,8 +189,8 @@ const server = http.createServer((req, res) => {
         if(RECOVERY.includes(url.pathname) && (blocked('rec' + ip, RECOVERY_IP) || blocked('rec:all', RECOVERY_ALL))) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
         if(extra && clubsClosedFor(u)) return send(res, 403, { error: 'Business Club opens soon.' }, undefined, extra);
-        send(res, 200, fn(data, u), undefined, extra);
-      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); if(RECOVERY.includes(url.pathname) && /setup code/.test(e.message)){ recordFailure('rec' + ip); recordFailure('rec:all'); } } send(res, [401, 403, 404, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.' }, undefined, extra); }
+        send(res, 200, fn(data, u, clientIp(req)), undefined, extra);
+      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner', '/api/joinClub'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); if(RECOVERY.includes(url.pathname) && /setup code/.test(e.message)){ recordFailure('rec' + ip); recordFailure('rec:all'); } } send(res, [401, 403, 404, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.' }, undefined, extra); }
     });
     return;
   }
@@ -297,6 +300,9 @@ function clubView(u){
     view.households = hh;
     view.mutedIds = store.values('user:').filter(x => !x.removed && x.muted).map(x => x.id);
   }
+  // the join page and QR code of each club this account owns, with that club's email sign-ups only
+  const jq = joinqr.ownerView(u, owner());
+  if(jq.length) view.joinQr = jq;
   return view;
 }
 const VERSION = (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null;
@@ -338,6 +344,8 @@ function broadcastClub(){
   if(clubTimer) return;
   clubTimer = setTimeout(() => { clubTimer = null; for(const ws of sockets) if(ws.user) sendWS(ws, { t: 'club', club: clubView(ws.user) }); }, 60);
 }
+// a new email sign-up shows up in its club owner's QR card straight away
+joinqr.setOnJoin(() => broadcastClub());
 function pushTable(tid){
   const tb = club.tables.get(tid); if(!tb) return;
   const snap = club.snapshot(tb), uids = new Set(snap.seats.filter(Boolean).map(s => s.uid));
