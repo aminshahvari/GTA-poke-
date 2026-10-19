@@ -1840,8 +1840,8 @@ body{background:var(--lx-ink)}
 #game.wpt .dock .helper.open{position:absolute;right:0;bottom:calc(100% + 6px);width:min(280px,calc(100vw - 12px));margin:0;gap:5px;font-size:12.5px;box-shadow:0 10px 26px rgba(0,0,0,.55);z-index:2}
 #game.wpt .dock .helper.open .h-eq small{display:inline}
 #game.wpt .dock .helper.open .h-line{-webkit-line-clamp:4}
-#game.wpt .turnrow{min-height:24px;gap:6px}
-#game.wpt .xtime{padding:3px 8px;font-size:12px}
+#game.wpt .turnrow{min-height:44px;gap:6px;align-items:center}
+#game.wpt .xtime{min-height:44px;padding:0 9px;font-size:12px;align-items:center}
 #game.wpt .act-main{grid-template-columns:1fr;gap:6px}
 #game.wpt .act-btn{min-height:44px;flex-direction:row;justify-content:space-between;padding:0 12px;border-radius:12px}
 #game.wpt .act-btn b{font-size:16px}
@@ -1851,14 +1851,14 @@ body{background:var(--lx-ink)}
 #game.wpt .sizing~.act-main .act-btn{flex-direction:column;justify-content:center;gap:0;padding:0 6px}
 #game.wpt .sizing{padding:6px;gap:6px}
 #game.wpt .sz-presets{grid-template-columns:1fr 1fr;gap:5px}
-#game.wpt .sz-presets button{padding:6px 0;font-size:13px}
+#game.wpt .sz-presets button{min-height:44px;padding:0;font-size:13px}
 #game.wpt .sz-presets button:last-child:nth-child(odd){grid-column:1/-1}
 #game.wpt .sz-slider{gap:6px}
-#game.wpt .sz-slider .step{width:32px;height:32px;font-size:18px}
+#game.wpt .sz-slider .step{width:44px;height:44px;font-size:20px;flex:none}
 #game.wpt .info-line{font-size:12.5px;padding:4px 6px;line-height:1.35;background:rgba(7,11,20,.8);border:1px solid var(--lx-hair,rgba(255,255,255,.1));border-radius:10px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
 #game.wpt .preacts,#game.wpt .preacts.showmuck.n1{grid-template-columns:1fr;gap:5px}
 #game.wpt .preacts.showmuck{grid-template-columns:1fr 1fr}
-#game.wpt .preacts button{min-height:36px;font-size:13px}
+#game.wpt .preacts button{min-height:44px;font-size:13px}
 #game.wpt .dock .controls,#game.wpt .sizing{grid-template-columns:minmax(0,1fr)}
 #game.wpt .sz-slider input{min-width:0;width:100%;flex:1}
 #game.wpt .turnrow .turnbar{min-width:0}
@@ -1895,4 +1895,18 @@ body{background:var(--lx-ink)}
 .playnote i{position:absolute;top:1px;right:5px;font-style:normal;font-size:12px;line-height:1;color:var(--lx-mute,#a3abbb)}
 @media (prefers-reduced-motion:reduce){.playnote{animation:none}}
 /* in the WPT column the free-play line takes two short lines above the buttons (counted in the column's height) */
-#game.wpt .playline,#game.wpt:not(.seated) .playline{position:static;height:auto;margin:5px 0 6px;padding:0 4px;white-space:normal;line-height:13px}
+#game.wpt .playline,#game.wpt:not(.seated) .playline{position:static;height:auto;margin:6px 0 0;padding:0 4px;white-space:normal;line-height:13px}
+#game.wpt .dock .controls{flex:1 1 auto;align-content:end}
+/* the column is a grid of three rows: the helper's line (its height kept when the helper is hidden: folded, the hand
+   over), the buttons, and the free-play line at its foot, so nothing in it moves mid-hand; the raise panel takes the
+   helper's row too (the helper is hidden while it is open), so the column is no taller for it */
+#game.wpt .dock{display:grid;grid-template-rows:var(--hlp-h,0px) minmax(0,1fr) auto}
+#game.wpt .dock .helper{grid-row:1;align-self:start}
+#game.wpt .dock .controls{grid-row:2}
+#game.wpt .dock .controls:has(.sizing){grid-row:1/3}
+#game.wpt .dock .playline{grid-row:3}
+/* last hand's coach tip opens just above the column (as the open helper does), over the felt, never over the buttons */
+#game.wpt .dock>.coachtip{left:auto;right:0;top:auto;bottom:calc(100% + 6px);width:min(300px,calc(100vw - 12px));grid-row:auto}
+/* the extra-time button keeps a 44 px tap target in the column while its pill stays the usual slim size */
+#game.wpt .xtime,#game.wpt .xtime:disabled{background:none;border-color:transparent;position:relative;isolation:isolate}
+#game.wpt .xtime::before{content:'';position:absolute;inset:8px 0;z-index:-1;border-radius:999px;background:rgba(240,195,90,.12);border:1px solid rgba(240,195,90,.4)}

@@ -231,6 +231,7 @@ const moved = (a, b) => !a || !b ? Infinity : Math.max(...a.map((v, i) => Math.a
     check(seat <= TOL, `${tag}: every seat stays put (moved ${seat.toFixed(1)} px${seat > TOL ? ', worst ' + worst : ''})`);
     check(board <= TOL, `${tag}: the board stays put (moved ${board.toFixed(1)} px)`);
     check(areaH <= TOL && dockTop <= TOL, `${tag}: the table area keeps its size (height range ${areaH.toFixed(1)} px)`);
+    if(process.env.SHIFTS) console.log(JSON.stringify(rows[rows.length - 1].shifts));
     check(cls <= CLS_MAX, `${tag}: layout shift during the hand ${cls.toFixed(4)} <= ${CLS_MAX}`);
     // the action buttons are on screen on my turn, the hero's cards are visible throughout
     if(role === 'player'){

@@ -1200,13 +1200,17 @@ function reserveDock(seated){
         '<div class="controls"><div class="info-line">Wg<br>Wg<br>Wg</div><div class="preacts showmuck n4"><button>Show left</button><button>Show right</button><button>Show both</button><button>Muck</button></div></div>']
         : ['<div class="controls"><div class="info-line">Wg<br>Wg<br>Wg</div></div>'];
       // (the free-play line stands above the buttons in every state)
-      h = Math.max(...states.map(st => st.replace('<div class="controls">', PLAY_LINE + '<div class="controls">')).map(st => { const p = document.createElement('div');
-        p.className = 'dock'; p.setAttribute('aria-hidden', 'true'); p.style.cssText = 'visibility:hidden;pointer-events:none'; p.innerHTML = st;
-        g.appendChild(p); const ph = p.offsetHeight; p.remove(); return ph; }));
+      let hh = 0;
+      h = [Math.max(...states.map(st => st.replace('<div class="controls">', PLAY_LINE + '<div class="controls">')).map(st => { const p = document.createElement('div');
+        p.className = 'dock'; p.setAttribute('aria-hidden', 'true'); p.style.cssText = 'visibility:hidden;pointer-events:none;height:auto;--hlp-h:auto'; p.innerHTML = st;
+        g.appendChild(p); const ph = p.offsetHeight, hp = p.querySelector('.helper'); if(hp) hh = Math.max(hh, hp.offsetHeight); p.remove(); return ph; })), hh];
       if(g.clientWidth){ if(DOCKS.size > 20) DOCKS.clear(); DOCKS.set(key, h); }
     }
-    if(dock.style.cssText) dock.style.cssText = '';
-    DOCKH = h; return;
+    // (the column keeps that height all hand, the helper and the free-play line at its top and the buttons at its
+    // foot, so nothing in it moves when its contents change)
+    // (and the helper's line keeps its place when the helper is hidden: folded, the raise panel open, the hand over)
+    const css = `height:${h[0]}px;--hlp-h:${h[1]}px`; if(dock.dataset.css !== css){ dock.style.cssText = css; dock.dataset.css = css; }
+    DOCKH = h[0]; return;
   }
   if(h == null){
     const p = document.createElement('div');
@@ -1228,7 +1232,7 @@ function reserveDock(seated){
     if(g.clientWidth){ if(DOCKS.size > 20) DOCKS.clear(); DOCKS.set(key, h); }
   }
   // the helper and the action bar each keep their own height too, so neither edge moves inside the dock
-  if(dock.style.height !== h[0] + 'px') dock.style.cssText = `height:${h[0]}px;--hlp-h:${h[1]}px;--ctl-h:${h[2]}px`;
+  if(dock.style.height !== h[0] + 'px' || dock.dataset.css){ dock.style.cssText = `height:${h[0]}px;--hlp-h:${h[1]}px;--ctl-h:${h[2]}px`; dock.dataset.css = ''; }
 }
 // Free social play. A quiet line in the dock stays at the table the whole game, between the helper and the action bar:
 // upright it fills the gap already there (the helper's bottom margin and the bar's top padding, and 1-3 px of the
@@ -1318,7 +1322,7 @@ function lockArea(){
   // what sits around the table (the header above, the dock below): when that changes (the web fonts arriving
   // after the first hand was drawn, the helper folded small) the table is laid out again for the room left
   const frame = Math.round(area.offsetTop + (g.classList.contains('wpt') ? DOCKH : $('dock').offsetHeight));
-  if(LOCK.frame !== frame){ LOCK.frame = frame; LOCK.h = 0; }
+  if(LOCK.frame !== frame){ LOCK.frame = frame; LOCK.h = 0; LOCK.box = null; }
   if(!LOCK.h){
     // with the browser's bars showing the screen is (at most) this much shorter
     const h = Math.max(120, room - Math.max(0, g.clientHeight - svhPx()));
@@ -1327,9 +1331,13 @@ function lockArea(){
   const over = Math.max(0, LOCK.h - room);
   area.style.flex = 'none'; area.style.height = LOCK.h + 'px'; area.style.marginBottom = (2 - over) + 'px';
   // the WPT column's box in the table area (its reserved height, from where it stands at the bottom right)
-  DOCKBOX = null;
-  if(g.classList.contains('wpt')){ const ar = area.getBoundingClientRect(), dr = $('dock').getBoundingClientRect();
-    DOCKBOX = [Math.round(dr.right - dr.width - ar.left), Math.round(dr.bottom - DOCKH - ar.top), Math.round(dr.right - ar.left), Math.round(dr.bottom - ar.top)]; }
+  // (decided with the table area's height, for the whole hand: the toolbar or the keyboard moving the column mid-hand
+  // doesn't lay the table out again)
+  if(!g.classList.contains('wpt')) DOCKBOX = LOCK.box = null;
+  // (where it stands with the browser's bars showing, the highest it goes during the hand)
+  else if(!LOCK.box){ const ar = area.getBoundingClientRect(), dr = $('dock').getBoundingClientRect(), up = Math.max(0, g.clientHeight - svhPx());
+    DOCKBOX = [Math.round(dr.right - dr.width - ar.left), Math.round(dr.bottom - up - DOCKH - ar.top), Math.round(dr.right - ar.left), Math.round(dr.bottom - up - ar.top)]; LOCK.box = DOCKBOX; }
+  else DOCKBOX = LOCK.box;
 }
 function renderTable(){
   if(view !== 'table' || !club) return;

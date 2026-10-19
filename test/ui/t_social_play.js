@@ -57,7 +57,7 @@ async function measure(pg){
     const line = document.getElementById('playLine'), note = document.getElementById('playNote'), ls = line && getComputedStyle(line);
     return {
       w: innerWidth, h: innerHeight,
-      area: r(document.getElementById('tableArea')), dock: r(document.getElementById('dock')), felt: r(document.querySelector('#tableArea .felt')),
+      area: r(document.getElementById('tableArea')), wpt: document.getElementById('game').classList.contains('wpt'), dock: r(document.getElementById('dock')), felt: r(document.querySelector('#tableArea .felt')),
       seats, cards: all('#seats .hole .card'), bets: all('#tableArea .bet'), dealer: all('#tableArea .dealer'), pot: drawn(document.getElementById('pot')) && document.getElementById('pot').textContent ? r(document.getElementById('pot')) : null,
       board: u(all('#board .card')), slots: u(all('#board .slot, #board .card')), msg: txt(document.getElementById('msg')),
       buttons: all('#game button'), helper: drawn(document.getElementById('helper')) ? r(document.getElementById('helper')) : null,
@@ -171,7 +171,9 @@ function clashes(m, box){
       check(/free social play/i.test(m.line.text) && /no betting/i.test(m.line.text) && /no real money/i.test(m.line.text), `${tag}: line says free social play, no betting, no real money`);
       check(!m.line.cut && m.line.font >= 10.95, `${tag}: line not cut off, text at least 11 px like all game text (font ${m.line.font}px)`);
       check(inside(m.line.box, { l: 0, t: 0, r: m.w, b: m.h }), `${tag}: line on screen`);
-      check(inside(m.line.box, m.dock, .5) && !hit(m.line.box, m.area, .5), `${tag}: line inside the dock, never over the table area`);
+      // (the WPT column stands over the felt by design, laid out clear of every seat: there the line is only checked
+      // to be in the column, and clear of everything on the table below)
+      check(inside(m.line.box, m.dock, .5) && (m.wpt || !hit(m.line.box, m.area, .5)), `${tag}: line inside the dock, never over the table area${m.wpt ? ' (WPT column)' : ''}`);
       const c = clashes(m, m.line.box);
       if(m.helper && hit(m.line.box, m.helper, .5)) c.push('helper');
       if(hit(m.line.box, m.board, .5)) c.push('board');
