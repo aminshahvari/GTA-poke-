@@ -121,7 +121,7 @@ async function viewportMatrix(pg, [w, h], tag, push){
     await sleep(120);
     await pg.evaluate(() => Object.defineProperty(window, 'innerHeight', window.__ih));
     if(process.env.DBG) console.log('innerHeight now', await pg.evaluate(() => window.innerHeight), 'want', H);
-    await sleep(1200); return measure(pg);
+    await sleep(2800); return measure(pg);
   };
   const cls = () => pg.evaluate(() => ['land', 'h700', 'h600'].map(c => document.getElementById('game').classList.contains(c)).join());
   m = await set(h, w); const landRef = m, landCls = await cls();
