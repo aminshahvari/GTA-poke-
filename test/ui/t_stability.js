@@ -6,7 +6,8 @@
 //  - the felt, the board and the seats move at most 1 px from the first state, as a player and as a spectator
 //  - the action area's top edge stays put (the bottom dock keeps its height)
 //  - layout shift (PerformanceObserver 'layout-shift', the CLS score) stays near zero
-// Sizes: 320x568, 375x667, 390x844, 393x852, 430x932 and landscape 844x390.
+// Sizes: 320x568, 375x667, 390x844, 393x852, 430x932 and landscape 956x440, 844x390, 956x370 (an in-app
+// browser's bars), 667x375 and 568x320.
 // And, for a seated player at each portrait size, during one hand:
 //  - the browser's bars: the screen gets 90 px shorter (Safari's toolbar sliding in) and then back: the felt and
 //    the seats stay put and keep their size, and the action bar stays on screen
@@ -27,7 +28,7 @@ const DATA = require('os').tmpdir() + '/t_stab_' + process.pid + '.json';
 const srv = spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const REPORT = process.env.REPORT === '1', SHOTS = process.env.SHOTS || '';
-const SIZES = [[320, 568], [375, 667], [390, 844], [393, 852], [430, 932], [844, 390]].filter(v => !process.env.ONLY || process.env.ONLY === v.join('x'));
+const SIZES = [[320, 568], [375, 667], [390, 844], [393, 852], [430, 932], [956, 440], [844, 390], [956, 370], [667, 375], [568, 320]].filter(v => !process.env.ONLY || process.env.ONLY === v.join('x'));
 const TOL = 1, CLS_MAX = 0.01;
 const api = async (p, body) => { const j = await (await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })).json(); if(j.error) throw new Error(p + ': ' + j.error); return j; };
 const fails = [];
@@ -83,7 +84,8 @@ async function measure(pg){
     document.querySelectorAll('#seats .seat').forEach(s => { seats[s.dataset.uid] = r(s.querySelector('.av')); });
     return { area: r(document.getElementById('tableArea')), felt: r(document.querySelector('#tableArea .felt')), board: r(document.getElementById('board')),
       controls: r(document.getElementById('controls')), dock: r(document.getElementById('dock')), seats,
-      hero: (() => { const cs = [...document.querySelectorAll('#seats .seat.hero .hole .card')].map(r).filter(Boolean); return cs.length ? [0, Math.min(...cs.map(c => c[1])), 0, Math.max(...cs.map(c => c[1] + c[3])) - Math.min(...cs.map(c => c[1]))] : null; })(), cls: window.__cls || 0, shifts: (window.__shifts || []).slice() };
+      hero: (() => { const cs = [...document.querySelectorAll('#seats .seat.hero .hole .card')].map(r).filter(Boolean); if(!cs.length) return null; const l = Math.min(...cs.map(c => c[0])), t = Math.min(...cs.map(c => c[1]));
+        return [l, t, Math.max(...cs.map(c => c[0] + c[2])) - l, Math.max(...cs.map(c => c[1] + c[3])) - t]; })(), cls: window.__cls || 0, shifts: (window.__shifts || []).slice() };
   });
 }
 // the felt and every seat compared with a reference measurement
@@ -110,6 +112,24 @@ async function viewportMatrix(pg, [w, h], tag, push){
   check(inside && await onScreen('#aCall', w), `${tag}: turned to landscape (${h}x${w}): every seat and the action buttons are on screen`);
   m = await set(w, h, 1);
   check(drift(ref, m) <= TOL, `${tag}: turned back to portrait: every seat is where it was (${drift(ref, m).toFixed(1)} px)`);
+  // the same turns the way iPhone Safari reports them: the new width arrives at once, the new height only later
+  // (no event of its own), mid-hand. The table must end up laid out exactly as for a normal turn.
+  const lateTurn = async (W, H, oldH) => {
+    await pg.evaluate(oh => { const d = Object.getOwnPropertyDescriptor(window, 'innerHeight') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerHeight');
+      window.__ih = d; Object.defineProperty(window, 'innerHeight', { get: () => oh, configurable: true }); }, oldH);
+    await pg.setViewportSize({ width: W, height: H }); await pg.evaluate(() => window.dispatchEvent(new Event('orientationchange')));
+    await sleep(120);
+    await pg.evaluate(() => Object.defineProperty(window, 'innerHeight', window.__ih));
+    if(process.env.DBG) console.log('innerHeight now', await pg.evaluate(() => window.innerHeight), 'want', H);
+    await sleep(1200); return measure(pg);
+  };
+  const cls = () => pg.evaluate(() => ['land', 'h700', 'h600'].map(c => document.getElementById('game').classList.contains(c)).join());
+  m = await set(h, w); const landRef = m, landCls = await cls();
+  m = await set(w, h);
+  m = await lateTurn(h, w, h);
+  check(drift(landRef, m) <= TOL && await cls() === landCls, `${tag}: turned to landscape, size reported late (iPhone): laid out as a normal turn (${drift(landRef, m).toFixed(1)} px, ${await cls()} vs ${landCls})`);
+  m = await lateTurn(w, h, w);
+  check(drift(ref, m) <= TOL, `${tag}: turned back to portrait, size reported late (iPhone): every seat is where it was (${drift(ref, m).toFixed(1)} px)`);
   // the keyboard, from the chat box
   await pg.click('#chatBtn'); await sleep(250); await pg.focus('#chatInput');
   const kbH = h - 300;
@@ -191,7 +211,8 @@ const moved = (a, b) => !a || !b ? Infinity : Math.max(...a.map((v, i) => Math.a
       const b2 = await measure(pg);
       check(moved(b0.felt, b2.felt) <= TOL && await pg.locator('#aRaise').isVisible(), `${tag}: Back closes the raise panel and the table is where it was`);
       // the hero's cards are above the dock, not under it, in every step of the hand
-      const hid = rows.filter(m => m.hero && m.dock && m.hero[1] + m.hero[3] > m.dock[1] + .5).map(m => m.step);
+      const cover = (a, b) => a[0] < b[0] + b[2] - .5 && b[0] < a[0] + a[2] - .5 && a[1] < b[1] + b[3] - .5 && b[1] < a[1] + a[3] - .5;
+      const hid = rows.filter(m => m.hero && m.dock && cover(m.hero, m.dock)).map(m => m.step);
       check(!hid.length, `${tag}: your cards stay clear of the action bar${hid.length ? ' (covered at ' + hid.join(', ') + ')' : ''}`);
     }
     all[tag] = rows;

@@ -56,8 +56,9 @@ async function load(browser, tok, [w, h], n){
 function measure(){
   const R = el => { const r = el.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
   const boxes = [];
-  // a seat is its cards, avatar, name plate and action badge, each checked on its own (they may overlap each other)
-  document.querySelectorAll('#seats .seat').forEach((s, i) => s.querySelectorAll('.hole .card, .av, .plate, .badge').forEach(e => boxes.push({ kind: 'seat', seat: i, name: s.querySelector('.nm').textContent + ' ' + e.classList[0], ...R(e) })));
+  // a seat is its cards, avatar, name plate and action badge, each checked on its own (they may overlap each other;
+  // the smallest look leaves another player's card backs undrawn)
+  document.querySelectorAll('#seats .seat').forEach((s, i) => s.querySelectorAll('.hole .card, .av, .plate, .badge').forEach(e => e.getClientRects().length && boxes.push({ kind: 'seat', seat: i, name: s.querySelector('.nm').textContent + ' ' + e.classList[0], ...R(e) })));
   document.querySelectorAll('#seats .bet').forEach(b => boxes.push({ kind: 'bet', name: b.textContent, ...R(b) }));
   document.querySelectorAll('#seats .dealer').forEach(b => boxes.push({ kind: 'dealer', name: 'D', ...R(b) }));
   boxes.push({ kind: 'board', name: 'board', ...R(document.getElementById('board')) });

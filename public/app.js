@@ -725,12 +725,14 @@ const GEOS = new Map();
 const SIZES = new Map();
 // measure something with the table area dressed in a given look for a moment
 function inLook(area, look, f){
-  const cls = ['compact', 'mini', 'tight'], was = cls.map(c => area.classList.contains(c));
-  area.classList.toggle('compact', look !== ''); area.classList.toggle('mini', look === 'mini'); area.classList.remove('tight');
+  const cls = ['compact', 'mini', 'micro', 'tight'], was = cls.map(c => area.classList.contains(c));
+  area.classList.toggle('compact', look !== ''); area.classList.toggle('mini', look === 'mini' || look === 'micro'); area.classList.toggle('micro', look === 'micro'); area.classList.remove('tight');
   try{ return f(); } finally { cls.forEach((c, i) => area.classList.toggle(c, was[i])); }
 }
+// which sideways layout the table is in ('' upright), part of every cached size and layout
+const landKey = () => { const g = $('game'); return g.classList.contains('land') ? (g.classList.contains('land-s') ? 's' : 'l') : ''; };
 function seatSizes(area, look, bet){
-  const key = `${look}:${bet}:${area.style.getPropertyValue('--cw')}`;
+  const key = `${look}:${bet}:${area.style.getPropertyValue('--cw')}:${landKey()}`;
   if(SIZES.has(key)) return SIZES.get(key);
   const S = inLook(area, look, () => {
     const txt = '<div class="nm">Wwwwwwwwwwwwww</div><div class="st num">8,888,888</div>', badge = '<span class="badge act-raise">Raise 888,888</span>', at = 'style="left:0;top:0"';
@@ -741,7 +743,7 @@ function seatSizes(area, look, bet){
       + `<div class="bet num" ${at}>${chipsIcon(3)}${bet}</div><div class="bet num tight" ${at}>${chipsIcon(3)}${bet}</div><div class="dealer" ${at}>D</div>`;
     area.appendChild(p);
     const o = p.getBoundingClientRect(), box = els => {
-      const r = els.map(e => e.getBoundingClientRect()), l = Math.min(...r.map(q => q.left)), t = Math.min(...r.map(q => q.top)), rr = Math.max(...r.map(q => q.right)), b = Math.max(...r.map(q => q.bottom));
+      const r = els.filter(e => e.getClientRects().length).map(e => e.getBoundingClientRect()), l = Math.min(...r.map(q => q.left)), t = Math.min(...r.map(q => q.top)), rr = Math.max(...r.map(q => q.right)), b = Math.max(...r.map(q => q.bottom));
       return [(l + rr) / 2 - o.left, (t + b) / 2 - o.top, (rr - l) / 2, (b - t) / 2];
     };
     const [seat, hero] = p.querySelectorAll('.seat'), [b1, b2] = p.querySelectorAll('.bet');
@@ -761,66 +763,83 @@ function seatSizes(area, look, bet){
 // and the message line are measured as they are drawn, so nothing is placed on top of them.
 function tableGeo(n, bet = '8,888'){
   const a = $('tableArea'), W = a.clientWidth || 360, H = a.clientHeight || 520, pot = $('pot'), msg = $('msg');
-  // the pot and the message line get a fixed room (a six-digit pot, two lines of text), whatever they say right
+  // the pot and the message line get a fixed room (a six-digit pot, one line of text), whatever they say right
   // now, so the layout is the same for the whole hand and nothing moves when the result is written under the board
-  const key = `${n}:${W}:${H}:${bet}`;
+  const key = `${n}:${W}:${H}:${bet}:${landKey()}`;
   if(GEO && GEO.key === key) return GEO;
   // the area changes between a few sizes during a hand (your turn, the raise panel), so keep the recent layouts
   if(GEOS.has(key)) return GEO = GEOS.get(key);
   // try the normal seats first, then smaller ones, then seats pushed further into the corners (a squarer ring
   // around the same oval felt), until everything fits without touching
-  const looks = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3]]);
+  // (on a phone each look first tries the broad oval with the side seats on the rail's inner edge, then a slightly
+  // longer one, then both with the side seats on the rail, before the seats get smaller: readable seats matter more
+  // than the last bit of width)
+  // sideways the seats at the bottom corners carry their badge under the plate, so the bottom keeps room for that too
+  const LAND = $('game').classList.contains('land');
+  const shapes = W < 470 ? [[1.2, 1], [1.3, 1], [1.2, 0], [1.3, 0]] : [[0, 0]];
+  const looks = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3], ['micro', 1], ['micro', .6], ['micro', .3]])
+    .flatMap(([l, q]) => shapes.map(([k, inset]) => [l, q, k, inset, 1.18]))
+    // (the micro seats may also give up some of the extra room either side of yours, for the seats along the top)
+    .concat(n >= 6 ? [['micro', .6], ['micro', .3]].flatMap(([l, q]) => shapes.map(([k, inset]) => [l, q, k, inset, 1.06])) : []);
   let best = null;
-  for(const [look, sq] of looks){ const L = layout(look, sq); if(!best || L.cost <= best.cost) best = L; if(!L.cost) break; }
+  for(const [look, sq, k, inset, g] of looks){ const L = layout(look, sq, false, k, inset, g); if(!best || L.cost <= best.cost) best = L; if(!L.cost) break; }
   // no clean layout anywhere: search the roomiest look that seats everyone harder, for the fewest overlaps
-  if(best.cost) best = layout(best.look, best.sq, true);
+  if(best.cost) best = layout(best.look, best.sq, true, best.k, best.inset, best.g);
   GEO = { ...best, key, W, H, betAt: k => best.bets[k], dealerAt: k => best.dealers[k] };
   if(GEOS.size > 12) GEOS.delete(GEOS.keys().next().value);
   if(a.clientWidth) GEOS.set(key, GEO);
   return GEO;
 
-  function layout(look, sq, thorough){
-    const S = seatSizes(a, look, bet), mini = look === 'mini', compact = look !== '';
+  function layout(look, sq, thorough, k, inset, g){
+    const S = seatSizes(a, look, bet), mini = look === 'mini' || look === 'micro', compact = look !== '';
     const ext = bs => ({ hw: Math.max(...bs.map(([x, , w]) => Math.abs(x) + w)), up: Math.max(...bs.map(([, y, , h]) => h - y)), down: Math.max(...bs.map(([, y, , h]) => y + h)) });
     const se = ext(S.seat), he = ext(S.hero);
     const rail = Math.round(Math.max(10, Math.min(18, Math.min(W, H) * .036)));
     // seats are centred on the middle of the rail and stay inside the area: the side ones `side` px from the
-    // edge, the top ones `top` px from the top, and your seat `bot` px from the bottom
-    const top = Math.max(se.up + 2 - rail / 2, look ? 0 : 50), bot = Math.max(he.down + 4 - rail / 2, look ? 0 : 64), side = Math.max(se.hw + 2, look ? 0 : 46);
+    // edge, the top ones `top` px from the top, and your seat `bot` px from the bottom. In a phone-width column
+    // the side seats sit `ins` px further in, on the rail's inner edge, so the felt can be that much wider.
+    const ins = inset ? Math.round(Math.min(se.hw * .4, 18)) : 0;
+    const top = Math.max(se.up + (LAND ? 8 : 2) - rail / 2, look ? 0 : 50), bot = Math.max((LAND ? Math.max(he.down, se.down) + 8 : he.down + 4) - rail / 2, look ? 0 : 64), side = Math.max(se.hw + 2, look ? 0 : 46) - ins;
     let fw = Math.min(W - 2 * side + rail, 760), fh = H - top - bot;
-    // a real table's proportions: tall in a phone-width column (using the height there is), long when there's
-    // room; on a wide screen the shape stays the same when the area grows or shrinks a little between hands
-    if(W < 470) fh = Math.min(fh, fw * 1.6);
+    // a real table's proportions: on a phone held upright a broad oval only a little taller than wide (the
+    // height left over is shared above and below it); long when there's room; on a wide screen the shape stays
+    // the same when the area grows or shrinks a little between hands
+    if(W < 470) fh = Math.min(fh, fw * k);
     else fh = Math.min(fh, Math.max(fw / 1.4, Math.min(fw / 1.2, 370)));
     fw = Math.max(fw, 140); fh = Math.max(fh, 120);
     const cx = W / 2, cy = top + (H - top - bot) / 2;
     const hx = fw / 2 - rail / 2, hy = fh / 2 - rail / 2, r = Math.min(hx, hy), lx = hx - r, ly = hy - r;
-    // the seats' ring: the middle of the rail, or with tighter corners (sq < 1) when a full table is crowded
-    const rs = r * sq, sx = hx - rs, sy = hy - rs;
+    // the seats' ring: the middle of the rail (its sides `ins` further in), or with tighter corners (sq < 1) when
+    // a full table is crowded
+    const rx = hx - ins, rs = Math.min(rx, hy) * sq, sx = rx - rs, sy = hy - rs;
     // walk the seats' ring clockwise from the bottom centre; each piece is [length, point(t), outward normal(t)]
     const arc = (ox, oy, a0) => [Math.PI * rs / 2, t => { const q = a0 + t / rs; return [ox + rs * Math.cos(q), oy + rs * Math.sin(q), Math.cos(q), Math.sin(q)]; }];
     const line = (x0, y0, dx, dy, len, nx, ny) => [len, t => [x0 + dx * t, y0 + dy * t, nx, ny]];
-    const parts = [line(0, hy, -1, 0, sx, 0, 1), arc(-sx, sy, Math.PI / 2), line(-hx, sy, 0, -1, 2 * sy, -1, 0), arc(-sx, -sy, Math.PI),
-      line(-sx, -hy, 1, 0, 2 * sx, 0, -1), arc(sx, -sy, Math.PI * 1.5), line(hx, -sy, 0, 1, 2 * sy, 1, 0), arc(sx, sy, 0), line(sx, hy, -1, 0, sx, 0, 1)];
+    const parts = [line(0, hy, -1, 0, sx, 0, 1), arc(-sx, sy, Math.PI / 2), line(-rx, sy, 0, -1, 2 * sy, -1, 0), arc(-sx, -sy, Math.PI),
+      line(-sx, -hy, 1, 0, 2 * sx, 0, -1), arc(sx, -sy, Math.PI * 1.5), line(rx, -sy, 0, 1, 2 * sy, 1, 0), arc(sx, sy, 0), line(sx, hy, -1, 0, sx, 0, 1)];
     const P = parts.reduce((t, q) => t + q[0], 0);
     const at = d => { for(const [len, f] of parts){ if(d <= len + 1e-6) return f(d); d -= len; } return parts[0][1](0); };
     // evenly spaced, with a little extra room either side of the hero's wider seat at a full table
-    const gap = n >= 6 ? P / n * 1.18 : P / n, along = i => i === 0 ? 0 : n === 2 ? P / 2 : gap + (i - 1) * (P - 2 * gap) / (n - 2);
+    const gap = n >= 6 ? P / n * g : P / n, along = i => i === 0 ? 0 : n === 2 ? P / 2 : gap + (i - 1) * (P - 2 * gap) / (n - 2);
     const seats = Array.from({ length: n }, (_, i) => { const [x, y, nx, ny] = at(along(i)); return { x: cx + x, y: cy + y, nx, ny }; });
     // on a long table the hero's cards reach into the felt, so the board sits a little higher
     const tall = fh > fw, by0 = tall ? cy : cy - Math.min(28, fh * .08);
     // board cards sized to the felt so they never run into the seats' chips
-    const bw = Math.max(mini ? 24 : 28, Math.min(mini ? 30 : compact ? 34 : 50, (fw - 2 * rail) * (tall ? .128 : .108), (hx - 54) / 2.5)), boardHalf = bw * 2.5 + 6, bh = bw * .7;
-    const msgHalf = Math.min(140, hx - 48, (Math.min(fw - 2 * rail - 16, bw * 5 + 50)) / 2);
+    const bw = Math.max(mini ? 24 : 28, Math.min(mini ? 30 : compact ? 34 : 50, (fw - 2 * rail) * (tall ? .128 : .108), (rx - 54) / 2.5)), boardHalf = bw * 2.5 + 6, bh = bw * .7;
+    const msgHalf = Math.min(140, rx - 48, (Math.min(fw - 2 * rail - 16, bw * 5 + 50)) / 2);
     // what must stay clear: each seat (cards + avatar, and the name plate with its badge), the board, the pot
     // above it and the message under it (both drawn at their real size)
     const seatBoxes = seats.map((q, k) => (k ? S.seat : S.hero).map(([dx, dy, w, h]) => [q.x + dx, q.y + dy, w, h]));
     const [pw0, ph0, mh] = inLook(a, look, () => {
       const pv = pot.innerHTML, mv = msg.innerHTML, mx = msg.style.maxWidth;
-      pot.innerHTML = chipsIcon(3) + 'Pot 888,888'; msg.innerHTML = '<div>8<br>8</div>'; msg.style.maxWidth = msgHalf * 2 + 'px';
+      pot.innerHTML = chipsIcon(3) + 'Pot 888,888'; msg.innerHTML = '<div>8</div>'; msg.style.maxWidth = msgHalf * 2 + 'px';
       try{ return [pot.offsetWidth, pot.offsetHeight, msg.offsetHeight]; } finally { pot.innerHTML = pv; msg.innerHTML = mv; msg.style.maxWidth = mx; }
     }), mw = msgHalf * 2;
-    const middle = by => [[cx, by, boardHalf, bh], [cx, by - bh - 6 - ph0 / 2, pw0 / 2, ph0 / 2, 1], [cx, by + bh + 6 + mh / 2, mw / 2, mh / 2, 1]];
+    // (when the felt is too short for the pot above the board, sideways or on the shortest screens, the pot may sit
+    // at the board's left instead, the two centred together)
+    const bxOf = side => side ? cx + (pw0 + 8) / 2 : cx;
+    const middle = (by, side) => { const bx = bxOf(side); return [[bx, by, boardHalf, bh], side ? [bx - boardHalf - 8 - pw0 / 2, by, pw0 / 2, ph0 / 2, 1] : [bx, by - bh - 6 - ph0 / 2, pw0 / 2, ph0 / 2, 1], [bx, by + bh + 6 + mh / 2, mw / 2, mh / 2, 1]]; };
+    const sides = pw0 + 8 + 2 * boardHalf <= fw - 2 * rail - 12 ? [false, true] : [false];
     // seats that touch each other mean this look is too big for the area
     const touch = (A, B) => A.some(([x, y, w, h]) => B.some(([X, Y, ww, hh]) => Math.abs(x - X) < w + ww + 1 && Math.abs(y - Y) < h + hh + 1));
     let clash = 0;
@@ -836,9 +855,12 @@ function tableGeo(n, bet = '8,888'){
     let fails = 0;
     // overlap with what's there; seats and cards count most, then other chips, then the pot and the message
     const overlap = (x, y, hw, hh, list) => list.reduce((t, [X, Y, w, h, wt = 3]) => t + wt * Math.max(0, hw + w + 3 - Math.abs(x - X)) * Math.max(0, hh + h + 3 - Math.abs(y - Y)), 0);
-    // chips and the button always stay nearer their own seat than any other, so it's clear whose they are
-    const [hc] = S.hero, anchors = seats.map((q, i) => i ? [q.x, q.y] : [q.x + hc[0], q.y + hc[1]]);
-    const mine = (x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || Math.hypot(x - X, y - Y) > d); };
+    // chips and the button always stay clearly nearer their own seat than any other, so it's clear whose they are
+    // (your own seat by the middle of its cards and name plate together: chips beside your plate read as yours)
+    const [hc, hp] = S.hero, side0 = hc[0] + hc[2] < hp[0] + hp[2] - 4, hu = (f, g) => g(...S.hero.map(([x, y, w, h]) => f(x, y, w, h)));
+    const ha = [(hu((x, y, w) => x - w, Math.min) + hu((x, y, w) => x + w, Math.max)) / 2, (hu((x, y, w, h) => y - h, Math.min) + hu((x, y, w, h) => y + h, Math.max)) / 2];
+    const anchors = seats.map((q, i) => i ? [q.x, q.y] : [q.x + ha[0], q.y + ha[1]]);
+    const mine = (x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || Math.hypot(x - X, y - Y) > d * 1.12 + 3); };
     // the button may also sit off the felt, beside its seat, as long as it stays in the table area
     const onArea = (x, y, hw, hh) => x >= hw + 1 && x <= W - hw - 1 && y >= hh + 1 && y <= H - hh - 1;
     function place(x0, y0, nx, ny, hw, hh, list, own, free, quick){
@@ -846,9 +868,17 @@ function tableGeo(n, bet = '8,888'){
       for(const m of [Math.min(hw, hh) + 2, -rail / 2]) for(const [dd, tt] of steps){ const x = x0 - nx * dd + tx * tt, y = y0 - ny * dd + ty * tt; if(ok(x, y, m) && !hits(x, y, hw, hh, list)) return [x, y]; }
       // no clean spot: give up at once when only a clean layout will do, else the least crowded spot on the felt
       fails++; if(quick) return null;
-      let best = [x0, y0], bc = Infinity;
-      for(const [dd, tt] of steps){ const x = x0 - nx * dd + tx * tt, y = y0 - ny * dd + ty * tt; if(!ok(x, y, -rail / 2)) continue; const c = overlap(x, y, hw, hh, list) + tt * .5; if(c < bc){ bc = c; best = [x, y]; } }
-      return best;
+      // (any clean spot round it, on the felt or just off it beside its own seat, beats one on top of a seat: the
+      // nearest one on a 4 px grid)
+      let gb = null, gd = Infinity;
+      for(let gx = -120; gx <= 120; gx += 4) for(let gy = -120; gy <= 120; gy += 4){ const x = x0 + gx, y = y0 + gy, d = gx * gx + gy * gy;
+        if(d < gd && (inside(x, y, -rail / 2) || onArea(x, y, hw, hh)) && mine(x, y, own) && !hits(x, y, hw, hh, list)){ gb = [x, y]; gd = d; } }
+      if(gb) return gb;
+      // (still always nearer its own seat than any other: off the felt or crowded beats looking like someone else's)
+      let best = null, bc = Infinity;
+      for(const [dd, tt] of steps){ const x = x0 - nx * dd + tx * tt, y = y0 - ny * dd + ty * tt; if(!mine(x, y, own)) continue;
+        const c = overlap(x, y, hw, hh, list) + tt * .5 + (ok(x, y, -rail / 2) ? 0 : 1e6); if(c < bc){ bc = c; best = [x, y]; } }
+      return best || [(x0 + anchors[own][0]) / 2, (y0 + anchors[own][1]) / 2];
     }
     // how far in front of a seat's centre its edge is, towards the middle of the table
     const front = q => Math.abs(q.nx) * se.hw + Math.abs(q.ny) * (q.ny > 0 ? se.up : se.down);
@@ -861,13 +891,18 @@ function tableGeo(n, bet = '8,888'){
         let x0, y0, nx = q.nx, ny = q.ny;
         if(k === 0){ nx = 0; ny = 1; [x0, y0] = tall ? [q.x, q.y + hc[1] - hc[3] - ph - 5] : [q.x + hc[0] - hc[2] - pw - 9, q.y + hc[1] - hc[3] + 18]; }
         else { const d = front(q) + 6 + Math.abs(q.nx) * pw + Math.abs(q.ny) * ph; x0 = q.x - q.nx * d; y0 = q.y - q.ny * d; }
-        bets[k] = place(x0, y0, nx, ny, pw, ph, boxes.concat(placed), k, false, quick);
+        // your own chips may also sit just off the felt beside your plate (as the dealer button may) when the felt in
+        // front of your cards has no clean spot left, on the smallest screens
+        const f0 = fails, list = boxes.concat(placed);
+        bets[k] = place(x0, y0, nx, ny, pw, ph, list, k, false, true) || (k === 0 ? place(q.x, q.y + hp[1], nx, ny, pw, ph, list, k, true, true) : null);
+        fails = f0;
+        if(!bets[k]) bets[k] = place(x0, y0, nx, ny, pw, ph, list, k, false, quick);
         if(!bets[k]) return null;
         placed.push([...bets[k], pw, ph, 2]);
       }
       const betBoxes = boxes.concat(placed), dh = S.dealer;
       const dealers = seats.map((q, k) => {
-        if(k === 0) return place(q.x + hc[0] + hc[2] + dh + 4, q.y + hc[1] - hc[3] + 22, 0, 1, dh, dh, betBoxes, k, true, quick);
+        if(k === 0) return place(q.x + Math.max(hc[0] + hc[2], side0 ? hp[0] + hp[2] : -Infinity) + dh + 4, q.y + hc[1] - hc[3] + 22, 0, 1, dh, dh, betBoxes, k, true, quick);
         const d = front(q) + dh + 4, tx = -q.ny, ty = q.nx;
         return place(q.x - q.nx * d - tx * 40, q.y - q.ny * d - ty * 40, q.nx, q.ny, dh, dh, betBoxes, k, true, quick);
       });
@@ -876,18 +911,18 @@ function tableGeo(n, bet = '8,888'){
     // a clean layout: the board where it belongs, else a little higher or lower; chips placed seat by seat round
     // the table, the other way round, or top seats first; then the same with a size smaller chip labels
     const round = seats.map((q, i) => i), orders = [round, [0].concat(round.slice(1).reverse()), round.slice().sort((i, j) => seats[i].y - seats[j].y)];
-    const geo = { look, sq, compact, mini, rail, cx, cy, tall, msgW: msgHalf * 2, fw, fh, seats, bw };
-    if(!clash) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]) for(const dy of [0, -10, 10, -20, 20]){
-      const by = by0 + dy, mid = middle(by);
+    const geo = { look, sq, k, inset, g, compact, mini, rail, cx, cy, tall, msgW: msgHalf * 2, fw, fh, seats, bw };
+    if(!clash) for(const side of sides) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]) for(const dy of [0, -10, 10, -20, 20]){
+      const by = by0 + dy, mid = middle(by, side);
       if(seatBoxes.some(b => touch(b, mid))) continue;
-      for(const order of orders){ const L = solve(lab, seatBoxes.flat().concat(mid), order, true); if(L) return { ...geo, cost: 0, by, tight, bets: L.bets, dealers: L.dealers }; }
+      for(const order of orders){ const L = solve(lab, seatBoxes.flat().concat(mid), order, true); if(L) return { ...geo, cost: 0, by, bx: bxOf(side), tight, potSide: side, bets: L.bets, dealers: L.dealers }; }
     }
     // nothing clean: when searching hard, the least crowded way of all; else just say how far off this look is
     if(!thorough) return { ...geo, cost: clash ? clash * 100 + 99 : 50 };
     let best = null;
-    for(const dy of [0, -10, 10]) for(const order of orders) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]){
-      const by = by0 + dy, mid = middle(by), L = solve(lab, seatBoxes.flat().concat(mid), order), cost = (clash + seatBoxes.filter(b => touch(b, mid)).length) * 100 + L.fails;
-      if(!best || cost < best.cost) best = { ...geo, cost, by, tight, bets: L.bets, dealers: L.dealers };
+    for(const side of sides) for(const dy of [0, -10, 10]) for(const order of orders) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]){
+      const by = by0 + dy, mid = middle(by, side), L = solve(lab, seatBoxes.flat().concat(mid), order), cost = (clash + seatBoxes.filter(b => touch(b, mid)).length) * 100 + L.fails;
+      if(!best || cost < best.cost) best = { ...geo, cost, by, bx: bxOf(side), tight, potSide: side, bets: L.bets, dealers: L.dealers };
     }
     return best;
   }
@@ -895,15 +930,15 @@ function tableGeo(n, bet = '8,888'){
 const pxToPct = ([x, y]) => [x / GEO.W * 100, y / GEO.H * 100];
 // Maps a table's seat numbers to screen positions, turned so you sit at the bottom.
 function layoutOf(d){
-  // the chips in front of a seat never read wider than "88,888" (bigger bets read 125K, 1.2M; see chipFmt), so the
-  // seats have the same room all hand and don't move when someone bets big
-  const bet = '88,888';
+  // the chips in front of a seat never read wider than "8,888" or "88.8K" (bigger bets read 12.5K, 125K, 1.2M; see
+  // chipFmt), so the seats have the same room all hand and don't move when someone bets big
+  const bet = '88.8K';
   const allowed = d.allowed || [0, 1, 2, 3, 4, 5, 6, 7, 8], n = allowed.length, G = tableGeo(n, bet);
   const mySeat = d.seats.findIndex(p => p && club && p.uid === club.me.id), base = Math.max(0, allowed.indexOf(mySeat));
   const rel = s => (allowed.indexOf(s) - base + n) % n;
   return { allowed, rel, G, posOf: s => pxToPct([G.seats[rel(s)].x, G.seats[rel(s)].y]), betOf: s => G.betAt(rel(s)), dealerOf: s => G.dealerAt(rel(s)) };
 }
-const centerPx = () => GEO ? [GEO.cx, GEO.by] : pctToPx([50, 45]);
+const centerPx = () => GEO ? [GEO.bx, GEO.by] : pctToPx([50, 45]);
 const reducedMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 // An element's centre inside the table area (for a seat's avatar), or null.
 function avatarPx(uid){
@@ -959,8 +994,9 @@ function patchKids(box, parts){
   pool.forEach(q => q.forEach(k => k.remove()));
   els.forEach((el, i) => { if(box.children[i] !== el) box.insertBefore(el, box.children[i] || null); });
 }
-// an amount on the felt, short from `from` up (125K, 1.25M), so a label never outgrows the room the layout keeps
-const chipFmt = (n, from) => n < from ? fmt(n) : n < 1e6 ? Math.floor(n / 1000) + 'K' : (Math.floor(n / 1e4) / 100).toFixed(2).replace(/\.?0+$/, '') + 'M';
+// an amount on the felt, short from `from` up (12.5K, 125K, 1.25M), so a label never outgrows the room the layout keeps
+const chipFmt = (n, from) => n < from ? fmt(n) : n < 1e5 ? (Math.floor(n / 100) / 10).toFixed(1).replace(/\.0$/, '') + 'K'
+  : n < 1e6 ? Math.floor(n / 1000) + 'K' : (Math.floor(n / 1e4) / 100).toFixed(2).replace(/\.?0+$/, '') + 'M';
 const pctToPx = ([x, y]) => { const a = $('tableArea'); return [a.clientWidth * x / 100, a.clientHeight * y / 100]; };
 const cs = s => E.parse(s)[0];
 function cardHTML(c, cls = '', extra = ''){
@@ -1146,8 +1182,8 @@ function reserveDock(seated){
     const p = document.createElement('div');
     p.className = 'dock'; p.setAttribute('aria-hidden', 'true');
     p.style.cssText = 'position:absolute;left:0;right:0;bottom:0;height:auto;visibility:hidden;pointer-events:none';
-    p.innerHTML = (seated ? `<div class="helper${helperMin ? ' min' : ''}"><div class="h-top"><b class="h-name">Wg</b><span class="h-eq">88%<small> to win vs 8</small></span></div>${helperMin ? '' : `<div class="h-bar"><i></i></div><div class="h-line">Wg${g.classList.contains('h700') ? '' : '<br>Wg'}</div>`}</div>` : '')
-      + `<div class="controls">${seated ? `<div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="act-main" style="--n:3"><button class="act-btn fold"><b>Fold</b></button><button class="act-btn call"><b>Call</b><span class="num">88,888</span></button><button class="act-btn raise"><b>Raise</b><span>Choose amount</span></button></div>` : '<div class="info-line">Wg</div>'}</div>`
+    p.innerHTML = (seated ? `<div class="helper${helperMin ? ' min' : ''}"><div class="h-top"><b class="h-name">Wg</b><span class="h-eq"><i class="h-w">Win</i>88%<small> to win vs 8</small></span></div>${helperMin ? '' : `<div class="h-bar"><i></i></div><div class="h-line">Wg<br>Wg${g.classList.contains('land') ? '<br>Wg' : ''}</div>`}</div>` : '')
+      + `<div class="controls">${seated ? `<div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="act-main" style="--n:3"><button class="act-btn fold"><b>Fold</b></button><button class="act-btn call"><b>Call</b><span class="num">88,888</span></button><button class="act-btn raise"><b>Raise</b><span>Choose amount</span></button></div>` : `<div class="info-line">Wg${g.classList.contains('land') ? '<br>Wg' : ''}</div>`}</div>`
       // the other state a seated player's bar has: the waiting line with the pre-action buttons
       + (seated ? '<div class="controls"><div class="info-line">Wg</div><div class="preacts"><button><i></i>Fold</button><button><i></i>Call 88,888</button><button><i></i>Call any</button></div></div>' : '');
     g.appendChild(p); const hp = p.querySelector('.helper'), cs = [...p.querySelectorAll('.controls')].map(c => c.offsetHeight), ch = Math.max(...cs);
@@ -1174,10 +1210,16 @@ function newLock(d){
   const g = $('game'), hand = d ? d.tid + ':' + d.handNo : '';
   if(LOCK && LOCK.w === g.clientWidth && LOCK.hand === hand) return false;
   const H = window.innerHeight; g.classList.toggle('h700', H <= 700); g.classList.toggle('h600', H <= 600);
+  // a phone held sideways: the table takes the full width on the left and the action bar stands beside it
+  const land = window.innerWidth > H && H <= 600 && window.innerWidth >= 560;
+  if(g.classList.contains('land') !== land){ g.classList.toggle('land', land); LOCK = null; }
+  // the smallest phones sideways (iPhone SE): your cards go back above your plate, smaller, so the bottom row of
+  // a full table has the width it needs
+  g.classList.toggle('land-s', land && window.innerWidth < 700);
   // on the shortest screens the header is one row: the chat and Lobby buttons move up beside the clock
   const hb = g.querySelector('.hdr-btns'), home = g.querySelector(H <= 600 ? '.clock' : '.stats');
   if(hb && hb.parentNode !== home) home.appendChild(hb);
-  LOCK = { w: g.clientWidth, hand, h: 0 };
+  LOCK = { w: g.clientWidth, hand, h: 0, iw: window.innerWidth, ih: H };
   return true;
 }
 function lockArea(){
@@ -1215,7 +1257,10 @@ function renderTable(){
   area.style.setProperty('--cw', Math.max(30, Math.min(46, area.clientWidth * .1)) + 'px');
   const res = d.result, winCards = new Set((res && res.showdown ? res.winCards : []).map(cs));
   const handKey = d.tid + ':' + d.handNo;
-  $('pot').innerHTML = !res && d.pot > 0 ? `${chipsIcon(3)}Pot ${chipFmt(d.pot, 1e6)}` : '';
+  // the whole live pot: what's in the middle plus this street's bets still in front of the seats (the coach's pot
+  // odds count the same total; when the bets are swept in they leave the seats as they join d.pot, so nothing counts twice)
+  const potAll = (d.pot || 0) + d.seats.reduce((t, p) => t + (p && p.inHand ? p.bet || 0 : 0), 0);
+  $('pot').innerHTML = !res && potAll > 0 ? `${chipsIcon(3)}Pot ${chipFmt(potAll, 1e6)}` : '';
   $('pot').style.visibility = $('pot').innerHTML ? 'visible' : 'hidden';
   let b = '';
   for(let i = 0; i < 5; i++){
@@ -1227,15 +1272,16 @@ function renderTable(){
   }
   $('board').innerHTML = b;
   const lines = res ? res.lines : d.note ? [d.note] : d.seats.filter(Boolean).length < 2 ? ['Waiting for players to be moved to this table…'] : [];
-  // the felt keeps room for two lines here (see tableGeo); a longer result is cut to two, and the full text is the title
+  // the felt keeps room for one line here (see tableGeo); a longer result is cut there, and the full result is
+  // written in the bar under the table (renderControls); the full text is also the title
   $('msg').innerHTML = lines.map(l => `<div>${esc(l)}</div>`).join(''); $('msg').title = lines.join('\n');
   const LY = layoutOf(d), posOf = LY.posOf, G = LY.G;
   area.style.setProperty('--bw', G.bw + 'px');
   const felt = area.querySelector('.felt');
   felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px`;
-  area.querySelector('.center').style.cssText = `left:${G.cx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
+  area.querySelector('.center').style.cssText = `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
   $('msg').style.maxWidth = G.msgW + 'px';
-  area.classList.toggle('tall', G.tall); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini);
+  area.classList.toggle('tall', G.tall); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini); area.classList.toggle('micro', G.look === 'micro'); area.classList.toggle('pot-side', !!G.potSide);
   if(!d.result) $('fx').querySelectorAll('.winpile').forEach(e => { if(e.dataset.hand !== d.tid + ':' + d.handNo){ e.classList.add('gone'); setTimeout(() => e.remove(), 400); } });
   const mc = myCards.get(d.tid), mine = mc && mc.hand === d.handNo ? mc.cards.map(cs) : null;
   const nick = seatNicks(d.seats.filter(Boolean).map(p => p.name));
@@ -1257,12 +1303,13 @@ function renderTable(){
         return cardHTML(null, `mini ${anim}`);
       }).join('');
     }
+    const acting = d.acting === s;
     let badge = '';
     if(res && p.won > 0) badge = '<span class="badge won">Winner</span>';
     else if(res && res.showdown && p.cat) badge = `<span class="badge hand">${esc(p.cat)}</span>`;
     else if(p.away) badge = '<span class="badge">Away</span>';
-    else if(p.act){ const amt = (p.act === 'Raise' || p.act === 'Bet') ? ' ' + fmt(p.lastAmt) : ''; badge = `<span class="badge act-${p.act.toLowerCase().replace(/[^a-z]+/g, '-')}">${esc(p.act)}${amt}</span>`; }
-    const acting = d.acting === s;
+    // the seat whose turn it is shows no pill from its last action (that CALL is history); the gold ring marks it
+    else if(p.act && !acting){ const amt = (p.act === 'Raise' || p.act === 'Bet') ? ' ' + fmt(p.lastAmt) : ''; badge = `<span class="badge act-${p.act.toLowerCase().replace(/[^a-z]+/g, '-')}">${esc(p.act)}${amt}</span>`; }
     const stackTxt = p.inHand && p.allIn && !res ? 'All-in' : fmt(p.stack);
     const cls = `seat ${isMe ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
     const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
@@ -1274,7 +1321,7 @@ function renderTable(){
     if(p.inHand && p.bet > 0){
       const [bx, by] = LY.betOf(s), bp = pxToPct([bx, by]), [sx, sy] = pctToPx(pos);
       const key = `b${handKey}-${d.street}-${s}-${p.bet}`, isNew = !seen.has(key); seen.add(key);
-      parts.push(`<div class="bet num ${isNew ? 'chipin' : ''}" style="left:${bp[0]}%;top:${bp[1]}%;--fx:${sx - bx}px;--fy:${sy - by}px">${chipsIcon(Math.min(3, 1 + Math.floor(p.bet / (d.blinds[1] * 3))))}${chipFmt(p.bet, 1e5)}</div>`);
+      parts.push(`<div class="bet num ${isNew ? 'chipin' : ''}" style="left:${bp[0]}%;top:${bp[1]}%;--fx:${sx - bx}px;--fy:${sy - by}px">${chipsIcon(Math.min(3, 1 + Math.floor(p.bet / (d.blinds[1] * 3))))}${chipFmt(p.bet, 1e4)}</div>`);
     }
   }
   if(d.btn >= 0 && d.phase === 'hand'){
@@ -1338,6 +1385,9 @@ function renderControls(d, mySeat, mine){
   }
   else if(meSeat.inHand && meSeat.folded) line = 'You folded. Next hand coming up…';
   else line = d.phase === 'hand' ? 'You play from the next hand.' : 'Shuffling up…';
+  // a finished hand: the whole result in the bar (the felt shows its first line)
+  const R = d.result && d.result.lines;
+  if(R && R.length && !(meSeat && meSeat.away)) line = R.map(esc).join('<br>');
   c.innerHTML = `<div class="info-line">${line}</div>${pre}`;
   const bb = $('backBtn'); if(bb) bb.onclick = () => send({ t: 'back' });
   c.querySelectorAll('[data-pre]').forEach(btn => btn.onclick = () => {
@@ -1347,8 +1397,21 @@ function renderControls(d, mySeat, mine){
     if(navigator.vibrate) try{ navigator.vibrate(15); }catch(e){}
   });
 }
+// One action per turn: the first tap locks the buttons (a second tap, or a pre-action racing the button, sends
+// nothing) until the table moves on. If nothing has moved after a few seconds (a lost message), the buttons come
+// back so the action can be sent again; the server takes only the first action for a turn.
+let actLockTimer = 0;
 function sendAction(d, a){
-  lastSent = d.tid + ':' + d.handNo + ':' + d.seq;
+  const key = d.tid + ':' + d.handNo + ':' + d.seq;
+  if(lastSent === key) return;
+  lastSent = key;
+  $('controls').querySelectorAll('button').forEach(b => { b.disabled = true; });
+  clearTimeout(actLockTimer);
+  actLockTimer = setTimeout(() => {
+    const t = tables.get(d.tid);
+    if(lastSent !== key || !t || t.tid + ':' + t.handNo + ':' + t.seq !== key || t.actUid !== club.me.id) return;
+    lastSent = null; $('controls').dataset.turn = ''; if(view === 'table' && watchTid === d.tid) renderTable();
+  }, 4000);
   if(d.tid === 'demo' && demo){ if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){} $('controls').innerHTML = '<div class="info-line">…</div>'; return demo.answer(a); }
   const words = { fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' };
   $('controls').innerHTML = `<div class="info-line">${words[a.t] || ''}${a.t === 'raise' ? ' to ' + fmt(a.to) : ''} · sending…</div>`;
@@ -1447,6 +1510,26 @@ function tickClock(){
 }
 setInterval(tickClock, 200);
 window.addEventListener('resize', () => { if(view === 'table') renderTable(); });
+// iPhone Safari reports a turned screen's new size late (after the resize/orientationchange events have fired), so
+// the table was laid out for the old shape and kept it: look again a few times while the turn settles. A screen
+// that only got taller or shorter (the toolbar, the keyboard) keeps its held layout; a turned one (a new width) is laid
+// out anew.
+let TURN = [], TURNW = window.innerWidth;
+function settleTurn(){
+  TURN.forEach(clearTimeout);
+  TURN = [60, 200, 450, 900].map((ms, i, all) => setTimeout(() => {
+    if(view === 'table'){
+      // the screen really turned (its width is not the one it settled at last time): while the turn settles, a
+      // height arriving late decides the layout again too
+      if(LOCK && window.innerWidth !== TURNW && (LOCK.iw !== window.innerWidth || LOCK.ih !== window.innerHeight)) LOCK = null;
+      renderTable();
+    }
+    if(i === all.length - 1) TURNW = window.innerWidth;
+  }, ms));
+}
+window.addEventListener('orientationchange', settleTurn);
+if(screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', settleTurn);
+window.addEventListener('resize', () => { if(window.innerWidth !== TURNW) settleTurn(); });
 // the layout measures text, so measure again once the web fonts have arrived (the table keeps its held height)
 if(document.fonts) document.fonts.addEventListener('loadingdone', () => { SIZES.clear(); GEOS.clear(); DOCKS.clear(); GEO = null; if(view === 'table') renderTable(); });
 // the table area also changes size without the window doing so (the action bar, the raise panel or the hand
@@ -1753,9 +1836,30 @@ function drawsOf(hole, board){
   if(straightOuts) parts.push(straightOuts >= 8 ? 'open-ended straight draw' : 'gutshot straight draw');
   const outs = flushOuts + straightOuts;
   if(!outs) return '';
-  const pct = board.length === 3 ? Math.min(outs * 4, 100) : outs * 2;
-  return `${parts.join(' + ')} · ${outs} outs (about ${pct}% to hit${board.length === 3 ? ' by the river' : ' on the river'})`;
+  return drawHTML(parts, outs, board.length);
 }
+// The helper's two hints as markup built only from fixed words and numbers (no names or other user text), so the
+// layout test can ask for their longest forms too. A draw's chance to hit is written out in full, and as a short
+// "~N%" that short screens show instead, so the hint fits the helper's two lines there.
+function drawHTML(parts, outs, boardLen){
+  const pct = boardLen === 3 ? Math.min(outs * 4, 100) : outs * 2;
+  return `${esc(parts.join(' + '))} · ${outs} outs<span class="h-odds"> (about ${pct}% to hit${boardLen === 3 ? ' by the river' : ' on the river'})</span><span class="h-odds-s"> · ~${pct}%</span>`;
+}
+// your turn's advice from your chance to win (eq) and what calling costs; '' when there's nothing to say
+function adviceFor(eq, L, boardLen){
+  if(eq == null || !L) return ['', ''];
+  const have = `<span class="h-have">, you have ${Math.round(eq * 100)}%</span>`;
+  if(!L.canCheck){
+    const need = L.toCall / (L.pot + L.toCall), n = Math.round(need * 100);
+    if(eq >= need + .05) return [`Call needs ${n}%${have}: calling pays.${eq > .65 ? ' You can raise for value.' : ''}`, 'good'];
+    if(eq >= need - .03) return [`Close: call needs ${n}%${have}.`, 'mid'];
+    return [`Call needs ${n}%${have}: folding is fine.`, 'bad'];
+  }
+  return [eq > .6 ? 'Strong: bet for value.' : eq > .4 ? 'Medium: a small bet or a check both work.' : (boardLen === 5 ? 'Weak: check, no need to put more in.' : 'Weak: check and see a free card.'),
+    eq > .6 ? 'good' : eq > .4 ? 'mid' : 'bad'];
+}
+// read-only, for the layout test: the hints' markup for any inputs
+window.__helperText = Object.freeze({ adviceFor, drawHTML });
 function equityFor(key, hole, board, nOpp){
   if(eqCache.has(key)) return eqCache.get(key);
   eqCache.set(key, null);
@@ -1778,25 +1882,14 @@ function renderHelper(d, me, mine){
   const name = board.length ? madeName(mine, board) : preName(mine);
   const draw = drawsOf(mine, board);
   const L = d.legal && d.actUid === club.me.id ? d.legal : null;
-  let advice = '', tone = '';
-  if(eq != null){
-    if(L && !L.canCheck){
-      const need = L.toCall / (L.pot + L.toCall);
-      if(eq >= need + .05){ advice = `Call needs ${Math.round(need * 100)}%, you have ${Math.round(eq * 100)}%: calling pays.${eq > .65 ? ' You can raise for value.' : ''}`; tone = 'good'; }
-      else if(eq >= need - .03){ advice = `Close: call needs ${Math.round(need * 100)}%, you have ${Math.round(eq * 100)}%.`; tone = 'mid'; }
-      else { advice = `Call needs ${Math.round(need * 100)}%, you have ${Math.round(eq * 100)}%: folding is fine.`; tone = 'bad'; }
-    } else if(L){
-      advice = eq > .6 ? 'Strong: bet for value.' : eq > .4 ? 'Medium: a small bet or a check both work.' : (board.length === 5 ? 'Weak: check, no need to put more in.' : 'Weak: check and see a free card.');
-      tone = eq > .6 ? 'good' : eq > .4 ? 'mid' : 'bad';
-    }
-  }
+  const [advice, tone] = adviceFor(eq, L, board.length);
   const pct = eq == null ? '…' : Math.round(eq * 100) + '%';
   const bar = eq == null ? 0 : Math.round(eq * 100);
   el.hidden = false;
   el.className = 'helper' + (helperMin ? ' min' : '');
-  el.innerHTML = `<div class="h-top"><b class="h-name">${esc(name)}</b><span class="h-eq ${eq == null ? '' : eq > .5 ? 'good' : eq > .3 ? 'mid' : 'bad'}">${pct}<small> to win vs ${nOpp}</small></span></div>
+  el.innerHTML = `<div class="h-top"><b class="h-name">${esc(name)}</b><span class="h-eq ${eq == null ? '' : eq > .5 ? 'good' : eq > .3 ? 'mid' : 'bad'}"><i class="h-w">Win</i>${pct}<small> to win vs ${nOpp}</small></span></div>
     ${helperMin ? '' : `<div class="h-bar"><i style="width:${bar}%"></i></div>
-    ${advice ? `<div class="h-line ${tone}">💡 ${esc(advice)}</div>` : draw ? `<div class="h-line">🎯 ${esc(draw)}</div>` : ''}`}`;
+    ${advice ? `<div class="h-line ${tone}">💡 ${advice}</div>` : draw ? `<div class="h-line">🎯 ${draw}</div>` : ''}`}`;
   el.onclick = () => { helperMin = !helperMin; try{ localStorage.setItem('stacked:helper', helperMin ? 'min' : ''); }catch(e){} renderTable(); };
 }
 
@@ -1824,7 +1917,7 @@ function demoSnap(){
     cur: live ? h.currentBet : 0, board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((a, p) => a + p.bet, 0) : 0,
     btn: g.btn, blinds: E.levelFor(g.level, 'each'), acting: demo.acting ? demo.acting.seat : -1, actUid: demo.acting ? demo.acting.uid : null, seq: demo.seq,
     deadline: demo.acting ? demo.acting.deadline : 0, bank: 20000, usingBank: false, legal: demo.acting ? demo.acting.legal : null,
-    result: res ? { lines, winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null, note: demo.note || ''
+    result: res ? { lines, winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null, note: live ? '' : demo.note || ''
   };
 }
 function demoPublish(){
