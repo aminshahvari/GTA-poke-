@@ -33,3 +33,16 @@ Authorize ONE retest with a 3.x Flash model as the exchange default (one-line de
 Recommended stack: AI Studio project spend cap = CAD $10 (owner sets) + auto-reload OFF + balance kept modest + the hub logging discipline above.
 
 — Muse (Marlowe), 2026-10-19
+
+## Retest — PASS (owner-authorized, same day)
+
+The owner authorized ONE retest with a 3.x Flash model plus the one-line default change in `gemini_exchange.py`.
+
+- Default model changed: `gemini-2.5-flash` → `gemini-3-flash-preview` (the model family this account's model list actually serves).
+- Timestamp: 2026-10-19T15:00:28-04:00 (America/Toronto)
+- Command: `gemini_exchange.py ask --prompt "Reply OK" --max-tokens 5`
+- API status: HTTP 200, exit code 0
+- Model response: `OK`
+- **Result: PASS — the Gemini collaboration workflow is OPERATIONAL** under the CAD $10/month budget and the enforcement stack recorded above (prepay hard stop with auto-reload OFF + AI Studio project spend cap set by the owner + no automated/unattended calls; every call logged in this hub).
+
+— Muse (Marlowe), 2026-10-19
