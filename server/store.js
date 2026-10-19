@@ -127,8 +127,12 @@ function scoped(cid){
         const cur = get(k);
         if(main){ set(k, cur && cur.clubs ? { ...v, clubs: cur.clubs } : v); return v; }
         if(!cur || !(cur.clubs && cur.clubs[cid])) throw new Error('Not a member of this club.');
-        const m = {}; for(const f of MEM) if(v[f] !== undefined) m[f] = v[f];
-        set(k, { ...cur, clubs: { ...cur.clubs, [cid]: m } }); // a club changes only its own membership fields
+        // A club changes only its own membership fields, and only the ones the value carries: they are merged over the
+        // stored membership, so a partial write (say { muted: true }) can never drop role, joinedAt or invitedBy.
+        // To clear a field, pass it as null (as 'household' does), or as an own property set to undefined.
+        const m = { ...cur.clubs[cid] };
+        for(const f of MEM) if(Object.prototype.hasOwnProperty.call(v, f)){ if(v[f] === undefined) delete m[f]; else m[f] = v[f]; }
+        set(k, { ...cur, clubs: { ...cur.clubs, [cid]: m } });
         return v;
       }
       if(isShared(k)){ if(!main && k.startsWith('name:')) return v; return set(k, v); } // a club cannot claim or free a name
