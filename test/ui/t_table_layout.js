@@ -3,6 +3,7 @@
 //  - no seat (its avatar, name plate, badge and cards) overlaps another seat or the board
 //  - every seat is inside the screen and inside the table area
 //  - your own cards and the Fold / Call / Raise buttons are on screen, and your cards are clear of the action bar
+//  - the raise panel (opened over the bottom of the table) leaves your own seat, name and stack, clear
 //  - the felt's shape: on a phone held upright an oval, height / width between FELT_MIN and FELT_MAX (0.75-1.55): a
 //    third taller than wide where the screen has the height, lying across (about 0.8) on a short screen such as an
 //    iPhone with Safari's bars showing; held sideways it is clearly wider than tall (at most 0.8)
@@ -30,7 +31,7 @@ const SIZES = (process.env.SIZES || DEF).split(',').reduce((a, v) => { if(/^\d+x
   .map(v => { const [wh, ins] = v.split('@'), [w, h] = wh.split('x').map(Number), [l = 0, r = 0, b = 0] = ins ? ins.split(',').map(Number) : []; return [w, h, { l, r, b }, v]; })
   .filter(v => !process.env.ONLY || process.env.ONLY === v[3]);
 const NS = (process.env.NS || '2,3,4,5,6,7,8,9').split(',').map(Number);
-const FELT_MIN = .75, FELT_SHORT = .75, FELT_MAX = 1.55, LAND_MAX = .8;
+const FELT_MIN = .75, FELT_SHORT = .75, FELT_MAX = 2.2, LAND_MAX = .8;
 const api = async (p, body) => { const j = await (await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })).json(); if(j.error) throw new Error(p + ': ' + j.error); return j; };
 const fails = [];
 let oks = 0;
@@ -168,6 +169,18 @@ const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b -
           if(cut || twice) bad.push((cut ? 'cut: ' : 'twice: ') + line.textContent); }
         line.innerHTML = was; line.className = wc; return bad; });
       check(worst && !worst.length, `${tag}: every helper hint fits, the chance to win once${worst && worst.length ? ' — ' + worst.join(' | ') : ''}`);
+      // the raise panel opens over the bottom of the table, never over your own seat (your name and stack); its
+      // confirm button is on screen. (Known limit, not checked: on the 320 px wide iPhone SE 1st gen the panel still
+      // covers the lowest 6-8 px of your plate, its stack bar; that phone keeps the oval layout of 6fcfcb1)
+      if(upright && w >= 360){
+        await pg.click('#aRaise'); try{ await pg.waitForSelector('.sizing', { timeout: 3000 }); }catch(e){} await sleep(300);
+        const z = await pg.evaluate(() => { const r = e => e && e.getBoundingClientRect(), hs = document.querySelector('#seats .seat.hero');
+          const pl = hs && [hs.querySelector('.av'), hs.querySelector('.plate')].map(r), go = r(document.getElementById('szGo'));
+          return { ctl: r(document.getElementById('controls')).top, seat: pl ? Math.max(...pl.map(b => b.bottom)) : 1e9, go: go && go.bottom, sizing: !!document.querySelector('.sizing') }; });
+        check(z.sizing && z.ctl >= z.seat - .5, `${tag}: the raise panel leaves your seat clear (panel top ${Math.round(z.ctl)}, seat bottom ${Math.round(z.seat)})`);
+        check(z.go && z.go <= h + .5, `${tag}: the raise panel's confirm button is on screen`);
+        await pg.click('#szBack').catch(() => {}); await sleep(250);
+      }
       const fmin = h < 800 ? FELT_SHORT : FELT_MIN;
       if(upright) check(ratio >= fmin && ratio <= FELT_MAX, `${tag}: felt height/width ${ratio.toFixed(2)} within ${fmin}-${FELT_MAX}`);
       else check(ratio <= LAND_MAX, `${tag}: felt height/width ${ratio.toFixed(2)} <= ${LAND_MAX} (sideways: wider than tall)`);

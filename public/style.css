@@ -1299,13 +1299,13 @@ label.btn{display:flex;align-items:center;justify-content:center;gap:8px;cursor:
 /* iPhone SE (1st gen) class */
 /* (was @media (max-height:600px): now a class app.js sets on #game when a hand starts, so these sizes hold for the hand) */
   /* the hand helper in one row: its advice (or the hand's name) beside the chance to win */
-  :where(#game.h600) .helper{grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:8px}
-  :where(#game.h600) .helper .h-top{display:contents}
-  :where(#game.h600) .helper .h-bar,:where(#game.h600) .helper .h-eq small,:where(#game.h600) .helper:has(.h-line) .h-name{display:none}
-  :where(#game.h600) .helper .h-name{font-size:13px}
-  :where(#game.h600) .helper .h-eq{grid-column:2;grid-row:1;font-size:15px}
-  :where(#game.h600) .helper .h-line{grid-column:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  :where(#game.h600) .helper .h-line+.h-line{display:none}
+  :where(#game.h600,#game.row1) .helper{grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:8px}
+  :where(#game.h600,#game.row1) .helper .h-top{display:contents}
+  :where(#game.h600,#game.row1) .helper .h-bar,:where(#game.h600,#game.row1) .helper .h-eq small,:where(#game.h600,#game.row1) .helper:has(.h-line) .h-name{display:none}
+  :where(#game.h600,#game.row1) .helper .h-name{font-size:13px}
+  :where(#game.h600,#game.row1) .helper .h-eq{grid-column:2;grid-row:1;font-size:15px}
+  :where(#game.h600,#game.row1) .helper .h-line{grid-column:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  :where(#game.h600,#game.row1) .helper .h-line+.h-line{display:none}
   :where(#game.h600) .act-btn{min-height:46px}
   :where(#game.h600) .xtime{padding:4px 10px}
   :where(#game.h600) .turnrow{min-height:26px}
@@ -1725,12 +1725,13 @@ body{background:var(--lx-ink)}
 #game .dock .controls{flex:none;min-height:var(--ctl-h,0)}
 #game .dock .helper{flex:none;height:var(--hlp-h,auto);align-content:start;overflow:hidden}
 #game:has(.sizing) .helper{visibility:hidden}
+#game:not(.land):has(.sizing) #dock>.helper{display:none}
 #game .stats small,#game .stats b,#game .blinds b,#game .blinds small,#game .time small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 #game .stats>div,#game .clock>div{min-width:0}
 /* the helper shows one hint (your turn's advice, else a draw) in up to two full lines, on short screens too (the
    dock keeps room for both); short screens give a draw's chance to hit as "~N%" so the hint fits */
 #game .helper .h-line{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-#game.h600 .helper .h-line{white-space:normal}
+#game.h600 .helper .h-line,#game.row1 .helper .h-line{white-space:normal}
 #game .helper .h-odds-s,#game.h700 .helper .h-odds{display:none}
 #game.h700 .helper .h-odds-s{display:inline}
 /* the chat sheet never gets too short for its message box (a short screen with the keyboard open) */
@@ -1809,3 +1810,6 @@ body{background:var(--lx-ink)}
 .preacts.showmuck.n1{grid-template-columns:1fr}
 .preacts.showmuck button{color:var(--text,#fff)}
 .preacts.showmuck button:disabled{opacity:.45}
+/* on a phone held upright the "Raise to" line is left out of the raise panel (the amount is on the Raise button), so
+   the panel is barely taller than the helper and action bar it replaces; the dock keeps room for it (reserveDock) */
+@media (max-width:599px){ #game:not(.land) .sizing .amt{display:none} }

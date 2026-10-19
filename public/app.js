@@ -690,6 +690,19 @@ function seatSizes(area, look, bet){
 // rail, with the seats spaced evenly along the middle of the rail. Tall on phones, long on wide screens.
 // Position 0 is the bottom seat (you). `bet` is the widest bet label at the table (digits as 8s); the pot
 // and the message line are measured as they are drawn, so nothing is placed on top of them.
+// Seat spots on the tall stadium (a phone held upright), your seat first and then clockwise: [x, y] with x from -0.5
+// (left) to 0.5 (right) across the seats' ring and y from -0.9 (bottom) to 0.9 (top). Gemini's proposed map (Issue #4),
+// adopted where it seats everyone cleanly at a seat size; where it doesn't, even spacing round the rail with the same seats.
+const STADIUM_SEATS = {
+  2: [[0, -.88], [0, .88]],
+  3: [[0, -.88], [-.46, .35], [.46, .35]],
+  4: [[0, -.88], [-.48, 0], [0, .88], [.48, 0]],
+  5: [[0, -.88], [-.46, -.32], [-.34, .72], [.34, .72], [.46, -.32]],
+  6: [[0, -.88], [-.46, -.32], [-.46, .38], [0, .88], [.46, .38], [.46, -.32]],
+  7: [[0, -.88], [-.44, -.55], [-.5, .05], [-.32, .78], [.32, .78], [.5, .05], [.44, -.55]],
+  8: [[0, -.88], [-.44, -.55], [-.5, -.1], [-.42, .55], [0, .88], [.42, .55], [.5, -.1], [.44, -.55]],
+  9: [[0, -.88], [-.44, -.58], [-.5, -.2], [-.5, .2], [-.3, .79], [.3, .79], [.5, .2], [.5, -.2], [.44, -.58]]
+};
 function tableGeo(n, bet = '8,888'){
   const a = $('tableArea'), W = a.clientWidth || 360, H = a.clientHeight || 520, pot = $('pot'), msg = $('msg');
   // the pot and the message line get a fixed room (a six-digit pot, one line of text), whatever they say right
@@ -704,17 +717,17 @@ function tableGeo(n, bet = '8,888'){
   // longer one, then both with the side seats on the rail, before the seats get smaller: readable seats matter more
   // than the last bit of width)
   // sideways the seats at the bottom corners carry their badge under the plate, so the bottom keeps room for that too
-  const LAND = $('game').classList.contains('land');
+  const LAND = $('game').classList.contains('land'), SHORT = $('game').classList.contains('h600');
   // (upright, each look first tries a clear oval a third taller than wide (or a quarter), narrowing the felt a little
   // when the screen is short; on a screen too short for that an oval lying across, clearly wider than tall; only
   // when neither seats everyone cleanly the broader felt of before, k 1.2-1.3. Never the nearly round in-between.)
   const BROAD = [[1.2, 1, 0], [1.3, 1, 0], [1.2, 0, 0], [1.3, 0, 0]];
-  const OVAL = [[1.35, 1, 1], [1.35, 0, 1], [1.25, 1, 1], [1.25, 0, 1], [.78, 1, 0], [.78, 0, 0], [.82, 1, 0], [.82, 0, 0]];
-  const shapes = W < 470 ? (LAND ? BROAD : [...OVAL, ...BROAD]) : [[0, 0, 0]];
+  const STAD = [[2.2, 2, 0], [2.2, 3, 0]], OVAL = [[1.35, 1, 1], [1.35, 0, 1], [1.25, 1, 1], [1.25, 0, 1], [.78, 1, 0], [.78, 0, 0], [.82, 1, 0], [.82, 0, 0]];
+  const shapes = W < 470 ? (LAND ? BROAD : [...STAD, ...OVAL, ...BROAD]) : [[0, 0, 0]];
   const sizes = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3], ['micro', 1], ['micro', .6], ['micro', .3]]);
   // (upright on a phone, a clear oval with smaller seats comes before the broad felt with bigger ones, which on a
   // short screen ends up nearly round; the broad felt is next, and only then the smallest (micro) seats)
-  const looks = (W < 470 && !LAND ? [[OVAL, sizes.filter(([l]) => l !== 'micro')], [BROAD, sizes.filter(([l]) => l !== 'micro')], [shapes, sizes.filter(([l]) => l === 'micro')]] : [[shapes, sizes]])
+  const looks = (W < 470 && !LAND ? [[SHORT ? [] : STAD, sizes.filter(([l]) => l !== 'micro')], [OVAL, sizes.filter(([l]) => l !== 'micro')], [BROAD, sizes.filter(([l]) => l !== 'micro')], [shapes, sizes.filter(([l]) => l === 'micro')]] : [[shapes, sizes]])
     .flatMap(([sh, sz]) => sz.flatMap(([l, q]) => sh.map(([k, inset, nar]) => [l, q, k, inset, 1.18, nar])))
     // (the micro seats may also give up some of the extra room either side of yours, for the seats along the top)
     .concat(n >= 6 ? [['micro', .6], ['micro', .3]].flatMap(([l, q]) => shapes.map(([k, inset, nar]) => [l, q, k, inset, 1.06, nar])) : []);
@@ -735,7 +748,9 @@ function tableGeo(n, bet = '8,888'){
     // seats are centred on the middle of the rail and stay inside the area: the side ones `side` px from the
     // edge, the top ones `top` px from the top, and your seat `bot` px from the bottom. In a phone-width column
     // the side seats sit `ins` px further in, on the rail's inner edge, so the felt can be that much wider.
-    const ins = inset ? Math.round(Math.min(se.hw * .4, 18)) : 0;
+    // (inset 2 and 3, the tall stadium of a phone held upright: the side seats sit on the felt with their avatars over the
+    // rail, as on a real long table, so the felt can take nearly the whole width and the whole height)
+    const ins = inset >= 2 ? Math.round(se.hw * .72) : inset ? Math.round(Math.min(se.hw * .4, 18)) : 0;
     const top = Math.max(se.up + (LAND ? 8 : 2) - rail / 2, look ? 0 : 50), bot = Math.max((LAND ? Math.max(he.down, se.down) + 8 : he.down + 4) - rail / 2, look ? 0 : 64), side = Math.max(se.hw + 2, look ? 0 : 46) - ins;
     let fw = Math.min(W - 2 * side + rail, 760), fh = H - top - bot;
     // a real table's proportions: on a phone held upright a clear oval, half again as tall as wide (the
@@ -745,7 +760,7 @@ function tableGeo(n, bet = '8,888'){
     if(W < 470){ const fw0 = fw; fh = Math.min(fh, fw * k); if(nar) fw = Math.min(fw, Math.round(fh / k));
       // (an upright oval that would have to get much narrower than the screen allows is skipped: on a short screen
       // the table lies across instead, clearly wider than tall, rather than ending up round or thin)
-      if(nar && fw < fw0 * .82) return { look, sq, k, inset, g, nar, cost: 1e9 }; }
+      if(nar && fw < fw0 * (k >= 1.5 ? .6 : .82)) return { look, sq, k, inset, g, nar, cost: 1e9 }; }
     else fh = Math.min(fh, Math.max(fw / 1.4, Math.min(fw / 1.2, 370)));
     fw = Math.max(fw, 140); fh = Math.max(fh, 120);
     const cx = W / 2, cy = top + (H - top - bot) / 2;
@@ -762,7 +777,15 @@ function tableGeo(n, bet = '8,888'){
     const at = d => { for(const [len, f] of parts){ if(d <= len + 1e-6) return f(d); d -= len; } return parts[0][1](0); };
     // evenly spaced, with a little extra room either side of the hero's wider seat at a full table
     const gap = n >= 6 ? P / n * g : P / n, along = i => i === 0 ? 0 : n === 2 ? P / 2 : gap + (i - 1) * (P - 2 * gap) / (n - 2);
-    const seats = Array.from({ length: n }, (_, i) => { const [x, y, nx, ny] = at(along(i)); return { x: cx + x, y: cy + y, nx, ny }; });
+    // the tall stadium of a phone held upright: the seats at the owner-approved spots round a long table (Gemini's
+    // seat map, x across the ring's width from -0.5 to 0.5, y from the bottom -0.9 to the top 0.9), each facing the
+    // middle of its stretch of rail; the usual collision checks below still decide whether this look fits, and
+    // inset 3 (tried next, with the same seats) spaces them evenly round the rail instead
+    const gem = inset === 2 && STADIUM_SEATS[n];
+    const seats = gem ? gem.map(([gx, gy]) => { const x = gx * 2 * rx, y = -gy / .9 * hy, cy0 = Math.max(0, hy - rx) * Math.sign(y);
+        const [vx, vy] = Math.abs(y) <= Math.abs(cy0) ? [Math.sign(x), 0] : [x, y - cy0], l = Math.hypot(vx, vy) || 1;
+        return { x: cx + x, y: cy + y, nx: vx / l, ny: vy / l }; })
+      : Array.from({ length: n }, (_, i) => { const [x, y, nx, ny] = at(along(i)); return { x: cx + x, y: cy + y, nx, ny }; });
     // on a long table the hero's cards reach into the felt, so the board sits a little higher
     const tall = fh > fw, by0 = tall ? cy : cy - Math.min(28, fh * .08);
     // board cards sized to the felt so they never run into the seats' chips
@@ -1131,8 +1154,15 @@ function reserveDock(seated){
       + `<div class="controls">${seated ? `<div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="act-main" style="--n:3"><button class="act-btn fold"><b>Fold</b></button><button class="act-btn call"><b>Call</b><span class="num">88,888</span></button><button class="act-btn raise"><b>Raise</b><span>Choose amount</span></button></div>` : `<div class="info-line">Wg${g.classList.contains('land') ? '<br>Wg' : ''}</div>`}</div>`
       // the other state a seated player's bar has: the waiting line with the pre-action buttons
       + (seated ? '<div class="controls"><div class="info-line">Wg</div><div class="preacts"><button><i></i>Fold</button><button><i></i>Call 88,888</button><button><i></i>Call any</button></div></div>' : '');
+    // and, upright, the raise panel (which takes the helper's place too): the dock is as tall as the taller of the two,
+    // so the panel opens inside it and never over your own seat
+    const sz = seated && !g.classList.contains('land') && !g.classList.contains('h600') ? '<div class="controls"><div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="sizing"><div class="amt"><small>Raise to</small><b class="num">88,888</b><span class="num">88 BB</span></div><div class="sz-presets"><button>2.5 BB</button><button>3 BB</button><button>Pot</button><button>All-in</button></div><div class="sz-slider"><button class="step">−</button><input type="range"><button class="step">+</button></div></div><div class="act-main" style="--n:2"><button class="act-btn back"><b>Back</b></button><button class="act-btn raise"><b>Raise</b><span class="num">88,888</span></button></div></div>' : '';
     g.appendChild(p); const hp = p.querySelector('.helper'), cs = [...p.querySelectorAll('.controls')].map(c => c.offsetHeight), ch = Math.max(...cs);
-    h = [p.offsetHeight - cs.reduce((t, x) => t + x, 0) + ch, hp ? hp.offsetHeight : 0, ch]; p.remove();
+    const full = p.offsetHeight - cs.reduce((t, x) => t + x, 0) + ch, hh = hp ? hp.offsetHeight : 0;
+    // (measured after the rest: a raise panel anywhere in the game hides the helper)
+    let szh = 0;
+    if(sz){ p.insertAdjacentHTML('beforeend', '<div style="position:absolute;left:0;right:0;top:0">' + sz + '</div>'); szh = p.lastElementChild.firstElementChild.offsetHeight; }
+    h = [Math.max(full, szh + full - ch - hh), hh, ch]; p.remove();
     if(g.clientWidth){ if(DOCKS.size > 20) DOCKS.clear(); DOCKS.set(key, h); }
   }
   // the helper and the action bar each keep their own height too, so neither edge moves inside the dock
@@ -1230,7 +1260,13 @@ function renderTable(){
   const LY = layoutOf(d), posOf = LY.posOf, G = LY.G;
   area.style.setProperty('--bw', G.bw + 'px');
   const felt = area.querySelector('.felt');
-  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px`;
+  // a phone held upright: the long table runs on under the action bar to the bottom of the screen (the seats, the
+  // board and your cards stay above the bar), a tall stadium with straight sides as on a real long table
+  // (not on the shortest screens, iPhone SE 1st gen: there the table keeps the oval of before, which leaves room for
+  // a full table above the action bar and the raise panel)
+  const run = G.W < 470 && !$('game').classList.contains('land') && !$('game').classList.contains('h600') ? Math.max(0, $('dock').offsetHeight - 10) : 0;
+  area.classList.toggle('run', run > 0);
+  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh + run}px;--rw:${G.rail}px`;
   area.querySelector('.center').style.cssText = `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
   $('msg').style.maxWidth = G.msgW + 'px';
   area.classList.toggle('tall', G.tall); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini); area.classList.toggle('micro', G.look === 'micro'); area.classList.toggle('pot-side', !!G.potSide);
