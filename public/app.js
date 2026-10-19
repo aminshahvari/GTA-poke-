@@ -1141,7 +1141,7 @@ function reserveDock(seated){
     p.className = 'dock'; p.setAttribute('aria-hidden', 'true');
     p.style.cssText = 'position:absolute;left:0;right:0;bottom:0;height:auto;visibility:hidden;pointer-events:none';
     p.innerHTML = (seated ? `<div class="helper${helperMin ? ' min' : ''}"><div class="h-top"><b class="h-name">Wg</b><span class="h-eq"><i class="h-w">Win</i>88%<small> to win vs 8</small></span></div>${helperMin ? '' : `<div class="h-bar"><i></i></div><div class="h-line">Wg<br>Wg${g.classList.contains('land') ? '<br>Wg' : ''}</div>`}</div>` : '')
-      + `<div class="controls">${seated ? `<div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="act-main" style="--n:3"><button class="act-btn fold"><b>Fold</b></button><button class="act-btn call"><b>Call</b><span class="num">88,888</span></button><button class="act-btn raise"><b>Raise</b><span>Choose amount</span></button></div>` : `<div class="info-line">Wg${g.classList.contains('land') ? '<br>Wg' : ''}</div>`}</div>`
+      + PLAY_LINE + `<div class="controls">${seated ? `<div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div><div class="act-main" style="--n:3"><button class="act-btn fold"><b>Fold</b></button><button class="act-btn call"><b>Call</b><span class="num">88,888</span></button><button class="act-btn raise"><b>Raise</b><span>Choose amount</span></button></div>` : `<div class="info-line">Wg${g.classList.contains('land') ? '<br>Wg' : ''}</div>`}</div>`
       // the other state a seated player's bar has: the waiting line with the pre-action buttons
       + (seated ? '<div class="controls"><div class="info-line">Wg</div><div class="preacts"><button><i></i>Fold</button><button><i></i>Call 88,888</button><button><i></i>Call any</button></div></div>' : '');
     // and, upright, the raise panel (which takes the helper's place too): the dock is as tall as the taller of the two,
@@ -1158,6 +1158,48 @@ function reserveDock(seated){
   // the helper and the action bar each keep their own height too, so neither edge moves inside the dock
   if(dock.style.height !== h[0] + 'px') dock.style.cssText = `height:${h[0]}px;--hlp-h:${h[1]}px;--ctl-h:${h[2]}px`;
 }
+// Free social play. A quiet line in the dock stays at the table the whole game, between the helper and the action bar:
+// upright it fills the gap already there (the helper's bottom margin and the bar's top padding, and 1-3 px of the
+// helper's padding), so the table keeps its size; sideways it is one more row of the dock column. Either way it is part of the dock's reserved height, so
+// it never sits over a seat, a card, chips, the result line or a button.
+// At the start of each game (a tournament, or a new practice table) a short notice also shows once, over the
+// board's empty card slots (and the empty message line under them) before the flop: the layout keeps that space clear of every seat, card and chip, so the
+// notice covers nothing you play with. It goes on a tap, when the flop is dealt, when the hand ends, or after 10 s.
+const PLAY_LINE = '<div class="playline"><span>Free social play</span> · <span>No betting · No real money</span></div>';
+const playNoted = new Set();
+let playNoteTimer = 0;
+function playKey(d){
+  if(d.tid === 'demo') return demo ? (demo.noteKey = demo.noteKey || 'demo:' + Date.now()) : null;
+  const T = club && club.tourney; return T && T.id ? 't:' + T.id : null;
+}
+function playNoteSeen(k){ if(playNoted.has(k)) return true; try{ return localStorage.getItem('stacked:playnote') === k; }catch(e){ return false; } }
+function hidePlayNote(){ clearTimeout(playNoteTimer); const el = $('playNote'); if(el) el.hidden = true; }
+function renderPlayNote(d){
+  const el = $('playNote'); if(!el) return;
+  const k = d && playKey(d), clear = d && !d.board.length && !d.result;
+  if(!el.hidden){ if(!clear || el.dataset.key !== k) hidePlayNote(); else placePlayNote(el); return; }
+  if(!k || !clear || playNoteSeen(k)) return;
+  playNoted.add(k); try{ localStorage.setItem('stacked:playnote', k); }catch(e){}
+  el.dataset.key = k; el.hidden = false; placePlayNote(el);
+  clearTimeout(playNoteTimer); playNoteTimer = setTimeout(hidePlayNote, 10000);
+}
+// over the board's five empty slots (and, when no message is showing, the message line under them: the layout keeps
+// both clear of seats and chips), the text as large as fits there, on two lines or, if need be, three
+function placePlayNote(el){
+  const area = $('tableArea').getBoundingClientRect(), slots = [...$('board').children].map(c => c.getBoundingClientRect());
+  if(!slots.length) return hidePlayNote();
+  const l = Math.min(...slots.map(r => r.left)), t = Math.min(...slots.map(r => r.top)), r = Math.max(...slots.map(r => r.right));
+  let b = Math.max(...slots.map(r => r.bottom));
+  const msg = $('msg');
+  if(!msg.textContent.trim()){ const ms = getComputedStyle(msg), lh = parseFloat(ms.lineHeight) || parseFloat(ms.fontSize) * 1.3; b = Math.max(b, msg.getBoundingClientRect().top + lh); }
+  el.style.cssText = `left:${l - area.left}px;top:${t - area.top}px;width:${r - l}px;height:${b - t}px`;
+  const fits = () => el.scrollHeight <= el.clientHeight + .5 && el.scrollWidth <= el.clientWidth + .5;
+  for(const wrap of [false, true]){
+    el.classList.toggle('wrap', wrap);
+    for(let f = 13; f >= 11; f -= .5){ el.style.fontSize = f + 'px'; if(fits()) return; }
+  }
+}
+$('playNote').onclick = hidePlayNote;
 // The table area's height is held for the whole hand. It is decided when a hand starts (or the screen turns) from
 // the room the screen has with the browser's bars showing (100svh), so the felt doesn't move or rescale when
 // Safari's toolbar slides in or out, or the keyboard opens, mid-hand. If the screen still gets shorter during a
@@ -1217,7 +1259,7 @@ function renderTable(){
     $('seats').innerHTML = ''; $('board').innerHTML = ''; $('pot').style.visibility = 'hidden';
     $('msg').textContent = club.tourney && club.tourney.status === 'running' ? 'Loading the table…' : 'This table has closed.';
     $('controls').innerHTML = '<div class="info-line">Tap Lobby to see the other tables.</div>';
-    tickClock(); return;
+    hidePlayNote(); tickClock(); return;
   }
   const mySeat = d.seats.findIndex(s => s && s.uid === club.me.id);
   newLock(d);
@@ -1312,6 +1354,7 @@ function renderTable(){
   renderHelper(d, mySeat >= 0 ? d.seats[mySeat] : null, mine);
   // last hand's coach tip floats over the table; it gets out of the way when it's your turn to act
   if(d.actUid === club.me.id && !d.result && !$('coachTip').hidden){ $('coachTip').hidden = true; clearTimeout(tipTimer); }
+  renderPlayNote(d);
   tickClock();
 }
 // Pre-actions (like the big online rooms): pick Check/Fold, Check, Call or Call any before your turn.
