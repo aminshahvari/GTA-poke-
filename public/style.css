@@ -1299,13 +1299,13 @@ label.btn{display:flex;align-items:center;justify-content:center;gap:8px;cursor:
 /* iPhone SE (1st gen) class */
 /* (was @media (max-height:600px): now a class app.js sets on #game when a hand starts, so these sizes hold for the hand) */
   /* the hand helper in one row: its advice (or the hand's name) beside the chance to win */
-  :where(#game.h600,#game.row1) .helper{grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:8px}
-  :where(#game.h600,#game.row1) .helper .h-top{display:contents}
-  :where(#game.h600,#game.row1) .helper .h-bar,:where(#game.h600,#game.row1) .helper .h-eq small,:where(#game.h600,#game.row1) .helper:has(.h-line) .h-name{display:none}
-  :where(#game.h600,#game.row1) .helper .h-name{font-size:13px}
-  :where(#game.h600,#game.row1) .helper .h-eq{grid-column:2;grid-row:1;font-size:15px}
-  :where(#game.h600,#game.row1) .helper .h-line{grid-column:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  :where(#game.h600,#game.row1) .helper .h-line+.h-line{display:none}
+  :where(#game.h600) .helper{grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:8px}
+  :where(#game.h600) .helper .h-top{display:contents}
+  :where(#game.h600) .helper .h-bar,:where(#game.h600) .helper .h-eq small,:where(#game.h600) .helper:has(.h-line) .h-name{display:none}
+  :where(#game.h600) .helper .h-name{font-size:13px}
+  :where(#game.h600) .helper .h-eq{grid-column:2;grid-row:1;font-size:15px}
+  :where(#game.h600) .helper .h-line{grid-column:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  :where(#game.h600) .helper .h-line+.h-line{display:none}
   :where(#game.h600) .act-btn{min-height:46px}
   :where(#game.h600) .xtime{padding:4px 10px}
   :where(#game.h600) .turnrow{min-height:26px}
@@ -1813,3 +1813,10 @@ body{background:var(--lx-ink)}
 /* on a phone held upright the "Raise to" line is left out of the raise panel (the amount is on the Raise button), so
    the panel is barely taller than the helper and action bar it replaces; the dock keeps room for it (reserveDock) */
 @media (max-width:599px){ #game:not(.land) .sizing .amt{display:none} }
+/* upright on a phone the raise panel keeps to the compact size of the short screens (h700), so the room the dock
+   keeps for it stays small and the long table above it gets that height */
+@media (max-width:599px){
+  #game.row1:not(.land) .sizing{padding:7px 8px;gap:7px}
+  #game.row1:not(.land) .sz-presets button{padding:6px 0}
+  #game.row1:not(.land) .sz-slider .step{width:36px;height:36px;font-size:20px}
+}

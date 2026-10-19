@@ -722,12 +722,15 @@ function tableGeo(n, bet = '8,888'){
   // when the screen is short; on a screen too short for that an oval lying across, clearly wider than tall; only
   // when neither seats everyone cleanly the broader felt of before, k 1.2-1.3. Never the nearly round in-between.)
   const BROAD = [[1.2, 1, 0], [1.3, 1, 0], [1.2, 0, 0], [1.3, 0, 0]];
-  const STAD = [[2.2, 2, 0], [2.2, 3, 0]], OVAL = [[1.35, 1, 1], [1.35, 0, 1], [1.25, 1, 1], [1.25, 0, 1], [.78, 1, 0], [.78, 0, 0], [.82, 1, 0], [.82, 0, 0]];
-  const shapes = W < 470 ? (LAND ? BROAD : [...STAD, ...OVAL, ...BROAD]) : [[0, 0, 0]];
+  // (before all of those, the tall stadium with every seat on its rail: the tallest of 1.7, 1.55 and 1.4 times as tall
+  // as wide that stays at least 70% of the width it could have, at any seat size but the smallest; then 1.25; then the
+  // same with the smallest seats; only then the ovals. Not on the shortest screens (h600), which keep the oval.)
+  const STAD = [[1.7, 2, 1], [1.7, 3, 1], [1.55, 2, 1], [1.55, 3, 1], [1.4, 2, 1], [1.4, 3, 1]], STAD_LOW = [[1.25, 2, 1], [1.25, 3, 1]], OVAL = [[1.35, 1, 1], [1.35, 0, 1], [1.25, 1, 1], [1.25, 0, 1], [.78, 1, 0], [.78, 0, 0], [.82, 1, 0], [.82, 0, 0]];
+  const shapes = W < 470 ? (LAND ? BROAD : [...STAD, ...STAD_LOW, ...OVAL, ...BROAD]) : [[0, 0, 0]];
   const sizes = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3], ['micro', 1], ['micro', .6], ['micro', .3]]);
   // (upright on a phone, a clear oval with smaller seats comes before the broad felt with bigger ones, which on a
   // short screen ends up nearly round; the broad felt is next, and only then the smallest (micro) seats)
-  const looks = (W < 470 && !LAND ? [[SHORT ? [] : STAD, sizes.filter(([l]) => l !== 'micro')], [OVAL, sizes.filter(([l]) => l !== 'micro')], [BROAD, sizes.filter(([l]) => l !== 'micro')], [shapes, sizes.filter(([l]) => l === 'micro')]] : [[shapes, sizes]])
+  const looks = (W < 470 && !LAND ? [[SHORT ? [] : STAD, sizes.filter(([l]) => l !== 'micro')], [SHORT ? [] : STAD_LOW, sizes.filter(([l]) => l !== 'micro')], [SHORT ? [] : [...STAD, ...STAD_LOW], sizes.filter(([l]) => l === 'micro')], [OVAL, sizes.filter(([l]) => l !== 'micro')], [BROAD, sizes.filter(([l]) => l !== 'micro')], [shapes, sizes.filter(([l]) => l === 'micro')]] : [[shapes, sizes]])
     .flatMap(([sh, sz]) => sz.flatMap(([l, q]) => sh.map(([k, inset, nar]) => [l, q, k, inset, 1.18, nar])))
     // (the micro seats may also give up some of the extra room either side of yours, for the seats along the top)
     .concat(n >= 6 ? [['micro', .6], ['micro', .3]].flatMap(([l, q]) => shapes.map(([k, inset, nar]) => [l, q, k, inset, 1.06, nar])) : []);
@@ -748,9 +751,10 @@ function tableGeo(n, bet = '8,888'){
     // seats are centred on the middle of the rail and stay inside the area: the side ones `side` px from the
     // edge, the top ones `top` px from the top, and your seat `bot` px from the bottom. In a phone-width column
     // the side seats sit `ins` px further in, on the rail's inner edge, so the felt can be that much wider.
-    // (inset 2 and 3, the tall stadium of a phone held upright: the side seats sit on the felt with their avatars over the
-    // rail, as on a real long table, so the felt can take nearly the whole width and the whole height)
-    const ins = inset >= 2 ? Math.round(se.hw * .72) : inset ? Math.round(Math.min(se.hw * .4, 18)) : 0;
+    // (inset 2 and 3, the tall stadium of a phone held upright: every seat sits on the middle of the rail, half on the
+    // felt and half off it, as on a real long table; the felt is narrowed to its shape so the whole table, both rounded
+    // ends, shows above the action bar)
+    const ins = inset >= 2 ? 0 : inset ? Math.round(Math.min(se.hw * .4, 18)) : 0;
     const top = Math.max(se.up + (LAND ? 8 : 2) - rail / 2, look ? 0 : 50), bot = Math.max((LAND ? Math.max(he.down, se.down) + 8 : he.down + 4) - rail / 2, look ? 0 : 64), side = Math.max(se.hw + 2, look ? 0 : 46) - ins;
     let fw = Math.min(W - 2 * side + rail, 760), fh = H - top - bot;
     // a real table's proportions: on a phone held upright a clear oval, half again as tall as wide (the
@@ -760,7 +764,7 @@ function tableGeo(n, bet = '8,888'){
     if(W < 470){ const fw0 = fw; fh = Math.min(fh, fw * k); if(nar) fw = Math.min(fw, Math.round(fh / k));
       // (an upright oval that would have to get much narrower than the screen allows is skipped: on a short screen
       // the table lies across instead, clearly wider than tall, rather than ending up round or thin)
-      if(nar && fw < fw0 * (k >= 1.5 ? .6 : .82)) return { look, sq, k, inset, g, nar, cost: 1e9 }; }
+      if(nar && fw < fw0 * (inset >= 2 ? (k > 1.3 ? .7 : .62) : k >= 1.5 ? .6 : .82)) return { look, sq, k, inset, g, nar, cost: 1e9 }; }
     else fh = Math.min(fh, Math.max(fw / 1.4, Math.min(fw / 1.2, 370)));
     fw = Math.max(fw, 140); fh = Math.max(fh, 120);
     const cx = W / 2, cy = top + (H - top - bot) / 2;
@@ -1260,13 +1264,7 @@ function renderTable(){
   const LY = layoutOf(d), posOf = LY.posOf, G = LY.G;
   area.style.setProperty('--bw', G.bw + 'px');
   const felt = area.querySelector('.felt');
-  // a phone held upright: the long table runs on under the action bar to the bottom of the screen (the seats, the
-  // board and your cards stay above the bar), a tall stadium with straight sides as on a real long table
-  // (not on the shortest screens, iPhone SE 1st gen: there the table keeps the oval of before, which leaves room for
-  // a full table above the action bar and the raise panel)
-  const run = G.W < 470 && !$('game').classList.contains('land') && !$('game').classList.contains('h600') ? Math.max(0, $('dock').offsetHeight - 10) : 0;
-  area.classList.toggle('run', run > 0);
-  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh + run}px;--rw:${G.rail}px`;
+  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px`;
   area.querySelector('.center').style.cssText = `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
   $('msg').style.maxWidth = G.msgW + 'px';
   area.classList.toggle('tall', G.tall); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini); area.classList.toggle('micro', G.look === 'micro'); area.classList.toggle('pot-side', !!G.potSide);
