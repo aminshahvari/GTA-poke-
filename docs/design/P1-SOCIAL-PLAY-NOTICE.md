@@ -1,0 +1,52 @@
+# P1 design: free-social-play notices (game start + persistent label)
+
+Status: **design only in production.** A client-only implementation exists on the **non-production branch `social-play-notice`** (cut from `4423a07`). It is not merged, not released and not audited by Muse. Treat it as a candidate, not a shipped feature.
+
+Scope: make it unmistakable that Blindrise is free social play with no betting and no real money:
+
+1. a clear **notice at the start of each game** (each tournament, each new practice table, later each shared game);
+2. a **subtle persistent label** at the table.
+
+Constraints: must not block cards or action buttons; must not overlap seats, cards, chips, buttons or the result ("winner") line in portrait or landscape; navy-and-gold design; no new betting controls.
+
+## 1. Architecture
+
+Client only. No server change, no new key, no new endpoint or socket message.
+
+| Piece | Where | Rule |
+|---|---|---|
+| Persistent label "Free social play · No betting · No real money" | `#playLine` inside `#dock` (`public/index.html`), counted in the dock's reserved height by `reserveDock` (`public/app.js`) | Upright and seated it fills the gap that already exists between the helper and the action bar (6+6 px, or 6+4 px on short screens), so the table size is unchanged. Watching, it sits in the action bar's top padding. Sideways it is one more row of the dock column (wraps to two lines). Never over the table area. |
+| Start notice "Free social play / No betting, no real money." | `#playNote` inside `#tableArea`, `renderPlayNote(d)` called at the end of `renderTable` | Shown once per game key (`t:<tourney.id>` or `demo:<start>`), placed exactly over the board's empty slots before the flop (the layout already keeps that space clear of seats, cards and chips), text fitted to the space. Hidden on tap, when the flop is dealt, when the hand ends, or after 10 s. `role="status"`, `aria-live="polite"`. |
+| Dismissal memory | `localStorage['stacked:playnote']` (try/catch), plus memory | A reload in the same tournament does not show it again; a new tournament does. |
+
+Authorization / isolation: not applicable (static text, no data). For shared games (`P1-SHARED-SOCIAL-GAMES.md`) the game key becomes `sg:<gid>`.
+
+## 2. Phased plan
+
+| Step | Ships | Status |
+|---|---|---|
+| N1 | Label + start notice, client only, UI test `test/ui/t_social_play.js` | **On branch `social-play-notice`, not released** |
+| N2 | Muse audit (layout + premium UI) on the branch; merge with `table-oval` if that lands first | Muse |
+| N3 | Release with the next approved production build | owner GO |
+| N4 | Same notice text on the registration confirmation and the welcome screen (optional) | decision 3 |
+
+Merge note: the `table-oval` branch also changes table layout. This change touches only `#dock` content, `reserveDock`'s measured copy, one call at the end of `renderTable`, and an appended CSS block, so conflicts should be limited to adjacent lines; layout tests must be re-run after merging.
+
+## 3. Owner decisions needed
+
+1. Approve the wording: notice "Free social play / No betting, no real money."; label "Free social play · No betting · No real money".
+2. Notice once per tournament per device (as built) vs on every table move.
+3. Also show the line on registration and welcome screens (N4).
+
+## 4. Acceptance tests (implemented in `test/ui/t_social_play.js`)
+
+Sizes 320×568, 375×667, 393×659, 430×739, 667×375, 844×390 and 1280×800; tables of 2, 6 and 9.
+
+1. At the start of a tournament the notice shows and contains "free social play", "no betting" and "no real money".
+2. The notice lies inside the board's slot rectangle and overlaps no seat, card, chip, dealer button, pot, result line or button.
+3. Fold / Call / Raise are the topmost elements at their centres while the notice shows.
+4. A tap dismisses it; the next hand of the same tournament and a page reload do not show it again; a new tournament id shows it again.
+5. It is gone once the flop is dealt.
+6. Opening a practice table shows it.
+7. In each of your turn, a finished hand (Winner badge + result line) and watching, the label is shown, says all three phrases, is not cut off (≥ 9.5 px), lies inside the dock and not over the table area, and overlaps no seat, card, chip, dealer button, pot, board, helper, result line or button; the page does not scroll.
+8. `t_table_layout`, `t_stability`, `t_positions`, `t_mobile_ux`, `t_premium_ui` pass unchanged (no assertion loosened).
