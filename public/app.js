@@ -442,7 +442,7 @@ function clubsSwitchHTML(){
 const extrasOn = () => !!(club && club.features && club.features.tableExtras);
 function extrasNote(T){
   if(!extrasOn() || !T) return '';
-  const x = [T.showMuck ? 'the winner of an uncontested pot may show one or both cards' : '', T.rabbit ? 'the unused turn and river are shown when a hand ends early' : '', T.handPause ? `${T.handPause} seconds between hands` : ''].filter(Boolean);
+  const x = [T.showMuck ? 'after each hand, players may show one or both of their cards' : '', T.rabbit ? 'the unused turn and river are shown when a hand ends early' : '', T.handPause ? `${T.handPause} seconds between hands` : ''].filter(Boolean);
   return x.length ? ` Table extras: ${x.join('; ')}.` : '';
 }
 function directorMainHTML(){
@@ -473,7 +473,7 @@ function directorMainHTML(){
         <div class="two"><label>Ante<select id="nAnte">${opt('each', 'Every player', P ? P.anteMode : 'each')}${opt('bb', 'Big blind (WSOP)', P ? P.anteMode : 'each')}</select></label>
         <label>Time to act<select id="nAct">${[10, 15, 20, 30].map(v => opt(v, v + ' seconds', P ? P.actSec : 20)).join('')}</select></label></div>
         <label>Hand helper<select id="nHelper">${opt('on', 'On: show hand strength and win chance', P && P.helper === false ? 'off' : 'on')}${opt('off', 'Off (pro mode)', P && P.helper === false ? 'off' : 'on')}</select></label>
-        ${extrasOn() ? `<div class="two"><label>Show or muck<select id="nShow">${opt('off', 'Off', P && P.showMuck ? 'on' : 'off')}${opt('on', 'Winner may show', P && P.showMuck ? 'on' : 'off')}</select></label>
+        ${extrasOn() ? `<div class="two"><label>Show cards<select id="nShow">${opt('off', 'Off', P && P.showMuck ? 'on' : 'off')}${opt('on', 'Players may show', P && P.showMuck ? 'on' : 'off')}</select></label>
         <label>Rabbit hunt<select id="nRabbit">${opt('off', 'Off', P && P.rabbit ? 'on' : 'off')}${opt('on', 'Show the unused cards', P && P.rabbit ? 'on' : 'off')}</select></label></div>
         <label>Pause between hands<select id="nPause">${[[0, 'Standard (about 3 seconds)'], [2, '2 seconds'], [3, '3 seconds'], [4, '4 seconds'], [5, '5 seconds'], [6, '6 seconds']].map(([v, l]) => opt(v, l, P ? P.handPause || 0 : 0)).join('')}</select></label>` : ''}
         <div class="two"><label>Start<select id="nWhen">${opt('manual', 'When I press Start', at)}${opt('at', 'At a set time', at)}</select></label>
@@ -1222,7 +1222,8 @@ function renderTable(){
     if(!p){ parts.push(`<div class="empty-seat" style="left:${pos[0]}%;top:${pos[1]}%">OPEN</div>`); continue; }
     const isMe = p.uid === club.me.id;
     let hole = '';
-    if(p.inHand && !(p.folded && !isMe)){
+    // a folded hand stays hidden from others unless its owner chose to show a card after the hand
+    if(p.inHand && !(p.folded && !isMe && !(p.shown && p.shown.some(x => x != null)))){
       const [sx, sy] = pctToPx(pos), [cx, cy] = centerPx();
       hole = [0, 1].map(j => {
         const key = `h${handKey}-${s}-${j}`, isNew = !seen.has(key); seen.add(key);
@@ -1296,12 +1297,17 @@ function renderControls(d, mySeat, mine){
     return drawActions(d, meSeat);
   }
   c.dataset.turn = '';
-  let line, pre = '';
+  let line, pre = '', showLine = '';
   const T = club.tourney, out = T && (T.places || []).find(r => r.uid === club.me.id);
   if(!meSeat) line = out ? `You finished ${ord(out.place)}. Watching Table ${d.n}.` : `Watching Table ${d.n}.`;
-  else if(d.showOffer && d.showOffer.uid === club.me.id && d.result && !d.result.showdown){
-    line = d.showOffer.done ? (meSeat.shown ? 'You showed your hand.' : 'You mucked.') : 'You won the pot. Show your cards?';
-    if(!d.showOffer.done) pre = `<div class="preacts showmuck"><button data-show="0">Show left</button><button data-show="1">Show right</button><button data-show="0,1">Show both</button><button data-show="">Muck</button></div>`;
+  else if(d.result && d.showOffer && (d.showOffer.can || []).includes(club.me.id)){
+    // after the hand: show my own cards if I want to (only the ones still face down); the uncontested winner may muck
+    const up = meSeat.shown || [null, null], won = !d.result.showdown && !meSeat.folded;
+    const none = up[0] == null && up[1] == null;
+    const b = [up[0] == null ? ['0', none ? 'Show left' : 'Show other'] : null, up[1] == null ? ['1', none ? 'Show right' : 'Show other'] : null,
+      none ? ['0,1', 'Show both'] : null, won && none ? ['', 'Muck'] : null].filter(Boolean);
+    showLine = up[0] != null || up[1] != null ? 'You showed a card.' : won ? 'You won. Show your cards?' : 'Show your cards?';
+    pre = `<div class="preacts showmuck n${b.length}">${b.map(([v, l]) => `<button data-show="${v}">${l}</button>`).join('')}</div>`;
   }
   else if(meSeat.away) line = `You're sitting out, so your hands fold automatically. <button class="btn green" id="backBtn" style="margin-left:6px;padding:6px 12px">I'm back</button>`;
   else if(myTurn) line = 'Sending your action…';
@@ -1322,7 +1328,9 @@ function renderControls(d, mySeat, mine){
   else line = d.phase === 'hand' ? 'You play from the next hand.' : 'Shuffling up…';
   // a finished hand: the whole result in the bar (the felt shows its first line)
   const R = d.result && d.result.lines;
-  if(R && R.length && !(meSeat && meSeat.away)) line = R.map(esc).join('<br>');
+  // (while my show offer is up, the bar asks about my cards instead; the felt still shows the result)
+  if(showLine) line = showLine;
+  else if(R && R.length && !(meSeat && meSeat.away)) line = R.map(esc).join('<br>');
   c.innerHTML = `<div class="info-line">${line}</div>${pre}`;
   const bb = $('backBtn'); if(bb) bb.onclick = () => send({ t: 'back' });
   c.querySelectorAll('[data-show]').forEach(btn => btn.onclick = () => {

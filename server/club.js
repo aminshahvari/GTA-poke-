@@ -260,16 +260,18 @@ function rabbitCards(h){
   for(let k = n; k < 5; k++){ d.pop(); out.push(d.pop()); }
   return out;
 }
+// Who may show after the hand: everyone dealt in whose cards are still face down (folded players, the winner of an
+// uncontested pot). Hands already face up under the club's rules (showdown, all-in) have nothing left to show.
+const canShow = p => p.cards.length === 2 && !(p.shown && !p.folded);
 function resultExtras(tb, h){
   if(gpOn('rabbit') && !h.result.showdown){ const r = rabbitCards(h); if(r) h.rabbit = r; }
-  const winner = h.players.filter(p => !p.folded);
-  if(gpOn('showMuck') && !h.result.showdown && winner.length === 1) tb.show = { uid: winner[0].uid, hand: h.no, cards: null, done: false, until: 0 };
+  if(gpOn('showMuck') && h.players.some(canShow)) tb.show = { hand: h.no, picks: {}, closed: new Set(), done: false, until: 0 };
 }
 // How long the result stays up. A set pause is the time from the pot being pushed to the next deal (the table always
 // idles 1.2 s between hands); a showdown never gets less than today's 4.5 s so the hands can be read.
 const resultMs = (x, showdown, offer, base) => {
   const ms = x ? (showdown ? Math.max(4500, x * 1000 - 1200) : Math.max(800, x * 1000 - 1200)) : base;
-  return offer ? Math.max(ms, 2500) : ms; // the winner needs a moment to decide
+  return offer ? Math.max(ms, 2500) : ms; // players need a moment to decide
 };
 async function resultWait(tb, h, base){
   const s = tb.show && tb.show.hand === h.no ? tb.show : null, ms = resultMs(pauseSec(), h.result.showdown, !!s, base);
@@ -280,19 +282,23 @@ async function resultWait(tb, h, base){
   while(running && !tb.broken){ const left = Math.max(end0, hfh.on ? 0 : s.until) - Date.now(); if(left <= 0) break; await sleep(Math.min(left, 100)); }
   s.done = true;
 }
-// The winner of an uncontested pot shows one card, both, or mucks. Only once the pot is awarded and before the next deal.
+// After the pot is awarded and before the next deal, a player shows one card, the other, or both, only their own and
+// only by their own request. Shown cards stay shown; the winner of an uncontested pot may also muck (closes the offer).
 function show(uid, msg){
   const tb = msg && tables.get(msg.tid), s = tb && tb.show, h = tb && tb.g.hand;
-  if(!s || s.done || s.cards || s.uid !== uid || !tb.inHand || !h || !h.result || h.no !== msg.hand || s.hand !== h.no) return false;
+  if(!s || s.done || !tb.inHand || !h || !h.result || h.no !== msg.hand || s.hand !== h.no || s.closed.has(uid)) return false;
+  const p = h.players.find(q => q.uid === uid);
+  if(!p || !canShow(p)) return false;
   const pick = Array.isArray(msg.cards) ? msg.cards : null;
   const ok = pick && pick.length <= 2 && pick.every(i => i === 0 || i === 1) && new Set(pick).size === pick.length;
   if(!ok) return false;
-  s.cards = pick.slice().sort();
-  if(pick.length) s.until = Date.now() + 2000 * SPEED; else s.done = true;
+  const had = s.picks[uid] || [], now = [...new Set(had.concat(pick))].sort();
+  if(!pick.length || now.length === 2) s.closed.add(uid);
+  if(now.length > had.length){ s.picks[uid] = now; s.until = Date.now() + 2000 * SPEED; }
   publish(tb);
   return true;
 }
-const shownByChoice = (tb, h, p) => { const s = tb.show; return s && s.cards && s.cards.length && s.hand === h.no && s.uid === p.uid && h.result ? [0, 1].map(j => s.cards.includes(j) ? E.cardStr(p.cards[j]) : null) : null; };
+const shownByChoice = (tb, h, p) => { const s = tb.show, k = s && s.hand === h.no && h.result && s.picks[p.uid]; return k && k.length ? [0, 1].map(j => k.includes(j) ? E.cardStr(p.cards[j]) : null) : null; };
 
 async function ask(tb, p, L){
   await waitUnpaused();
@@ -550,7 +556,7 @@ function snapshot(tb){
     result: res ? { lines: resultLines(g, h), winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null,
     note: tb.note || '',
     ...(res && h.rabbit ? { rabbit: h.rabbit.map(E.cardStr) } : {}),
-    ...(res && tb.show && tb.show.hand === h.no ? { showOffer: { uid: tb.show.uid, done: !!(tb.show.done || tb.show.cards) } } : {})
+    ...(res && tb.show && tb.show.hand === h.no ? { showOffer: { done: !!tb.show.done, can: tb.show.done ? [] : h.players.filter(p => canShow(p) && !tb.show.closed.has(p.uid)).map(p => p.uid) } } : {})
   };
 }
 function cardsFor(tid, uid){

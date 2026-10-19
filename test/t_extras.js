@@ -117,23 +117,25 @@ async function makeClub(s, n){
   await until(() => owner.club.tourney.status === 'running' && owner.club.myTable === null && owner.club.tables.length);
   const tid = owner.club.tables[0].tid;
   owner.send({ t: 'watch', tid }); // the owner is a spectator here
-  // winners answer the offer in turn: one card, the other, both, muck; then try again (must be ignored)
-  const picks = [[0], [1], [0, 1], []], chosen = {}; let tries = 0, earlyTries = 0;
+  // players answer offers in turn: one card, the other, both, keep hidden; then ask again (a muck or a full show is
+  // final; repeating a one-card show must not reveal the other card)
+  const picks = [[0], [1], [0, 1], []], chosen = {}; let tries = 0, earlyTries = 0, n = 0;
   ps.forEach(c => c.onTable = tb => {
-    const key = tb.tid + '#' + tb.handNo;
-    if(tb.showOffer && tb.showOffer.uid === c.id && !tb.showOffer.done && !chosen[key]){
-      const pick = picks[Object.keys(chosen).length % 4]; chosen[key] = { uid: c.id, pick };
+    const key = tb.tid + '#' + tb.handNo, me = tb.seats.find(s => s && s.uid === c.id);
+    if(tb.result && tb.showOffer && (tb.showOffer.can || []).includes(c.id) && !(chosen[key] && chosen[key][c.id])){
+      const pick = picks[n++ % 4]; (chosen[key] = chosen[key] || {})[c.id] = { pick, folded: !!(me && me.folded) };
       c.send({ t: 'show', tid: tb.tid, hand: tb.handNo, cards: pick });
-      setTimeout(() => c.send({ t: 'show', tid: tb.tid, hand: tb.handNo, cards: [0, 1] }), 5); // a second answer
+      setTimeout(() => c.send({ t: 'show', tid: tb.tid, hand: tb.handNo, cards: pick.length === 1 ? pick : [0, 1] }), 5); // a second answer
     }
-    // a loser (or anyone mid-hand) asking to show is ignored
-    if(tb.result && tb.showOffer && tb.showOffer.uid !== c.id && tb.seats.some(s => s && s.uid === c.id) && tries++ % 3 === 0) c.send({ t: 'show', tid: tb.tid, hand: tb.handNo, cards: [0, 1] });
+    // a player whose hand is already face up (showdown), or who isn't offered, asking to show changes nothing
+    if(tb.result && tb.showOffer && !(tb.showOffer.can || []).includes(c.id) && me && tries++ % 3 === 0) c.send({ t: 'show', tid: tb.tid, hand: tb.handNo, cards: [0, 1] });
     if(!tb.result && tb.phase === 'hand' && earlyTries++ % 5 === 0) c.send({ t: 'show', tid: tb.tid, hand: tb.handNo, cards: [0, 1] });
   });
-  await until(() => Object.keys(chosen).length >= 16 && owner.msgs.filter(m => m.rabbit).length >= 8, 90000);
+  const nChosen = () => Object.values(chosen).reduce((a, o) => a + Object.keys(o).length, 0);
+  await until(() => nChosen() >= 24 && Object.values(chosen).some(o => Object.values(o).some(v => v.folded && v.pick.length)) && owner.msgs.filter(m => m.rabbit).length >= 8, 90000);
   owner.send({ t: 'pause' }); await sleep(300);
   // everything every viewer saw
-  let rabbits = 0, early = 0, badRabbit = 0, badOffer = 0, shownOk = 0, shownBad = 0;
+  let rabbits = 0, early = 0, badRabbit = 0, badOffer = 0, shownOk = 0, shownBad = 0, foldedOk = 0;
   const all = cs.flatMap(c => c.msgs.map(m => [c, m]));
   for(const [c, tb] of all){
     if(tb.rabbit){
@@ -141,24 +143,28 @@ async function makeClub(s, n){
       if(!tb.result || tb.result.showdown || ![3, 4].includes(tb.board.length) || tb.rabbit.length !== 5 - tb.board.length || tb.rabbit.some(x => tb.board.includes(x))) badRabbit++;
     }
     if(!tb.result && (tb.rabbit || tb.showOffer)) early++;
-    if(tb.showOffer && (!tb.result || tb.result.showdown)) badOffer++;
-    // a card shown by choice: only by that hand's winner, only the cards they picked, and they must be the real cards
+    // nobody whose hand is already face up (showdown, all-in) is offered
+    if(tb.showOffer && (tb.showOffer.can || []).some(uid => { const s = tb.seats.find(x => x && x.uid === uid); return !s || (s.shown && !s.folded && tb.result.showdown); })) badOffer++;
+    // a card face up outside today's rules: only by its holder's pick, only the cards they picked, the real cards
     tb.seats.forEach(s => {
-      if(!s || !s.shown || (tb.result && tb.result.showdown)) return;
-      const ch = chosen[tb.tid + '#' + tb.handNo], holder = cs.find(x => x.id === s.uid), real = holder && holder.cards[tb.tid + '#' + tb.handNo];
-      const good = ch && ch.uid === s.uid && tb.result && real && [0, 1].every(j => ch.pick.includes(j) ? s.shown[j] === real[j] : s.shown[j] === null);
-      if(good) shownOk++; else shownBad++;
+      if(!s || !s.shown || (!s.folded && (!tb.result || tb.result.showdown))) return;
+      const ch = chosen[tb.tid + '#' + tb.handNo] && chosen[tb.tid + '#' + tb.handNo][s.uid], holder = cs.find(x => x.id === s.uid), real = holder && holder.cards[tb.tid + '#' + tb.handNo];
+      const good = ch && tb.result && real && [0, 1].every(j => ch.pick.includes(j) ? s.shown[j] === real[j] : s.shown[j] === null);
+      if(good){ shownOk++; if(s.folded) foldedOk++; } else shownBad++;
     });
   }
   ok(rabbits > 0 && badRabbit === 0, `rabbit shown only after an early finish, right count, not on the board (${rabbits} views, ${badRabbit} bad)`);
   ok(early === 0, 'no rabbit card or show offer before the pot is awarded');
-  ok(badOffer === 0, 'show offer only after a pot won without showdown');
-  ok(shownOk > 0 && shownBad === 0, `shown cards are exactly the winner's pick, seen by every viewer incl. the spectator (${shownOk} ok, ${shownBad} bad)`);
-  ok(owner.msgs.some(tb => tb.seats.some(s => s && s.shown && !(tb.result && tb.result.showdown))), 'the spectator saw a card shown by choice');
-  const mucked = Object.entries(chosen).filter(([, v]) => !v.pick.length).map(([k]) => k);
-  ok(mucked.length > 0 && !all.some(([, tb]) => mucked.includes(tb.tid + '#' + tb.handNo) && tb.seats.some(s => s && s.shown && !(tb.result && tb.result.showdown))), 'a muck shows nothing, even after a second request');
-  const one = Object.entries(chosen).filter(([, v]) => v.pick.length === 1).map(([k]) => k);
-  ok(!all.some(([, tb]) => one.includes(tb.tid + '#' + tb.handNo) && tb.seats.some(s => s && s.shown && s.shown.every(x => x) && !(tb.result && tb.result.showdown))), 'show one stays one card after a second request');
+  ok(badOffer === 0, 'show offer never includes a hand already face up');
+  ok(shownOk > 0 && shownBad === 0, `shown cards are exactly the holder's pick, seen by every viewer incl. the spectator (${shownOk} ok, ${shownBad} bad)`);
+  ok(foldedOk > 0, `folded players' chosen cards reach every viewer (${foldedOk} seat views)`);
+  ok(owner.msgs.some(tb => tb.seats.some(s => s && s.shown && s.folded)), 'the spectator saw a folded player\'s card shown by choice');
+  const byPick = len => Object.entries(chosen).flatMap(([k, o]) => Object.entries(o).filter(([, v]) => v.pick.length === len).map(([uid]) => [k, uid]));
+  const seatIn = (tb, uid) => tb.seats.find(s => s && s.uid === uid);
+  const mucked = byPick(0);
+  ok(mucked.length > 0 && !all.some(([, tb]) => mucked.some(([k, uid]) => k === tb.tid + '#' + tb.handNo && (s => s && s.shown && (s.folded || (tb.result && !tb.result.showdown)))(seatIn(tb, uid)))), 'keeping cards hidden shows nothing, even after a second request');
+  const one = byPick(1);
+  ok(one.length > 0 && !all.some(([, tb]) => one.some(([k, uid]) => k === tb.tid + '#' + tb.handNo && (s => s && s.shown && s.shown.every(x => x != null) && (s.folded || (tb.result && !tb.result.showdown)))(seatIn(tb, uid)))), 'show one stays one card after a repeated request');
   const chips = await (await fetch(on.base + '/debug/chips')).json();
   ok(chips.chips === chips.expected, `chips conserved (${chips.chips} / ${chips.expected})`);
   // cancel to reveal the seed, then check the recorded rabbit cards against the deck

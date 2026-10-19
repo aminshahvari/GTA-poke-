@@ -1801,5 +1801,7 @@ body{background:var(--lx-ink)}
 /* table extras: rabbit-hunt cards read as "never dealt"; show/muck buttons use four columns */
 .card.board.rabbit{opacity:.5;filter:saturate(.6);outline:1px dashed rgba(214,180,106,.7);outline-offset:-1px}
 .preacts.showmuck{grid-template-columns:repeat(4,1fr)}
+.preacts.showmuck.n3{grid-template-columns:repeat(3,1fr)}
+.preacts.showmuck.n1{grid-template-columns:1fr}
 .preacts.showmuck button{color:var(--text,#fff)}
 .preacts.showmuck button:disabled{opacity:.45}

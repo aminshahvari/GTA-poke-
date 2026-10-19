@@ -1,13 +1,14 @@
 // Table extras in the browser (phone size): the Director form offers them only where the server allows them,
-// the winner of an uncontested pot gets Show left / Show right / Show both / Muck, a spectator sees exactly the shown
-// cards, and rabbit-hunt cards appear faded in the empty board slots after a hand ends on the flop or turn.
+// after a hand every player whose cards are face down gets Show left / Show right / Show both (the winner of an
+// uncontested pot also Muck), a spectator sees exactly the shown cards (a folded player's too), and rabbit-hunt cards appear faded in the empty board slots after a hand ends on the flop or turn.
 // Real timing (no FAST) so the show window is as long as on the live site; players act after 1.5 s.
-// Usage: node test/ui/t_extras_ui.js [screenshot dir]
+// Usage: [VP=844x390] node test/ui/t_extras_ui.js [screenshot dir]   (VP: the phone size, default 390x844 portrait)
 const path = require('path'), net = require('net');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 const SHOTS = process.argv[2];
+const VP = (process.env.VP || '390x844').split('x').map(Number);
 const ROOT = path.join(__dirname, '..', '..');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let fails = 0, oks = 0;
@@ -23,7 +24,7 @@ async function boot(env){
   const post = (p, body, tok) => fetch(base + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body || {}) }).then(r => r.json());
   return { port, base, post };
 }
-async function signedIn(browser, s, tok, [w, h] = [390, 844]){
+async function signedIn(browser, s, tok, [w, h] = VP){
   const pg = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await pg.goto(s.base + '/'); await pg.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), tok);
   await pg.reload(); await pg.evaluate(() => document.fonts.ready); await sleep(500);
@@ -63,8 +64,8 @@ const optionsOnForm = pg => pg.evaluate(() => ['nShow', 'nRabbit', 'nPause'].map
   const dpg = await signedIn(browser, s, dir.token);
   await dpg.click('#tabs [data-tab=director]'); await sleep(400);
   check((await optionsOnForm(dpg)).every(Boolean), 'staging: Show or muck, Rabbit hunt and Pause fields on the form');
-  check(await dpg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'staging: form has no sideways scroll at 390px');
-  if(SHOTS){ await dpg.locator('#nShow').scrollIntoViewIfNeeded(); await dpg.screenshot({ path: path.join(SHOTS, 'extras-form-390.png') }); }
+  check(await dpg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'staging: form has no sideways scroll at ' + VP[0] + 'px');
+  if(SHOTS){ await dpg.locator('#nShow').scrollIntoViewIfNeeded(); await dpg.screenshot({ path: path.join(SHOTS, 'extras-form-' + VP.join('x') + '.png') }); }
   await dpg.selectOption('#nShow', 'on'); await dpg.selectOption('#nRabbit', 'on'); await dpg.selectOption('#nPause', '4');
   await dpg.fill('#nName', 'Extras Night'); await dpg.selectOption('#nLate', '0');
   await dpg.click('#newForm button[type=submit]'); await sleep(800);
@@ -93,7 +94,7 @@ const optionsOnForm = pg => pg.evaluate(() => ['nShow', 'nRabbit', 'nPause'].map
   await dpg.click('[data-watch]');
   await sleep(800);
   let sawRabbit = false, sawOffer = 0, sawSpecShown = { both: false, one: false }, offerChecks = [];
-  for(let i = 0; i < 700 && !(sawRabbit && sawSpecShown.both && sawSpecShown.one); i++){
+  for(let i = 0; i < 700 && !(sawRabbit && sawSpecShown.both && sawSpecShown.one && sawSpecShown.folded); i++){
     await sleep(250);
     const r = await dpg.evaluate(() => ({ rabbit: document.querySelectorAll('#board .card.board.rabbit').length, board: document.querySelectorAll('#board .card.board:not(.rabbit)').length,
       fit: [...document.querySelectorAll('#board .card')].every(c => { const b = c.getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth; }), sx: document.documentElement.scrollWidth <= innerWidth }));
@@ -101,28 +102,30 @@ const optionsOnForm = pg => pg.evaluate(() => ['nShow', 'nRabbit', 'nPause'].map
       sawRabbit = true;
       check(r.rabbit === 5 - r.board && [3, 4].includes(r.board), `spectator sees ${r.rabbit} rabbit card(s) after a ${r.board}-card board`);
       check(r.fit && r.sx, 'rabbit cards fit the screen, no sideways scroll');
-      if(SHOTS) await dpg.screenshot({ path: path.join(SHOTS, 'extras-rabbit-390.png') });
+      if(SHOTS) await dpg.screenshot({ path: path.join(SHOTS, 'extras-rabbit-' + VP.join('x') + '.png') });
     }
     const btns = await ppg.$$eval('#controls [data-show]', bs => bs.map(b => { const r = b.getBoundingClientRect(); return { t: b.textContent, h: r.height, in: r.left >= 0 && r.right <= innerWidth }; }));
-    if(btns.length === 4){
+    if(btns.length >= 3){
       sawOffer++;
-      offerChecks.push(btns.every(b => b.h >= 40 && b.in) && btns.map(b => b.t).join('|') === 'Show left|Show right|Show both|Muck');
-      if(SHOTS && sawOffer === 1) await ppg.screenshot({ path: path.join(SHOTS, 'extras-show-390.png') });
+      const won = btns.length === 4;
+      offerChecks.push(btns.every(b => b.h >= 40 && b.in) && btns.map(b => b.t).join('|') === 'Show left|Show right|Show both' + (won ? '|Muck' : ''));
+      if(SHOTS && sawOffer === 1) await ppg.screenshot({ path: path.join(SHOTS, 'extras-show-' + VP.join('x') + '.png') });
       const pick = !sawSpecShown.both ? 'Show both' : 'Show left';
       await ppg.click(`#controls [data-show]:has-text("${pick}")`).catch(() => {});
       // the spectator's view of the browser player's seat
       for(let k = 0; k < 12; k++){
         await sleep(100);
-        const n = await dpg.evaluate(uid => { const s = document.querySelector(`.seat[data-uid="${uid}"]`); return s ? s.querySelectorAll('.hole .card.show').length : -1; }, b1.id);
-        if(pick === 'Show both' && n === 2){ sawSpecShown.both = true; break; }
-        if(pick === 'Show left' && n === 1){ sawSpecShown.one = true; break; }
+        const v = await dpg.evaluate(uid => { const s = document.querySelector(`.seat[data-uid="${uid}"]`); return s ? { n: s.querySelectorAll('.hole .card.show').length, folded: s.classList.contains('folded') } : { n: -1 }; }, b1.id);
+        if(pick === 'Show both' && v.n === 2){ sawSpecShown.both = true; if(v.folded) sawSpecShown.folded = true; break; }
+        if(pick === 'Show left' && v.n === 1){ sawSpecShown.one = true; if(v.folded) sawSpecShown.folded = true; break; }
       }
-      if(SHOTS && sawSpecShown.both && !sawSpecShown.one) await dpg.screenshot({ path: path.join(SHOTS, 'extras-spectator-shown-390.png') });
+      if(SHOTS && sawSpecShown.both && !sawSpecShown.one) await dpg.screenshot({ path: path.join(SHOTS, 'extras-spectator-shown-' + VP.join('x') + '.png') });
       await sleep(600);
     }
   }
   check(sawRabbit, 'rabbit hunt cards appeared on the spectator\'s table');
-  check(sawOffer >= 2 && offerChecks.every(Boolean), `winner got Show left / Show right / Show both / Muck, 44px-ish and on screen (${sawOffer} offers)`);
+  check(sawOffer >= 2 && offerChecks.every(Boolean), `player got Show left / Show right / Show both (+ Muck when winning uncontested), 44px-ish and on screen (${sawOffer} offers)`);
+  check(!!sawSpecShown.folded, 'spectator saw a folded player\'s chosen card');
   check(sawSpecShown.both, 'spectator saw both cards after Show both');
   check(sawSpecShown.one, 'spectator saw exactly one card after Show left');
   await browser.close();
