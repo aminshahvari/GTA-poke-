@@ -705,21 +705,25 @@ function tableGeo(n, bet = '8,888'){
   // than the last bit of width)
   // sideways the seats at the bottom corners carry their badge under the plate, so the bottom keeps room for that too
   const LAND = $('game').classList.contains('land');
-  const shapes = W < 470 ? [[1.2, 1], [1.3, 1], [1.2, 0], [1.3, 0]] : [[0, 0]];
+  // (upright, each look first tries a clear oval a third taller than wide (or a quarter), narrowing the felt a little
+  // when the screen is short; on a screen too short for that an oval lying across, clearly wider than tall; only
+  // when neither seats everyone cleanly the broader felt of before, k 1.2-1.3. Never the nearly round in-between.)
+  const BROAD = [[1.2, 1, 0], [1.3, 1, 0], [1.2, 0, 0], [1.3, 0, 0]];
+  const shapes = W < 470 ? (LAND ? BROAD : [[1.35, 1, 1], [1.35, 0, 1], [1.25, 1, 1], [1.25, 0, 1], [.78, 1, 0], [.78, 0, 0], [.82, 1, 0], [.82, 0, 0], ...BROAD]) : [[0, 0, 0]];
   const looks = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3], ['micro', 1], ['micro', .6], ['micro', .3]])
-    .flatMap(([l, q]) => shapes.map(([k, inset]) => [l, q, k, inset, 1.18]))
+    .flatMap(([l, q]) => shapes.map(([k, inset, nar]) => [l, q, k, inset, 1.18, nar]))
     // (the micro seats may also give up some of the extra room either side of yours, for the seats along the top)
-    .concat(n >= 6 ? [['micro', .6], ['micro', .3]].flatMap(([l, q]) => shapes.map(([k, inset]) => [l, q, k, inset, 1.06])) : []);
+    .concat(n >= 6 ? [['micro', .6], ['micro', .3]].flatMap(([l, q]) => shapes.map(([k, inset, nar]) => [l, q, k, inset, 1.06, nar])) : []);
   let best = null;
-  for(const [look, sq, k, inset, g] of looks){ const L = layout(look, sq, false, k, inset, g); if(!best || L.cost <= best.cost) best = L; if(!L.cost) break; }
+  for(const [look, sq, k, inset, g, nar] of looks){ const L = layout(look, sq, false, k, inset, g, nar); if(!best || L.cost <= best.cost) best = L; if(!L.cost) break; }
   // no clean layout anywhere: search the roomiest look that seats everyone harder, for the fewest overlaps
-  if(best.cost) best = layout(best.look, best.sq, true, best.k, best.inset, best.g);
+  if(best.cost) best = layout(best.look, best.sq, true, best.k, best.inset, best.g, best.nar);
   GEO = { ...best, key, W, H, betAt: k => best.bets[k], dealerAt: k => best.dealers[k] };
   if(GEOS.size > 12) GEOS.delete(GEOS.keys().next().value);
   if(a.clientWidth) GEOS.set(key, GEO);
   return GEO;
 
-  function layout(look, sq, thorough, k, inset, g){
+  function layout(look, sq, thorough, k, inset, g, nar){
     const S = seatSizes(a, look, bet), mini = look === 'mini' || look === 'micro', compact = look !== '';
     const ext = bs => ({ hw: Math.max(...bs.map(([x, , w]) => Math.abs(x) + w)), up: Math.max(...bs.map(([, y, , h]) => h - y)), down: Math.max(...bs.map(([, y, , h]) => y + h)) });
     const se = ext(S.seat), he = ext(S.hero);
@@ -730,10 +734,14 @@ function tableGeo(n, bet = '8,888'){
     const ins = inset ? Math.round(Math.min(se.hw * .4, 18)) : 0;
     const top = Math.max(se.up + (LAND ? 8 : 2) - rail / 2, look ? 0 : 50), bot = Math.max((LAND ? Math.max(he.down, se.down) + 8 : he.down + 4) - rail / 2, look ? 0 : 64), side = Math.max(se.hw + 2, look ? 0 : 46) - ins;
     let fw = Math.min(W - 2 * side + rail, 760), fh = H - top - bot;
-    // a real table's proportions: on a phone held upright a broad oval only a little taller than wide (the
+    // a real table's proportions: on a phone held upright a clear oval, half again as tall as wide (the
     // height left over is shared above and below it); long when there's room; on a wide screen the shape stays
     // the same when the area grows or shrinks a little between hands
-    if(W < 470) fh = Math.min(fh, fw * k);
+    // (when the screen is too short for that, the felt gets narrower rather than rounder: it always reads as an oval)
+    if(W < 470){ const fw0 = fw; fh = Math.min(fh, fw * k); if(nar) fw = Math.min(fw, Math.round(fh / k));
+      // (an upright oval that would have to get much narrower than the screen allows is skipped: on a short screen
+      // the table lies across instead, clearly wider than tall, rather than ending up round or thin)
+      if(nar && fw < fw0 * .82) return { look, sq, k, inset, g, nar, cost: 1e9 }; }
     else fh = Math.min(fh, Math.max(fw / 1.4, Math.min(fw / 1.2, 370)));
     fw = Math.max(fw, 140); fh = Math.max(fh, 120);
     const cx = W / 2, cy = top + (H - top - bot) / 2;
@@ -770,6 +778,7 @@ function tableGeo(n, bet = '8,888'){
     const middle = (by, side) => { const bx = bxOf(side); return [[bx, by, boardHalf, bh], side ? [bx - boardHalf - 8 - pw0 / 2, by, pw0 / 2, ph0 / 2, 1] : [bx, by - bh - 6 - ph0 / 2, pw0 / 2, ph0 / 2, 1], [bx, by + bh + 6 + mh / 2, mw / 2, mh / 2, 1]]; };
     const sides = pw0 + 8 + 2 * boardHalf <= fw - 2 * rail - 12 ? [false, true] : [false];
     // seats that touch each other mean this look is too big for the area
+    const hull = bs => { const l = Math.min(...bs.map(([x, , w]) => x - w)), r = Math.max(...bs.map(([x, , w]) => x + w)), t = Math.min(...bs.map(([, y, , h]) => y - h)), d = Math.max(...bs.map(([, y, , h]) => y + h)); return [(l + r) / 2, (t + d) / 2, (r - l) / 2, (d - t) / 2]; };
     const touch = (A, B) => A.some(([x, y, w, h]) => B.some(([X, Y, ww, hh]) => Math.abs(x - X) < w + ww + 1 && Math.abs(y - Y) < h + hh + 1));
     let clash = 0;
     for(let i = 0; i < n; i++) for(let j = i + 1; j < n; j++) if(touch(seatBoxes[i], seatBoxes[j])) clash++;
@@ -840,10 +849,13 @@ function tableGeo(n, bet = '8,888'){
     // a clean layout: the board where it belongs, else a little higher or lower; chips placed seat by seat round
     // the table, the other way round, or top seats first; then the same with a size smaller chip labels
     const round = seats.map((q, i) => i), orders = [round, [0].concat(round.slice(1).reverse()), round.slice().sort((i, j) => seats[i].y - seats[j].y)];
-    const geo = { look, sq, k, inset, g, compact, mini, rail, cx, cy, tall, msgW: msgHalf * 2, fw, fh, seats, bw };
+    const geo = { look, sq, k, inset, g, nar, compact, mini, rail, cx, cy, tall, msgW: msgHalf * 2, fw, fh, seats, bw };
     if(!clash) for(const side of sides) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]) for(const dy of [0, -10, 10, -20, 20]){
       const by = by0 + dy, mid = middle(by, side);
-      if(seatBoxes.some(b => touch(b, mid))) continue;
+      // (the board with room to spare: the pot, board and message are drawn as one stack centred on `by`, so the board
+      // itself can sit up to half the difference between the pot's and the message's heights off it;
+      // and each seat taken as one block, its cards and name plate together, against the board)
+      if(seatBoxes.some(b => touch(b, mid) || touch([hull(b)], [[mid[0][0], mid[0][1], mid[0][2] + 2, mid[0][3] + Math.abs(ph0 - mh) / 2 + 2]]))) continue;
       for(const order of orders){ const L = solve(lab, seatBoxes.flat().concat(mid), order, true); if(L) return { ...geo, cost: 0, by, bx: bxOf(side), tight, potSide: side, bets: L.bets, dealers: L.dealers }; }
     }
     // nothing clean: when searching hard, the least crowded way of all; else just say how far off this look is
@@ -1203,9 +1215,10 @@ function renderTable(){
   }
   $('board').innerHTML = b;
   const lines = res ? res.lines : d.note ? [d.note] : d.seats.filter(Boolean).length < 2 ? ['Waiting for players to be moved to this table…'] : [];
-  // the felt keeps room for one line here (see tableGeo); a longer result is cut there, and the full result is
-  // written in the bar under the table (renderControls); the full text is also the title
-  $('msg').innerHTML = lines.map(l => `<div>${esc(l)}</div>`).join(''); $('msg').title = lines.join('\n');
+  // the felt keeps room for one line here (see tableGeo); the full result is written in the bar under the table
+  // (renderControls); the full text is also the title
+  // (a result keeps its short part here, who won how much, so it is never cut off; the hand's name is in the bar)
+  $('msg').innerHTML = lines.map(l => `<div>${esc(res ? l.split(' · ')[0] : l)}</div>`).join(''); $('msg').title = lines.join('\n');
   const LY = layoutOf(d), posOf = LY.posOf, G = LY.G;
   area.style.setProperty('--bw', G.bw + 'px');
   const felt = area.querySelector('.felt');
@@ -1719,6 +1732,9 @@ function showTip(kind, title, text){
   tipTimer = setTimeout(() => { el.hidden = true; }, kind === 'mind' ? 14000 : 10000);
 }
 $('coachTip').onclick = () => { $('coachTip').hidden = true; clearTimeout(tipTimer); };
+// the coach's tips show in the bar under the table (where the helper and the action buttons are), never over the
+// cards and seats; a tip is put away when it's your turn
+$('dock').appendChild($('coachTip'));
 const MINDSET = [
   'Judge yourself on decisions, not results. A good fold that would have won is still a good fold.',
   'You will lose with the best hand about one time in five. That is the game, not bad luck aimed at you.',
