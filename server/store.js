@@ -98,4 +98,18 @@ const freeze = () => { frozen = true; };
 const health = () => ({ mode: file ? 'file' : pool ? 'postgres' : null, epoch, leaseLost: lost, dirty: dirty.size,
   lastWriteError: lastWriteError && { message: lastWriteError.message, ageMs: Date.now() - lastWriteError.at } });
 
-module.exports = { init, get, set, del, keys, values, flush, freeze, health, onLost: fn => { onLost = fn; } };
+// noMain guard. A later release (club switching) can create accounts that belong only to another club; they carry
+// noMain: true. This code has only the main club, so for it such an account does not exist: get/keys/values never
+// return it or its picture, so it is not listed, cannot sign in (by name or with an old session token), cannot join a
+// table, chat, use the Exchange or rewards; set/del leave it untouched, so turning club switching back on finds it intact.
+// Every other key and every account without noMain goes through unchanged.
+const hidden = k => { const u = k.startsWith('user:') ? cache.get(k) : k.startsWith('avatar:') ? cache.get('user:' + k.slice(7)) : null; return !!(u && u.noMain); };
+const shown = {
+  get: k => hidden(k) ? undefined : get(k),
+  set: (k, v) => hidden(k) ? v : set(k, v),
+  del: k => { if(!hidden(k)) del(k); },
+  keys: prefix => keys(prefix).filter(k => !hidden(k))
+};
+shown.values = prefix => shown.keys(prefix).map(k => cache.get(k));
+
+module.exports = { init, ...shown, flush, freeze, health, onLost: fn => { onLost = fn; } };
