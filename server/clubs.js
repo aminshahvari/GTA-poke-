@@ -8,7 +8,7 @@ const path = require('path');
 const Module = require('module');
 const store = require('./store');
 
-const ON = () => process.env.CLUB_SWITCHING === '1' || process.env.STAGING === '1';
+const ON = store.switching; // CLUB_SWITCHING=1 or STAGING=1 (server/store.js)
 const MAIN = 'main';
 
 // load a fresh copy of one of our server files, with some of its requires replaced
@@ -48,7 +48,7 @@ const all = () => [MAIN, ...(ON() ? store.keys('clubdef:').map(k => k.slice(8)).
 // the clubs an account belongs to (raw account record from the plain store)
 function memberships(u){
   if(!u) return [];
-  if(!ON()) return u.removed ? [] : [MAIN];
+  if(!ON()) return u.removed || u.noMain ? [] : [MAIN]; // noMain: only in another club, never in main
   const out = [];
   if(!u.noMain && !u.removed) out.push(MAIN);
   for(const [id, m] of Object.entries(u.clubs || {})) if(m && !m.removed && def(id)) out.push(id);

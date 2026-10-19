@@ -154,4 +154,22 @@ function scoped(cid){
   return s;
 }
 
-module.exports = { init, get, set, del, keys, values, flush, freeze, health, onLost: fn => { onLost = fn; }, scoped };
+// Club switching is on with CLUB_SWITCHING=1 or STAGING=1 (server/clubs.js uses this same test).
+const switching = () => process.env.CLUB_SWITCHING === '1' || process.env.STAGING === '1';
+
+// noMain guard (club switching off, the rollback case). With the flag off the main club uses this plain store, so an
+// account that belongs only to another club (noMain: true) must not exist for it: get/keys/values never return it or
+// its picture, so it is not listed, cannot sign in (by name or with an old session token), cannot join a table, chat,
+// use the Exchange or rewards; set/del leave it untouched, so turning club switching back on finds it intact.
+// The same guard is in the production line (branch nomain-guard). With the flag on, the plain store is unchanged and
+// clubs see accounts through scoped() above, which hides noMain accounts from main the same way.
+const hidden = k => { const u = k.startsWith('user:') ? cache.get(k) : k.startsWith('avatar:') ? cache.get('user:' + k.slice(7)) : null; return !!(u && u.noMain) && !switching(); };
+const shown = {
+  get: k => hidden(k) ? undefined : get(k),
+  set: (k, v) => hidden(k) ? v : set(k, v),
+  del: k => { if(!hidden(k)) del(k); },
+  keys: prefix => keys(prefix).filter(k => !hidden(k))
+};
+shown.values = prefix => shown.keys(prefix).map(k => cache.get(k));
+
+module.exports = { init, ...shown, flush, freeze, health, onLost: fn => { onLost = fn; }, scoped, switching };
