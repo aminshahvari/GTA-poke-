@@ -1990,3 +1990,6 @@ body{background:var(--lx-ink)}
 #game.ovl .seat.hero .card.hero+.card.hero{transform:rotate(4deg)}
 #game.ovl .seat.hero .badge{left:calc(100% + 6px);bottom:auto;top:50%;transform:translateY(-50%)}
 #game .table-area.oval .felt::after{top:var(--wm,74%)}
+/* (the raise panel's presets, five of them with All-in, stay one row between the - and + steps) */
+#game.ovl .sz-presets{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px}
+#game.ovl .sz-presets button{font-size:clamp(11px,3.3vw,12.5px);line-height:1.05;white-space:normal;letter-spacing:0;padding:0 2px}

@@ -1001,11 +1001,15 @@ function potToWinners(d, handKey, LY){
   const [px, py] = br.width ? [br.left + br.width / 2 - ar.left, br.top - ar.top - 12] : centerPx(), still = reducedMotion(), bb = (d.blinds && d.blinds[1]) || 1;
   d.seats.forEach((p, s) => {
     if(!p || !(p.won > 0)) return;
-    const [bx, by] = LY.betOf(s), el = document.createElement('div');
+    let [bx, by] = LY.betOf(s); const el = document.createElement('div');
     el.className = 'winpile num'; el.dataset.hand = handKey;
-    el.style.cssText = `left:${bx}px;top:${by}px`;
     el.innerHTML = `<span class="wglow"></span><span class="wstack">${chipStacks(p.won, bb)}</span><span class="wamt">+${fmt(p.won)}</span>`;
     fx.appendChild(el);
+    // (the pile is taller than the chips' spot: it moves that much further in, towards the pot, so it never lies over
+    // the seat or your cards behind that spot)
+    const grow = Math.max(0, el.offsetHeight / 2 - 11), gl = Math.hypot(px - bx, py - by) || 1;
+    bx += (px - bx) / gl * grow; by += (py - by) / gl * grow;
+    el.style.cssText = `left:${bx}px;top:${by}px`;
     if(still){ el.classList.add('settled'); return; }
     const dx = px - bx, dy = py - by, lift = Math.min(60, Math.hypot(dx, dy) * .18);
     el.querySelectorAll('.wcol').forEach((c, i) => c.animate([

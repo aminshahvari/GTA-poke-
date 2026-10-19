@@ -79,6 +79,9 @@ function measure(){
   // (on the oval the raise panel takes the timer's row: the timer is a thin line along its top, without +30s)
   const ovalSizing = document.getElementById('game').classList.contains('ovl') && !!document.querySelector('#controls .sizing');
   for(const el of controls){ if(ovalSizing && el.classList.contains('xtime')) continue; const r = R(el); if(r.t < 0 || r.l < -0.5 || r.b > vh + 0.5 || r.r > vw + 0.5 || r.b - r.t < 1) out.push(`control ${el.id || el.className || el.tagName} not fully on screen (${r.l.toFixed(0)},${r.t.toFixed(0)})-(${r.r.toFixed(0)},${r.b.toFixed(0)}) in ${vw}x${vh}`); }
+  // upright on a phone the raise panel's presets stand in one row
+  const pre = [...document.querySelectorAll('#game.ovl #controls .sz-presets button')];
+  if(pre.length && pre.some(b => Math.abs(R(b).t - R(pre[0]).t) > 1)) out.push(`raise presets not in one row (${pre.map(b => b.textContent).join(' / ')})`);
   const helper = document.getElementById('helper'); if(!helper.hidden){ const r = R(helper); if(r.b > R(document.getElementById('controls')).t + 0.5) out.push('helper overlaps the action bar'); }
   const doc = document.scrollingElement; if(doc.scrollHeight > vh + 1 || doc.scrollWidth > vw + 1) out.push(`page scrolls (${doc.scrollWidth}x${doc.scrollHeight})`);
   return { area: `${Math.round(area.r - area.l)}x${Math.round(area.b - area.t)}`, over, out, bets: document.querySelectorAll('#seats .bet').length, seats: document.querySelectorAll('#seats .seat').length };
