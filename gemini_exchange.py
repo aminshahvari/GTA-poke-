@@ -3,10 +3,10 @@
 
 Sends ONE bounded prompt to the Gemini Developer API using the stored
 `custom.gemini` credential (authd surrogate -- never the raw key) and
-returns the model's text. Text generation on gemini-2.5-flash.
+returns the model's text. Text generation on gemini-3-flash-preview (owner-approved 2026-10-19: the 2.5 family returns 404 on this account).
 
 Usage:
-  gemini_exchange.py ask --prompt "..." [--model gemini-2.5-flash]
+  gemini_exchange.py ask --prompt "..." [--model gemini-3-flash-preview]
                          [--max-tokens 2048] [--file OUT.md]
 
 Cost note: text calls are fractions of a cent at Flash rates, but they
@@ -62,7 +62,7 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("ask")
     a.add_argument("--prompt", required=True)
-    a.add_argument("--model", default="gemini-2.5-flash")
+    a.add_argument("--model", default="gemini-3-flash-preview")
     a.add_argument("--max-tokens", type=int, default=2048)
     a.add_argument("--file", default=None, help="also write the reply to this file")
     args = ap.parse_args()
