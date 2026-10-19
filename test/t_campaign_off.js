@@ -37,7 +37,8 @@ const strip = v => JSON.parse(JSON.stringify(v, (k, x) => ['now', 'version', 'pu
   const a = (await post(base, '/api/redeem', { code: personal, name: 'Alice', pin: '1111', agree: true })).body.token;
   const camp = (await post(base, '/api/campaign', { source: 'celestia', max: 10, hours: 24 }, owner)).body.code;
   ok(camp && (await post(base, '/api/vmap', { slug: 'celestia', code: camp }, owner)).body.ok, 'with campaigns on: a campaign link and a path exist');
-  ok((await post(base, '/api/redeem', { code: camp, name: 'Bea', pin: '2222', agree: true, email: 'bea@example.com', emailOk: true })).body.token, 'with campaigns on: someone joined through it with an email');
+  const consent = (await post(base, '/api/campaignInfo', { code: camp })).body.consent;
+  ok((await post(base, '/api/redeem', { code: camp, name: 'Bea', pin: '2222', agree: true, consent, email: 'bea@example.com', emailOk: true })).body.token, 'with campaigns on: someone joined through it with an email');
   await stop(srv);
 
   srv = await start(path.join(__dirname, '..'), port, DATA);
@@ -49,6 +50,7 @@ const strip = v => JSON.parse(JSON.stringify(v, (k, x) => ['now', 'version', 'pu
   const v = await fetch(base + '/v/celestia', { redirect: 'manual' }), nf = await fetch(base + '/no-such-file', { redirect: 'manual' });
   eq([v.status, await v.text(), v.headers.get('location')], [nf.status, await nf.text(), null], '/v/celestia is an unknown path (no redirect)');
   ok((await post(base, '/api/redeem', { code: camp, name: 'Cid', pin: '3333', agree: true })).body.error, 'a campaign invite left in the data cannot be redeemed');
+  ok((await post(base, '/api/redeem', { code: camp, name: 'Cid', pin: '3333', agree: true, consent })).body.error, 'not even with a consent token issued while campaigns were on');
   const fresh = (await post(base, '/api/invite', {}, owner)).body.code;
   ok((await post(base, '/api/redeem', { code: fresh, name: 'Dee', pin: '4444', agree: true })).body.token, 'ordinary invite links still work');
   const ov = await view(base, owner), mv = await view(base, a), oj = JSON.stringify(ov), mj = JSON.stringify(mv);

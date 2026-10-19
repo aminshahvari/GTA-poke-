@@ -62,6 +62,28 @@ const FORBIDDEN = /partner|discount|prize|reward|guarantee|% off|free (drink|mea
       if(SHOTS){ await p.waitForTimeout(800); await p.screenshot({ path: `${SHOTS}/lounge-${w}.png` }); }
       await c.close(); n++;
     }
+    // fail closed (client): if the campaign lookup fails (network or server error), the page must NOT fall back to the
+    // ordinary join form; it offers Try again / Sign in, and Try again then shows the consent page.
+    {
+      const c = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+      await c.route(/fonts\.(googleapis|gstatic)/, r => r.abort());
+      let mode = 'abort';
+      await c.route('**/api/campaignInfo', r => mode === 'abort' ? r.abort() : mode === '500' ? r.fulfill({ status: 500, body: 'oops' }) : r.continue());
+      const p = await c.newPage();
+      for(const m of ['abort', '500']){
+        mode = m;
+        await p.goto(BASE + '/join/' + code); await p.waitForSelector('#authForm:not([hidden]) #cRetry');
+        assert(!(await p.isVisible('#welcome')) && (await p.locator('#aName').count()) === 0 && (await p.locator('#wJoin:visible').count()) === 0);
+        ok(`campaign lookup ${m === 'abort' ? 'network failure' : 'server error'}: no join form and no "Accept invitation" fallback`);
+      }
+      mode = 'pass'; await p.click('#cRetry'); await p.waitForSelector('#authForm:not([hidden]) #cAgree'); ok('Try again then shows the welcome and consent page');
+      // a consent token the server no longer accepts (for example after a restart) sends the joiner back to the consent page
+      await p.check('#cAgree'); await p.click('#cGo'); await p.waitForSelector('#aName');
+      await p.evaluate(() => { const f = window.fetch; window.fetch = (u, o) => { if(String(u).includes('/api/redeem') && o && o.body){ const j = JSON.parse(o.body); j.consent = 'c1.' + 'A'.repeat(43); o = { ...o, body: JSON.stringify(j) }; } return f(u, o); }; });
+      await p.fill('#aName', 'Stale390'); await p.fill('#aPin', '2468'); await p.click('#authForm button[type=submit]');
+      await p.waitForSelector('#authForm:not([hidden]) #cAgree'); assert(!(await p.isChecked('#cAgree'))); ok('a refused consent token returns to the consent page, box unticked');
+      await c.close();
+    }
     const v = await ownerView(own), row = v.campaigns[0], src = v.campaignSources.find(x => x.source === 'celestia');
     assert.deepStrictEqual([src.visits, row.joined, row.emails, row.played, row.returned], [3, 3, 1, 0, 0]); ok('Director report: 3 scans, 3 joined, 1 email, 0 played, 0 returned (nothing invented)');
     assert(src.views >= 3); ok('Director report: welcome views counted (' + src.views + ')');

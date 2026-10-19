@@ -32,7 +32,12 @@ function session(token){
     const api = { send: async m => { ws.send(JSON.stringify(m)); await sleep(150); return api; }, view: () => view, error: () => err, close: () => ws.close() };
   });
 }
-const join = (code, name, ip) => post('/api/redeem', { code, name, pin: '4321', agree: true }, null, ip);
+// a campaign join must send back the consent token its welcome page received (fails closed otherwise); the token is
+// fetched once per link, like one phone opening the welcome page, so the welcome-view counts below stay exact
+const consents = new Map();
+const info = code => { if(!consents.has(code)) consents.set(code, post('/api/campaignInfo', { code })); return consents.get(code); };
+const consentOf = async code => (await info(code)).consent;
+const join = async (code, name, ip) => post('/api/redeem', { code, name, pin: '4321', agree: true, consent: await consentOf(code) }, null, ip);
 const campaign = (token, source, max, hours) => post('/api/campaign', { source, max, hours }, token);
 
 (async () => {
@@ -77,16 +82,19 @@ const campaign = (token, source, max, hours) => post('/api/campaign', { source, 
 
   // ---- campaign info, cap, no tournament sign-up ----
   eq(await post('/api/campaignInfo', { code: camp }).then(r => [r.campaign, r.open, r.source, r.venue]), [true, true, 'celestia', 'Celestia Restaurant & Lounge'], 'join page learns it is an open campaign link, its source and the venue line');
-  const info = await post('/api/campaignInfo', { code: camp });
-  eq(Object.keys(info).filter(k => k !== 'status').sort(), ['campaign', 'emailConsent', 'open', 'source', 'venue'], 'campaign info reveals nothing else (no code, cap, count or owner)');
+  const cinfo = await post('/api/campaignInfo', { code: camp });
+  eq(Object.keys(cinfo).filter(k => k !== 'status').sort(), ['campaign', 'consent', 'emailConsent', 'open', 'source', 'venue'], 'campaign info reveals nothing else (no code, cap, count or owner); consent is the page\'s consent token');
+  ok(/^c1\.[A-Za-z0-9_-]{43}$/.test(cinfo.consent) && !cinfo.consent.includes(camp), 'the consent token is versioned and does not carry the code');
+  const ck = cinfo.consent;
   eq((await post('/api/campaignInfo', { code: group })).campaign, false, 'a group link is not a campaign link');
   eq((await post('/api/campaignInfo', { code: 'nope' })).campaign, false, 'an unknown code reveals nothing');
-  ok((await post('/api/redeem', { code: camp, name: 'No Tick', pin: '4321' })).error.includes('tick'), 'campaign join needs the consent box');
+  ok((await post('/api/redeem', { code: camp, name: 'No Tick', pin: '4321', consent: ck })).error.includes('tick'), 'campaign join needs the consent box');
+  ok(/welcome page/.test((await post('/api/redeem', { code: camp, name: 'No Consent', pin: '4321', agree: true })).error), 'campaign join without the welcome page\'s consent token is refused');
   // ---- the optional email: its own consent box, validated, never required ----
-  ok(/email box/.test((await post('/api/redeem', { code: camp, name: 'Mail NoOk', pin: '4321', agree: true, email: 'a@example.com' })).error), 'an email without its consent box is refused');
-  ok(/does not look right/.test((await post('/api/redeem', { code: camp, name: 'Mail Bad', pin: '4321', agree: true, email: 'not-an-email', emailOk: true })).error), 'a malformed email is refused');
-  const c1 = await post('/api/redeem', { code: camp, name: 'Camp One', pin: '4321', agree: true, email: 'one@example.com', emailOk: true });
-  const c2 = await post('/api/redeem', { code: camp, name: 'Camp Two', pin: '4321', agree: true, email: '', emailOk: true }), c3 = await join(camp, 'Camp Three');
+  ok(/email box/.test((await post('/api/redeem', { code: camp, name: 'Mail NoOk', pin: '4321', agree: true, consent: ck, email: 'a@example.com' })).error), 'an email without its consent box is refused');
+  ok(/does not look right/.test((await post('/api/redeem', { code: camp, name: 'Mail Bad', pin: '4321', agree: true, consent: ck, email: 'not-an-email', emailOk: true })).error), 'a malformed email is refused');
+  const c1 = await post('/api/redeem', { code: camp, name: 'Camp One', pin: '4321', agree: true, consent: ck, email: 'one@example.com', emailOk: true });
+  const c2 = await post('/api/redeem', { code: camp, name: 'Camp Two', pin: '4321', agree: true, consent: ck, email: '', emailOk: true }), c3 = await join(camp, 'Camp Three');
   ok(c1.token && c2.token && c3.token, 'three people joined with the campaign link');
   ok((await join(camp, 'Camp Four')).error, 'cap of 3 holds');
   eq((await post('/api/campaignInfo', { code: camp })).open, false, 'a full campaign link reads as closed');
@@ -180,7 +188,7 @@ const campaign = (token, source, max, hours) => post('/api/campaign', { source, 
   eq((await get('/v/celestia')).headers.get('location'), '/join/' + live2, 're-pointing takes effect on the next scan (nothing cached)');
   // a scan, the welcome page and a join through the path are counted under celestia; the joiner is not signed up for the tournament
   const before = (await session(owner)).view().campaignSources.find(x => x.source === 'celestia');
-  await get('/v/celestia'); await post('/api/campaignInfo', { code: live2 });
+  await get('/v/celestia'); await info(live2);
   const vj = await join(live2, 'Via Path');
   const after = (await session(owner)).view(), srcRow = after.campaignSources.find(x => x.source === 'celestia');
   eq([srcRow.visits - before.visits, srcRow.views - before.views], [1, 1], 'one scan and one welcome view counted, no more');
@@ -206,7 +214,7 @@ const campaign = (token, source, max, hours) => post('/api/campaign', { source, 
   // what is stored for the email: only the address, the exact consent wording, its version and the time
   const uid1 = Object.values(db).find(x => x && x.name === 'Camp One' && x.salt).id, contact = db['contact:' + uid1];
   eq(Object.keys(contact).sort(), ['consent', 'email'], 'the contact record holds the email and its consent only');
-  eq([contact.consent.v, contact.consent.text, typeof contact.consent.at], [1, info.emailConsent, 'number'], 'the consent stored is the exact wording shown, with its version and time');
+  eq([contact.consent.v, contact.consent.text, typeof contact.consent.at], [1, cinfo.emailConsent, 'number'], 'the consent stored is the exact wording shown, with its version and time');
   ok(!Object.keys(db).some(k => k.startsWith('contact:') && db[k].email !== 'one@example.com'), 'nobody else has a contact record');
   ok(Object.keys(db).filter(k => k.startsWith('cstat:')).every(k => Object.keys(db[k]).every(f => ['visits', 'views'].includes(f) && Number.isInteger(db[k][f]))), 'counters are plain integers: no address, time or device');
   // a celestia member who comes back on a later day (within 30 days) counts once as returned
