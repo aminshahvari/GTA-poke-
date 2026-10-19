@@ -1910,3 +1910,4 @@ body{background:var(--lx-ink)}
 /* the extra-time button keeps a 44 px tap target in the column while its pill stays the usual slim size */
 #game.wpt .xtime,#game.wpt .xtime:disabled{background:none;border-color:transparent;position:relative;isolation:isolate}
 #game.wpt .xtime::before{content:'';position:absolute;inset:8px 0;z-index:-1;border-radius:999px;background:rgba(240,195,90,.12);border:1px solid rgba(240,195,90,.4)}
+#game.wpt .felt::after{top:var(--wm,50%)}

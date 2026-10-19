@@ -760,8 +760,9 @@ function tableGeo(n, bet = '8,888'){
     const lo = look || inset >= 2 ? 0 : 1, top = Math.max(se.up + (LAND ? 8 : 2) - rail / 2, lo * 50), bot = Math.max((LAND ? Math.max(he.down, se.down) + 8 : he.down + 4) - rail / 2, lo * 64), side = Math.max(se.hw + 2, lo * 46) - ins;
     let fw = Math.min(W - 2 * side + rail, 760), fh = H - top - bot;
     // (the WPT table: the felt spans the width with the side seats on its rail, from the top seat down past the bottom
-    // of the screen, so its lower corners are still felt where your seat and the action column stand)
-    const below = WPT ? Math.round((fw / 2 - rail / 2) * .5) : 0;
+    // of the screen by its whole round end, so its sides run straight to the bottom edge, where your seat and the action
+    // column stand)
+    const below = WPT ? Math.round(W / 2) : 0;
     if(WPT){ fw = Math.min(W - 8, 760); fh = H + below - top; }
     // a real table's proportions: on a phone held upright a clear oval, half again as tall as wide (the
     // height left over is shared above and below it); long when there's room; on a wide screen the shape stays
@@ -819,8 +820,9 @@ function tableGeo(n, bet = '8,888'){
         return { x: cx + x, y: cy + y, nx: vx / l, ny: vy / l }; })
       : Array.from({ length: n }, (_, i) => { const [x, y, nx, ny] = at(along(i)); return { x: cx + x, y: cy + y, nx, ny }; }));
     // on a long table the hero's cards reach into the felt, so the board sits a little higher
-    // (on the WPT table, halfway down the felt that shows above your seat and the action column)
-    const tall = fh > fw, by0 = WPT ? Math.round(top + (Math.min(heroTop, DB[1]) - top) * .56) : tall ? cy : cy - Math.min(28, fh * .08);
+    // (on the WPT table, halfway between the top of the felt and your cards, else as much higher as it must be to clear
+    // the action column)
+    const tall = fh > fw, by0 = WPT ? Math.round(top + (heroTop - top) * .5) : tall ? cy : cy - Math.min(28, fh * .08);
     // board cards sized to the felt so they never run into the seats' chips
     const bw = Math.max(mini ? 24 : 28, Math.min(mini ? 30 : compact ? 34 : 50, (fw - 2 * rail) * (tall ? .128 : .108), (rx - 54) / 2.5)), boardHalf = bw * 2.5 + 6, bh = bw * .7;
     const msgHalf = Math.min(140, rx - 48, (Math.min(fw - 2 * rail - 16, bw * 5 + 50)) / 2);
@@ -916,8 +918,8 @@ function tableGeo(n, bet = '8,888'){
     // a clean layout: the board where it belongs, else a little higher or lower; chips placed seat by seat round
     // the table, the other way round, or top seats first; then the same with a size smaller chip labels
     const round = seats.map((q, i) => i), orders = [round, [0].concat(round.slice(1).reverse()), round.slice().sort((i, j) => seats[i].y - seats[j].y)];
-    const geo = { look, sq, k, inset, g, nar, compact, mini, rail, cx, cy, tall, msgW: msgHalf * 2, fw, fh, seats, bw };
-    if(!clash) for(const side of sides) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]) for(const dy of [0, -10, 10, -20, 20]){
+    const geo = { look, sq, k, inset, g, nar, compact, mini, rail, cx, cy, tall, msgW: msgHalf * 2, fw, fh, seats, bw, low: WPT ? heroTop : 0 };
+    if(!clash) for(const side of sides) for(const [lab, tight] of [[S.bet, false], [S.tight, true]]) for(const dy of WPT ? [0, 10, -10, -20, -30, -40, -55, -70, -85, -100, -120, -140, -160] : [0, -10, 10, -20, 20]){
       const by = by0 + dy, mid = middle(by, side);
       // (the board with room to spare: the pot, board and message are drawn as one stack centred on `by`, so the board
       // itself can sit up to half the difference between the pot's and the message's heights off it;
@@ -1382,7 +1384,10 @@ function renderTable(){
   const LY = layoutOf(d), posOf = LY.posOf, G = LY.G;
   area.style.setProperty('--bw', G.bw + 'px');
   const felt = area.querySelector('.felt');
-  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px`;
+  // (the felt's name sits on the empty felt under the board: on the WPT table, whose felt runs on past the screen,
+  // halfway between the board and your cards)
+  const wm = G.low ? `;--wm:${((G.by + G.low) / 2 - (G.cy - G.fh / 2)) / G.fh * 100}%` : '';
+  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px${wm}`;
   area.querySelector('.center').style.cssText = `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
   $('msg').style.maxWidth = G.msgW + 'px';
   // a split or several pots can be longer than the felt's one line: then the same result in shorter words, until it
