@@ -1822,3 +1822,46 @@ body{background:var(--lx-ink)}
   #game.row1:not(.land) .sz-presets button{padding:6px 0}
   #game.row1:not(.land) .sz-slider .step{width:36px;height:36px;font-size:20px}
 }
+/* ---------- the WPT table (a phone held upright, not the shortest screens) ----------
+   The table area runs from the header to the bottom of the screen and the felt spans its width, its lower end going
+   on past the screen's edge. Your seat stands at the bottom left; the dock (helper and action buttons) is a narrow
+   column at the bottom right, over the felt, as tall as app.js reserves for it, and the seats are laid out round it
+   (tableGeo), so it never covers a seat, a card or the board. Colours and type stay as they are. */
+#game.wpt .table-area{margin:2px 0 0;overflow:hidden}
+#game.wpt .dock{position:absolute;right:calc(6px + var(--sa-r));bottom:calc(6px + var(--sa-b));width:var(--dock-w,184px);margin:0;padding:0;height:auto;justify-content:flex-end;pointer-events:none}
+#game.wpt .dock>*{pointer-events:auto}
+#game.wpt .dock .controls{min-height:0;padding:0;gap:6px;background:none}
+#game.wpt .dock .helper{height:auto;margin:0 0 6px;padding:6px 9px;font-size:12px;position:relative}
+#game.wpt .helper .h-top{gap:6px;align-items:center}
+#game.wpt .helper .h-name{font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#game.wpt .helper .h-eq{font-size:14px}
+#game.wpt .helper .h-eq small{display:none}
+#game.wpt .helper .h-more{font-style:normal;color:var(--lx-gold,#d8b46a);font-size:13px;line-height:1}
+#game.wpt .dock .helper.open{position:absolute;right:0;bottom:calc(100% + 6px);width:min(280px,calc(100vw - 12px));margin:0;gap:5px;font-size:12.5px;box-shadow:0 10px 26px rgba(0,0,0,.55);z-index:2}
+#game.wpt .dock .helper.open .h-eq small{display:inline}
+#game.wpt .dock .helper.open .h-line{-webkit-line-clamp:4}
+#game.wpt .turnrow{min-height:24px;gap:6px}
+#game.wpt .xtime{padding:3px 8px;font-size:12px}
+#game.wpt .act-main{grid-template-columns:1fr;gap:6px}
+#game.wpt .act-btn{min-height:44px;flex-direction:row;justify-content:space-between;padding:0 12px;border-radius:12px}
+#game.wpt .act-btn b{font-size:16px}
+#game.wpt .act-btn span{font-size:14px}
+#game.wpt .act-btn.raise span:not(.num){font-size:11px}
+#game.wpt .sizing~.act-main{grid-template-columns:1fr 1fr}
+#game.wpt .sizing~.act-main .act-btn{flex-direction:column;justify-content:center;gap:0;padding:0 6px}
+#game.wpt .sizing{padding:6px;gap:6px}
+#game.wpt .sz-presets{grid-template-columns:1fr 1fr;gap:5px}
+#game.wpt .sz-presets button{padding:6px 0;font-size:13px}
+#game.wpt .sz-presets button:last-child:nth-child(odd){grid-column:1/-1}
+#game.wpt .sz-slider{gap:6px}
+#game.wpt .sz-slider .step{width:32px;height:32px;font-size:18px}
+#game.wpt .info-line{font-size:12.5px;padding:4px 6px;line-height:1.35;background:rgba(7,11,20,.8);border:1px solid var(--lx-hair,rgba(255,255,255,.1));border-radius:10px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+#game.wpt .preacts,#game.wpt .preacts.showmuck.n1{grid-template-columns:1fr;gap:5px}
+#game.wpt .preacts.showmuck{grid-template-columns:1fr 1fr}
+#game.wpt .preacts button{min-height:36px;font-size:13px}
+#game.wpt .dock .controls,#game.wpt .sizing{grid-template-columns:minmax(0,1fr)}
+#game.wpt .sz-slider input{min-width:0;width:100%;flex:1}
+#game.wpt .turnrow .turnbar{min-width:0}
+#game.wpt .sizing~.act-main{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}
+#game.wpt .sizing~.act-main .act-btn b{font-size:14px;white-space:nowrap}
+#game .center .msg.up{top:auto;bottom:100%;margin:0 0 6px}
