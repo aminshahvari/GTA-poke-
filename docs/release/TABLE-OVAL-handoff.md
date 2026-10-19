@@ -40,7 +40,12 @@ Screenshot matrix (5 phones × 2 / 6 / 9 players, your turn): `docs/evidence/tab
 Other states: `393x852-hand-over.png`, `393x659-showdown.png`, `393x659-watching.png`, `390x844-raise-panel.png`, `852x393-landscape-helper.png` in the same folder.
 
 ## Tests on a clean `8881f80` checkout
-Running at the time of this commit; results follow in the Issue #4 comment. So far: t_table_layout 3962 ok, 34 failed (2 at 320x568 9 players = C3; 32 at 320x500, outside R8); t_social_play 630/0.
+All on a clean `git worktree` of `8881f80` (Chromium):
+- `npm test`: exit 0 (incl. rules, fair deal, t_extras 28/0, content and CSP tests).
+- t_table_layout 3962 ok, 34 failed: 2 at 320x568 9 players (C3), 32 at 320x500 (outside R8). Every other size, every player count: pass.
+- t_mobile_ux 71 ok, 2 failed: both 320x568 9 players (C3, the same seats touching).
+- t_table_small: 2 crowded layouts, both 320x568 9 players (C3).
+- t_social_play 630/0, t_stability 220/0, t_positions 356/0, t_premium_ui 296/0, t_hotfix 42/0, t_clubs_closed 25/0, t_welcome pass, t_extras_ui 13/0.
 
 ## Known limit (C3): 320×568, 9 players
 On the smallest phone at a full table, the two lowest left seats touch: Ben's action badge over Alexandra's card backs, and Ben's card backs over Christina's plate (R4d). Nothing is hidden that matters (names, stacks, the board, the pot and your seat stay clear).
