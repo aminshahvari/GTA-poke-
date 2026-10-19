@@ -134,7 +134,7 @@ With the flag off, the main context is the plain store (`server/clubs.js:25`), a
 
 Effect with the flag off (rollback by removing the flag): a `noMain` account cannot sign in ("Name or PIN is not right.", same as a wrong PIN), its old session token is treated as signed out everywhere, it is in no roster, profile, count, push list or table, its picture is 404, owner actions aimed at it do nothing, and a main invite cannot reuse its name. Accounts without `noMain` (main-only, and main + another club) are unaffected. The record, name, picture and sessions stay stored, so re-enabling the flag restores B exactly.
 
-The same guard (without the flag condition, since that line has no club switching) is on branch **`nomain-guard`** from `origin/main` `4423a07`: `server/store.js:101-115`, `package.json:9`, `test/t_nomain_guard.js`, `test/t_nomain_parity.js`, `docs/release/NOMAIN-GUARD-handoff.md`. So a rollback to the production line is also safe once that branch ships. Shipping it is a separate owner GO.
+The same guard (without the flag condition, since that line has no club switching) is on branch **`nomain-guard`** (commit `dd84e36`) from `origin/main` `4423a07`: `server/store.js:101-115`, `package.json:9`, `test/t_nomain_guard.js`, `test/t_nomain_parity.js`, `docs/release/NOMAIN-GUARD-handoff.md`. So a rollback to the production line is also safe once that branch ships. Shipping it is a separate owner GO.
 
 ### 7.3 Tests
 
