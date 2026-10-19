@@ -1595,6 +1595,10 @@ body{background:var(--lx-ink)}
 #game .chat-quick button{min-height:var(--lx-tap)}
 #game .coachtip{background:rgba(13,20,37,.97);border-color:var(--lx-hair2);border-left-color:var(--lx-gold)}
 #game .coachtip button{min-width:var(--lx-tap);min-height:var(--lx-tap)}
+/* the coach's tips sit in the bar under the table, just above the action buttons (the helper's place), not over the seats and cards */
+#game .dock>.coachtip{top:auto;bottom:calc(var(--ctl-h, 0px) + 4px);padding:7px 8px 7px 10px;font-size:12.5px;line-height:1.35}
+#game .dock>.coachtip b{font-size:13px}
+#game .dock>.coachtip button{min-height:32px}
 #game .h-eq.mid{color:var(--lx-gold)}
 /* the table keeps its room on short phones: these controls stay visually compact, and an invisible margin around each
    makes the touch area at least 44 px (tested by t_premium_ui with real hit-testing) */

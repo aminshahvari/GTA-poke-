@@ -3,9 +3,9 @@
 //  - no seat (its avatar, name plate, badge and cards) overlaps another seat or the board
 //  - every seat is inside the screen and inside the table area
 //  - your own cards and the Fold / Call / Raise buttons are on screen, and your cards are clear of the action bar
-//  - the felt's shape: on a phone held upright the oval is only a little taller than wide (height / width
-//    between FELT_MIN and FELT_MAX, 0.95-1.42; on a short upright screen, under 800 px, the dock and header leave
-//    less height, so down to FELT_SHORT 0.8 (443a27f measured 0.86-0.94 there too)); held sideways it is clearly wider than tall (at most 0.8)
+//  - the felt's shape: on a phone held upright an oval, height / width between FELT_MIN and FELT_MAX (0.75-1.55): a
+//    third taller than wide where the screen has the height, lying across (about 0.8) on a short screen such as an
+//    iPhone with Safari's bars showing; held sideways it is clearly wider than tall (at most 0.8)
 // The table state is written into the page's own socket (routeWebSocket), as t_stability does.
 // PLAYWRIGHT=/path/to/playwright-core CHROMIUM=/path/to/chromium node test/ui/t_table_layout.js
 //   ROOT=<dir> another checkout ("before")   REPORT=1 print without failing   SHOTS=<dir> a screenshot per case
@@ -24,12 +24,13 @@ const REPORT = process.env.REPORT === '1', SHOTS = process.env.SHOTS || '';
 // Sideways sizes: 956x440 / 932x430 Pro Max and Plus with Safari's bars hidden, 956x370 / 932x360 with the address
 // bar showing, 852x393 / 844x390 Pro and standard, 852x330 with the bar showing, 844x340 / 812x320 in-app browsers
 // (Instagram, WhatsApp) with their own bars, 667x375 and 568x320 the small ones.
-const DEF = '320x568,375x667,390x844,393x852,430x932,320x500,390x760,430x850,956x440,932x430,956x370@59,0,21,932x360@0,59,21,852x393@59,0,21,844x390,852x330,844x340,812x320@44,0,21,667x375@0,0,21,568x320';
+// (393x659, 430x739: iPhone 15 / 15 Pro Max upright with Safari's bars showing, the room a hand usually starts with)
+const DEF = '320x568,375x667,390x844,393x852,430x932,393x659,430x739,320x500,390x760,430x850,956x440,932x430,956x370@59,0,21,932x360@0,59,21,852x393@59,0,21,844x390,852x330,844x340,812x320@44,0,21,667x375@0,0,21,568x320';
 const SIZES = (process.env.SIZES || DEF).split(',').reduce((a, v) => { if(/^\d+x\d+/.test(v)) a.push(v); else a[a.length - 1] += ',' + v; return a; }, [])
   .map(v => { const [wh, ins] = v.split('@'), [w, h] = wh.split('x').map(Number), [l = 0, r = 0, b = 0] = ins ? ins.split(',').map(Number) : []; return [w, h, { l, r, b }, v]; })
   .filter(v => !process.env.ONLY || process.env.ONLY === v[3]);
 const NS = (process.env.NS || '2,3,4,5,6,7,8,9').split(',').map(Number);
-const FELT_MIN = .95, FELT_SHORT = .8, FELT_MAX = 1.42, LAND_MAX = .8;
+const FELT_MIN = .75, FELT_SHORT = .75, FELT_MAX = 1.55, LAND_MAX = .8;
 const api = async (p, body) => { const j = await (await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })).json(); if(j.error) throw new Error(p + ': ' + j.error); return j; };
 const fails = [];
 let oks = 0;
