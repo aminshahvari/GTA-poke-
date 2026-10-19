@@ -834,10 +834,11 @@ function tableGeo(n, bet = '8,888'){
           shx = side === 'l' ? Math.min(0, -g - 1 - (x + px + pw)) : Math.max(0, g + 1 - (x + px - pw)); }
         const ax = cx + x, ay = cy + y, pb = [ax + px + shx, ay + py + shy, pw, ph];
         return { x: ax, y: ay, nx, ny, side, sx: Math.round(shx), sy: Math.round(shy), boxes: [O[side][0].map((v, j) => j === 0 ? v + ax : j === 1 ? v + ay : v), pb] }; };
-      // (the lowest seats either side as low as they go clear of your seat, its cards and plate, 4 px apart)
-      const hero = S.hero.map(([dx, dy, w, h]) => [heroAt[0] + dx, heroAt[1] + dy, w + 4, h + 4]);
+      // (the lowest seats either side stay up on the felt's sides, facing across it, not round its foot beside you:
+      // no lower than where the rail starts to turn under, and 16 px clear of your seat, its cards and plate)
+      const hero = S.hero.map(([dx, dy, w, h]) => [heroAt[0] + dx, heroAt[1] + dy, w + 16, h + 16]);
       const near = (A, B) => A.some(([x, y, w, h]) => B.some(([X, Y, ww, hh]) => Math.abs(x - X) < w + ww && Math.abs(y - Y) < h + hh));
-      let d0 = 0; while(d0 < P / 2 && near(seatAt(d0).boxes, hero)) d0 += 2;
+      let d0 = 0; while(d0 < P / 2 && (at(d0)[3] > .25 || near(seatAt(d0).boxes, hero))) d0 += 2;
       const m = n - 1, R = P - 2 * d0;
       const opp = Array.from({ length: m }, (_, i) => { const q = seatAt(d0 + R * (m >= 4 ? i / (m - 1) : (i + .5) / m)), [[, , ], pb] = q.boxes;
         if(pb[0] - pb[2] < 0 || pb[0] + pb[2] > W || pb[1] - pb[3] < 0 || pb[1] + pb[3] > H) ovClash++;
@@ -1287,13 +1288,18 @@ function renderPlayNote(d){
 }
 // over the board's five empty slots (and, when no message is showing, the message line under them: the layout keeps
 // both clear of seats and chips), the text as large as fits there, on two lines or, if need be, three
+// (on the oval nothing but the game lies on the felt: there the notice stands in the dock, over the helper's line)
 function placePlayNote(el){
-  const area = $('tableArea').getBoundingClientRect(), slots = [...$('board').children].map(c => c.getBoundingClientRect());
+  let area = $('tableArea').getBoundingClientRect(); const slots = [...$('board').children].map(c => c.getBoundingClientRect());
   if(!slots.length) return hidePlayNote();
-  const l = Math.min(...slots.map(r => r.left)), t = Math.min(...slots.map(r => r.top)), r = Math.max(...slots.map(r => r.right));
+  let l = Math.min(...slots.map(r => r.left)), t = Math.min(...slots.map(r => r.top)), r = Math.max(...slots.map(r => r.right));
   let b = Math.max(...slots.map(r => r.bottom));
-  const msg = $('msg');
-  if(!msg.textContent.trim()){ const ms = getComputedStyle(msg), lh = parseFloat(ms.lineHeight) || parseFloat(ms.fontSize) * 1.3; b = Math.max(b, msg.getBoundingClientRect().top + lh); }
+  const msg = $('msg'), hp = $('helper');
+  const oval = $('tableArea').classList.contains('oval'), home = oval ? $('dock') : $('tableArea');
+  if(el.parentNode !== home) home.appendChild(el);
+  if(oval){ const d = $('dock').getBoundingClientRect(), h = !hp.hidden && hp.parentNode === $('dock') ? hp.getBoundingClientRect() : null;
+    area = d; l = h ? h.left : d.left + 8; r = h ? h.right : d.right - 8; t = h ? h.top : d.top; b = h ? Math.max(h.bottom, t + 36) : t + 36; }
+  else if(!msg.textContent.trim()){ const ms = getComputedStyle(msg), lh = parseFloat(ms.lineHeight) || parseFloat(ms.fontSize) * 1.3; b = Math.max(b, msg.getBoundingClientRect().top + lh); }
   el.style.cssText = `left:${l - area.left}px;top:${t - area.top}px;width:${r - l}px;height:${b - t}px`;
   const fits = () => el.scrollHeight <= el.clientHeight + .5 && el.scrollWidth <= el.clientWidth + .5;
   for(const wrap of [false, true]){

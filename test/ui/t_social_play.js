@@ -57,7 +57,7 @@ async function measure(pg){
     const line = document.getElementById('playLine'), note = document.getElementById('playNote'), ls = line && getComputedStyle(line);
     return {
       w: innerWidth, h: innerHeight,
-      area: r(document.getElementById('tableArea')), wpt: document.getElementById('game').classList.contains('wpt'), dock: r(document.getElementById('dock')), felt: r(document.querySelector('#tableArea .felt')),
+      area: r(document.getElementById('tableArea')), oval: document.getElementById('tableArea').classList.contains('oval'), dock: r(document.getElementById('dock')), felt: r(document.querySelector('#tableArea .felt')),
       seats, cards: all('#seats .hole .card'), bets: all('#tableArea .bet'), dealer: all('#tableArea .dealer'), pot: drawn(document.getElementById('pot')) && document.getElementById('pot').textContent ? r(document.getElementById('pot')) : null,
       board: u(all('#board .card')), slots: u(all('#board .slot, #board .card')), msg: txt(document.getElementById('msg')),
       buttons: all('#game button'), helper: drawn(document.getElementById('helper')) ? r(document.getElementById('helper')) : null,
@@ -133,10 +133,13 @@ function clashes(m, box){
     if(m.note){
       check(/free social play/i.test(m.note.text) && /no betting/i.test(m.note.text) && /no real money/i.test(m.note.text), `${tag}: notice says free social play, no betting, no real money ("${m.note.text}")`);
       check(!m.note.cut && m.note.font >= 10.95, `${tag}: notice text fits at 11 px or more (font ${m.note.font}px)`);
-      check(!!m.slots && m.note.box.l >= m.slots.l - 1 && m.note.box.r <= m.slots.r + 1 && Math.abs(m.note.box.t - m.slots.t) <= 1 && m.note.box.b <= m.slots.b + 24, `${tag}: notice sits over the board's empty slots (and the empty message line under them) only`);
+      // (on the oval, as the correction brief's R5 asks, nothing but the game lies on the felt: the notice stands in the
+      // dock, over the helper's line, clear of the felt)
+      if(m.oval) check(inside(m.note.box, m.dock, 1) && m.note.box.t >= m.felt.b - .5, `${tag}: notice in the dock, over the helper's line, off the felt (oval)`);
+      else check(!!m.slots && m.note.box.l >= m.slots.l - 1 && m.note.box.r <= m.slots.r + 1 && Math.abs(m.note.box.t - m.slots.t) <= 1 && m.note.box.b <= m.slots.b + 24, `${tag}: notice sits over the board's empty slots (and the empty message line under them) only`);
       const c = clashes(m, m.note.box);
       check(!c.length, `${tag}: notice clear of seats, cards, chips, dealer button, pot, result line and buttons${c.length ? ' — ' + c.join(', ') : ''}`);
-      check(inside(m.note.box, { l: 0, t: 0, r: m.w, b: m.h }) && inside(m.note.box, m.area), `${tag}: notice on screen, inside the table area`);
+      check(inside(m.note.box, { l: 0, t: 0, r: m.w, b: m.h }) && (m.oval || inside(m.note.box, m.area)), `${tag}: notice on screen${m.oval ? '' : ', inside the table area'}`);
     }
     await shot('start-notice');
     // your action buttons still work with the notice up (nothing blocks them)
@@ -173,7 +176,7 @@ function clashes(m, box){
       check(inside(m.line.box, { l: 0, t: 0, r: m.w, b: m.h }), `${tag}: line on screen`);
       // (the WPT column stands over the felt by design, laid out clear of every seat: there the line is only checked
       // to be in the column, and clear of everything on the table below)
-      check(inside(m.line.box, m.dock, .5) && (m.wpt || !hit(m.line.box, m.area, .5)), `${tag}: line inside the dock, never over the table area${m.wpt ? ' (WPT column)' : ''}`);
+      check(inside(m.line.box, m.dock, .5) && !hit(m.line.box, m.area, .5), `${tag}: line inside the dock, never over the table area`);
       const c = clashes(m, m.line.box);
       if(m.helper && hit(m.line.box, m.helper, .5)) c.push('helper');
       if(hit(m.line.box, m.board, .5)) c.push('board');
