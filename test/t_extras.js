@@ -49,7 +49,7 @@ async function makeClub(s, n){
   for(let i = 1; i <= n; i++){ const { code } = await post(s.base, '/api/invite', {}, own.token); toks.push((await post(s.base, '/api/redeem', { code, name: 'Player ' + i, pin: '4321', agree: true })).token); }
   return Promise.all(toks.map((tok, i) => new Promise(res => {
     const ws = new WebSocket(`ws://127.0.0.1:${s.port}/ws`, { headers: { 'x-forwarded-for': '10.1.' + i + '.1' } });
-    const c = { i, ws, id: null, club: null, msgs: [], cards: {}, offers: [], send: o => ws.send(JSON.stringify(o)) };
+    const c = { i, ws, tok, id: null, club: null, msgs: [], cards: {}, offers: [], send: o => ws.send(JSON.stringify(o)) };
     ws.on('open', () => c.send({ t: 'hello', token: tok, device: 'd' + i }));
     ws.on('message', raw => {
       const m = JSON.parse(raw);
@@ -119,7 +119,7 @@ async function makeClub(s, n){
   owner.send({ t: 'watch', tid }); // the owner is a spectator here
   // players answer offers in turn: one card, the other, both, keep hidden; then ask again (a muck or a full show is
   // final; repeating a one-card show must not reveal the other card)
-  const picks = [[0], [1], [0, 1], []], chosen = {}; let tries = 0, earlyTries = 0, n = 0;
+  const picks = [[0], [1], [0, 1], []], chosen = {}, earlySent = new Set(); let tries = 0, earlyTries = 0, n = 0;
   ps.forEach(c => c.onTable = tb => {
     const key = tb.tid + '#' + tb.handNo, me = tb.seats.find(s => s && s.uid === c.id);
     if(tb.result && tb.showOffer && (tb.showOffer.can || []).includes(c.id) && !(chosen[key] && chosen[key][c.id])){
@@ -129,13 +129,37 @@ async function makeClub(s, n){
     }
     // a player whose hand is already face up (showdown), or who isn't offered, asking to show changes nothing
     if(tb.result && tb.showOffer && !(tb.showOffer.can || []).includes(c.id) && me && tries++ % 3 === 0) c.send({ t: 'show', tid: tb.tid, hand: tb.handNo, cards: [0, 1] });
-    if(!tb.result && tb.phase === 'hand' && earlyTries++ % 5 === 0) c.send({ t: 'show', tid: tb.tid, hand: tb.handNo, cards: [0, 1] });
+    // a show sent mid-hand: refused while the hand is live. (If the hand ends while it is in flight, the server reads
+    // it after the result as the player's own request to show both; such hands are left out of the pick checks below.)
+    if(!tb.result && tb.phase === 'hand' && earlyTries++ % 5 === 0){ earlySent.add(tb.tid + '#' + tb.handNo + '#' + c.id); c.send({ t: 'show', tid: tb.tid, hand: tb.handNo, cards: [0, 1] }); }
   });
+  // reconnect mid-reveal: while a chosen card is face up, a fresh connection (the shower's own, and a spectator's)
+  // must get the same table state at once (sent on sign-in / watch, not left to the next table event), the shown cards included
+  const reconnects = []; let probing = false;
+  // (each reconnect comes from that member's own address: a shared address would link two accounts)
+  const firstTable = (who, watch) => new Promise(res => {
+    const tok = who.tok, ws = new WebSocket(`ws://127.0.0.1:${on.port}/ws`, { headers: { 'x-forwarded-for': '10.1.' + who.i + '.1' } });
+    const done = v => { clearTimeout(t); try{ ws.close(); }catch(e){} res(v); }, t = setTimeout(() => done(null), 3000);
+    ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', token: tok, device: 'd' + who.i })));
+    ws.on('message', raw => { const m = JSON.parse(raw); ws.prev = ws.last; ws.last = m.t; if(m.t === 'auth') ws.at = Date.now(); if(m.t === 'club' && watch) ws.send(JSON.stringify({ t: 'watch', tid: watch })); if(m.t === 'table' && (!watch || m.table.tid === watch)) done({ ...m.table, ms: Date.now() - ws.at, afterClub: ws.prev === 'club' }); });
+  });
+  owner.onTable = async tb => {
+    if(probing || reconnects.length >= 4 || !tb.result) return;
+    const s = tb.seats.find(x => x && x.shown && (x.folded || !tb.result.showdown)); if(!s) return;
+    const holder = ps.find(x => x.id === s.uid); if(!holder) return;
+    probing = true;
+    const [mine, spec] = await Promise.all([firstTable(holder), firstTable(owner, tb.tid)]);
+    const same = (v, seated) => v && v.ms < 150 && (!seated || v.afterClub) && v.handNo === tb.handNo && v.result && JSON.stringify((v.seats.find(x => x && x.uid === s.uid) || {}).shown) === JSON.stringify(s.shown);
+    reconnects.push({ ok: same(mine, true) && same(spec), late: !!(mine && mine.handNo !== tb.handNo) || !!(spec && spec.handNo !== tb.handNo) });
+    probing = false;
+  };
   const nChosen = () => Object.values(chosen).reduce((a, o) => a + Object.keys(o).length, 0);
-  await until(() => nChosen() >= 24 && Object.values(chosen).some(o => Object.values(o).some(v => v.folded && v.pick.length)) && owner.msgs.filter(m => m.rabbit).length >= 8, 90000);
+  await until(() => nChosen() >= 24 && Object.values(chosen).some(o => Object.values(o).some(v => v.folded && v.pick.length)) && owner.msgs.filter(m => m.rabbit).length >= 8 && reconnects.length >= 4, 90000);
   owner.send({ t: 'pause' }); await sleep(300);
+  const inWindow = reconnects.filter(r => !r.late);
+  ok(inWindow.length >= 2 && inWindow.every(r => r.ok), `reconnect mid-reveal: the shower and a spectator get the shown cards at once (${inWindow.filter(r => r.ok).length}/${inWindow.length} in-window probes ok, ${reconnects.length - inWindow.length} landed after the next deal)`); console.log('reconnect probes', JSON.stringify(reconnects));
   // everything every viewer saw
-  let rabbits = 0, early = 0, badRabbit = 0, badOffer = 0, shownOk = 0, shownBad = 0, foldedOk = 0;
+  let rabbits = 0, early = 0, badRabbit = 0, badOffer = 0, shownOk = 0, shownBad = 0, foldedOk = 0, lateOwn = 0; const lateHands = new Set();
   const all = cs.flatMap(c => c.msgs.map(m => [c, m]));
   for(const [c, tb] of all){
     if(tb.rabbit){
@@ -149,17 +173,21 @@ async function makeClub(s, n){
     tb.seats.forEach(s => {
       if(!s || !s.shown || (!s.folded && (!tb.result || tb.result.showdown))) return;
       const ch = chosen[tb.tid + '#' + tb.handNo] && chosen[tb.tid + '#' + tb.handNo][s.uid], holder = cs.find(x => x.id === s.uid), real = holder && holder.cards[tb.tid + '#' + tb.handNo];
-      const good = ch && tb.result && real && [0, 1].every(j => ch.pick.includes(j) ? s.shown[j] === real[j] : s.shown[j] === null);
-      if(good){ shownOk++; if(s.folded) foldedOk++; } else shownBad++;
+      const key = tb.tid + '#' + tb.handNo + '#' + s.uid;
+      const good = tb.result && real && ch && [0, 1].every(j => ch.pick.includes(j) ? s.shown[j] === real[j] : s.shown[j] === null);
+      // a mid-hand show-both still in flight when the result lands is the player's own request: allowed, real cards only
+      const late = !good && tb.result && real && earlySent.has(key) && [0, 1].every(j => s.shown[j] === null || s.shown[j] === real[j]);
+      if(late){ lateOwn++; lateHands.add(key); }
+      else if(good){ shownOk++; if(s.folded) foldedOk++; } else { shownBad++; if(process.env.DEBUG_EXTRAS && shownBad < 4) console.log('BAD', c.i, tb.tid, tb.handNo, JSON.stringify(s), JSON.stringify(ch), JSON.stringify(real), JSON.stringify(tb.result && tb.result.lines), tb.phase); }
     });
   }
   ok(rabbits > 0 && badRabbit === 0, `rabbit shown only after an early finish, right count, not on the board (${rabbits} views, ${badRabbit} bad)`);
   ok(early === 0, 'no rabbit card or show offer before the pot is awarded');
   ok(badOffer === 0, 'show offer never includes a hand already face up');
-  ok(shownOk > 0 && shownBad === 0, `shown cards are exactly the holder's pick, seen by every viewer incl. the spectator (${shownOk} ok, ${shownBad} bad)`);
+  ok(shownOk > 0 && shownBad === 0, `shown cards are exactly the holder's pick, seen by every viewer incl. the spectator (${shownOk} ok, ${shownBad} bad, ${lateOwn} from a mid-hand request that landed after the result)`);
   ok(foldedOk > 0, `folded players' chosen cards reach every viewer (${foldedOk} seat views)`);
   ok(owner.msgs.some(tb => tb.seats.some(s => s && s.shown && s.folded)), 'the spectator saw a folded player\'s card shown by choice');
-  const byPick = len => Object.entries(chosen).flatMap(([k, o]) => Object.entries(o).filter(([, v]) => v.pick.length === len).map(([uid]) => [k, uid]));
+  const byPick = len => Object.entries(chosen).flatMap(([k, o]) => Object.entries(o).filter(([uid, v]) => v.pick.length === len && !lateHands.has(k + '#' + uid)).map(([uid]) => [k, uid]));
   const seatIn = (tb, uid) => tb.seats.find(s => s && s.uid === uid);
   const mucked = byPick(0);
   ok(mucked.length > 0 && !all.some(([, tb]) => mucked.some(([k, uid]) => k === tb.tid + '#' + tb.handNo && (s => s && s.shown && (s.folded || (tb.result && !tb.result.showdown)))(seatIn(tb, uid)))), 'keeping cards hidden shows nothing, even after a second request');
