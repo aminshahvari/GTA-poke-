@@ -1,0 +1,57 @@
+PASS db_failure: state after db outage + restart is consistent
+  note: writes that failed while db was down: 3
+  note: persisted tourney.places=["u056b3030b003","u0455244aec63","u57b432018dfd"] remaining=5; live seated=["u00e6e3bec89b","u451906024131","u026172f6b05b","u546bafc20bc0","uaf431e1179db"] (sum 80000)
+  note: restarted server resumed=true; seated now=5 chips=80000/80000
+  note: final results rows=8 for entrants=8, duplicate uids=0
+  note: cause: per-key async upserts with no transaction (server/store.js:39-47); tourney and live written separately (server/club.js:337 then :347)
+PASS finish_crash: result recorded exactly once in both crash points
+  note: A: died {"code":null,"signal":"SIGKILL"}; db had tourney.status=finished, history row=true, live row=false; restart resumed=false; history rows after=1
+  note: B: died {"code":null,"signal":"SIGKILL"}; db had tourney.status=finished, history row=true, live row=false; restart resumed=false; history rows after=1
+  note: flush order = Set insertion order of dirty keys (server/store.js:41); no transaction across history:/tourney/live (server/club.js:436-438)
+PASS sigterm_mid_hand: state after SIGTERM + restart consistent
+  note: A(at bust): SIGTERM 0 ms after bust shown; exit={"code":0,"signal":null}; persisted places=1/1; restart chips 40000/40000
+  note: B(next hand): SIGTERM 39 ms after bust shown; exit={"code":0,"signal":null}; persisted places=1/1; restart chips 40000/40000
+  note: server flushes before exit: has a SIGTERM handler
+  note: an interrupted hand is replayed from starting stacks by design (server/club.js:157); only state not yet flushed is lost
+PASS duplicate_actions: 10 decisions, 20 duplicate sends + stale acts all ignored; points = history pts for all 5 members
+  note: total pts awarded 54 across 5 results; a rejected act gets no reply from the server (club.act returns false silently, server/index.js:309)
+PASS two_instances: only one instance dealt; state not clobbered
+  note: B resumed the running tournament on boot: true; A exit=null, A healthz {"status":503,"ok":false,"mode":"postgres","epoch":1,"leaseLost":true,"dirty":1,"lastWriteError":null}, A said: lease lost: epoch 2 held by vm:10154, ours was 1
+  note: hand numbers seen: A {"t1792385794030-1":2} -> {"t1792385794030-1":2}; B {"t1792385794030-1":23}
+  note: both report live tables: A 0 tables n/a (A fenced, answers 503) chips, B 1 tables 600000 chips; 115 db samples
+  note: before B1, players on A kept playing while B timed them out (away -> folds) and both wrote tourney/live rows
+PASS lease_fencing: stale-epoch flush rolled back; old instance closed sockets (4001), wrote nothing and stayed up fenced
+  note: invite on A answered {"status":200,"code":"_dKygBEexs8u"}; A exit=null; healthz A {"ok":true,"mode":"postgres","epoch":1,"leaseLost":false,"dirty":0,"lastWriteError":null} B {"ok":true,"mode":"postgres","epoch":2,"leaseLost":false,"dirty":0,"lastWriteError":null}
+  note: A said: lease lost: epoch 2 held by vm:10333, ours was 1
+PASS lease_lost_stays_alive: A stayed up 10 s after losing the lease: healthz 503 leaseLost, API 503, sockets 4001, nothing written
+  note: healthz {"status":503,"ok":false,"mode":"postgres","epoch":1,"leaseLost":true,"dirty":0,"lastWriteError":null}; API 503,503,503; new ws 4001
+PASS restart_pingpong: one handover (epoch 1 -> 2) in a 12 s overlap with a restarting supervisor; OLD stayed fenced, exited 0 on SIGTERM
+  note: epochs seen 2; restarts {"OLD":0,"NEW":0}; NEW healthz {"status":200,"ok":true,"mode":"postgres","epoch":2,"leaseLost":false,"dirty":0,"lastWriteError":null}; OLD exit {"code":0,"signal":null}
+PASS sigterm_after_loss: fenced A exited 0 in 13 ms on SIGTERM, no final save, nothing written; B healthy
+  note: exit {"code":0,"signal":null} after 13 ms
+PASS reconnect: server re-sent turn (same seq, legal, deadline) and cards on reconnect; act on new socket applied
+  note: send on dead socket: returned without error and the act went nowhere; deadline kept (not reset): true
+  note: server reply to a rejected act: none - no ack/nack for act (server/index.js:309), so a client cannot tell a lost act from a slow one
+PASS fair_after_interrupt: report verifies, non-void hand numbers contiguous, interrupted deal recorded as void and verifies
+  note: verifier: sealOk=true ok=4 bad=0 void=1 (all beacons local: NO_BEACON); 4 hand records
+  note: killed on t1792385836070-1 hand 3 after board Kc 4d 2h; restart replays it as hand 3 with a new deck; old deal kept as void
+PASS sessions_owner_reset: sessions behave
+  note: one address: 400,400,400,400,400,429; 12 addresses: 400,400,400,400,400,400,400,400,400,400,400,400; real owner from own address: 200
+  note: club-wide cap reached after 61 wrong codes in total
+
+test                   | result | expected  | verdict          | secs   | reason
+------------------------------------------------------------------------------------------------------------------------
+db_failure             | PASS   | PASS      | ok               | 2.9    | state after db outage + restart is consistent
+finish_crash           | PASS   | PASS      | ok               | 2.5    | result recorded exactly once in both crash points
+sigterm_mid_hand       | PASS   | PASS      | ok               | 3.4    | state after SIGTERM + restart consistent
+duplicate_actions      | PASS   | PASS      | ok               | 2.6    | 10 decisions, 20 duplicate sends + stale acts all ignored; points = history pts for all 5 members
+two_instances          | PASS   | PASS      | ok               | 7.4    | only one instance dealt; state not clobbered
+lease_fencing          | PASS   | PASS      | ok               | 2.1    | stale-epoch flush rolled back; old instance closed sockets (4001), wrote nothing and stayed up fenced
+lease_lost_stays_alive | PASS   | PASS      | ok               | 13.3   | A stayed up 10 s after losing the lease: healthz 503 leaseLost, API 503, sockets 4001, nothing written
+restart_pingpong       | PASS   | PASS      | ok               | 14.6   | one handover (epoch 1 -> 2) in a 12 s overlap with a restarting supervisor; OLD stayed fenced, exited 0 on SIGTERM
+sigterm_after_loss     | PASS   | PASS      | ok               | 3.3    | fenced A exited 0 in 13 ms on SIGTERM, no final save, nothing written; B healthy
+reconnect              | PASS   | PASS      | ok               | 1.4    | server re-sent turn (same seq, legal, deadline) and cards on reconnect; act on new socket applied
+fair_after_interrupt   | PASS   | PASS      | ok               | 2.1    | report verifies, non-void hand numbers contiguous, interrupted deal recorded as void and verifies
+sessions_owner_reset   | PASS   | PASS      | ok               | 1.6    | sessions behave
+
+12 tests: 12 pass, 0 fail (0 expected), 0 unexpected failures

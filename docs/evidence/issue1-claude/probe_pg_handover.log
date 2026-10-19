@@ -1,0 +1,18 @@
+ok   A: postgres mode, lease epoch 1
+ok   db before handover: 156 rows, tourney running, lease epoch 1
+ok   B: healthz 200, epoch 2
+ok   B: resumed running tournament from postgres
+ok   A: fenced after B took over (healthz 503, leaseLost true, dirty 2)
+ok   A logged "lease lost": store: lease lost: epoch 2 held by B:20187, ours was 1
+ok   A closed every player socket with 4001
+ok   A: API answers 503 after fencing
+ok   all players reconnect to B and are seated in the running tournament
+ok   accounts created on A sign in on B
+ok   B: chips conserved after handover (80000 / expected 80000; A had 80000)
+ok   db lease row held by B at epoch 2 (A never reclaimed)
+ok   B: SIGTERM -> final save done {"mode":"postgres","epoch":2,"leaseLost":false,"dirty":0,"lastWriteError":null}
+ok   C: epoch 3; boot line: store: postgres, 248 keys, lease epoch 3
+ok   owner signs in on C
+ok   tournament still running and everyone seated on C
+ok   fenced A exits 0 on SIGTERM without saving
+PG PROBE PASS
