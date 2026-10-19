@@ -699,9 +699,13 @@ function tableGeo(n, bet = '8,888'){
   // when the screen is short; on a screen too short for that an oval lying across, clearly wider than tall; only
   // when neither seats everyone cleanly the broader felt of before, k 1.2-1.3. Never the nearly round in-between.)
   const BROAD = [[1.2, 1, 0], [1.3, 1, 0], [1.2, 0, 0], [1.3, 0, 0]];
-  const shapes = W < 470 ? (LAND ? BROAD : [[1.35, 1, 1], [1.35, 0, 1], [1.25, 1, 1], [1.25, 0, 1], [.78, 1, 0], [.78, 0, 0], [.82, 1, 0], [.82, 0, 0], ...BROAD]) : [[0, 0, 0]];
-  const looks = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3], ['micro', 1], ['micro', .6], ['micro', .3]])
-    .flatMap(([l, q]) => shapes.map(([k, inset, nar]) => [l, q, k, inset, 1.18, nar]))
+  const OVAL = [[1.35, 1, 1], [1.35, 0, 1], [1.25, 1, 1], [1.25, 0, 1], [.78, 1, 0], [.78, 0, 0], [.82, 1, 0], [.82, 0, 0]];
+  const shapes = W < 470 ? (LAND ? BROAD : [...OVAL, ...BROAD]) : [[0, 0, 0]];
+  const sizes = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3], ['micro', 1], ['micro', .6], ['micro', .3]]);
+  // (upright on a phone, a clear oval with smaller seats comes before the broad felt with bigger ones, which on a
+  // short screen ends up nearly round; the broad felt is next, and only then the smallest (micro) seats)
+  const looks = (W < 470 && !LAND ? [[OVAL, sizes.filter(([l]) => l !== 'micro')], [BROAD, sizes.filter(([l]) => l !== 'micro')], [shapes, sizes.filter(([l]) => l === 'micro')]] : [[shapes, sizes]])
+    .flatMap(([sh, sz]) => sz.flatMap(([l, q]) => sh.map(([k, inset, nar]) => [l, q, k, inset, 1.18, nar])))
     // (the micro seats may also give up some of the extra room either side of yours, for the seats along the top)
     .concat(n >= 6 ? [['micro', .6], ['micro', .3]].flatMap(([l, q]) => shapes.map(([k, inset, nar]) => [l, q, k, inset, 1.06, nar])) : []);
   let best = null;
@@ -1147,8 +1151,12 @@ function newLock(d){
   // the smallest phones sideways (iPhone SE): your cards go back above your plate, smaller, so the bottom row of
   // a full table has the width it needs
   g.classList.toggle('land-s', land && window.innerWidth < 700);
-  // on the shortest screens the header is one row: the chat and Lobby buttons move up beside the clock
-  const hb = g.querySelector('.hdr-btns'), home = g.querySelector(H <= 600 ? '.clock' : '.stats');
+  // on short screens the header is one row: the chat and Lobby buttons move up beside the clock. Short is judged by
+  // the height with Safari's bars showing (svh), which is the room the table is laid out for: an iPhone upright in
+  // Safari (393x659, 430x739) gets the second row's height for the felt, so a full table is an oval, not round
+  const row1 = H <= 600 || Math.min(H, svhPx()) <= 760 && window.innerWidth < 600;
+  g.classList.toggle('row1', row1);
+  const hb = g.querySelector('.hdr-btns'), home = g.querySelector(row1 ? '.clock' : '.stats');
   if(hb && hb.parentNode !== home) home.appendChild(hb);
   LOCK = { w: g.clientWidth, hand, h: 0, iw: window.innerWidth, ih: H };
   return true;
@@ -1424,7 +1432,7 @@ function tickClock(){
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;
   // in the one-row header of the shortest screens the ante takes the second line, in place of the next level
-  const one = $('game').classList.contains('h600');
+  const one = $('game').classList.contains('row1');
   $('cBlinds').textContent = `${fmt(sb)}/${fmt(bb)}${an && !one ? ' · ante ' + fmt(an) : ''}`;
   $('cNext').textContent = one && an ? `Ante ${fmt(an)}` : `Next: ${fmt(nsb)}/${fmt(nbb)}${nan ? ' · ante ' + fmt(nan) : ''}`;
   const ms = T.paused ? T.pausedLeft : Math.max(0, T.levelEndsAt - now), s = Math.ceil(ms / 1000);
