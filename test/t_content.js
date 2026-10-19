@@ -6,6 +6,7 @@ const assert = require('assert');
 const fs = require('fs');
 const net = require('net');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('./ready');
 const WebSocket = require('ws');
 const content = require('../server/content');
 
@@ -167,8 +168,8 @@ const WORD = { link: /web address/, email: /email address/, phone: /phone number
 
 (async () => {
   const PORT = await freePort(); BASE = 'http://localhost:' + PORT;
-  srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUBS_DEFAULT: 'on' }, stdio: 'ignore' });
-  for(let i = 0; i < 40; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(150); }
+  srv = watchServer(spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUBS_DEFAULT: 'on' }, stdio: ['ignore', 'ignore', 'pipe'] }));
+  await waitReady(BASE, srv);
   const O = (await ok('setup', { code: 'secret', name: 'Director', pin: '1234', agree: true })).token;
   const join = async name => { const { code } = await ok('invite', {}, O); return (await ok('redeem', { code, name, pin: '1111', agree: true })).token; };
   const A = await join('Alex'), B = await join('Bea');

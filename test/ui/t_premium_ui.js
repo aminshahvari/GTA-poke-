@@ -10,12 +10,13 @@
 //   ROOT=<dir>      run against another checkout (for "before" screenshots); REPORT=1 prints findings without failing
 //   FONTS_DIR=<dir> serve real Google Fonts files (fonts.css + woff2 named like fonts.gstatic.com paths with / -> _)
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('../ready');
 const fs = require('fs'), path = require('path');
 const { chromium } = require(process.env.PLAYWRIGHT || process.env.PLAYWRIGHT_CORE || 'playwright');
 const ROOT = process.env.ROOT || path.join(__dirname, '..', '..');
 const PORT = 5200 + Math.floor(Math.random() * 80), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_premium_' + process.pid + '.json';
-const srv = spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const SHOTS = process.env.SHOTS || '', REPORT = process.env.REPORT === '1';
 const PHONES = [[320, 568], [375, 667], [390, 844], [430, 932]].filter(v => !process.env.ONLY || process.env.ONLY === v.join('x'));
@@ -120,7 +121,7 @@ const tableWS = pg => pg.routeWebSocket(/\/ws$/, ws => {
 });
 
 (async () => {
-  for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
+  await waitReady(BASE, srv);
   await sleep(400);
   const OWN = (await api('login', { name: 'Test Director', pin: '246810' })).token;
   const MEM = (await api('login', { name: 'Test Player 07', pin: '135777' })).token;

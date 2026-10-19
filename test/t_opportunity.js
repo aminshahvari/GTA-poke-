@@ -4,11 +4,12 @@
 const assert = require('assert');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('./ready');
 const WebSocket = require('ws');
 const PORT = 4200 + Math.floor(Math.random() * 50), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_opp_' + process.pid + '.json';
 const env = { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUBS_DEFAULT: 'on' };
-let srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env, stdio: 'ignore' });
+let srv = watchServer(spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function call(p, body, tok){
   const r = await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body || {}) });
@@ -30,7 +31,7 @@ const ids = r => r.items.map(x => x.id);
 const disk = () => JSON.parse(fs.readFileSync(DATA, 'utf8'));
 
 (async () => {
-  for(let i = 0; i < 40; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(150); }
+  await waitReady(BASE, srv);
   const O = (await ok('setup', { code: 'secret', name: 'Director', pin: '1234', agree: true })).token;
   const join = async name => { const { code } = await ok('invite', {}, O); return (await ok('redeem', { code, name, pin: '1111', agree: true })).token; };
   const A = await join('Alex'), B = await join('Bea'), Cc = await join('Cam'), D = await join('Dee'), E = await join('Eve'), F = await join('Fay');
@@ -90,8 +91,8 @@ const disk = () => JSON.parse(fs.readFileSync(DATA, 'utf8'));
   // expire it by moving its end date into the past on disk (restart the server with the edited file)
   srv.kill(); await sleep(400);
   const dd = disk(); dd['opp:' + c1.id].expiresAt = Date.now() - 1000; fs.writeFileSync(DATA, JSON.stringify(dd));
-  srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env, stdio: 'ignore' });
-  for(let i = 0; i < 40; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(150); }
+  srv = watchServer(spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env, stdio: ['ignore', 'ignore', 'pipe'] }));
+  await waitReady(BASE, srv);
   assert.ok(!ids(await ok('oppList', {}, D)).includes(c1.id), 'expired not in feed');
   assert.strictEqual(await status('oppGet', { id: c1.id }, D), 404);
   assert.strictEqual((await ok('oppMine', {}, Cc)).listings.find(x => x.id === c1.id).state, 'expired', 'poster sees expired');

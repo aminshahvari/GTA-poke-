@@ -4,6 +4,7 @@
 // tournament is paused with seating confirmed stable from the server, and every "got nothing" is proven with a per-socket
 // round-trip barrier (the server writes a broadcast to every socket before it answers any later request on that socket).
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('./ready');
 const path = require('path'), fs = require('fs'), os = require('os'), net = require('net');
 const WebSocket = require('ws');
 const ROOT = path.join(__dirname, '..');
@@ -18,11 +19,11 @@ async function until(f, what, ms = 15000){ const t0 = Date.now(); while(!f()){ i
   const PORT = await freePort(), base = `http://127.0.0.1:${PORT}`, dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-'));
   const env = { ...process.env, PORT: String(PORT), FAST: '1', NO_BEACON: '1', NO_PUSH: '1', DEBUG_CHIPS: '1', OWNER_CODE: 'secret', DATA_FILE: path.join(dir, 'club.json') };
   delete env.DATABASE_URL;
-  const srv = spawn(process.execPath, [path.join(ROOT, 'server', 'index.js')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'inherit'] });
+  const srv = watchServer(spawn(process.execPath, [path.join(ROOT, 'server', 'index.js')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] }), { forward: true });
   srv.stdout.on('data', d => process.env.VERBOSE && process.stdout.write(d));
   process.on('exit', () => { try{ srv.kill('SIGKILL'); }catch(e){} try{ fs.rmSync(dir, { recursive: true, force: true }); }catch(e){} });
   setTimeout(() => { console.log('FAIL chat test timed out'); process.exit(1); }, 240000).unref();
-  { const t0 = Date.now(); for(;;){ try{ if((await fetch(base + '/healthz')).ok) break; }catch(e){} if(Date.now() - t0 > 10000) throw new Error('server did not start'); await sleep(40); } }
+  await waitReady(base, srv);
   const post = async (p, body, token) => (await fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body) })).json();
   const debug = async () => (await fetch(base + '/debug/chips')).json();
 

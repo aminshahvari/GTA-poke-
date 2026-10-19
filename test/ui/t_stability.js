@@ -20,12 +20,13 @@
 //   ROOT=<dir>  run against another checkout ("before" numbers)   REPORT=1 print the numbers without failing
 //   ONLY=390x844 one size   JSON=<file> write every measurement   SHOTS=<dir> a screenshot per state
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('../ready');
 const fs = require('fs'), path = require('path');
 const { chromium } = require(process.env.PLAYWRIGHT || process.env.PLAYWRIGHT_CORE || 'playwright');
 const ROOT = process.env.ROOT || path.join(__dirname, '..', '..');
 const PORT = 5300 + Math.floor(Math.random() * 80), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_stab_' + process.pid + '.json';
-const srv = spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const REPORT = process.env.REPORT === '1', SHOTS = process.env.SHOTS || '';
 const SIZES = [[320, 568], [375, 667], [390, 844], [393, 852], [430, 932], [956, 440], [844, 390], [956, 370], [667, 375], [568, 320]].filter(v => !process.env.ONLY || process.env.ONLY === v.join('x'));
@@ -146,7 +147,7 @@ async function viewportMatrix(pg, [w, h], tag, push){
 const moved = (a, b) => !a || !b ? Infinity : Math.max(...a.map((v, i) => Math.abs(v - b[i])));
 
 (async () => {
-  for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
+  await waitReady(BASE, srv);
   await sleep(400);
   const TOK = (await api('login', { name: 'Test Player 07', pin: '135777' })).token;
   if(SHOTS) fs.mkdirSync(SHOTS, { recursive: true });

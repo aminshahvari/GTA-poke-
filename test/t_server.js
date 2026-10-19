@@ -1,5 +1,6 @@
 // Full-stack test: owner + invited friends play a whole tournament over WebSockets.
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('./ready');
 const path = require('path'), fs = require('fs'), os = require('os'), net = require('net');
 const WebSocket = require('ws');
 // a real free port (other test servers run on this machine; a random 3900+n port collided -> ECONNRESET)
@@ -17,13 +18,12 @@ let srv; process.on('exit', () => { try{ srv.kill('SIGKILL'); }catch(e){} try{ f
   // start on a free port and wait for /healthz; retry on a new port if ours was taken in between (EADDRINUSE)
   for(let tries = 0; ; tries++){
     PORT = await freePort(); base = `http://127.0.0.1:${PORT}`;
-    srv = spawn(process.execPath, ['server/index.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(PORT), FAST: '1', NO_BEACON: '1', DEBUG_CHIPS: '1', OWNER_CODE: 'secret', DATA_FILE: dataFile }, stdio: ['ignore', 'pipe', 'inherit'] });
+    srv = watchServer(spawn(process.execPath, ['server/index.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(PORT), FAST: '1', NO_BEACON: '1', DEBUG_CHIPS: '1', OWNER_CODE: 'secret', DATA_FILE: dataFile }, stdio: ['ignore', 'pipe', 'pipe'] }), { forward: true });
     srv.stdout.on('data', d => process.env.VERBOSE && process.stdout.write(d));
-    let up = false; const t0 = Date.now();
-    while(!up && srv.exitCode === null && Date.now() - t0 < 10000){ try{ up = (await fetch(base + '/healthz')).ok; }catch(e){} if(!up) await sleep(40); }
-    if(up && srv.exitCode === null) break;
+    // the last try is fatal: waitReady prints the diagnostic (port, elapsed, last error, stderr tail) and exits 1
+    const up = await waitReady(base, srv, { fatal: tries >= 2 });
+    if(up !== null && srv.exitCode === null) break;
     try{ srv.kill('SIGKILL'); }catch(e){}
-    if(tries >= 2) throw new Error('server did not start');
   }
   // setup + negative auth checks
   if(!(await post('/api/setup', { code: 'nope', name: 'Sean', pin: '1234', agree: true })).error) fail('bad setup code accepted');
@@ -175,14 +175,14 @@ let srv; process.on('exit', () => { try{ srv.kill('SIGKILL'); }catch(e){} try{ f
       console.log(`fair deal: ${r.ok} hands verified, ${compared} dealt hands cross-checked`);
     } }
   // group invite link: many people, then cancelled
-  { owner.ws.send(JSON.stringify({ t: 'invite', group: true })); await sleep(200);
+  { owner.invite = null; owner.ws.send(JSON.stringify({ t: 'invite', group: true })); await until(() => owner.invite, 5000);
     const code = owner.invite && owner.invite.code;
     if(!code || !owner.invite.group) fail('no group invite');
     const a1 = await post('/api/redeem', { code, name: 'Group A', pin: '1111', agree: true }), a2 = await post('/api/redeem', { code, name: 'Group B', pin: '1111', agree: true });
     if(!a1.token || !a2.token) fail('group link should work for several people');
-    await sleep(150); const gi = (owner.club.invites || []).find(i => i.code === code);
+    const findGi = () => (owner.club.invites || []).find(i => i.code === code); await until(() => findGi() && findGi().used === 2, 5000); const gi = findGi();
     if(!gi || gi.used !== 2) fail('group link use count ' + JSON.stringify(gi));
-    owner.ws.send(JSON.stringify({ t: 'revoke', code })); await sleep(150);
+    owner.ws.send(JSON.stringify({ t: 'revoke', code })); await until(() => !findGi(), 5000);
     if(!(await post('/api/redeem', { code, name: 'Group C', pin: '1111', agree: true })).error) fail('cancelled group link still works'); }
   // points + rewards shop
   const win = clients.find(c => c.id === h.results[0].uid), loser = clients.find(c => c.id === h.results.find(r => r.pts === 1 && r.uid !== owner.id).uid);
@@ -190,21 +190,21 @@ let srv; process.on('exit', () => { try{ srv.kill('SIGKILL'); }catch(e){} try{ f
   const pct1 = h.payouts[0];
   if(!h.results[0].tie && h.results[0].pts !== Math.max(2, Math.round(pct1 * N / 10))) fail('winner points ' + h.results[0].pts);
   if(h.results.filter(r => !r.tie && r.place > h.payouts.length).some(r => r.pts !== 1)) fail('unpaid places should get 1 point');
-  const mem = clients.find(c => c !== owner && c !== win); mem.lastError = null; mem.ws.send(JSON.stringify({ t: 'addReward', name: 'x', cost: 1, qty: 1 })); await sleep(150);
+  const mem = clients.find(c => c !== owner && c !== win); mem.lastError = null; mem.ws.send(JSON.stringify({ t: 'addReward', name: 'x', cost: 1, qty: 1 })); await until(() => mem.lastError, 5000);
   if(!mem.lastError) fail('member could add a reward');
-  owner.ws.send(JSON.stringify({ t: 'addReward', name: 'Gift card', cost: h.results[0].pts, qty: 1, value: '$25' })); await sleep(250);
+  owner.ws.send(JSON.stringify({ t: 'addReward', name: 'Gift card', cost: h.results[0].pts, qty: 1, value: '$25' })); await until(() => win.club.shop && win.club.shop.rewards[0], 5000);
   const rw = win.club.shop.rewards[0];
   if(!rw || rw.left !== 1) fail('reward not listed');
   const bal0 = win.club.shop.balance;
-  win.ws.send(JSON.stringify({ t: 'skillq', rid: rw.id })); await sleep(150);
-  win.lastError = null; win.ws.send(JSON.stringify({ t: 'claim', rid: rw.id, answer: '-1' })); await sleep(150);
+  win.q = null; win.ws.send(JSON.stringify({ t: 'skillq', rid: rw.id })); await until(() => win.q, 5000);
+  win.lastError = null; win.ws.send(JSON.stringify({ t: 'claim', rid: rw.id, answer: '-1' })); await until(() => win.lastError, 5000);
   if(!win.lastError) fail('wrong skill answer accepted');
-  win.ws.send(JSON.stringify({ t: 'skillq', rid: rw.id })); await sleep(150);
+  win.q = null; win.ws.send(JSON.stringify({ t: 'skillq', rid: rw.id })); await until(() => win.q, 5000);
   const ans = Function('return ' + win.q.replace('×', '*').replace('÷', '/').replace('−', '-'))();
-  win.ws.send(JSON.stringify({ t: 'claim', rid: rw.id, answer: String(ans) })); await sleep(300);
+  win.ws.send(JSON.stringify({ t: 'claim', rid: rw.id, answer: String(ans) })); await until(() => win.claimed === 1 && win.club.shop.balance === bal0 - rw.cost, 5000);
   if(win.claimed !== 1) fail('claim failed ' + win.lastError);
   if(win.club.shop.balance !== bal0 - rw.cost) fail('balance not reduced');
-  loser.lastError = null; loser.ws.send(JSON.stringify({ t: 'skillq', rid: rw.id })); await sleep(150);
+  loser.lastError = null; loser.ws.send(JSON.stringify({ t: 'skillq', rid: rw.id })); await until(() => loser.lastError, 5000);
   if(!loser.lastError) fail('could claim without enough points / sold out');
   if(!(owner.club.shop.requests || []).length) fail('owner cannot see requests');
   console.log(`server test: ${N} players, max ${maxTables} tables, ${hfhRounds} hand-for-hand rounds, ${h.results.filter(r => r.tie).length} tied, ${checks} chip checks, ${clients.reduce((a, c) => a + c.acted, 0)} actions, ${Math.round((Date.now() - t0) / 1000)}s, champion ${h && h.results[0].name}`);

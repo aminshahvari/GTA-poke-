@@ -1,5 +1,6 @@
 // Extra-time cards: tapping adds 30 seconds; a lone (final) table gives each player 5, then they run out.
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('./ready');
 const path = require('path'), fs = require('fs'), os = require('os');
 const WebSocket = require('ws');
 const PORT = 3800 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${PORT}`;
@@ -8,8 +9,8 @@ let fails = 0; const fail = m => { fails++; console.log('FAIL', m); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const post = async (p, body, token) => (await fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body) })).json();
 (async () => {
-  const srv = spawn(process.execPath, ['server/index.js'], { env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: dataFile }, stdio: ['ignore', 'ignore', 'inherit'] });
-  await sleep(700);
+  const srv = watchServer(spawn(process.execPath, ['server/index.js'], { env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: dataFile }, stdio: ['ignore', 'ignore', 'pipe'] }), { forward: true });
+  await waitReady(base, srv);
   const own = await post('/api/setup', { code: 'secret', name: 'Sean', pin: '1234', agree: true });
   const { code } = await post('/api/invite', {}, own.token);
   const fr = await post('/api/redeem', { code, name: 'Friend', pin: '4321', agree: true });

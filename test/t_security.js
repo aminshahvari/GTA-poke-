@@ -1,12 +1,13 @@
 // A bad Origin header can't crash the server, and wrong PINs are limited per name no matter what IP header is sent.
 const assert = require('assert');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('./ready');
 const WebSocket = require('ws');
 const PORT = 3990 + Math.floor(Math.random() * 9), BASE = 'http://localhost:' + PORT;
-const srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: require('os').tmpdir() + '/t_sec_' + process.pid + '.json', FAST: '' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: require('os').tmpdir() + '/t_sec_' + process.pid + '.json', FAST: '' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const post = (p, body, ip, h = {}) => fetch(BASE + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(ip ? { 'x-forwarded-for': ip } : {}), ...h }, body: JSON.stringify(body) });
 (async () => {
-  await new Promise(r => setTimeout(r, 900));
+  await waitReady(BASE, srv);
   assert.strictEqual((await post('/api/setup', { code: 'secret', name: 'Sean', pin: '1234', agree: true })).status, 200, 'owner set up');
   for(const origin of ['null', 'not a url', '://']){
     await new Promise(r => { const ws = new WebSocket(BASE.replace('http', 'ws') + '/ws', { headers: { Origin: origin } }); ws.on('close', r); ws.on('error', r); });

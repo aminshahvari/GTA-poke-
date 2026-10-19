@@ -11,12 +11,13 @@
 //   ROOT=<dir> another checkout ("before")   REPORT=1 print without failing   SHOTS=<dir> a screenshot per case
 //   ONLY=390x844 one size   NS=2,6,9 only these table sizes   JSON=<file> every measurement
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('../ready');
 const fs = require('fs'), path = require('path');
 const { chromium } = require(process.env.PLAYWRIGHT || process.env.PLAYWRIGHT_CORE || 'playwright');
 const ROOT = process.env.ROOT || path.join(__dirname, '..', '..');
 const PORT = 5400 + Math.floor(Math.random() * 80), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_tlay_' + process.pid + '.json';
-const srv = spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const REPORT = process.env.REPORT === '1', SHOTS = process.env.SHOTS || '';
 // a size is WxH, optionally @L,R,B: the iPhone safe-area insets (notch / Dynamic Island side, home bar) in px, which
@@ -74,7 +75,7 @@ async function measure(pg){
 const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b - pad && b.t < a.b - pad;
 
 (async () => {
-  for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
+  await waitReady(BASE, srv);
   await sleep(400);
   const TOK = (await api('login', { name: 'Test Player 07', pin: '135777' })).token;
   if(SHOTS) fs.mkdirSync(SHOTS, { recursive: true });

@@ -5,11 +5,12 @@
 // Usage: node test/ui/t_hotfix.js [screenshot dir]
 const path = require('path');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('../ready');
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 const SHOTS = process.argv[2];
 const ROOT = path.join(__dirname, '..', '..');
 const PORT = 4800 + Math.floor(Math.random() * 100), BASE = 'http://127.0.0.1:' + PORT, DATA = '/tmp/t_hotfix_' + PORT + '.json';
-const srv = spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '1', STAGING: '1', DATABASE_URL: '' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '1', STAGING: '1', DATABASE_URL: '' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let fails = 0, oks = 0;
 const check = (ok, msg) => { ok ? oks++ : fails++; console.log((ok ? 'ok   ' : 'FAIL ') + msg); };
@@ -22,18 +23,8 @@ async function signedIn(browser, tok, [w, h]){
   return pg;
 }
 
-// wait until the server answers /healthz instead of a fixed pause (slow machines start later)
-async function serverReady(ms = 20000){
-  const end = Date.now() + ms;
-  while(Date.now() < end){
-    try{ const r = await fetch(BASE + '/healthz'); if(r.ok) return; }catch(e){}
-    await sleep(150);
-  }
-  throw new Error('server did not become ready within ' + ms + ' ms');
-}
-
 (async () => {
-  await serverReady();
+  await waitReady(BASE, srv);  // shared helper: polls /healthz every 100 ms, bounded, diagnostic on timeout
   const dir = await post('login', { name: 'Test Director', pin: '246810' });
   // two members make their own invite links (as Soltan and Sisi did); the director also has a group and a personal link
   for(const [n, pin] of [['Test Player 01', '135711'], ['Test Player 02', '135722']]){

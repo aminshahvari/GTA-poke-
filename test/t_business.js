@@ -3,10 +3,11 @@
 const assert = require('assert');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('./ready');
 const WebSocket = require('ws');
 const PORT = 4100 + Math.floor(Math.random() * 50), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_biz_' + process.pid + '.json';
-const srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUBS_DEFAULT: 'on' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUBS_DEFAULT: 'on' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function call(p, body, tok){
   const r = await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body || {}) });
@@ -30,7 +31,7 @@ const base = (over = {}) => ({ name: 'Rivera Plumbing', category: 'trades', desc
   show: { website: true, email: true, phone: false, instagram: false, address: false, fullName: false }, ...over });
 
 (async () => {
-  for(let i = 0; i < 40; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(150); }
+  await waitReady(BASE, srv);
   const O = (await ok('setup', { code: 'secret', name: 'Director', pin: '1234', agree: true })).token;
   const join = async name => { const { code } = await ok('invite', {}, O); return (await ok('redeem', { code, name, pin: '1111', agree: true })).token; };
   const A = await join('Alex'), B = await join('Bea'), Cc = await join('Cam'), D = await join('Dee');

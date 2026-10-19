@@ -11,13 +11,14 @@
 // demo table (the real engine in the browser) deals the button and blinds to consecutive live seats each hand.
 // PLAYWRIGHT=/path/to/playwright-core CHROMIUM=/path/to/chromium node test/ui/t_positions.js
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('../ready');
 const fs = require('fs'), path = require('path');
 const { chromium } = require(process.env.PLAYWRIGHT || process.env.PLAYWRIGHT_CORE || 'playwright');
 const ROOT = process.env.ROOT || path.join(__dirname, '..', '..');
 const PORT = 5600 + Math.floor(Math.random() * 80), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_pos_' + process.pid + '.json';
 let srvOut = '';
-const srv = spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: ['ignore', 'pipe', 'pipe'] }));
 srv.stdout.on('data', b => { srvOut = (srvOut + b).slice(-2000); }); srv.stderr.on('data', b => { srvOut = (srvOut + b).slice(-2000); });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const api = async (p, body) => { const j = await (await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })).json(); if(j.error) throw new Error(p + ': ' + j.error); return j; };
@@ -63,9 +64,8 @@ const nearest = (seats, p) => { const ds = seats.map(s => ({ uid: s.uid, d: Math
   return ds.length < 2 || ds[1].d >= ds[0].d * 1.08 ? ds[0].uid : null; };
 
 (async () => {
-  // the server is ready when it answers (bounded wait, with its output if it never does)
-  const t0 = Date.now();
-  for(;;){ try{ const r = await fetch(BASE + '/'); if(r.ok) break; }catch(e){} if(Date.now() - t0 > 20000){ console.error(`server not ready on port ${PORT} after 20 s\n${srvOut}`); srv.kill(); process.exit(1); } await sleep(150); }
+  // the server is ready when /healthz answers 200 (shared bounded wait; prints port, elapsed, last error and stderr tail if it never does)
+  await waitReady(BASE, srv);
   const TOK = (await api('login', { name: 'Test Player 07', pin: '135777' })).token;
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
   const open = async (vp, tok) => {

@@ -5,6 +5,7 @@
 //  - the owner opens the clubs from the Director tab: members see them at once; closing them again hides them
 // PLAYWRIGHT=/path/to/playwright-core CHROMIUM=/path/to/chromium node test/ui/t_clubs_closed.js
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('../ready');
 const path = require('path');
 const { chromium } = require(process.env.PLAYWRIGHT || process.env.PLAYWRIGHT_CORE || 'playwright');
 const ROOT = process.env.ROOT || path.join(__dirname, '..', '..');
@@ -12,7 +13,7 @@ const PORT = 5300 + Math.floor(Math.random() * 80), BASE = 'http://localhost:' +
 const DATA = require('os').tmpdir() + '/t_clubs_closed_' + process.pid + '.json';
 const env = { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', DATABASE_URL: '' };
 delete env.STAGING; delete env.CLUBS_DEFAULT;
-const srv = spawn('node', ['server/index.js'], { cwd: ROOT, env, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: ROOT, env, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const post = async (p, body, tok) => { const r = await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body || {}) }); return { status: r.status, j: await r.json() }; };
 const api = async (p, body, tok) => { const { j } = await post(p, body, tok); if(j.error) throw new Error(p + ': ' + j.error); return j; };
@@ -38,7 +39,7 @@ const tabHidden = pg => pg.evaluate(() => document.querySelector('#tabs [data-ta
 const selected = pg => pg.evaluate(() => document.querySelector('#tabs [aria-selected="true"]').dataset.tab);
 
 (async () => {
-  for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
+  await waitReady(BASE, srv);
   await sleep(300);
   const OWN = (await api('setup', { code: 'secret', name: 'Test Director', pin: '246810', agree: true })).token;
   const MEM = (await api('redeem', { code: (await api('invite', {}, OWN)).code, name: 'Test Player 01', pin: '135711', agree: true })).token;

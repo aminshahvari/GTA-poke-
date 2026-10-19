@@ -2,14 +2,15 @@
 // Needs Playwright + Chromium, which are not repo dependencies: PLAYWRIGHT=/path/to/playwright CHROMIUM=/path/to/chromium node test/ui/t_bizsearch.js
 const assert = require('assert');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('../ready');
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const PORT = 4800 + Math.floor(Math.random() * 50), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_bizsearch_' + process.pid + '.json';
 // STAGING=1 seeds fake "Test Player NN" members and 5 fake businesses, one of them in the spotlight
-const srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/../..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: __dirname + '/../..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
-  for(let i = 0; i < 60; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(150); }
+  await waitReady(BASE, srv);
   const { token } = await (await fetch(BASE + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Test Player 07', pin: '135777' }) })).json();
   assert.ok(token, 'fake member signs in');
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });

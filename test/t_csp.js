@@ -3,16 +3,17 @@
 const assert = require('assert');
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('./ready');
 const PORT = 4200 + Math.floor(Math.random() * 50), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_csp_' + process.pid + '.json';
 const ROOT = path.join(__dirname, '..');
-const srv = spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUBS_DEFAULT: 'on' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUBS_DEFAULT: 'on' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const YEAR = 'public, max-age=31536000, immutable';
 
 (async () => {
-  for(let i = 0; i < 40; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(150); }
+  await waitReady(BASE, srv);
   for(const p of ['/', '/join/abc', '/app.js', '/business.js', '/style.css']){
     const r = await fetch(BASE + p);
     assert.strictEqual(r.status, 200, p);

@@ -2,10 +2,11 @@
 // opening and closing is owner-only, and closing keeps everything saved.
 const assert = require('assert');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('./ready');
 const WebSocket = require('ws');
 const PORT = 4200 + Math.floor(Math.random() * 50), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_clubs_' + process.pid + '.json';
-const srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUBS_DEFAULT: '' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUBS_DEFAULT: '' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function call(p, body, tok){
   const r = await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body || {}) });
@@ -32,7 +33,7 @@ function clubView(tok, msg){
   });
 }
 (async () => {
-  for(let i = 0; i < 40; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(150); }
+  await waitReady(BASE, srv);
   const O = (await ok('setup', { code: 'secret', name: 'Director', pin: '1234', agree: true })).token;
   const { code } = await ok('invite', {}, O);
   const A = (await ok('redeem', { code, name: 'Alex', pin: '1111', agree: true })).token;

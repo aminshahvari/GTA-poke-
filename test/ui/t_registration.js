@@ -4,16 +4,17 @@
 // PLAYWRIGHT=/path/to/playwright CHROMIUM=/path/to/chromium node test/ui/t_registration.js
 const assert = require('assert');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('../ready');
 const WebSocket = require('ws');
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const PORT = 4850 + Math.floor(Math.random() * 50), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_reg_' + process.pid + '.json';
-const srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/../..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '1', STAGING: '', DATABASE_URL: '' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: __dirname + '/../..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '1', STAGING: '', DATABASE_URL: '' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const post = async (p, body, tok) => (await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body) })).json();
 function sock(tok){ return new Promise(res => { const ws = new WebSocket(BASE.replace('http', 'ws') + '/ws'); ws.on('open', () => { ws.send(JSON.stringify({ t: 'hello', token: tok })); setTimeout(() => res(ws), 300); }); }); }
 (async () => {
-  for(let i = 0; i < 60; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(150); }
+  await waitReady(BASE, srv);
   const O = (await post('setup', { code: 'secret', name: 'Director', pin: '1234', agree: true })).token;
   const join = async name => { const { code } = await post('invite', {}, O); return (await post('redeem', { code, name, pin: '1111', agree: true })).token; };
   const A = await join('Alex'), B = await join('Bea');

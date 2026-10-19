@@ -9,11 +9,12 @@
 // PLAYWRIGHT=/path/to/playwright CHROMIUM=/path/to/chromium node test/ui/t_mobile_ux.js   (SHOTS=<dir> saves screenshots)
 const assert = require('assert');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('../ready');
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const PORT = 5100 + Math.floor(Math.random() * 80), BASE = 'http://localhost:' + PORT;
 const DATA = require('os').tmpdir() + '/t_mobux_' + process.pid + '.json';
 // STAGING=1 seeds "Test Player NN" members (PIN 1357 + NN%10 twice) and 5 fake businesses
-const srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/../..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: 'ignore' });
+const srv = watchServer(spawn('node', ['server/index.js'], { cwd: __dirname + '/../..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: ['ignore', 'ignore', 'pipe'] }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const SHOTS = process.env.SHOTS || '';
 const api = async (p, body, tok) => { const j = await (await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body || {}) })).json(); if(j.error) throw new Error(p + ': ' + j.error); return j; };
@@ -98,7 +99,7 @@ function measure(){
 }
 
 (async () => {
-  for(let i = 0; i < 60; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(150); }
+  await waitReady(BASE, srv);
   const T7 = await login(7), T9 = await login(9), T5 = await login(5);
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
   // FONTS_DIR=<dir with fonts.css + woff2 files named like fonts.gstatic.com paths with / -> _>: serve the real IBM Plex

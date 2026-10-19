@@ -7,6 +7,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { watchServer, waitReady } = require('../ready');
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 const SHOTS = process.argv[2];
 const PORT = 4500 + Math.floor(Math.random() * 100), BASE = 'http://127.0.0.1:' + PORT;
@@ -16,9 +17,9 @@ const ok = m => console.log('ok  ', m);
 const PHONES = [[320, 568, 'iPhone SE 1st gen'], [375, 667, 'iPhone SE 2/3'], [390, 844, 'iPhone 13-15'], [430, 932, 'iPhone Pro Max'], [360, 800, 'Android small'], [412, 915, 'Pixel']];
 
 (async () => {
-  const srv = spawn(process.execPath, ['server/index.js'], { env: { ...process.env, PORT, OWNER_CODE: 'secret', DATA_FILE: DATA, NO_BEACON: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
+  const srv = watchServer(spawn(process.execPath, ['server/index.js'], { env: { ...process.env, PORT, OWNER_CODE: 'secret', DATA_FILE: DATA, NO_BEACON: '1' }, stdio: ['ignore', 'ignore', 'pipe'] }), { forward: true });
   try{
-    for(let i = 0; i < 50; i++){ try{ await fetch(BASE + '/healthz'); break; }catch(e){ await new Promise(r => setTimeout(r, 200)); } }
+    await waitReady(BASE, srv);
     const b = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
     const ctxFor = async (w, h) => { const c = await b.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }); await c.route(/fonts\.(googleapis|gstatic)/, r => r.abort()); return c; };
     const noHScroll = async (p, what) => { const d = await p.evaluate(() => { const a = document.getElementById('auth'); return { sw: a.scrollWidth, cw: a.clientWidth, dw: document.documentElement.scrollWidth, vw: innerWidth }; }); assert(d.sw <= d.cw && d.dw <= d.vw, what + ' scrolls sideways ' + JSON.stringify(d)); };
