@@ -78,7 +78,8 @@ function measure(){
     const b = s.querySelector('.badge'), st = s.querySelector('.st'), nm = s.querySelector('.nm');
     // at least 1 px of clear space between a badge and its stack, so a 1-2 px rounding or font difference between
     // browsers can't make them touch (Muse saw 1-2 px grazes in another Chromium setup when this was a 0 px fit)
-    if(b && R(b).t - R(st).b < 1 && Math.min(R(b).r, R(st).r) - Math.max(R(b).l, R(st).l) > 0.5) own.push(`"${b.textContent}" sits ${(R(b).t - R(st).b).toFixed(1)}px from ${nm.textContent}'s stack ${st.textContent} (needs 1px clear)`);
+    // (a seat at the top of the oval wears its badge over its plate: there it keeps 1 px clear of the name instead)
+    if(b && R(b).t - R(st).b < 1 && !(R(b).b <= R(nm).t - 1) && Math.min(R(b).r, R(st).r) - Math.max(R(b).l, R(st).l) > 0.5) own.push(`"${b.textContent}" sits ${(R(b).t - R(st).b).toFixed(1)}px from ${nm.textContent}'s stack ${st.textContent} (needs 1px clear)`);
     if(b && !s.classList.contains('hero') && hit(R(b), R(nm))) own.push(`"${b.textContent}" covers the name ${nm.textContent}`);
     names.push({ text: nm.textContent, cut: nm.scrollWidth > nm.clientWidth + 1, hero: s.classList.contains('hero') });
   });

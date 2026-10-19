@@ -734,9 +734,10 @@ function tableGeo(n, bet = '8,888'){
   const sizes = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3], ['micro', 1], ['micro', .6], ['micro', .3]]);
   // (upright on a phone, a clear oval with smaller seats comes before the broad felt with bigger ones, which on a
   // short screen ends up nearly round; the broad felt is next, and only then the smallest (micro) seats)
-  // (a phone held upright: the oval of WPT and WSOP, inset 6, its seats on the middle of the rail, at each seat size)
+  // (a phone held upright: the oval of WPT and WSOP, inset 6, its seats on the middle of the rail, at each seat size,
+  // then each again with the lowest seats a little lower)
   const PILL = W < 470 && !LAND;
-  const looks = PILL ? [...new Set(sizes.map(([l]) => l))].map(l => [l, 1, 0, 6, 1, 0]) : ((W < 470 && !LAND ? [[SHORT ? [] : STAD, sizes.filter(([l]) => l !== 'micro')], [SHORT ? [] : STAD_LOW, sizes.filter(([l]) => l !== 'micro')], [SHORT ? [] : [...STAD, ...STAD_LOW], sizes.filter(([l]) => l === 'micro')], [SHORT ? [] : ONE, sizes], [OVAL, sizes.filter(([l]) => l !== 'micro')], [BROAD, sizes.filter(([l]) => l !== 'micro')], [shapes, sizes.filter(([l]) => l === 'micro')]] : [[shapes, sizes]])
+  const looks = PILL ? [0, 1].flatMap(k => [...new Set(sizes.map(([l]) => l))].map(l => [l, 1, k, 6, 1, 0])) : ((W < 470 && !LAND ? [[SHORT ? [] : STAD, sizes.filter(([l]) => l !== 'micro')], [SHORT ? [] : STAD_LOW, sizes.filter(([l]) => l !== 'micro')], [SHORT ? [] : [...STAD, ...STAD_LOW], sizes.filter(([l]) => l === 'micro')], [SHORT ? [] : ONE, sizes], [OVAL, sizes.filter(([l]) => l !== 'micro')], [BROAD, sizes.filter(([l]) => l !== 'micro')], [shapes, sizes.filter(([l]) => l === 'micro')]] : [[shapes, sizes]])
     .flatMap(([sh, sz]) => sz.flatMap(([l, q]) => sh.map(([k, inset, nar]) => [l, q, k, inset, 1.18, nar])))
     // (the micro seats may also give up some of the extra room either side of yours, for the seats along the top)
     .concat(n >= 6 ? [['micro', .6], ['micro', .3]].flatMap(([l, q]) => shapes.map(([k, inset, nar]) => [l, q, k, inset, 1.06, nar])) : []));
@@ -835,10 +836,11 @@ function tableGeo(n, bet = '8,888'){
         const ax = cx + x, ay = cy + y, pb = [ax + px + shx, ay + py + shy, pw, ph];
         return { x: ax, y: ay, nx, ny, side, sx: Math.round(shx), sy: Math.round(shy), boxes: [O[side][0].map((v, j) => j === 0 ? v + ax : j === 1 ? v + ay : v), pb] }; };
       // (the lowest seats either side stay up on the felt's sides, facing across it, not round its foot beside you:
-      // no lower than where the rail starts to turn under, and 16 px clear of your seat, its cards and plate)
+      // no lower than where the rail starts to turn under, and 16 px clear of your seat, its cards and plate; k = 1,
+      // tried after every seat size, lets them a little way round the turn, on the smallest screens at a full table)
       const hero = S.hero.map(([dx, dy, w, h]) => [heroAt[0] + dx, heroAt[1] + dy, w + 16, h + 16]);
       const near = (A, B) => A.some(([x, y, w, h]) => B.some(([X, Y, ww, hh]) => Math.abs(x - X) < w + ww && Math.abs(y - Y) < h + hh));
-      let d0 = 0; while(d0 < P / 2 && (at(d0)[3] > .25 || near(seatAt(d0).boxes, hero))) d0 += 2;
+      let d0 = 0; while(d0 < P / 2 && (at(d0)[3] > (k ? .7 : .25) || near(seatAt(d0).boxes, hero))) d0 += 2;
       const m = n - 1, R = P - 2 * d0;
       const opp = Array.from({ length: m }, (_, i) => { const q = seatAt(d0 + R * (m >= 4 ? i / (m - 1) : (i + .5) / m)), [[, , ], pb] = q.boxes;
         if(pb[0] - pb[2] < 0 || pb[0] + pb[2] > W || pb[1] - pb[3] < 0 || pb[1] + pb[3] > H) ovClash++;

@@ -146,7 +146,8 @@ const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b -
       check(m.controls.every(b => b.l >= sf.l - .5 && b.r <= sf.r + .5 && b.b <= sf.b + .5), `${tag}: every button inside the safe area`);
       // hole cards never cover a name plate, stack or badge (your own included), and chips never sit on a seat
       const cover = [];
-      m.seats.forEach(a => { if(a.cards) m.seats.forEach(b => { if(hit(a.cards, b.plate, .5)) cover.push(`${a.name}'s cards x ${b.name}'s plate`); }); });
+      // (on the oval your own cards tuck their lower edge behind your plate, drawn under it, as WPT draws them)
+      m.seats.forEach(a => { if(a.cards) m.seats.forEach(b => { if(m.oval && a.hero && b.hero) return; if(hit(a.cards, b.plate, .5)) cover.push(`${a.name}'s cards x ${b.name}'s plate`); }); });
       m.bets.forEach(c => m.seats.forEach(b => { if(hit(c, b.plate, .5) || (b.cards && hit(c, b.cards, .5))) cover.push(`chips x ${b.name}`); }));
       check(!cover.length, `${tag}: no cards or chips over an avatar, name plate, stack or badge${cover.length ? ' — ' + cover.join('; ') : ''}`);
       // sideways: a slim header, and the top seats and your seat keep 8 px from the table area's edges

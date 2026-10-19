@@ -1958,8 +1958,8 @@ body{background:var(--lx-ink)}
 #game .seat[data-side]>.hole.shown{bottom:88%;z-index:3}
 #game .seat[data-side^=t]>.hole.shown{bottom:auto;top:88%}
 
-/* (the oval's dock: the raise panel takes the timer's row and the helper's line, its amount on the Raise button, so the
-   dock is no taller with it open and the table keeps the room) */
+/* (the oval's dock: the raise panel takes the timer's row and the helper's line, the timer a thin line along its top
+   edge and its amount on the Raise button, so the dock is no taller with it open and the table keeps the room) */
 #game.ovl .sizing{grid-template-columns:44px minmax(0,1fr) 44px;grid-template-rows:44px 26px;padding:5px 6px 2px;gap:4px 6px}
 #game.ovl .sz-slider{display:contents}
 #game.ovl .sz-slider .step:first-child{grid-column:1;grid-row:1}
@@ -1968,6 +1968,17 @@ body{background:var(--lx-ink)}
 #game.ovl .sz-slider input{grid-column:1/4;grid-row:2;align-self:center}
 #game.ovl .sz-slider input::-webkit-slider-thumb{width:24px;height:24px}
 #game.ovl .sizing .amt{display:none}
-#game.ovl .controls:has(.sizing) .turnrow{display:none}
+#game.ovl .controls:has(.sizing){position:relative}
+#game.ovl .controls:has(.sizing) .turnrow{position:absolute;left:14px;right:14px;top:-1px;min-height:0;z-index:2;pointer-events:none}
+#game.ovl .controls:has(.sizing) .turnrow .xtime{display:none}
+#game.ovl .controls:has(.sizing) .turnbar{height:3px;margin:0}
+#game.ovl .controls:has(.sizing) .turnbar span{display:none}
 #game.ovl .sz-presets button{min-height:44px;padding:0}
 #game.ovl .sz-slider .step{width:44px;height:44px}
+/* (your seat on the oval, as WPT draws it: your cards smaller, overlapping a little and tilted, their lower
+   edge tucked behind your plate, so your seat is one compact unit) */
+#game.ovl .seat.hero>.hole{gap:0;margin-bottom:-8px;z-index:1}
+#game.ovl .seat.hero .plate{position:relative;z-index:2}
+#game.ovl .seat.hero .card.hero{--w:calc(var(--cw)*1.05)}
+#game.ovl .seat.hero .card.hero:first-child{transform:rotate(-4deg);margin-right:-6px}
+#game.ovl .seat.hero .card.hero+.card.hero{transform:rotate(4deg)}
