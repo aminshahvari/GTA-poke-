@@ -1438,6 +1438,8 @@ function renderTable(){
     const cut = () => m.scrollHeight > m.clientHeight + 1 || m.scrollWidth > m.clientWidth + 1;
     for(const f of forms){ m.innerHTML = f.map(l => `<div>${esc(l)}</div>`).join(''); if(!cut()) break; }
   }
+  // (the felt's name fades while a line is written over it)
+  area.classList.toggle('msg-on', !!$('msg').textContent.trim());
   area.classList.toggle('tall', G.tall); area.classList.toggle('oval', G.inset === 6); area.classList.toggle('stad', G.inset === 2 || G.inset === 3 || G.inset === 6); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini); area.classList.toggle('micro', G.look === 'micro'); area.classList.toggle('pot-side', !!G.potSide);
   if(!d.result) $('fx').querySelectorAll('.winpile').forEach(e => { if(e.dataset.hand !== d.tid + ':' + d.handNo){ e.classList.add('gone'); setTimeout(() => e.remove(), 400); } });
   const mc = myCards.get(d.tid), mine = mc && mc.hand === d.handNo ? mc.cards.map(cs) : null;
@@ -1447,6 +1449,9 @@ function renderTable(){
     const p = d.seats[s], pos = posOf(s);
     if(!p){ parts.push(`<div class="empty-seat" style="left:${pos[0]}%;top:${pos[1]}%">OPEN</div>`); continue; }
     const isMe = p.uid === club.me.id, oq = LY.G.seats[LY.rel(s)] || {};
+    // (watching an oval table, the seat at its foot takes your seat's place and shape: its avatar in its plate, under
+    // its cards, just above the dock)
+    const foot = !isMe && G.inset === 6 && LY.rel(s) === 0 && !d.seats.some(q => q && q.uid === club.me.id);
     let hole = '';
     // a folded hand stays hidden from others unless its owner chose to show a card after the hand
     if(p.inHand && !(p.folded && !isMe && !(p.shown && p.shown.some(x => x != null)))){
@@ -1457,6 +1462,7 @@ function renderTable(){
         const c = p.shown && p.shown[j] != null ? cs(p.shown[j]) : (isMe && mine ? mine[j] : null);
         const hl = res && res.showdown && winCards.size && c != null ? (winCards.has(c) ? ' wincard' : ' dim') : '';
         if(isMe) return cardHTML(c, `hero ${p.folded ? 'dim' : ''}${hl === ' dim' ? '' : hl} ${anim}`);
+        if(foot) return cardHTML(c, `hero${hl === ' dim' ? '' : hl} ${anim}`);
         if(c != null) return cardHTML(c, `show${hl === ' dim' ? '' : hl}`); // a losing hand stays fully readable at showdown
         return cardHTML(null, `mini ${anim}`);
       }).join('');
@@ -1469,11 +1475,11 @@ function renderTable(){
     // the seat whose turn it is shows no pill from its last action (that CALL is history); the gold ring marks it
     else if(p.act && !acting){ const amt = (p.act === 'Raise' || p.act === 'Bet') ? ' ' + fmt(p.lastAmt) : ''; badge = `<span class="badge act-${p.act.toLowerCase().replace(/[^a-z]+/g, '-')}">${esc(p.act)}${amt}</span>`; }
     const stackTxt = p.inHand && p.allIn && !res ? 'All-in' : fmt(p.stack);
-    const cls = `seat ${isMe ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
+    const cls = `seat ${isMe || foot ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
     const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
     const av = avHTML(p.uid, p.name);
     const shot = acting ? '<div class="shot"><i class="shotBar"></i></div>' : '';
-    parts.push(isMe
+    parts.push(isMe || foot
       ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
       : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`);
     if(p.inHand && p.bet > 0){
@@ -1562,7 +1568,12 @@ function renderControls(d, mySeat, mine){
   const R = d.result && d.result.lines;
   // (while my show offer is up, the bar asks about my cards instead; the felt still shows the result)
   if(showLine) line = showLine;
-  else if(R && R.length && !(meSeat && meSeat.away)) line = R.map(esc).join('<br>');
+  else if(R && R.length && !(meSeat && meSeat.away)){
+    // the felt already says who won how much: the bar adds only what the felt leaves out (the winning hand, the
+    // other pots), so the same words never show twice
+    const rest = R.map(l => l.slice((l.match(/^.*? (?:wins|split) [\d,]+/) || [''])[0].length).replace(/^\s*·\s*/, ''));
+    line = rest.every(x => !x) ? 'Next hand coming up…' : R.length === 1 ? `Winning hand: <b>${esc(rest[0])}</b>` : R.map(esc).join('<br>');
+  }
   c.innerHTML = `<div class="info-line">${line}</div>${pre}`;
   const bb = $('backBtn'); if(bb) bb.onclick = () => send({ t: 'back' });
   c.querySelectorAll('[data-show]').forEach(btn => btn.onclick = () => {

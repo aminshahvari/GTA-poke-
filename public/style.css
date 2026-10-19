@@ -1993,3 +1993,12 @@ body{background:var(--lx-ink)}
 /* (the raise panel's presets, five of them with All-in, stay one row between the - and + steps) */
 #game.ovl .sz-presets{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px}
 #game.ovl .sz-presets button{font-size:clamp(11px,3.3vw,12.5px);line-height:1.05;white-space:normal;letter-spacing:0;padding:0 2px}
+/* the felt's name gives way to the line written over it (a result, a note) */
+#game .table-area .felt::after{transition:opacity .25s}
+#game .table-area.msg-on .felt::after{opacity:0}
+/* between your turns, a lone status line (the result, waiting for the deal, folded) stands as a quiet panel in the
+   middle of the buttons' place, not alone at the foot of an empty bar */
+#game.ovl .dock .controls:not(:has(button,.sizing)),#game.land .dock .controls:not(:has(button,.sizing)){align-content:center}
+#game.ovl .dock .controls:not(:has(button,.sizing))>.info-line:not(:empty),#game.land .dock .controls:not(:has(button,.sizing))>.info-line:not(:empty){border:1px solid rgba(216,180,106,.2);border-radius:16px;background:rgba(255,255,255,.03);padding:12px 14px}
+/* sideways the helper is as tall as what it says, just above the buttons (its room is still kept, so nothing moves) */
+#game.land .dock .helper{height:auto;max-height:var(--hlp-h,none)}
