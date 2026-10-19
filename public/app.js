@@ -1552,7 +1552,10 @@ function renderControls(d, mySeat, mine){
   else if(meSeat.away) line = `You're sitting out, so your hands fold automatically. <button class="btn green" id="backBtn" style="margin-left:6px;padding:6px 12px">I'm back</button>`;
   else if(myTurn) line = 'Sending your action…';
   else if(meSeat.inHand && !meSeat.folded){
-    if(mine && d.board.length) line = `${meSeat.allIn ? "You're all-in · " : 'You have '}<b>${esc(E.describe(E.evaluate(mine.concat(d.board.map(cs)))))}</b>`;
+    // (while the hand helper shows your hand's name, the bar doesn't say it again)
+    const HT = demo ? { helper: true } : club.tourney, helped = !!(HT && HT.helper !== false && mine && d.phase === 'hand' && !d.result);
+    if(mine && d.board.length && !helped) line = `${meSeat.allIn ? "You're all-in · " : 'You have '}<b>${esc(E.describe(E.evaluate(mine.concat(d.board.map(cs)))))}</b>`;
+    else if(meSeat.allIn) line = "You're all-in";
     else line = d.acting >= 0 ? `Waiting for ${esc((d.seats[d.acting] || {}).name || '')}…` : 'Dealing…';
     if(!meSeat.allIn && d.acting >= 0 && !d.result){
       const toCall = Math.min(Math.max(0, (d.cur || 0) - meSeat.bet), meSeat.stack);
