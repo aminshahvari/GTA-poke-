@@ -937,6 +937,8 @@ function tableGeo(n, bet = '8,888'){
       }
       const betBoxes = boxes.concat(placed), dh = S.dealer;
       const dealers = seats.map((q, k) => {
+        // (on the oval your badge stands right of your plate, so your button sits left of your cards, by your avatar)
+        if(k === 0 && WPT) return place(q.x + hc[0] - hc[2] - dh - 4, q.y + hc[1] - hc[3] + 22, 0, 1, dh, dh, betBoxes, k, true, quick);
         if(k === 0) return place(q.x + Math.max(hc[0] + hc[2], side0 ? hp[0] + hp[2] : -Infinity) + dh + 4, q.y + hc[1] - hc[3] + 22, 0, 1, dh, dh, betBoxes, k, true, quick);
         const d = front(q) + dh + 4, tx = -q.ny, ty = q.nx;
         return place(q.x - q.nx * d - tx * 40, q.y - q.ny * d - ty * 40, q.nx, q.ny, dh, dh, betBoxes, k, true, quick);
@@ -1462,7 +1464,7 @@ function renderTable(){
         const c = p.shown && p.shown[j] != null ? cs(p.shown[j]) : (isMe && mine ? mine[j] : null);
         const hl = res && res.showdown && winCards.size && c != null ? (winCards.has(c) ? ' wincard' : ' dim') : '';
         if(isMe) return cardHTML(c, `hero ${p.folded ? 'dim' : ''}${hl === ' dim' ? '' : hl} ${anim}`);
-        if(foot) return cardHTML(c, `hero${hl === ' dim' ? '' : hl} ${anim}`);
+        if(foot) return cardHTML(c, `hero${c != null ? ' show' : ''}${hl === ' dim' ? '' : hl} ${anim}`);
         if(c != null) return cardHTML(c, `show${hl === ' dim' ? '' : hl}`); // a losing hand stays fully readable at showdown
         return cardHTML(null, `mini ${anim}`);
       }).join('');
