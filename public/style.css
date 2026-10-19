@@ -1745,6 +1745,8 @@ body{background:var(--lx-ink)}
    hand's whole result is written in the bar under the table) */
 #game .center .msg{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden}
 #game .center .msg>div{display:inline}
+/* (the tall stadium keeps two lines for it, see tableGeo) */
+#game .table-area.stad .center .msg{-webkit-line-clamp:2}
 #game .center .msg>div+div::before{content:' · '}
 /* the shortest screens (iPhone SE 1st gen, phones held sideways): one header row, the clock with the chat and Lobby
    buttons beside it, so the table gets the room of the second row (table, average stack, rank) for the whole game */

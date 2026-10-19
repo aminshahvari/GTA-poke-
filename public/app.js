@@ -725,12 +725,12 @@ function tableGeo(n, bet = '8,888'){
   // (before all of those, the tall stadium with every seat on its rail: the tallest of 1.7, 1.55 and 1.4 times as tall
   // as wide that stays at least 70% of the width it could have, at any seat size but the smallest; then 1.25; then the
   // same with the smallest seats; only then the ovals. Not on the shortest screens (h600), which keep the oval.)
-  const STAD = [[1.7, 2, 1], [1.7, 3, 1], [1.55, 2, 1], [1.55, 3, 1], [1.4, 2, 1], [1.4, 3, 1]], STAD_LOW = [[1.25, 2, 1], [1.25, 3, 1]], OVAL = [[1.35, 1, 1], [1.35, 0, 1], [1.25, 1, 1], [1.25, 0, 1], [.78, 1, 0], [.78, 0, 0], [.82, 1, 0], [.82, 0, 0]];
+  const STAD = [[1.7, 2, 1], [1.7, 3, 1], [1.55, 2, 1], [1.55, 3, 1], [1.4, 2, 1], [1.4, 3, 1]], STAD_LOW = [[1.25, 2, 1], [1.25, 3, 1]], ONE = [...STAD, ...STAD_LOW].map(([k, i, nr]) => [k, i + 2, nr]), OVAL = [[1.35, 1, 1], [1.35, 0, 1], [1.25, 1, 1], [1.25, 0, 1], [.78, 1, 0], [.78, 0, 0], [.82, 1, 0], [.82, 0, 0]];
   const shapes = W < 470 ? (LAND ? BROAD : [...STAD, ...STAD_LOW, ...OVAL, ...BROAD]) : [[0, 0, 0]];
   const sizes = (H >= 420 ? [['', 1], ['', .6]] : []).concat([['compact', 1], ['compact', .6], ['mini', 1], ['mini', .6], ['mini', .3], ['micro', 1], ['micro', .6], ['micro', .3]]);
   // (upright on a phone, a clear oval with smaller seats comes before the broad felt with bigger ones, which on a
   // short screen ends up nearly round; the broad felt is next, and only then the smallest (micro) seats)
-  const looks = (W < 470 && !LAND ? [[SHORT ? [] : STAD, sizes.filter(([l]) => l !== 'micro')], [SHORT ? [] : STAD_LOW, sizes.filter(([l]) => l !== 'micro')], [SHORT ? [] : [...STAD, ...STAD_LOW], sizes.filter(([l]) => l === 'micro')], [OVAL, sizes.filter(([l]) => l !== 'micro')], [BROAD, sizes.filter(([l]) => l !== 'micro')], [shapes, sizes.filter(([l]) => l === 'micro')]] : [[shapes, sizes]])
+  const looks = (W < 470 && !LAND ? [[SHORT ? [] : STAD, sizes.filter(([l]) => l !== 'micro')], [SHORT ? [] : STAD_LOW, sizes.filter(([l]) => l !== 'micro')], [SHORT ? [] : [...STAD, ...STAD_LOW], sizes.filter(([l]) => l === 'micro')], [SHORT ? [] : ONE, sizes], [OVAL, sizes.filter(([l]) => l !== 'micro')], [BROAD, sizes.filter(([l]) => l !== 'micro')], [shapes, sizes.filter(([l]) => l === 'micro')]] : [[shapes, sizes]])
     .flatMap(([sh, sz]) => sz.flatMap(([l, q]) => sh.map(([k, inset, nar]) => [l, q, k, inset, 1.18, nar])))
     // (the micro seats may also give up some of the extra room either side of yours, for the seats along the top)
     .concat(n >= 6 ? [['micro', .6], ['micro', .3]].flatMap(([l, q]) => shapes.map(([k, inset, nar]) => [l, q, k, inset, 1.06, nar])) : []);
@@ -755,13 +755,15 @@ function tableGeo(n, bet = '8,888'){
     // felt and half off it, as on a real long table; the felt is narrowed to its shape so the whole table, both rounded
     // ends, shows above the action bar)
     const ins = inset >= 2 ? 0 : inset ? Math.round(Math.min(se.hw * .4, 18)) : 0;
-    const top = Math.max(se.up + (LAND ? 8 : 2) - rail / 2, look ? 0 : 50), bot = Math.max((LAND ? Math.max(he.down, se.down) + 8 : he.down + 4) - rail / 2, look ? 0 : 64), side = Math.max(se.hw + 2, look ? 0 : 46) - ins;
+    const lo = look || inset >= 2 ? 0 : 1, top = Math.max(se.up + (LAND ? 8 : 2) - rail / 2, lo * 50), bot = Math.max((LAND ? Math.max(he.down, se.down) + 8 : he.down + 4) - rail / 2, lo * 64), side = Math.max(se.hw + 2, lo * 46) - ins;
     let fw = Math.min(W - 2 * side + rail, 760), fh = H - top - bot;
     // a real table's proportions: on a phone held upright a clear oval, half again as tall as wide (the
     // height left over is shared above and below it); long when there's room; on a wide screen the shape stays
     // the same when the area grows or shrinks a little between hands
     // (when the screen is too short for that, the felt gets narrower rather than rounder: it always reads as an oval)
-    if(W < 470){ const fw0 = fw; fh = Math.min(fh, fw * k); if(nar) fw = Math.min(fw, Math.round(fh / k));
+    // (the stadium always takes the whole height between the header and the action bar, so the table spans the screen
+    // with your seat just above the bar: k is its least height/width, and where the width runs out first it is taller)
+    if(W < 470){ const fw0 = fw; fh = inset >= 2 ? Math.min(fh, fw * 2) : Math.min(fh, fw * k); if(nar) fw = Math.min(fw, Math.round(fh / k));
       // (an upright oval that would have to get much narrower than the screen allows is skipped: on a short screen
       // the table lies across instead, clearly wider than tall, rather than ending up round or thin)
       if(nar && fw < fw0 * (inset >= 2 ? (k > 1.3 ? .7 : .62) : k >= 1.5 ? .6 : .82)) return { look, sq, k, inset, g, nar, cost: 1e9 }; }
@@ -785,7 +787,7 @@ function tableGeo(n, bet = '8,888'){
     // seat map, x across the ring's width from -0.5 to 0.5, y from the bottom -0.9 to the top 0.9), each facing the
     // middle of its stretch of rail; the usual collision checks below still decide whether this look fits, and
     // inset 3 (tried next, with the same seats) spaces them evenly round the rail instead
-    const gem = inset === 2 && STADIUM_SEATS[n];
+    const gem = (inset === 2 || inset === 4) && STADIUM_SEATS[n];
     const seats = gem ? gem.map(([gx, gy]) => { const x = gx * 2 * rx, y = -gy / .9 * hy, cy0 = Math.max(0, hy - rx) * Math.sign(y);
         const [vx, vy] = Math.abs(y) <= Math.abs(cy0) ? [Math.sign(x), 0] : [x, y - cy0], l = Math.hypot(vx, vy) || 1;
         return { x: cx + x, y: cy + y, nx: vx / l, ny: vy / l }; })
@@ -798,11 +800,15 @@ function tableGeo(n, bet = '8,888'){
     // what must stay clear: each seat (cards + avatar, and the name plate with its badge), the board, the pot
     // above it and the message under it (both drawn at their real size)
     const seatBoxes = seats.map((q, k) => (k ? S.seat : S.hero).map(([dx, dy, w, h]) => [q.x + dx, q.y + dy, w, h]));
-    const [pw0, ph0, mh] = inLook(a, look, () => {
+    let [pw0, ph0, mh] = inLook(a, look, () => {
       const pv = pot.innerHTML, mv = msg.innerHTML, mx = msg.style.maxWidth;
       pot.innerHTML = chipsIcon(3) + 'Pot 888,888'; msg.innerHTML = '<div>8</div>'; msg.style.maxWidth = msgHalf * 2 + 'px';
       try{ return [pot.offsetWidth, pot.offsetHeight, msg.offsetHeight]; } finally { pot.innerHTML = pv; msg.innerHTML = mv; msg.style.maxWidth = mx; }
     }), mw = msgHalf * 2;
+    // (on the tall stadium the line under the board has two lines of room: a split or side pots, with the winners'
+    // names, rarely fit one line of its narrow felt; insets 4 and 5, tried after every other stadium and before the
+    // ovals, are the same stadium with one line, where the result is then written in shorter words)
+    if(inset === 2 || inset === 3) mh *= 2;
     // (when the felt is too short for the pot above the board, sideways or on the shortest screens, the pot may sit
     // at the board's left instead, the two centred together)
     const bxOf = side => side ? cx + (pw0 + 8) / 2 : cx;
@@ -1260,14 +1266,27 @@ function renderTable(){
   // the felt keeps room for one line here (see tableGeo); the full result is written in the bar under the table
   // (renderControls); the full text is also the title
   // (a result keeps its short part here, who won how much, so it is never cut off; the hand's name is in the bar)
-  $('msg').innerHTML = lines.map(l => `<div>${esc(res ? (l.match(/^.*? (?:wins|split) [\d,]+/) || [l])[0] : l)}</div>`).join(''); $('msg').title = lines.join('\n');
+  const short = l => (l.match(/^.*? (?:wins|split) [\d,]+/) || [l])[0];
+  $('msg').innerHTML = lines.map(l => `<div>${esc(res ? short(l) : l)}</div>`).join(''); $('msg').title = lines.join('\n');
   const LY = layoutOf(d), posOf = LY.posOf, G = LY.G;
   area.style.setProperty('--bw', G.bw + 'px');
   const felt = area.querySelector('.felt');
   felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px`;
   area.querySelector('.center').style.cssText = `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
   $('msg').style.maxWidth = G.msgW + 'px';
-  area.classList.toggle('tall', G.tall); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini); area.classList.toggle('micro', G.look === 'micro'); area.classList.toggle('pot-side', !!G.potSide);
+  // a split or several pots can be longer than the felt's one line: then the same result in shorter words, until it
+  // fits whole (short names, without the pot labels and the uncalled bets, then only who won); the bar under the
+  // table and the title keep the full text
+  if(res && lines.length){
+    const m = $('msg'), names = d.seats.filter(Boolean).map(p => p.name).sort((a, b) => b.length - a.length), nk = seatNicks(names);
+    const nicks = l => names.reduce((t, n) => t.split(n).join(nk(n)), l), won = lines.filter(l => / (?:wins|split) [\d,]+/.test(l));
+    const who = [...new Set(won.flatMap(l => short(l).replace(/^(?:Main pot|Side pot \d+): /, '').replace(/ (?:wins|split) [\d,]+$/, '').split(' & ')))].map(nk);
+    const forms = [lines.map(short), lines.map(l => nicks(short(l))), won.map(l => nicks(short(l)).replace(/^(?:Main pot|Side pot \d+): /, '')),
+      [who.join(' & ') + (who.length > 1 ? ' win' : ' wins')], [who.length > 1 ? who.length + ' winners' : who[0] + ' wins']];
+    const cut = () => m.scrollHeight > m.clientHeight + 1 || m.scrollWidth > m.clientWidth + 1;
+    for(const f of forms){ m.innerHTML = f.map(l => `<div>${esc(l)}</div>`).join(''); if(!cut()) break; }
+  }
+  area.classList.toggle('tall', G.tall); area.classList.toggle('stad', G.inset === 2 || G.inset === 3); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini); area.classList.toggle('micro', G.look === 'micro'); area.classList.toggle('pot-side', !!G.potSide);
   if(!d.result) $('fx').querySelectorAll('.winpile').forEach(e => { if(e.dataset.hand !== d.tid + ':' + d.handNo){ e.classList.add('gone'); setTimeout(() => e.remove(), 400); } });
   const mc = myCards.get(d.tid), mine = mc && mc.hand === d.handNo ? mc.cards.map(cs) : null;
   const nick = seatNicks(d.seats.filter(Boolean).map(p => p.name));
