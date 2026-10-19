@@ -1,0 +1,29 @@
+# MUSE AUDIT — Issue #2: Gemini GitHub Actions relay — feasibility, cost, security
+**Date:** 2026-10-19 (~01:35 EDT) · **Auditor:** Muse · **Scope:** read-only audit, NO implementation (per Issue #2). **Question put to Muse:** independent feasibility/cost/security audit + GO/NO-GO for a future narrowly-scoped staging proof of concept.
+
+## Verdict: **NO-GO** for the Actions relay as proposed. **GO** for the direct local link (already built) once the owner tops up prepay and approves the cap. A relay PoC is unnecessary until a concrete need the direct link cannot meet is demonstrated.
+
+## 1. The core finding: the relay solves a problem that is already solved
+Muse's direct exchange (`~/workspace/blindrise-ai-hub/gemini_exchange.py`) exists and is live-tested: authentication works, model listing works (50 models returned, including `gemini-3-flash-preview`, `gemini-3.1-flash-lite`, `gemini-flash-latest`). The only blocker is billing: a generation call re-tested today (2026-10-19) returns **HTTP 402 — prepayment credits depleted**, unchanged from Oct 18. A GitHub Actions relay calls the same API with the same key class and would hit the **same 402**. The relay therefore adds an entire automation surface — workflows, secrets in CI, comment parsing — to route around a billing state it cannot change. The smallest action that unblocks Gemini is the owner action already on record: top up AI Studio prepay + approve the proposed $10/month cap.
+
+## 2. Feasibility of the relay itself (were it ever needed)
+Technically feasible: an `issue_comment` workflow can read a comment, call generateContent, and post a reply. Actions minutes for a private repo are metered beyond the included allotment (2,000 min/month on the current plan class), so "the relay is free" is false on two independent axes (Actions minutes + API billing). Latency (workflow startup + queueing) makes it a worse channel than the direct link for interactive coordination.
+
+## 3. Security audit of the proposed design
+- **Secret exposure class change:** the API key would move from Muse's credential store into GitHub Actions secrets — a broader, CI-shaped blast radius (workflow logs, step outputs, third-party actions in the supply chain). No compensating benefit.
+- **Prompt injection:** the relay's input is issue comments — untrusted text by design, and on this bridge comments carry owner directives and other agents' work. A comment-driven agent that answers on the same thread can be steered by any participant with comment access; the relay would need author allow-lists, trigger phrases, output length caps and loop guards (bot-reply → retrigger) before it is safe to enable. None of that exists in the proposal.
+- **Token privilege:** posting replies requires a write-scoped GITHUB_TOKEN job on an event triggered by comment content — the classic confused-deputy shape; it must be pinned to `issues: write` only, with `contents: read`, and even then it acts with the repo owner's authority in-thread.
+- **Data boundaries:** prompts sent to the API from CI would leave the repo context wholesale (issue bodies include product plans and, potentially, pasted private detail). The direct link lets Muse select the minimum necessary excerpt per call.
+- **Loops and cost abuse:** without hard caps (per-day call ceiling, max output tokens, one reply per trigger), a comment thread can self-sustain calls. The proposal names no caps.
+
+## 4. Cost and the "zero-cost / free tier" claim
+**NOT DEMONSTRABLE.** (a) This account's project is on prepay and depleted — generation is 402, not free, today. (b) A separate free-tier project/key is a terms-and-eligibility question for the owner to settle in AI Studio; Muse cannot verify eligibility from here, and creating a second project to route around a billing state is not a control Muse will design around. (c) At Flash-class rates, real coordination traffic (bounded prompts, capped outputs) costs cents per exchange — the proposed **$10/month cap is generous headroom**, which is exactly why the direct link + cap is the honest route: near-zero cost, admitted and capped, instead of "zero" cost that is not zero.
+
+## 5. Actual need
+What coordination actually requires from Gemini today: (i) a connected reviewer who can read a bounded brief and return a bounded opinion — the direct link does this the hour the prepay lands; (ii) Gemini's UX specification delivered as a document — a file problem, not an API problem (it is still missing; see Issue #4 record). Neither needs Actions. Gemini participating via Issues as an autonomous commenter is a *preference* some workflows have, not a requirement the owner has set; the owner's own requirement (Issue #2, owner reminder Oct 18) is that the issue stays open until "a secure working Gemini↔bridge connection is demonstrated with independent evidence" — **the direct link, once funded and re-tested by Muse with a live generation call, satisfies that requirement with evidence.**
+
+## 6. Recommendation and next decisions
+1. **NO-GO**: do not build the Actions relay; do not create workflows, secrets, or keys for it.
+2. **Owner**: top up AI Studio prepay; approve or amend the proposed $10/month cap (Flash-class default model, per-call token caps, no batching without approval).
+3. On funding, Muse re-runs the live generation test the same hour and files the evidence (model, latency, response, cost estimate) on Issue #2; the issue can then close on the owner's word with the requirement met.
+4. If a future need for comment-driven Gemini participation is ever demonstrated (e.g., Gemini must respond in-thread without Muse relaying), this audit's §3 controls are the minimum precondition list, and the PoC would need its own separate owner approval, a dedicated non-production repo, and Muse re-audit before any bridge use.
