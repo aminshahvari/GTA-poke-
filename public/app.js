@@ -763,7 +763,8 @@ function tableGeo(n, bet = '8,888'){
     // of the screen by its whole round end, so its sides run straight to the bottom edge, where your seat and the action
     // column stand)
     const below = WPT ? Math.round(W / 2) : 0;
-    if(WPT){ fw = Math.min(W - 8, 760); fh = H + below - top; }
+    // (narrow enough that each side seat, 4 px from the screen's edge, stands over the felt's rail, its middle just inside it)
+    if(WPT){ fw = Math.min(Math.round(W - 8 - se.hw * 1.5 + rail), 760); fh = H + below - top; }
     // a real table's proportions: on a phone held upright a clear oval, half again as tall as wide (the
     // height left over is shared above and below it); long when there's room; on a wide screen the shape stays
     // the same when the area grows or shrinks a little between hands
@@ -781,8 +782,7 @@ function tableGeo(n, bet = '8,888'){
     const hx = fw / 2 - rail / 2, hy = fh / 2 - rail / 2, r = Math.min(hx, hy), lx = hx - r, ly = hy - r;
     // the seats' ring: the middle of the rail (its sides `ins` further in), or with tighter corners (sq < 1) when
     // a full table is crowded
-    // (on the WPT table the felt runs to 4 px from the screen's edges and the side seats stand on it, just in from
-    // the edge, over the rail as at a real table)
+    // (on the WPT table the side seats stand 4 px from the screen's edges, over the felt's rail as at a real table)
     const rx = WPT ? Math.min(hx, W / 2 - 4 - se.hw) : hx - ins, rs = Math.min(rx, hy) * sq, sx = rx - rs, sy = hy - rs;
     // walk the seats' ring clockwise from the bottom centre; each piece is [length, point(t), outward normal(t)]
     const arc = (ox, oy, a0) => [Math.PI * rs / 2, t => { const q = a0 + t / rs; return [ox + rs * Math.cos(q), oy + rs * Math.sin(q), Math.cos(q), Math.sin(q)]; }];

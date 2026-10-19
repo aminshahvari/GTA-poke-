@@ -8,8 +8,8 @@
 //    wide (not the 320 px SE, which keeps the oval of 6fcfcb1) the tall stadium, at least STAD_MIN (1.2) and filling
 //    the screen down to the action bar (at most DOCK_GAP px between your seat, its badge included, and the bar);
 //    held sideways it is clearly wider than tall (at most 0.8)
-//  - the WPT table (upright, under 470 px wide, taller than 600 px): the felt spans at least WPT_W (90%) of the width
-//    and reaches the bottom of the screen, the part that shows WPT_MIN-WPT_MAX (1.4-2.1) times as tall as wide; your
+//  - the WPT table (upright, under 470 px wide, taller than 600 px): the felt spans at least WPT_W (78%) of the width
+//    and reaches the bottom of the screen, the part that shows WPT_MIN-WPT_MAX (1.3-2.1) times as tall as wide; your
 //    seat is at the bottom left, and the action column (and the raise panel in it) covers no seat and no card
 //  - the winner line on the felt, for a split and for side pots, is written whole and clear of every seat
 // The table state is written into the page's own socket (routeWebSocket), as t_stability does.
@@ -36,7 +36,7 @@ const SIZES = (process.env.SIZES || DEF).split(',').reduce((a, v) => { if(/^\d+x
   .map(v => { const [wh, ins] = v.split('@'), [w, h] = wh.split('x').map(Number), [l = 0, r = 0, b = 0] = ins ? ins.split(',').map(Number) : []; return [w, h, { l, r, b }, v]; })
   .filter(v => !process.env.ONLY || process.env.ONLY === v[3]);
 const NS = (process.env.NS || '2,3,4,5,6,7,8,9').split(',').map(Number);
-const WPT_W = .9, WPT_MIN = 1.4, WPT_MAX = 2.1, FELT_MIN = .75, FELT_SHORT = .75, FELT_MAX = 1.8, STAD_MIN = 1.2, DOCK_GAP = 24, LAND_MAX = .8;
+const WPT_W = .78, WPT_MIN = 1.3, WPT_MAX = 2.1, FELT_MIN = .75, FELT_SHORT = .75, FELT_MAX = 1.8, STAD_MIN = 1.2, DOCK_GAP = 24, LAND_MAX = .8;
 const api = async (p, body) => { const j = await (await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })).json(); if(j.error) throw new Error(p + ': ' + j.error); return j; };
 const fails = [];
 let oks = 0;
