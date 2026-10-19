@@ -1218,7 +1218,7 @@ function renderTable(){
   // the felt keeps room for one line here (see tableGeo); the full result is written in the bar under the table
   // (renderControls); the full text is also the title
   // (a result keeps its short part here, who won how much, so it is never cut off; the hand's name is in the bar)
-  $('msg').innerHTML = lines.map(l => `<div>${esc(res ? l.split(' · ')[0] : l)}</div>`).join(''); $('msg').title = lines.join('\n');
+  $('msg').innerHTML = lines.map(l => `<div>${esc(res ? (l.match(/^.*? (?:wins|split) [\d,]+/) || [l])[0] : l)}</div>`).join(''); $('msg').title = lines.join('\n');
   const LY = layoutOf(d), posOf = LY.posOf, G = LY.G;
   area.style.setProperty('--bw', G.bw + 'px');
   const felt = area.querySelector('.felt');
@@ -1472,13 +1472,14 @@ function tickClock(){
 setInterval(tickClock, 200);
 window.addEventListener('resize', () => { if(view === 'table') renderTable(); });
 // iPhone Safari reports a turned screen's new size late (after the resize/orientationchange events have fired), so
-// the table was laid out for the old shape and kept it: look again a few times while the turn settles. A screen
+// the table was laid out for the old shape and kept it: look again a few times while the turn settles (for a few
+// seconds: a busy phone can be slow to report it). A screen
 // that only got taller or shorter (the toolbar, the keyboard) keeps its held layout; a turned one (a new width) is laid
 // out anew.
 let TURN = [], TURNW = window.innerWidth;
 function settleTurn(){
   TURN.forEach(clearTimeout);
-  TURN = [60, 200, 450, 900].map((ms, i, all) => setTimeout(() => {
+  TURN = [60, 200, 450, 900, 1600, 2600].map((ms, i, all) => setTimeout(() => {
     if(view === 'table'){
       // the screen really turned (its width is not the one it settled at last time): while the turn settles, a
       // height arriving late decides the layout again too
