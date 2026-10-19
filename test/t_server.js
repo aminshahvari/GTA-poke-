@@ -63,7 +63,10 @@ let srv; process.on('exit', () => { try{ srv.kill('SIGKILL'); }catch(e){} try{ f
         if(!seated && m.you) fail('leak');
         if(m.you) c.cards = m.you;
         if(m.you){ c.dealt = c.dealt || {}; c.dealt[tb.tid + '#' + m.you.hand] = m.you.cards.join(); }
-        tb.seats.forEach(s => { if(s && s.shown && s.uid !== c.id && tb.phase === 'hand' && !tb.result && tb.legal && tb.legal.canRaise === undefined) fail('shown early'); });
+        // before the result another player's cards show only when the hands are tabled (all-in: at most one player can
+        // still act), and a folded hand never (the full set of checks, with reconnects and a railbird, is t_privacy.js)
+        { const canAct = tb.seats.filter(s => s && s.inHand && !s.folded && !s.allIn).length;
+          tb.seats.forEach(s => { if(s && s.shown && s.uid !== c.id && !tb.result && (s.folded || canAct > 1)) fail(`shown early: ${s.name} at ${tb.tid} hand ${tb.handNo}`); }); }
         if(tb.actUid === c.id && tb.legal && c.lastSeq !== tb.tid + tb.seq){
           c.lastSeq = tb.tid + tb.seq;
           const L = tb.legal, r = Math.random();
