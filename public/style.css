@@ -1911,3 +1911,11 @@ body{background:var(--lx-ink)}
 #game.wpt .xtime,#game.wpt .xtime:disabled{background:none;border-color:transparent;position:relative;isolation:isolate}
 #game.wpt .xtime::before{content:'';position:absolute;inset:8px 0;z-index:-1;border-radius:999px;background:rgba(240,195,90,.12);border:1px solid rgba(240,195,90,.4)}
 #game.wpt .felt::after{top:var(--wm,50%)}
+/* the WPT table, closer to WPT: the helper is a small line under the board (centred, like WPT's pot line) and opens
+   there on a tap; while the raise panel is open the clock row gives it its place (your plate's own time bar keeps
+   running) */
+#game.wpt .center>.helper{position:absolute;left:50%;top:100%;transform:translateX(-50%);width:max-content;max-width:min(300px,calc(100vw - 24px));margin:6px 0 0;padding:5px 10px;font-size:12px;z-index:6;height:auto}
+#game.wpt .center>.helper.open{width:min(280px,calc(100vw - 24px));box-shadow:0 10px 26px rgba(0,0,0,.55);z-index:30;gap:5px}
+#game.wpt .center>.helper.open .h-eq small{display:inline}
+#game.wpt .center>.helper.open .h-line{-webkit-line-clamp:4}
+#game.wpt .controls:has(.sizing) .turnrow{display:none}

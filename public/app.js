@@ -806,7 +806,9 @@ function tableGeo(n, bet = '8,888'){
       const [d0, d1, d2, d3] = DB; dockBox = [(d0 + d2) / 2, (d1 + d3) / 2, (d2 - d0) / 2, (d3 - d1) / 2];
       const hl = Math.min(...S.hero.map(([x, , w]) => x - w)), ht = Math.min(...S.hero.map(([, y, , h]) => y - h)), hb = Math.max(...S.hero.map(([, y, , h]) => y + h));
       const hxp = 6 - hl, hyp = Math.min(H, d3) - 2 - hb; heroTop = hyp + ht;
-      const yL = Math.min(sy, heroTop - 6 - se.down - cy), yR = Math.min(sy, d1 - 6 - se.down - cy);
+      // (both sides end at the same height, as at WPT: the lowest seat each side just above the action column, the
+      // one on the left with your seat under it)
+      const yL = Math.min(sy, heroTop - 6 - se.down - cy, d1 - 6 - se.down - cy), yR = yL;
       const run = [line(-rx, yL, 0, -1, yL + sy, -1, 0), arc(-sx, -sy, Math.PI), line(-sx, -hy, 1, 0, 2 * sx, 0, -1), arc(sx, -sy, Math.PI * 1.5), line(rx, -sy, 0, 1, yR + sy, 1, 0)].filter(q => q[0] > 0);
       const m = n - 1, RL = yL + sy + Math.PI * rs / 2 + sx, RR = yR + sy + Math.PI * rs / 2 + sx;
       const on = d => { for(const [len, f] of run){ if(d <= len + 1e-6) return f(d); d -= len; } const [len, f] = run[run.length - 1]; return f(len); };
@@ -824,7 +826,9 @@ function tableGeo(n, bet = '8,888'){
     // the action column)
     const tall = fh > fw, by0 = WPT ? Math.round(top + (heroTop - top) * .5) : tall ? cy : cy - Math.min(28, fh * .08);
     // board cards sized to the felt so they never run into the seats' chips
-    const bw = Math.max(mini ? 24 : 28, Math.min(mini ? 30 : compact ? 34 : 50, (fw - 2 * rail) * (tall ? .128 : .108), (rx - 54) / 2.5)), boardHalf = bw * 2.5 + 6, bh = bw * .7;
+    // (the WPT table's board is big, as WPT's: up to 15% of the felt's width a card, the layout checks below still
+    // keeping it clear of every seat)
+    const bw = WPT ? Math.max(28, Math.min(mini ? 40 : compact ? 46 : 54, (fw - 2 * rail) * .15)) : Math.max(mini ? 24 : 28, Math.min(mini ? 30 : compact ? 34 : 50, (fw - 2 * rail) * (tall ? .128 : .108), (rx - 54) / 2.5)), boardHalf = bw * 2.5 + 6, bh = bw * .7;
     const msgHalf = Math.min(140, rx - 48, (Math.min(fw - 2 * rail - 16, bw * 5 + 50)) / 2);
     // what must stay clear: each seat (cards + avatar, and the name plate with its badge), the board, the pot
     // above it and the message under it (both drawn at their real size)
@@ -1195,10 +1199,9 @@ function reserveDock(seated){
     // table is laid out round that box, so the column never covers a seat or a card
     if(h == null){
       const turn = '<div class="turnrow"><button type="button" class="xtime">+30s<small>8 left</small></button><div class="turnbar"><i></i><span class="num">88s</span></div></div>';
-      const help = '<div class="helper min"><div class="h-top"><b class="h-name">Wg</b><span class="h-eq"><i class="h-w">Win</i>88%<small> to win vs 8</small></span></div></div>';
-      const states = seated ? [help + `<div class="controls">${turn}<div class="act-main" style="--n:3"><button class="act-btn fold"><b>Fold</b></button><button class="act-btn call"><b>Call</b><span class="num">88,888</span></button><button class="act-btn raise"><b>Raise</b><span>Choose amount</span></button></div></div>`,
-        help + '<div class="controls"><div class="info-line">Wg</div><div class="preacts"><button><i></i>Fold</button><button><i></i>Call 88,888</button><button><i></i>Call any</button></div></div>',
-        `<div class="controls">${turn}<div class="sizing"><div class="amt"><small>Raise to</small><b class="num">88,888</b><span class="num">88 BB</span></div><div class="sz-presets"><button>2.5 BB</button><button>3 BB</button><button>4 BB</button><button>Pot</button><button>All-in</button></div><div class="sz-slider"><button class="step">−</button><input type="range"><button class="step">+</button></div></div><div class="act-main" style="--n:2"><button class="act-btn back"><b>Back</b></button><button class="act-btn raise"><b>Raise</b><span class="num">88,888</span></button></div></div>`,
+      const states = seated ? [`<div class="controls">${turn}<div class="act-main" style="--n:3"><button class="act-btn fold"><b>Fold</b></button><button class="act-btn call"><b>Call</b><span class="num">88,888</span></button><button class="act-btn raise"><b>Raise</b><span>Choose amount</span></button></div></div>`,
+        '<div class="controls"><div class="info-line">Wg</div><div class="preacts"><button><i></i>Fold</button><button><i></i>Call 88,888</button><button><i></i>Call any</button></div></div>',
+        `<div class="controls"><div class="sizing"><div class="amt"><small>Raise to</small><b class="num">88,888</b><span class="num">88 BB</span></div><div class="sz-presets"><button>2.5 BB</button><button>3 BB</button><button>4 BB</button><button>Pot</button><button>All-in</button></div><div class="sz-slider"><button class="step">−</button><input type="range"><button class="step">+</button></div></div><div class="act-main" style="--n:2"><button class="act-btn back"><b>Back</b></button><button class="act-btn raise"><b>Raise</b><span class="num">88,888</span></button></div></div>`,
         '<div class="controls"><div class="info-line">Wg<br>Wg<br>Wg</div><div class="preacts showmuck n4"><button>Show left</button><button>Show right</button><button>Show both</button><button>Muck</button></div></div>']
         : ['<div class="controls"><div class="info-line">Wg<br>Wg<br>Wg</div></div>'];
       // (the free-play line stands above the buttons in every state)
@@ -2038,6 +2041,11 @@ function renderHelper(d, me, mine){
   // (in the WPT column the helper is one small line, the hand and the chance to win; a tap opens the whole helper
   // just above the column, and another tap, or the next hand, closes it)
   const wpt = $('game').classList.contains('wpt'), hk = d.tid + ':' + d.handNo;
+  // (on the WPT table the helper is a small line under the board, in the room the layout keeps for the line there, as
+  // WPT shows the pot; elsewhere it is in the dock above the buttons)
+  const home = wpt ? $('tableArea').querySelector('.center') : $('dock');
+  if(el.parentNode !== home) wpt ? home.appendChild(el) : home.insertBefore(el, $('playLine'));
+  if(wpt){ const m = $('msg'); el.style.marginTop = (m.textContent.trim() ? 10 + m.offsetHeight : 6) + 'px'; }
   if(helpOpen && helpOpen !== hk) helpOpen = null;
   const small = wpt ? !helpOpen : helperMin;
   el.className = 'helper' + (small ? ' min' : '') + (wpt && helpOpen ? ' open' : '');
