@@ -1,0 +1,50 @@
+{
+ "open_blockers": [
+  {
+   "id": "I4-TABLE",
+   "owner": "Claude builds / Muse audits",
+   "severity": "P0",
+   "status": "open",
+   "summary": "Production table geometry: portrait felt aspect 1.194, winner line clipped by 1-line clamp, 32.9% viewport below felt. Muse Issue #4 audit filed (G1-G6 criteria); Claude bespoke redesign due morning Oct 19 Toronto."
+  },
+  {
+   "id": "BR-QLT-03",
+   "owner": "Owner (Render)",
+   "severity": "P1-ops",
+   "status": "action required",
+   "summary": "Production Postgres expires 2026-11-14"
+  },
+  {
+   "id": "REL-EVIDENCE",
+   "owner": "Claude",
+   "severity": "P1",
+   "status": "owed",
+   "summary": "4423a07 gate evidence (idle check, fresh backup artifact, rollback readiness) + GO record not yet filed in repo"
+  }
+ ],
+ "product": "Blindrise",
+ "production": {
+  "commit": "4423a07",
+  "note": "RELEASED 2026-10-18 ~17:54 EDT (fast-forward 5c7ee11 -> 4423a07, Auto-Deploy ON); Muse verified live: served app.js SHA-256 c056b1cb... byte-exact, /healthz ok, Postgres epoch 2 clean handover. Oct 18 22:00 EDT tournament ran on the new build. Rollback target: 5c7ee11.",
+  "db_expires": "2026-11-14",
+  "url": "https://gta-poker.onrender.com"
+ },
+ "coordination": {
+  "chatgpt": "CONNECTED VIA GITHUB ISSUES (verified 2026-10-18 ~13:44 EDT): ChatGPT created Issue #1 in aminshahvari/GTA-poke- (coordination handoff: Claude read-only triage of 5 Gemini concerns + Muse independent audit; no deploy authorization). Muse read it in full. Still true: no OpenAI connector exists inside Muse's environment \u2014 the channel is ChatGPT<->GitHub<->Claude/Muse, not a direct ChatGPT<->Muse API link",
+  "claude_muse": "LIVE via GitHub repo filings",
+  "gemini_api": "Direct link built + live-tested: auth OK, 50 models listed (3.x available). Generation re-tested 2026-10-19: HTTP 402 prepay depleted \u2014 unchanged. Owner top-up + $10/mo cap approval is the ONLY unblock. Gemini UX spec document still not received by any agent in the repo.",
+  "issue_1": "https://github.com/aminshahvari/GTA-poke-/issues/1 \u2014 Muse acknowledgment comment POSTED 2026-10-18 13:43 EDT via browser (permalink #issuecomment-6253075222); issue remains Open; Muse GitHub MCP is not_connected, git push not credentialed",
+  "owner_actions": [
+   "top up Gemini API prepay + approve monthly cap",
+   "optional: GitHub MCP connector or scoped PAT for Muse push access (removes browser workaround)"
+  ]
+ },
+ "updated_at": "2026-10-19T01:40:00-04:00",
+ "updated_by": "Muse",
+ "verdicts_2026_10_19": {
+  "club_switching_06f8662": "CONDITIONAL PASS (dev/staging only) \u2014 MUSE-VERDICT-club-switching-06f8662-2026-10-19.md @ 1915725 on club-switching + Issue #5 comment 6260147187. Condition 1: scoped membership-write merge fix required before production activation.",
+  "celestia_9edd938": "CONDITIONAL PASS (preparation only) \u2014 MUSE-VERDICT-celestia-9edd938-2026-10-19.md @ 0de4a98 on celestia-campaign + Issue #5. Condition D1: re-base onto 4423a07 + delta re-audit before any release consideration; D5 fail-closed consent before launch.",
+  "issue2_gemini_relay": "Muse audit: NO-GO for the Actions relay (solves a solved problem; same 402 billing wall; secret/injection surface). GO for the direct link once funded. MUSE-AUDIT-issue2-gemini-relay-2026-10-19.md.",
+  "issue4_divergence": "No deployed-vs-candidate divergence; PASS criteria gap owned by Muse; G1-G6 criteria proposed. MUSE-AUDIT-issue4-divergence-2026-10-19.md @ de1ea63 on r2-integration + Issue #4 comment."
+ }
+}
