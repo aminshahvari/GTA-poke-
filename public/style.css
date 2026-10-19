@@ -1865,3 +1865,34 @@ body{background:var(--lx-ink)}
 #game.wpt .sizing~.act-main{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}
 #game.wpt .sizing~.act-main .act-btn b{font-size:14px;white-space:nowrap}
 #game .center .msg.up{top:auto;bottom:100%;margin:0 0 6px}
+/* ---------- free social play: the start-of-game notice and the line under the table ----------
+   The line sits in the dock between the helper and the action bar, and app.js counts it in the dock's reserved
+   height, so it is never over the table. Upright and seated it takes exactly the gap that was already there (the
+   helper's bottom margin and the bar's top padding, 6 + 6 px, or 6 + 4 px on short screens), and the 1 px (3 px on
+   short screens) more that its 11 px text needs comes out of the helper's own padding, so the table keeps its size
+   to the pixel. Watching, it sits over the
+   bar's top padding, above the status line's own padding (6 + 8 px; 5 + 8 px on short screens, 1 px more than before).
+   Sideways it is one more row of the dock column, which has room to spare. The notice covers only the board's
+   empty slots before the flop (placed by app.js). */
+#game .playline{flex:none;position:relative;z-index:4;height:13px;padding:0 8px;text-align:center;font-size:11px;line-height:13px;
+  letter-spacing:.02em;color:rgba(216,180,106,.66);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;user-select:none}
+#game .playline span{white-space:nowrap}
+#game.seated:not(.land) .dock .helper{margin-bottom:0;padding-bottom:7px}
+#game.seated.h700:not(.land) .dock .helper{padding-top:5px;padding-bottom:4px}
+#game.seated:not(.land) .dock .controls{padding-top:0}
+#game:not(.seated):not(.land) .playline{position:absolute;top:0;left:0;right:0}
+#game.h700:not(.seated):not(.land) .dock .controls{padding-top:5px}
+#game.land .playline{height:auto;margin:0 0 3px;padding:0 8px 0 4px;white-space:normal}
+.playnote{position:absolute;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  box-sizing:border-box;padding:2px 14px;overflow:hidden;text-align:center;line-height:1.15;font-size:13px;cursor:pointer;
+  border-radius:10px;background:rgba(10,16,30,.94);border:1px solid var(--lx-hair2,rgba(241,223,176,.26));
+  box-shadow:0 0 0 1px rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.45);animation:pnIn .3s ease-out}
+@keyframes pnIn{from{opacity:0}}
+.playnote[hidden]{display:none}
+.playnote b{color:var(--lx-gold,#d8b46a);font-weight:600;letter-spacing:.04em;white-space:nowrap}
+.playnote span{color:var(--lx-ivory,#f4eee2);white-space:nowrap}
+.playnote.wrap span{white-space:normal}
+.playnote i{position:absolute;top:1px;right:5px;font-style:normal;font-size:12px;line-height:1;color:var(--lx-mute,#a3abbb)}
+@media (prefers-reduced-motion:reduce){.playnote{animation:none}}
+/* in the WPT column the free-play line takes two short lines above the buttons (counted in the column's height) */
+#game.wpt .playline,#game.wpt:not(.seated) .playline{position:static;height:auto;margin:5px 0 6px;padding:0 4px;white-space:normal;line-height:13px}
