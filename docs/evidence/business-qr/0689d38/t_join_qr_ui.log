@@ -1,0 +1,11 @@
+ok 1 390x844: both clubs' landings show their own name, fine print and consent; unticked sends nothing; join and duplicate both succeed
+ok 2 320x568: both clubs' landings show their own name, fine print and consent; unticked sends nothing; join and duplicate both succeed
+ok 3 430x932: both clubs' landings show their own name, fine print and consent; unticked sends nothing; join and duplicate both succeed
+ok 4 unknown slug shows "not active"; a 12-character invite link still opens the invitation
+ok 5 owner card: Blindrise, 2 members, LIVE, join address shown; 3 sign-ups, duplicates collapsed, no other club
+ok 6 on-screen QR decodes (OpenCV) to exactly http://localhost:5407/join/blindrise
+ok 7 Share hands over the join address plus blindrise-join-qr.png
+ok 8 Download saves blindrise-join-qr.png, which decodes to http://localhost:5407/join/blindrise
+ok 9 Print opens the print dialog with only the QR sheet, and the printed page decodes to http://localhost:5407/join/blindrise
+ok 10 a member gets no QR card
+t_join_qr_ui: 10 ok, 0 failed

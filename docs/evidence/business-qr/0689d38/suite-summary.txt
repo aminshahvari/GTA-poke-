@@ -1,0 +1,15 @@
+npm test exit 0
+t_join_qr_ui exit 0 0 fails; t_join_qr_ui: 10 ok, 0 failed
+t_welcome exit 0 0 fails; welcome ui test passed
+t_clubs_closed exit 0 0 fails; 25 ok, 0 failed
+t_premium_ui exit 0 0 fails; 296 ok, 0 failed
+t_hotfix exit 0 0 fails; 50 ok, 0 failed
+t_extras_ui exit 0 0 fails; t_extras_ui: 13 ok, 0 failed
+t_stability exit 0 0 fails; 220 ok, 0 failed
+t_positions exit 0 0 fails; 356 ok, 0 failed
+t_social_play exit 0 0 fails; 630 ok, 0 failed
+t_mobile_ux exit 1 2 fails; 2 check(s) failed
+t_table_small exit 1 2 fails; 2 crowded layouts: 320x568 9-handed actions, 320x568 9-handed sizing
+t_table_layout exit 1 34 fails; 3962 ok, 34 failed
+
+[exited with code 0]

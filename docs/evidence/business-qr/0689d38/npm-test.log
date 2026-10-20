@@ -1,0 +1,66 @@
+
+> stacked-poker@1.0.0 test
+> node test/t_eval.js && node test/t_rules.js && node test/t_sim.js 20 && node test/t_server.js && node test/t_chat.js && node test/t_coach.js && node test/t_players.js && node test/t_push.js && node test/t_extra.js && node test/t_security.js && node test/t_bizunit.js && node test/t_business.js && node test/t_opportunity.js && node test/t_content.js && node test/t_clubs.js && node test/t_invite_privacy.js && node test/t_csp.js && node test/t_join_qr.js && node test/t_extras.js && node test/t_extras_parity.js 300
+
+random 7-card hands checked: 200000 category counts: High Card:34961, Pair:87599, Two Pair:46967, Three of a Kind:9634, Straight:9247, Flush:5975, Full House:5243, Four of a Kind:311, Straight Flush:63
+evaluator: all passed
+42 passed, 0 failed
+random-action stress: 3000 tournaments, 30459 hands, 1.01s, problems 0
+AI tournaments: 20, avg 155 hands, 3.136s, wins by style { cautious: 8, loose: 5, tight: 6, aggro: 1 } top-3 by style { tight: 18, aggro: 10, cautious: 20, loose: 12 } problems 0
+fair deal: 561 hands verified, 1973 dealt hands cross-checked
+server test: 23 players, max 4 tables, 0 hand-for-hand rounds, 2 tied, 327 chip checks, 648 actions, 86s, champion Friend 10
+server test passed
+rebalance: P15 moved t1792454128403-3 -> t1792454128403-1
+break: P7 moved t1792454128403-2 -> t1792454128403-1 (old table closed)
+break: P11 moved t1792454128403-2 -> t1792454128403-3 (old table closed)
+chat test: 1849 checks, 1 moved by rebalance, 2 moved by break (t1792454128403-2), no-delivery proofs: owner not watching 41, player at another table 828, railbird of another table 139, signed-out socket 162, removed member 78, member in lobby 110, player watching another table 20
+chat test passed
+coach test: 695 hands, 757 notes {
+  'Big over-shove': 95,
+  'Called off with a weak hand': 89,
+  'All-in equity': 237,
+  'Called a raise with a weak hand': 125,
+  'Got lucky': 30,
+  'Bad beat': 29,
+  'Folded for a small price': 13,
+  'Limped in': 48,
+  'Risky call near the bubble': 52,
+  'Opened a weak hand': 26,
+  'All-in bluff into a crowd': 7,
+  'Missed an all-in': 1,
+  'Paid off with nothing': 2,
+  'Good all-in': 3
+}
+coach test passed
+store: file /tmp/t_players_25546.json, 0 keys
+players test passed
+store: file /tmp/t_push_25553.json, 0 keys
+push test passed
+extra-time test passed
+security test passed
+store: file /tmp/t_bizunit_25592.json, 0 keys
+business units passed (card parser, validators, staging seed)
+business club test passed
+opportunity club test passed
+content rule test passed (414 probes: 32 links, 11 emails, 54 social, 135 phones, 182 allowed; server fields and visibility)
+clubs switch test passed
+ok   owner sees every member's inviter
+ok   a member's payload does not carry even their own inviter
+ok   a member does not see other members' inviters
+ok   an unrelated member sees no inviter for anyone else
+ok   no invitedBy anywhere in member payloads
+ok   the inviter sees only a count of who joined through them, not the names
+ok   members still see the full member list
+7 ok, 0 failed
+csp + vendor test passed
+ok 1 each club resolves to its own name, initials and consent text; unknown slugs say nothing
+ok 2 a 12-character name gets a slug that is not 12 characters (twelve-chars-2)
+ok 3 /join/blindrise serves the app; invite codes stay 12 characters
+ok 4 unticked box, missing/forged/other-club token and bad email are all refused; nothing is stored
+ok 5 duplicate email (different case and spaces) keeps one sign-up and returns the identical answer
+ok 6 the sign-up is stored under the main club only, with the consent version, text and time
+ok 7 two clubs: each owner sees only their own club and its emails; members see none
+ok 8 a connection can add at most JOIN_IP_HOUR new sign-ups an hour
+t_join_qr: 8 ok, 0 failed
+t_extras: 28 ok, 0 failed
+extras parity: 300 tournaments x2, 2986 hands, 108544 table views; identical outcomes 300/300, identical views 300/300; 256 rabbit hands verified against the seal; 2223 show offers, 3041 shows (2308 by folded players); 1.211s, problems 0
