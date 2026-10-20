@@ -46,7 +46,8 @@ const PHONES = [[320, 568, 'iPhone SE 1st gen'], [375, 667, 'iPhone SE 2/3'], [3
       await p.goto(BASE + '/'); await p.waitForSelector('#welcome:not([hidden])');
       assert.strictEqual((await p.textContent('.lux-word')).trim(), 'BLINDRISE');
       assert.strictEqual((await p.textContent('.lux-tag')).trim(), 'Where Connections Rise.');
-      assert.deepStrictEqual(await p.$$eval('.lux-card b', e => e.map(x => x.firstChild.textContent.trim())), ['Poker Club', 'Business Club', 'Opportunity Club']);
+      assert.deepStrictEqual(await p.$$eval('.lux-card b', e => e.map(x => x.firstChild.textContent.trim())), ['Business Club', 'Opportunity Club', 'Poker Club']);
+      assert(!/opening soon/i.test(await p.textContent('.lux-cards')), 'the welcome cards carry no "Opening soon" badge');
       assert.strictEqual((await p.textContent('#wJoin')).trim(), 'Join Blindrise');
       await noHScroll(p, tag + ' welcome'); await allInside(p, '#auth button, .lux-card', tag + ' welcome');
       if(SHOTS) await p.waitForTimeout(900), await p.screenshot({ path: `${SHOTS}/welcome-${tag}.png` });
