@@ -53,7 +53,8 @@ const recordFailure = key => { if(attempts.size > 5000) for(const k of attempts.
 // caller sent. x-forwarded-for there ends in Render's own internal proxy (same for every player), so it is only a local fallback.
 const clientIp = req => String(req.headers['cf-connecting-ip'] || '').trim() || String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean).pop() || req.socket.remoteAddress || '';
 // Per-account limit, which no header can get around: 10 wrong tries on one name locks that name for 10 minutes.
-const acctKey = (path, data) => path === '/api/login' ? 'acct:' + cleanName(data && data.name).toLowerCase() : null;
+// With club switching, an invite link also takes an existing name + PIN (redeem), so it counts against the same lock.
+const acctKey = (path, data) => path === '/api/login' || path === '/api/redeem' ? 'acct:' + cleanName(data && data.name).toLowerCase() : null;
 // Owner recovery (setup code): 5 wrong codes lock only the address they came from, so a stranger cannot lock the real
 // owner out. A club-wide cap of 60 wrong codes per 10 minutes stops guessing spread over many addresses.
 // Opening a club (club switching) asks for the same setup code, so it counts against the same limits.

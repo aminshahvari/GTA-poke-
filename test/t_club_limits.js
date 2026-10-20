@@ -1,5 +1,6 @@
 // Club switching (CLUB_SWITCHING=1), limits and account closure, with the real rate limits on (no FAST):
 // - opening a club asks for the setup code, so wrong codes are limited exactly like setup and owner recovery
+// - an invite link takes an existing name + PIN, so wrong PINs there lock the name exactly like sign-in does
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
@@ -33,6 +34,17 @@ const end = code => { srv.kill(); try{ fs.rmSync(tmp, { recursive: true, force: 
   check((await call('resetOwner', { code: 'secret', pin: '1234' }, null, ip)).status === 429, 'the lock is the same one that guards owner recovery');
   const B = (await ok('createClub', { name: 'Lounge B', code: 'secret' }, O)).club;
   check(/^c[0-9a-f]{10}$/.test(B), 'from another address the organizer still opens a club (control)');
+
+  // an invite link with an existing name: wrong PINs count against that name, from any address, like sign-in
+  const M = (await ok('redeem', { code: (await ok('invite', {}, O)).code, name: 'Mina', pin: '1111', agree: true })).token;
+  const bInv = (await ok('invite', {}, O, null, B)).code;
+  const tries = [];
+  for(let i = 0; i < 10; i++) tries.push((await call('redeem', { code: bInv, name: 'Mina', pin: String(9000 + i), agree: true })).status);
+  check(tries.every(x => x === 400), '10 wrong PINs for an existing name through an invite link are refused');
+  check((await call('redeem', { code: bInv, name: 'Mina', pin: '1111', agree: true })).status === 429, 'then the name is locked for invite links, even with the right PIN from a new address');
+  check((await call('login', { name: 'Mina', pin: '1111' })).status === 429, 'and for sign-in: one lock per name');
+  check((await ok('redeem', { code: bInv, name: 'Nika', pin: '3333', agree: true })).club === B, 'a new name still joins with the same link (control)');
+  check(M && (await call('invite', {}, M, null, B)).status === 403, 'Mina did not get into B by guessing');
 
   console.log(`t_club_limits: ${n} ok, 0 failed`);
   end(0);
