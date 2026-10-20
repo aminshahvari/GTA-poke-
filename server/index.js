@@ -368,7 +368,9 @@ function clubView(c, u){
 // the club an account is using: the one asked for if they belong to it, otherwise their first club (main first);
 // null when they asked for a club they do not belong to, or belong to none
 function ctxFor(ur, want){
-  if(!ur) return want ? null : clubs.get(clubs.MAIN);
+  // signed out (sign in, invite links, setup, the join page): the club header a phone kept from before is ignored,
+  // or a member who signed out could never sign in again ("You are not a member of that club.")
+  if(!ur) return clubs.get(clubs.MAIN);
   const mine = clubs.memberships(store.get('user:' + ur.id));
   if(want) return mine.includes(want) ? clubs.get(want) : null;
   return mine.length ? clubs.get(mine[0]) : null;

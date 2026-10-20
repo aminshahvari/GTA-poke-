@@ -29,6 +29,12 @@ function start(sw){
   let s = start(true); await s.up();
   const O = (await s.ok('setup', { code: 'secret', name: 'Sean', pin: '1234', agree: true })).token;
   const { club: cid } = await s.ok('createClub', { name: 'Sean Ventures', code: 'secret' }, O);
+  // a phone that signed out keeps its club header: signing in and invite links must still work (hotfix after 5df63cc)
+  const inv = (await s.ok('invite', {}, O)).code;
+  await s.ok('redeem', { code: inv, name: 'Alex', pin: '1111', agree: true }, null, cid);
+  await s.ok('login', { name: 'Sean', pin: '1234' }, null, cid);
+  await s.ok('login', { name: 'Alex', pin: '1111' }, null, 'main');
+  pass('signed out with a stored club header: sign in and invite links still work');
   const info = await s.ok('joinInfo', { slug: 'sean-ventures' });
   assert.deepStrictEqual([info.club, info.name, info.initials], [true, 'Sean Ventures', 'SV']);
   pass('a newly opened club has its own join page at once: /join/sean-ventures');
