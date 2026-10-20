@@ -6,7 +6,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node test/t_eval.js && node test/t_rules.js && node test/t_sim.js 20 && node test/t_server.js && node test/t_chat.js && node test/t_coach.js && node test/t_players.js && node test/t_push.js && node test/t_extra.js && node test/t_security.js && node test/t_bizunit.js && node test/t_business.js && node test/t_opportunity.js && node test/t_content.js && node test/t_clubs.js && node test/t_invite_privacy.js && node test/t_club_switching.js && node test/t_club_store.js && node test/t_nomain_guard.js && node test/t_club_limits.js && node test/t_platform.js && node test/t_open.js && node test/t_csp.js && node test/t_join_qr.js && node test/t_join_qr_clubs.js && node test/t_extras.js && node test/t_extras_parity.js 300"
+    "test": "node test/t_eval.js && node test/t_rules.js && node test/t_sim.js 20 && node test/t_server.js && node test/t_chat.js && node test/t_coach.js && node test/t_players.js && node test/t_push.js && node test/t_extra.js && node test/t_security.js && node test/t_bizunit.js && node test/t_business.js && node test/t_opportunity.js && node test/t_content.js && node test/t_clubs.js && node test/t_invite_privacy.js && node test/t_club_switching.js && node test/t_club_store.js && node test/t_nomain_guard.js && node test/t_club_limits.js && node test/t_platform.js && node test/t_club_cap.js && node test/t_open.js && node test/t_csp.js && node test/t_join_qr.js && node test/t_join_qr_clubs.js && node test/t_extras.js && node test/t_extras_parity.js 300"
   },
   "engines": {
     "node": ">=18"

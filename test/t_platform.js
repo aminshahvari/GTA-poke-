@@ -181,13 +181,29 @@ const end = code => { srv.kill(); try{ fs.rmSync(tmp, { recursive: true, force: 
   await ok('platformUnpost', { id: post.id }, O);
   check(!(await view(M)).blindrise.length, 'the founder can take a post down');
 
+  // ---------- a business member of another club can open a club too (Muse #10 D3) ----------
+  // Kai is only in the Founder Lounge (not in main) and publishes a business in the Lounge's Exchange
+  const K = (await ok('redeem', { code: (await ok('invite', {}, O, B)).code, name: 'Kai', pin: '4444', agree: true })).token;
+  check(!(await view(K, B)).openClub, 'a member of another club with no business is not offered "Create your club"');
+  await ok('bizSave', biz('Kai Kites'), K, B); await ok('bizPublish', { on: true }, K, B);
+  check((await view(K, B)).openClub, 'once their business is published in their own club\'s Exchange, they are offered it there');
+  await ok('clubModerate', { club: B, action: 'suspend', reason: 'Test: gate' }, O);
+  const kSus = await call('createClub', { name: 'Kai Club', ...RULES }, K);
+  check(kSus.status === 403 && /publish your business/.test(kSus.body.error), 'a business in a suspended club\'s Exchange does not count (403)');
+  await ok('clubModerate', { club: B, action: 'unsuspend', reason: 'Test: gate' }, O);
+  const KC = (await ok('createClub', { name: 'Kai Club', ...RULES }, K)).club;
+  check(/^c[0-9a-f]{10}$/.test(KC) && (await view(K, KC)).me.owner === true, 'they open their club, after accepting the rules, with no setup code');
+  const kAgain = await call('createClub', { name: 'Kai Two', ...RULES }, K);
+  check(kAgain.status === 403 && /already opened a club/.test(kAgain.body.error), 'and only one');
+  check((await view(O)).platform.clubs.some(x => x.id === KC && x.status === 'active'), 'the new club is in the founder\'s list at once');
+
   for(const s of [oB, p1, p2, nAfter]) try{ s.ws.close(); }catch(e){}
   srv.kill('SIGTERM'); await new Promise(r => srv.on('exit', r));
   const raw = JSON.parse(fs.readFileSync(DATA, 'utf8'));
   const dC = raw['clubdef:' + C];
   check(dC.rules && dC.rules.uid === boC.me.id && dC.rules.v === 1 && typeof dC.rules.at === 'number' && dC.createdBy === boC.me.id, 'the rules acceptance is stored on the club: account, time, version');
   check(dC.removed === true && dC.cancelled.reason === 'Test: cancel' && Object.keys(raw).some(k => k.startsWith(`club:${C}:invite:`)), 'the cancelled club keeps its data');
-  check(Object.keys(raw).filter(k => k.startsWith('platform:modlog:')).length === 3, 'the log is stored one key per entry');
+  check(Object.keys(raw).filter(k => k.startsWith('platform:modlog:')).length === 5, 'the log is stored one key per entry');
   console.log(`t_platform: ${n} ok, 0 failed`);
   end(0);
 })().catch(e => { console.error('FAIL', e.message); end(1); });
