@@ -194,8 +194,8 @@ module.exports = function makeDomino(store, hooks = {}){
 
   // ---------- what members see ----------
   function view(u){
-    const t = current(); if(!t) return { t: null, now: h.now() };
-    const owner = !!(u && h.isOwner(u));
+    const t = current(), owner = !!(u && h.isOwner(u));
+    if(!t) return { t: null, now: h.now(), owner, canHost: h.canHost(), mine: null, stats: u ? store.get('dom:stats:' + u.id) || null : null };
     const team = id => { const x = teamOf(t, id); return x ? { id: x.id, members: x.members.map(uid => ({ uid, name: nameOf(uid) })) } : null; };
     const matches = t.matches.map(p => { const m = Mget(t.id + '-' + p.id); return { ...M.view(m, h.now()), place: p, teams: p.teams.map(team) }; });
     const mine = u ? matches.find(m => m.sides.flat().includes(u.id) && ['ready', 'live', 'review', 'disputed'].includes(m.status)) || null : null;

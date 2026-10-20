@@ -163,6 +163,9 @@ const tables = new Map();
 const myCards = new Map(); // tid -> {hand, cards}
 let editingT = false, tab = 'event', view = 'lobby', watchTid = null, lastSent = null, seen = new Set(), lastStatus = null, lastMyTable = null, clockSkew = 0;
 // Business Club (public/business.js) gets the few app helpers it needs; it builds its own DOM with textContent
+// dominoes (server/domino, DOMINO=1 only): the club's tournament and the scorepad
+window.Domino.init({ post, toast, modal, me: () => club.me, on: () => !!(club && club.domino),
+  rerender: () => { if(club && view === 'lobby' && !(document.activeElement && document.activeElement.closest('#dmForm'))) renderLobby(); } });
 window.BizClub.init({ post, toast, token: () => local.get('token', ''), clubHeader, me: () => club.me, tab: () => tab,
   openTab: t => { tab = t; view = 'lobby'; showScreen('lobby'); renderLobby(); $('lobbyBody').scrollTop = 0; },
   confirm: (title, text, ok) => modal(`<h2>${esc(title)}</h2><p>${esc(text)}</p>`, [{ label: 'Cancel', value: false }, { label: esc(ok), value: true, primary: true }]) });
@@ -178,6 +181,7 @@ function connect(){
     const m = JSON.parse(ev.data);
     if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
     if(m.t === 'club'){ onClub(m.club); return; }
+    if(m.t === 'domino'){ window.Domino.onState(m.v); return; }
     if(m.t === 'table'){ tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
     if(m.t === 'invite'){ showInvite(m.code, m.group, m.max); return; }
@@ -295,7 +299,7 @@ function renderHome(body, clubsOn, showClubs){
   // members get the practice table on Home too (the owner has it in Director); not while seated in a running tournament
   const seated = !!(club.myTable && club.tourney && club.tourney.status === 'running');
   const extra = document.createElement('div'); extra.innerHTML = (clubsOn || club.events ? '' : comingHTML()) + (club.me.owner || seated ? '' : demoCard()) + picNudgeHTML();
-  body.innerHTML = memberHomeHTML(clubsOn || club.me.owner) + beventHTML() + blindriseHTML() + openClubHTML() + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
+  body.innerHTML = memberHomeHTML(clubsOn || club.me.owner) + beventHTML() + blindriseHTML() + window.Domino.homeHTML() + openClubHTML() + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
   body.append(...cards.slice(0, n), ...[...extra.children]);
   if(showClubs){
     const biz = document.createElement('section'); biz.className = 'hsec hsec-biz'; biz.setAttribute('aria-labelledby', 'hs-biz');
@@ -526,7 +530,7 @@ const demoCard = () => `<div class="card-box demo-box"><span class="eyebrow">Dem
 function directorHTML(){
   // the Blindrise Open: no Exchange, invites or prizes to run there, only its tournaments and players
   if(club.events) return conflictsHTML() + directorMainHTML();
-  return newsHTML() + demoCard() + conflictsHTML() + clubListHTML() + eventsRunHTML() + joinQrHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
+  return newsHTML() + demoCard() + conflictsHTML() + clubListHTML() + eventsRunHTML() + window.Domino.directorHTML() + joinQrHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
 }
 // ---------- the owner's join QR (Director) ----------
 // Each club the owner runs gets a QR code of its public join address, drawn here on the phone from that address only
@@ -893,6 +897,7 @@ function wireLearn(){
 
 function wireLobby(){
   wireLearn();
+  window.Domino.wire(document);
   wireJoinQr();
   document.querySelectorAll('[data-demo]').forEach(b => b.onclick = startDemo);
   document.querySelectorAll('[data-fair]').forEach(b => b.onclick = () => { b.disabled = true; b.textContent = 'Checking…'; send({ t: 'fair', id: b.dataset.fair }); });

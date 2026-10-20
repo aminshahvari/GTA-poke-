@@ -496,6 +496,7 @@ function clubView(c, u){
   // the join page and QR code of this club, if this account owns it, with this club's email sign-ups only
   const jq = joinqr.ownerView(rootStore.get('user:' + u.id), rootStore.get('owner')).filter(x => x.id === c.id);
   if(jq.length) view.joinQr = jq;
+  if(DOMINO()) view.domino = true; // dominoes are on: the app shows them (their state comes in 'domino' messages)
   return view;
 }
 // The Blindrise Open as every other club shows it: what it is, when, how many have registered, and whether this member
