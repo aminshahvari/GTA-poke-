@@ -123,7 +123,7 @@ async function clubJoinScreen(){
     <div class="cj-av" aria-hidden="true">${esc(info.initials)}</div>
     <span class="cj-eyebrow">Private club on Blindrise</span>
     <h2 class="cj-title">Join the <em>${esc(clubTitle(info.name))}</em></h2>
-    <ul class="cj-perks"><li>Free poker nights and club tournaments</li><li>Meet the people in the club</li><li>Event news by email, from this club only</li></ul>
+    <ul class="cj-perks"><li>Meet &amp; connect with people in the club</li><li>Get exclusive club events &amp; updates</li><li>Free poker nights &amp; club tournaments</li></ul>
     <form class="cj-form" id="cjForm" novalidate>
       <label class="cj-field" for="cjEmail"><span>Email</span><input id="cjEmail" type="email" inputmode="email" autocomplete="email" maxlength="254" placeholder="you@example.com"></label>
       <label class="cj-agree"><input type="checkbox" id="cjAgree"> <span>${esc(info.consent.text)}</span></label>

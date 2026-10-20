@@ -53,7 +53,10 @@ const noHScroll = pg => pg.evaluate(() => ({ dw: document.documentElement.scroll
         assert.strictEqual((await pg.textContent('.cj-av')).trim(), name[0]);
         assert.strictEqual(await pg.title(), `Join the ${name} Club`);
         assert.ok(await pg.isHidden('.lux-brand') && await pg.isHidden('#welcome') && await pg.isHidden('#authForm'));
-        assert.strictEqual(await pg.$$eval('.cj-perks li', e => e.length), 3);
+        assert.deepStrictEqual(await pg.$$eval('.cj-perks li', e => e.map(x => x.textContent)), ['Meet & connect with people in the club', 'Get exclusive club events & updates', 'Free poker nights & club tournaments']);
+        // from 390 px wide each benefit row is one line, as before (on narrower phones a row may wrap, as before)
+        const rows = await pg.$$eval('.cj-perks li', e => e.map(x => { const r = x.getBoundingClientRect(), lh = parseFloat(getComputedStyle(x).lineHeight); return Math.round((r.height - parseFloat(getComputedStyle(x).paddingTop) - parseFloat(getComputedStyle(x).paddingBottom)) / lh); }));
+        if(w >= 390) assert.deepStrictEqual(rows, [1, 1, 1], 'benefit rows wrap at ' + w + 'x' + h);
         assert.match(await pg.textContent('.cj-agree'), new RegExp('^\\s*' + name + ' may email me'));
         const fine = await pg.$$eval('.cj-fine', e => e.map(x => x.textContent.trim()));
         assert.deepStrictEqual(fine, ['Free social play · No betting · No real money', 'Your email goes to this club only — never shared with other clubs.']);
