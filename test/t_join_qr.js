@@ -15,7 +15,7 @@ fs.writeFileSync(DATA, JSON.stringify({
   'clubdef:cel001': { id: 'cel001', name: 'Celestia', createdAt: 1, createdBy: CEL },
   'clubdef:twv001': { id: 'twv001', name: 'Twelve Chars', createdAt: 2, createdBy: 'u0000000000ff' }
 }));
-const srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', JOIN_IP_HOUR: '4' }, stdio: 'ignore' });
+const srv = spawn('node', ['server/index.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '', CLUB_SWITCHING: '1', JOIN_IP_HOUR: '4' }, stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let n = 0; const pass = m => { n++; console.log('ok', n, m); };
 async function call(p, body, tok, ip){

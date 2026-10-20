@@ -1,0 +1,15 @@
+# Club switching test runs (Claude, 2026-10-18, code commit 06f8662, Chromium, FONTS_DIR fonts)
+npm test: exit 0
+CLUB_SWITCHING=1 npm test: exit 0
+t_club_switching (in npm test): 50 ok, 0 failed
+t_club_parity: 13 ok, 0 failed
+t_club_switch_ui exit 0 :: 19 ok, 0 failed
+t_stability exit 0 :: 146 ok, 0 failed
+t_hotfix exit 0 :: 39 ok, 0 failed
+t_premium_ui exit 0 :: 296 ok, 0 failed
+t_clubs_closed exit 0 :: 25 ok, 0 failed
+t_mobile_ux exit 0 :: mobile ux test passed
+t_table_small exit 0 :: small table ui test passed
+t_welcome exit 0 :: welcome ui test passed
+sim exit 0 :: random-action stress: 3000 tournaments, 30579 hands, 1.713s, problems 0 AI tournaments: 3000, avg 140 hands, 711.169s, wins by style { tight: 1061, aggro: 640, cautious: 831, loose: 468 } top-3 by style { aggro: 1540, tight: 3356, cautious: 2750, loose: 1354 } problems 0 
+

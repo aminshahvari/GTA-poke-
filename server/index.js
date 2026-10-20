@@ -4,15 +4,14 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const store = require('./store');
-const rewards = require('./rewards');
-const club = require('./club');
 const E = require('./engine');
-const fair = require('./fair');
-const players = require('./players');
 const coach = require('./coach');
 const push = require('./push');
-const business = require('./business');
-const opportunity = require('./opportunity');
+// the club modules (tournaments, rewards, Exchange, stats, fairness records) live in a club context: see server/clubs.js.
+// With club switching off there is one context, 'main', made of the normal modules and the plain store.
+const clubs = require('./clubs');
+const rootStore = store; // the plain store, for shared accounts, inside functions that work on a club's own store
+clubs.onNew(wire);
 const joinqr = require('./joinqr');
 
 const PORT = +process.env.PORT || 3000;
@@ -72,23 +71,49 @@ const api = {
     return { token: newSession(u.id) };
   },
   redeem({ code, name, pin, agree }){
-    const inv = store.get('invite:' + code);
-    const dead = !inv || inv.revoked || (inv.multi ? (inv.uses || []).length >= inv.max || Date.now() > inv.expiresAt : inv.usedBy);
-    if(inv && !dead && inv.by && inv.by !== store.get('owner') && !membersInvite()) throw new Error('Member invites are switched off right now. Ask the organizer for a link.');
-    if(dead) throw new Error(inv && inv.multi ? 'This group link is full, expired or was cancelled. Ask the organizer for a new one.' : 'This invite link has already been used or was cancelled. Ask for a new one.');
+    const c = inviteClub(code), inv = c.store.get('invite:' + code);
+    inviteCheck(c, inv);
     name = cleanName(name);
     if(!validName(name)) throw new Error('Pick a name with 2 to 16 letters or numbers.');
-    if(store.get('name:' + name.toLowerCase())) throw new Error('That name is taken. Try another.');
+    const taken = store.get('name:' + name.toLowerCase());
+    if(taken && clubs.ON()){
+      // club switching: someone who already has a Blindrise account joins this club with their own name and PIN
+      const x = store.get('user:' + taken);
+      if(!x || x.removed || !validPin(pin) || hashPin(pin, x.salt) !== x.pin) throw new Error('That name is taken. If it is yours, enter your PIN to join with your account.');
+      if(agree !== true) throw new Error('Please confirm you are 19 or older and agree to the club rules.');
+      if(!clubs.memberships(x).includes(c.id)){ clubs.addMember(c, x.id, inv.by); joined(c, x.id, code, inv); }
+      return { token: newSession(x.id), club: c.id };
+    }
+    if(taken) throw new Error('That name is taken. Try another.');
     if(!validPin(pin)) throw new Error('Pick a PIN of 4 to 8 digits.');
     if(agree !== true) throw new Error('Please confirm you are 19 or older and agree to the club rules.');
     const u = createUser(name, pin, 'member');
-    if(inv.by) store.set('user:' + u.id, { ...u, invitedBy: inv.by });
-    // the link is usually sent for a tournament: sign the new player up for it straight away
-    const t = club.T();
-    if(t && (t.status === 'registering' || (t.status === 'running' && club.lateOpen()))) try{ club.join(u.id); }catch(e){}
-    store.set('invite:' + code, inv.multi ? { ...inv, uses: [...(inv.uses || []), u.id] } : { ...inv, usedBy: u.id, usedAt: Date.now() });
-    broadcastClub();
-    return { token: newSession(u.id) };
+    if(c.id !== clubs.MAIN) store.set('user:' + u.id, { ...u, noMain: true, clubs: { [c.id]: { role: 'member', joinedAt: Date.now(), ...(inv.by ? { invitedBy: inv.by } : {}) } } });
+    else if(inv.by) store.set('user:' + u.id, { ...u, invitedBy: inv.by });
+    joined(c, u.id, code, inv);
+    return clubs.ON() ? { token: newSession(u.id), club: c.id } : { token: newSession(u.id) };
+  },
+  // club switching only: a signed-in member opens another club's invite link and joins it with the same account
+  joinInvite({ code }, u){
+    if(!clubs.ON()) throw Object.assign(new Error('Not found'), { status: 404 });
+    if(!u) throw new Error('Sign in first.');
+    const c = inviteClub(code), inv = c.store.get('invite:' + code);
+    if(clubs.memberships(u).includes(c.id)) return { club: c.id };
+    inviteCheck(c, inv);
+    clubs.addMember(c, u.id, inv.by); joined(c, u.id, code, inv);
+    return { club: c.id };
+  },
+  // club switching only: the deployment owner (the main club's owner) opens a new club, proved by the setup code
+  createClub({ code, name }, u){
+    if(!clubs.ON()) throw Object.assign(new Error('Not found'), { status: 404 });
+    if(!u || u.id !== owner() || u.noMain) throw new Error('Only the Blindrise organizer can open a new club.');
+    if(!process.env.OWNER_CODE || !sameCode(code, process.env.OWNER_CODE)) throw new Error('That setup code is not right.');
+    name = cleanName(name);
+    if(!/^[\p{L}\p{N} .&'-]{2,40}$/u.test(name)) throw new Error('Pick a club name of 2 to 40 letters or numbers.');
+    if(store.keys('clubdef:').length >= 50) throw new Error('This server already has 50 clubs.');
+    const c = clubs.create(name, u.id);
+    broadcastAll();
+    return { club: c.id };
   },
   login({ name, pin }){
     const id = store.get('name:' + cleanName(name).toLowerCase()), u = id && store.get('user:' + id);
@@ -105,38 +130,60 @@ const api = {
     revokeSessions(id); // a new PIN signs out every device that used the old one
     return { token: newSession(id), name: u.name };
   },
-  invite(_, u){ return { code: inviteCode(u) }; },
-  status(){ return { hasOwner: !!owner() }; },
+  invite(_, u, c){ return { code: inviteCode(c, u) }; },
+  status(){ return clubs.ON() ? { hasOwner: !!owner(), clubSwitching: true } : { hasOwner: !!owner() }; },
   pushKey(){ return { key: push.publicKey() }; },
-  push(sub, u){ if(!u) throw new Error('Sign in first.'); push.subscribe(u.id, sub); broadcastClub(); return { ok: true }; },
+  push(sub, u){ if(!u) throw new Error('Sign in first.'); push.subscribe(u.id, sub); broadcastAll(); return { ok: true }; },
   unpush({ endpoint }, u){ if(u) push.unsubscribe(u.id, String(endpoint || '')); return { ok: true }; },
   // your own picture: a gallery avatar or a small photo the phone has already shrunk
   avatar(a, u){
     if(!u) throw new Error('Sign in first.');
-    store.set('user:' + u.id, players.setAvatar(store.get('user:' + u.id), a));
-    broadcastClub();
+    store.set('user:' + u.id, clubs.get(clubs.MAIN).players.setAvatar(store.get('user:' + u.id), a)); // pictures are part of the shared account
+    broadcastAll();
     return { ok: true };
   },
-  // Business Club (members-only directory, separate from poker): see server/business.js
-  ...business.api,
-  // Opportunity Club ("I need help" / "I can help" listings inside Business Club): see server/opportunity.js
-  ...opportunity.api,
-  // club join page and QR code (/join/<club-slug>): see server/joinqr.js
+  // club join page and QR code (/join/<club-slug>): see server/joinqr.js. Account-level: a lead is kept per club id.
   ...joinqr.api
 };
+// Business Club (members-only directory, separate from poker): see server/business.js
+// Opportunity Club ("I need help" / "I can help" listings inside Business Club): see server/opportunity.js
+// Both run inside the caller's club context, so each club has its own Exchange.
+const CLUB_API = new Set([...Object.keys(clubs.get(clubs.MAIN).business.api), ...Object.keys(clubs.get(clubs.MAIN).opportunity.api)]);
+const clubApi = (name, c) => Object.hasOwn(c.opportunity.api, name) ? c.opportunity.api[name] : c.business.api[name];
+// calls that act on the shared account, not on a club
+const ACCOUNT_API = ['avatar', 'push', 'unpush', 'joinInvite', 'createClub', 'joinInfo', 'joinClub'];
+// which club an invite code belongs to (main when club switching is off)
+function inviteClub(code){
+  if(clubs.ON() && typeof code === 'string') for(const c of clubs.all()) if(c.store.get('invite:' + code)) return c;
+  return clubs.get(clubs.MAIN);
+}
+function inviteCheck(c, inv){
+  const dead = !inv || inv.revoked || (inv.multi ? (inv.uses || []).length >= inv.max || Date.now() > inv.expiresAt : inv.usedBy);
+  if(inv && !dead && inv.by && inv.by !== c.store.get('owner') && !membersInvite(c)) throw new Error('Member invites are switched off right now. Ask the organizer for a link.');
+  if(dead) throw new Error(inv && inv.multi ? 'This group link is full, expired or was cancelled. Ask the organizer for a new one.' : 'This invite link has already been used or was cancelled. Ask for a new one.');
+}
+// after an invite was used: sign the player up for the open tournament, record the use, tell the club
+function joined(c, uid, code, inv){
+  // the link is usually sent for a tournament: sign the new player up for it straight away
+  const t = c.club.T();
+  if(t && (t.status === 'registering' || (t.status === 'running' && c.club.lateOpen()))) try{ c.club.join(uid); }catch(e){}
+  c.store.set('invite:' + code, inv.multi ? { ...inv, uses: [...(inv.uses || []), uid] } : { ...inv, usedBy: uid, usedAt: Date.now() });
+  broadcastClub(c);
+}
 // Business Club + Opportunity Club: closed to members until the owner opens them in the Director tab (the owner can always use them).
 // Staging opens them by default so they can be tested; CLUBS_DEFAULT=on does the same for local test runs.
-const clubsOn = () => { const s = store.get('settings') || {}; return typeof s.clubsOn === 'boolean' ? s.clubsOn : process.env.STAGING === '1' || process.env.CLUBS_DEFAULT === 'on'; };
-const clubsClosedFor = u => !!u && !isOwner(u) && !clubsOn();
+const clubsOn = c => { const s = c.store.get('settings') || {}; return typeof s.clubsOn === 'boolean' ? s.clubsOn : process.env.STAGING === '1' || process.env.CLUBS_DEFAULT === 'on'; };
+const clubsClosedFor = (c, u) => !!u && !isOwner(u) && !clubsOn(c);
 const GROUP_MAX = 100, GROUP_DAYS = 30, MEMBER_DAYS = 7;
 // Members can invite friends too (the owner can switch that off). A member's link joins at most MEMBER_MAX people,
 // and asking again hands back the member's open link instead of piling up new ones.
 const MEMBER_MAX = 10;
-const membersInvite = () => (store.get('settings') || {}).membersInvite !== false;
+const membersInvite = c => (c.store.get('settings') || {}).membersInvite !== false;
 const openInvite = i => !i.revoked && (i.multi ? Date.now() < i.expiresAt && (i.uses || []).length < i.max : !i.usedBy);
-function inviteCode(u, group){
+function inviteCode(c, u, group){
+  const store = c.store;
   if(!isOwner(u)){
-    if(!membersInvite()) throw new Error('The organizer has turned off member invites. Ask them for a link.');
+    if(!membersInvite(c)) throw new Error('The organizer has turned off member invites. Ask them for a link.');
     const mine = store.values('invite:').find(i => i.by === u.id && i.multi && openInvite(i));
     if(mine) return mine.code;
     group = true;
@@ -149,7 +196,7 @@ function inviteCode(u, group){
     : { code, createdAt: Date.now(), by: u.id });
   return code;
 }
-const invitedCount = uid => store.values('user:').filter(x => !x.removed && x.invitedBy === uid).length;
+const invitedCount = (c, uid) => c.store.values('user:').filter(x => !x.removed && x.invitedBy === uid).length;
 
 // ---------- HTTP ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.wasm': 'application/wasm', '.gz': 'application/octet-stream' };
@@ -170,7 +217,7 @@ const server = http.createServer((req, res) => {
   // 503 until the lease is held and state is loaded, and again while shutting down (Render routes only to 200s)
   if(req.method === 'GET' && url.pathname === '/healthz'){ const ok = ready && !stopping; return send(res, ok ? 200 : 503, { ok, ...store.health() }); }
   if(stopping) return send(res, 503, { error: 'Server is restarting. Try again in a moment.' });
-  if(process.env.FAST === '1' && url.pathname === '/debug/chips'){ const t = club.T(); return send(res, 200, { chips: club.totalChips(), expected: t && t.status === 'running' ? t.stack * t.entrants : null, tables: club.tablesSummary(), hfh: club.hfhState(), detail: process.env.DEBUG_CHIPS ? [...club.tables.values()].map(tb => ({ tid: tb.tid, broken: tb.broken, toBreak: tb.toBreak, inHand: tb.inHand, seats: tb.g.seats.map((p, i) => p && [i, p.uid, p.stack, p.start]).filter(Boolean), hp: tb.g.hand ? tb.g.hand.players.map(p => [p.seat, p.uid, p.start]) : [] })) : undefined }); }
+  if(process.env.FAST === '1' && url.pathname === '/debug/chips'){ const club = clubs.get(clubs.MAIN).club, t = club.T(); return send(res, 200, { chips: club.totalChips(), expected: t && t.status === 'running' ? t.stack * t.entrants : null, tables: club.tablesSummary(), hfh: club.hfhState(), detail: process.env.DEBUG_CHIPS ? [...club.tables.values()].map(tb => ({ tid: tb.tid, broken: tb.broken, toBreak: tb.toBreak, inHand: tb.inHand, seats: tb.g.seats.map((p, i) => p && [i, p.uid, p.stack, p.start]).filter(Boolean), hp: tb.g.hand ? tb.g.hand.players.map(p => [p.seat, p.uid, p.start]) : [] })) : undefined }); }
   if(req.method === 'POST' && url.pathname.startsWith('/api/')){
     const ip = 'ip:' + clientIp(req);
     let body = '';
@@ -180,16 +227,20 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       let acct = null;
       try{
-        const name = url.pathname.slice(5), fn = Object.hasOwn(api, name) && api[name];
-        if(!fn) return send(res, 404, { error: 'Not found' });
+        const name = url.pathname.slice(5), fn = Object.hasOwn(api, name) ? api[name] : CLUB_API.has(name) && name;
+        if(!fn || (!clubs.ON() && (name === 'joinInvite' || name === 'createClub'))) return send(res, 404, { error: 'Not found' });
         if(blocked(ip, 30)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const data = body ? JSON.parse(body) : {};
         acct = acctKey(url.pathname, data);
         if(acct && blocked(acct, 10)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         if(RECOVERY.includes(url.pathname) && (blocked('rec' + ip, RECOVERY_IP) || blocked('rec:all', RECOVERY_ALL))) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
-        const u = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
-        if(extra && clubsClosedFor(u)) return send(res, 403, { error: 'Business Club opens soon.' }, undefined, extra);
-        send(res, 200, fn(data, u, clientIp(req)), undefined, extra);
+        const ur = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
+        // the club this call is about: the one the app says it is showing (x-club), only if the caller belongs to it
+        const c = clubs.ON() && !ACCOUNT_API.includes(name) ? ctxFor(ur, req.headers['x-club']) : clubs.get(clubs.MAIN);
+        if(!c) return send(res, 403, { error: 'You are not a member of that club.' }, undefined, extra);
+        const u = clubs.ON() && ur && !ACCOUNT_API.includes(name) ? c.store.get('user:' + ur.id) || null : ur;
+        if(extra && clubsClosedFor(c, u)) return send(res, 403, { error: 'Business Club opens soon.' }, undefined, extra);
+        send(res, 200, typeof fn === 'string' ? clubApi(fn, c)(data, u) : fn(data, u, c, clientIp(req)), undefined, extra);
       }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner', '/api/joinClub'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); if(RECOVERY.includes(url.pathname) && /setup code/.test(e.message)){ recordFailure('rec' + ip); recordFailure('rec:all'); } } send(res, [401, 403, 404, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.' }, undefined, extra); }
     });
     return;
@@ -197,14 +248,16 @@ const server = http.createServer((req, res) => {
   if(req.method !== 'GET') return send(res, 405, { error: 'Method not allowed' });
   const av = /^\/avatar\/(u[0-9a-f]{12})$/.exec(url.pathname);
   if(av){
-    const buf = players.photo(av[1]); if(!buf) return send(res, 404, 'Not found', 'text/plain');
+    const buf = clubs.get(clubs.MAIN).players.photo(av[1]); if(!buf) return send(res, 404, 'Not found', 'text/plain');
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=604800, immutable', ...SECURITY }); return res.end(buf);
   }
   // Business Club logos: only with the member's token (sent by fetch, not a plain <img> link)
   const bl = /^\/bizlogo\/(u[0-9a-f]{12})$/.exec(url.pathname);
   if(bl){
-    const lu = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
-    const r = clubsClosedFor(lu) ? { status: 404 } : business.logoFor(bl[1], lu);
+    const lr = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
+    const c = clubs.ON() ? ctxFor(lr, req.headers['x-club']) : clubs.get(clubs.MAIN);
+    const lu = clubs.ON() && lr && c ? c.store.get('user:' + lr.id) || null : lr;
+    const r = !c || clubsClosedFor(c, lu) ? { status: 404 } : c.business.logoFor(bl[1], lu);
     if(r.status !== 200) return send(res, r.status, 'Not found', 'text/plain', NOINDEX);
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
@@ -240,12 +293,12 @@ function remember(u, ip, dev){
   if(dev) seen.devs = keep({ ...seen.devs, [dev]: now });
   store.set('user:' + u.id, { ...x, seen });
 }
-const linkCache = new Map();
-function linkReason(a, b){
+function linkReason(cx, a, b){
   if(a === b) return null;
+  const linkCache = cx.linkCache;
   const k = a < b ? a + '|' + b : b + '|' + a, c = linkCache.get(k);
   if(c && Date.now() - c.at < 5000) return c.r;
-  const ua = store.get('user:' + a), ub = store.get('user:' + b);
+  const ua = cx.store.get('user:' + a), ub = cx.store.get('user:' + b);
   let r = null;
   if(ua && ub){
     const now = Date.now(), recent = (o, days) => Object.entries(o || {}).filter(([, t]) => now - t < days * 864e5).map(([v]) => v);
@@ -257,28 +310,28 @@ function linkReason(a, b){
   linkCache.set(k, { r, at: Date.now() });
   return r;
 }
-club.setLinker(linkReason);
-function conflictPairs(){
-  const t = club.T(), out = [], pairs = groups => groups.forEach(([where, us]) => { for(let i = 0; i < us.length; i++) for(let j = i + 1; j < us.length; j++){ const r = linkReason(us[i], us[j]); if(r) out.push({ a: us[i], b: us[j], reason: r, where }); } });
+function conflictPairs(c){
+  const club = c.club, t = club.T(), out = [], pairs = groups => groups.forEach(([where, us]) => { for(let i = 0; i < us.length; i++) for(let j = i + 1; j < us.length; j++){ const r = linkReason(c, us[i], us[j]); if(r) out.push({ a: us[i], b: us[j], reason: r, where }); } });
   if(t && t.status === 'registering') pairs([['registered', t.regs]]);
   else if(t && t.status === 'running') pairs([...club.tables.values()].filter(x => !x.broken).map(x => ['Table ' + x.n, x.g.seats.filter(Boolean).map(p => p.uid)]));
   return out;
 }
 
-let memo = null;
-function membersView(){
-  if(memo && Date.now() - memo.at < 200) return memo;
+function membersView(c){
+  const { store, players } = c;
+  if(c.memo && Date.now() - c.memo.at < 200) return c.memo;
   const history = store.values('history:').sort((a, b) => b.endedAt - a.endedAt);
   const members = store.values('user:').filter(x => !x.removed).map(x => {
     const pr = players.profile(x.id, history);
     return { id: x.id, name: x.name, role: x.role, createdAt: x.createdAt, invitedBy: x.invitedBy || null, av: x.av || null, tier: pr.tier, color: pr.color, score: pr.score };
   });
-  memo = { at: Date.now(), members, history: history.slice(0, 200), all: history };
-  return memo;
+  c.memo = { at: Date.now(), members, history: history.slice(0, 200), all: history };
+  return c.memo;
 }
-function clubView(u){
+function clubView(c, u){
+  const { store, club, rewards } = c;
   const t = club.T();
-  const { members, history } = membersView();
+  const { members, history } = membersView(c);
   const view = {
     me: { id: u.id, name: u.name, owner: isOwner(u) },
     tourney: t ? { id: t.id, status: t.status, name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: t.startAt, repeat: t.repeat, regs: t.regs,
@@ -289,31 +342,47 @@ function clubView(u){
     // who invited whom is for the owner only: a member's payload carries no inviter for anyone (Muse P10)
     members: isOwner(u) ? members : members.map(m => m.invitedBy ? { ...m, invitedBy: null } : m),
     history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
-    features: { clubs: clubsOn(), ...(club.gp() ? { tableExtras: true } : {}) }, chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
-    pushOn: push.hasPush(u.id), membersInvite: membersInvite(), invitedCount: invitedCount(u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
+    features: { clubs: clubsOn(c), ...(club.gp() ? { tableExtras: true } : {}) }, chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
+    pushOn: push.hasPush(u.id), membersInvite: membersInvite(c), invitedCount: invitedCount(c, u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
   };
   if(isOwner(u)){
     view.invites = store.values('invite:').filter(openInvite)
       .map(i => ({ code: i.code, createdAt: i.createdAt, multi: !!i.multi, used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt, by: i.by }));
-    view.conflicts = conflictPairs();
+    view.conflicts = conflictPairs(c);
     const hh = Object.fromEntries(store.values('user:').filter(x => !x.removed && x.household).map(x => [x.id, x.household]));
     view.households = hh;
     view.mutedIds = store.values('user:').filter(x => !x.removed && x.muted).map(x => x.id);
   }
-  // the join page and QR code of each club this account owns, with that club's email sign-ups only
-  const jq = joinqr.ownerView(u, owner());
+  if(clubs.ON()){
+    // club switching: which club this is, and the clubs this account belongs to (names only)
+    view.clubSwitching = true;
+    view.club = { id: c.id, name: clubs.def(c.id).name };
+    view.clubs = clubs.memberships(rootStore.get('user:' + u.id)).map(id => ({ id, name: clubs.def(id).name }));
+    view.canCreateClub = c.id === clubs.MAIN && isOwner(u) && rootStore.get('owner') === u.id;
+  }
+  // the join page and QR code of this club, if this account owns it, with this club's email sign-ups only
+  const jq = joinqr.ownerView(rootStore.get('user:' + u.id), rootStore.get('owner')).filter(x => x.id === c.id);
   if(jq.length) view.joinQr = jq;
   return view;
+}
+// the club an account is using: the one asked for if they belong to it, otherwise their first club (main first);
+// null when they asked for a club they do not belong to, or belong to none
+function ctxFor(ur, want){
+  if(!ur) return want ? null : clubs.get(clubs.MAIN);
+  const mine = clubs.memberships(store.get('user:' + ur.id));
+  if(want) return mine.includes(want) ? clubs.get(want) : null;
+  return mine.length ? clubs.get(mine[0]) : null;
 }
 const VERSION = (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null;
 
 // ---------- table chat and throwables ----------
 const THROWS = ['tomato', 'rose', 'beer', 'egg', 'fish', 'clap', 'cake', 'fire'];
-const chatLogs = new Map(), chatRate = new Map();
-function chatTo(tid, msg){
-  for(const ws of sockets) if(ws.user && (ws.watch === tid || club.tableOf(ws.user.id) === tid)) sendWS(ws, msg);
+const chatRate = new Map();
+function chatTo(c, tid, msg){
+  for(const ws of sockets) if(ws.user && ws.ctx === c && (ws.watch === tid || c.club.tableOf(ws.user.id) === tid)) sendWS(ws, msg);
 }
-function chat(ws, u, m){
+function chat(c, ws, u, m){
+  const { store, club, players, chatLogs } = c;
   const fail = error => sendWS(ws, { t: 'chaterr', error });
   if((store.get('settings') || {}).chatOff && !isOwner(u)) return fail('The organizer has turned table chat off.');
   if(u.muted) return fail('The organizer has muted your chat.');
@@ -327,30 +396,33 @@ function chat(ws, u, m){
     if(!text) return;
     body = { kind: 'text', text };
   } else {
-    const allowed = THROWS.includes(m.item) || players.perksFor(players.profile(u.id, membersView().all).tier).includes(m.item);
+    const allowed = THROWS.includes(m.item) || players.perksFor(players.profile(u.id, membersView(c).all).tier).includes(m.item);
     if(!allowed || typeof m.to !== 'string' || m.to === u.id || club.tableOf(m.to) !== tid) return;
     body = { kind: 'throw', item: m.item, to: m.to };
   }
   r.push(now); chatRate.set(u.id, r);
   const entry = { id: crypto.randomBytes(6).toString('hex'), tid, from: u.id, name: u.name, ts: now, ...body };
   const log = chatLogs.get(tid) || []; log.push(entry); if(log.length > 40) log.shift(); chatLogs.set(tid, log);
-  chatTo(tid, { t: 'chat', msg: entry });
+  chatTo(c, tid, { t: 'chat', msg: entry });
 }
-const chatLogFor = (ws, tid) => { if(tid) sendWS(ws, { t: 'chatlog', tid, log: chatLogs.get(tid) || [] }); };
+const chatLogFor = (c, ws, tid) => { if(tid) sendWS(ws, { t: 'chatlog', tid, log: c.chatLogs.get(tid) || [] }); };
 
-let clubTimer = null;
-function broadcastClub(){
-  memo = null;
-  if(clubTimer) return;
-  clubTimer = setTimeout(() => { clubTimer = null; for(const ws of sockets) if(ws.user) sendWS(ws, { t: 'club', club: clubView(ws.user) }); }, 60);
+// a club's own sockets get that club's view (each socket is in one club at a time)
+function broadcastClub(c){
+  c.memo = null;
+  if(c.clubTimer) return;
+  c.clubTimer = setTimeout(() => { c.clubTimer = null; for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'club', club: clubView(c, ws.user) }); }, 60);
 }
 // a new email sign-up shows up in its club owner's QR card straight away
-joinqr.setOnJoin(() => broadcastClub());
-function pushTable(tid){
+joinqr.setOnJoin(j => { const c = clubs.get(j.id); if(c) broadcastClub(c); });
+// an account changed (picture, push): every club it may appear in
+const broadcastAll = () => clubs.all().forEach(broadcastClub);
+function pushTable(c, tid){
+  const club = c.club;
   const tb = club.tables.get(tid); if(!tb) return;
   const snap = club.snapshot(tb), uids = new Set(snap.seats.filter(Boolean).map(s => s.uid));
   for(const ws of sockets){
-    if(!ws.user) continue;
+    if(!ws.user || ws.ctx !== c) continue;
     const seatedHere = uids.has(ws.user.id);
     if(!seatedHere && ws.watch !== tid) continue;
     sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null });
@@ -360,9 +432,9 @@ const clock = ms => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', 
 const dayOf = ms => { const tz = process.env.CLUB_TZ || 'America/Toronto', f = d => new Date(d).toLocaleDateString('en-CA', { timeZone: tz });
   const hour = +new Date(ms).toLocaleString('en-CA', { hour: 'numeric', hour12: false, timeZone: tz });
   return f(ms) === f(Date.now()) ? (hour >= 17 ? 'tonight' : 'today') : 'on ' + new Date(ms).toLocaleDateString('en-CA', { weekday: 'long', timeZone: tz }); };
-function notice(kind, t){
+function notice(c, kind, t){
   if(!t) return;
-  const members = store.values('user:').filter(x => !x.removed).map(x => x.id);
+  const members = c.store.values('user:').filter(x => !x.removed).map(x => x.id);
   if(kind === 'open') push.notify(members, { title: t.startAt ? `${t.name} ${dayOf(t.startAt)} at ${clock(t.startAt)}` : `${t.name} is open`, body: 'Registration is open. Tap to join.', tag: 'open-' + t.id, ttl: 6 * 3600 }).catch(() => {});
   if(kind === 'soon'){
     push.notify(t.regs, { title: `${t.name} starts in 15 minutes`, body: "You're registered. Open the app a few minutes early to take your seat.", tag: 'soon-' + t.id, ttl: 900 }).catch(() => {});
@@ -370,7 +442,13 @@ function notice(kind, t){
   }
   if(kind === 'start') push.notify(t.regs, { title: `${t.name} is starting!`, body: 'Cards are in the air. Tap to take your seat.', tag: 'start-' + t.id, ttl: 600 }).catch(() => {});
 }
-club.setHooks({ onNotice: notice, onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.user.id === uid) sendWS(ws, msg); }, onClub: broadcastClub, onTable: pushTable, onTableClosed: tid => { chatLogs.delete(tid); for(const ws of sockets) if(ws.user) sendWS(ws, { t: 'closed', tid }); broadcastClub(); } });
+// every club context (only 'main' with club switching off) gets its own live state and hooks
+function wire(c){
+  c.memo = null; c.clubTimer = null; c.chatLogs = new Map(); c.linkCache = new Map();
+  c.club.setLinker((a, b) => linkReason(c, a, b));
+  c.club.setHooks({ onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
+}
+clubs.get(clubs.MAIN);
 
 wss.on('connection', (ws, req) => {
   if(stopping){ try{ ws.close(4001, 'server moved'); }catch(e){} return; }
@@ -387,38 +465,44 @@ wss.on('connection', (ws, req) => {
     let m; try{ m = JSON.parse(raw); }catch(e){ return; }
     if(!m || typeof m !== 'object') return;
     if(m.t === 'hello'){
-      const u = userByToken(m.token);
+      const ur = userByToken(m.token);
+      if(!ur) return sendWS(ws, { t: 'auth', ok: false });
+      // club switching: the app says which club it shows; an unknown or foreign club falls back to the account's first club
+      const c = clubs.ON() ? (typeof m.club === 'string' && ctxFor(ur, m.club)) || ctxFor(ur, null) : clubs.get(clubs.MAIN);
+      const u = c && c.store.get('user:' + ur.id);
       if(!u) return sendWS(ws, { t: 'auth', ok: false });
-      ws.user = u; ws.sess = sha(m.token); remember(u, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); sendWS(ws, { t: 'auth', ok: true });
-      sendWS(ws, { t: 'club', club: clubView(u) });
-      const mine = club.tableOf(u.id); if(mine){ pushTable(mine); chatLogFor(ws, mine); }
+      ws.ctx = c; ws.user = u; ws.sess = sha(m.token); remember(ur, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); sendWS(ws, { t: 'auth', ok: true });
+      sendWS(ws, { t: 'club', club: clubView(c, u) });
+      const mine = c.club.tableOf(u.id); if(mine){ pushTable(c, mine); chatLogFor(c, ws, mine); }
       return;
     }
-    const u = ws.user && store.get('session:' + ws.sess) && store.get('user:' + ws.user.id);
+    const c = ws.ctx, { club, rewards, players, fair, business, opportunity } = c || {};
+    const u = ws.user && store.get('session:' + ws.sess) && c.store.get('user:' + ws.user.id);
     if(!u || u.removed) return sendWS(ws, { t: 'auth', ok: false });
     ws.user = u;
     try{
       switch(m.t){
-        case 'watch': ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(ws.watch); chatLogFor(ws, ws.watch); } break;
+        case 'watch': ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(c, ws.watch); chatLogFor(c, ws, ws.watch); } break;
         case 'act': club.act(u.id, m); break;
         case 'extend': club.extend(u.id); break;
         case 'show': club.show(u.id, m); break;
-        case 'chat': case 'throw': chat(ws, u, m); break;
-        case 'fair': { const id = String(m.id || ''), cur = club.T(), h = store.get('history:' + id);
+        case 'chat': case 'throw': chat(c, ws, u, m); break;
+        case 'fair': { const id = String(m.id || ''), cur = club.T(), h = c.store.get('history:' + id);
           const t = cur && cur.id === id ? cur : h ? { ...h, status: 'finished' } : null;
           sendWS(ws, { t: 'fair', report: t ? fair.report(t) : null }); } break;
-        case 'clubs': own(u); store.set('settings', { ...(store.get('settings') || {}), clubsOn: !!m.on }); broadcastClub(); break;
-        case 'chatOff': own(u); store.set('settings', { ...(store.get('settings') || {}), chatOff: !!m.off }); broadcastClub(); break;
-        case 'mute': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner') store.set('user:' + x.id, { ...x, muted: !!m.muted }); broadcastClub(); } break;
+        case 'clubs': own(u); c.store.set('settings', { ...(c.store.get('settings') || {}), clubsOn: !!m.on }); broadcastClub(c); break;
+        case 'chatOff': own(u); c.store.set('settings', { ...(c.store.get('settings') || {}), chatOff: !!m.off }); broadcastClub(c); break;
+        case 'mute': own(u); { const x = c.store.get('user:' + m.uid); if(x && x.role !== 'owner') c.store.set('user:' + x.id, { ...x, muted: !!m.muted }); broadcastClub(c); } break;
         case 'back': club.back(u.id); break;
         case 'join': club.join(u.id); break;
         case 'hands': sendWS(ws, { t: 'hands', hands: club.handsFor(u.id) }); break;
-        case 'report': { const h = store.get('history:' + String(m.id || '')); if(!h) break;
+        case 'report': { const h = c.store.get('history:' + String(m.id || '')); if(!h) break;
           const me = h.results.find(r => r.uid === u.id);
           const hands = club.handsFor(u.id).filter(x => x.ts >= (h.startedAt || 0) - 60000 && x.ts <= h.endedAt + 60000);
           sendWS(ws, { t: 'report', report: { id: h.id, name: h.name, at: h.endedAt, entrants: h.entrants, place: me ? me.place : null, pts: me ? me.pts : 0, ...(coach.reportCard(hands) || { hands: 0 }) } }); } break;
-        case 'profile': { const x = store.get('user:' + m.uid); if(x && !x.removed) sendWS(ws, { t: 'profile', profile: { ...players.profile(x.id, membersView().all), name: x.name, av: x.av || null, since: x.createdAt, perks: players.perksFor(players.profile(x.id, membersView().all).tier) } }); } break;
-        case 'avatarClear': own(u); { const x = store.get('user:' + m.uid); if(x){ store.set('user:' + x.id, players.setAvatar(x, { kind: 'none' })); memo = null; broadcastClub(); } } break;
+        case 'profile': { const x = c.store.get('user:' + m.uid); if(x && !x.removed) sendWS(ws, { t: 'profile', profile: { ...players.profile(x.id, membersView(c).all), name: x.name, av: x.av || null, since: x.createdAt, perks: players.perksFor(players.profile(x.id, membersView(c).all).tier) } }); } break;
+        // a picture belongs to the shared account, so only the main organizer can clear one
+        case 'avatarClear': own(u); if(c.id !== clubs.MAIN) throw new Error('Only the Blindrise organizer can remove a picture.'); { const x = c.store.get('user:' + m.uid); if(x){ c.store.set('user:' + x.id, players.setAvatar(x, { kind: 'none' })); c.memo = null; broadcastAll(); } } break;
         case 'leave': club.leave(u.id); break;
         // owner controls
         case 'create': own(u); club.create(m); break;
@@ -427,28 +511,32 @@ wss.on('connection', (ws, req) => {
         case 'cancel': own(u); club.cancel(); break;
         case 'pause': own(u); club.pause(); break;
         case 'resume': own(u); club.unpause(); break;
-        case 'kick': own(u); { const t = club.T(); if(t && t.status === 'registering') store.set('tourney', { ...t, regs: t.regs.filter(x => x !== m.uid) }); broadcastClub(); } break;
+        case 'kick': own(u); { const t = club.T(); if(t && t.status === 'registering') c.store.set('tourney', { ...t, regs: t.regs.filter(x => x !== m.uid) }); broadcastClub(c); } break;
         case 'household': own(u); {
+          const store = c.store;
           const x = store.get('user:' + m.uid), y = m.with ? store.get('user:' + m.with) : null;
           if(!x) break;
           if(!y){ store.set('user:' + x.id, { ...x, household: null }); }
           else { const gid = y.household || x.household || ('h' + Date.now().toString(36)); store.set('user:' + x.id, { ...x, household: gid }); store.set('user:' + y.id, { ...store.get('user:' + y.id), household: gid }); }
-          linkCache.clear(); broadcastClub();
+          c.linkCache.clear(); broadcastClub(c);
         } break;
         case 'skillq': sendWS(ws, { t: 'skillq', rid: m.rid, q: rewards.question(u.id, String(m.rid || '')) }); break;
-        case 'claim': rewards.claim(u.id, String(m.rid || ''), m.answer); sendWS(ws, { t: 'claimed' }); broadcastClub(); break;
-        case 'addReward': own(u); rewards.addReward(m); broadcastClub(); break;
-        case 'removeReward': own(u); rewards.removeReward(String(m.id || '')); broadcastClub(); break;
-        case 'redeemStatus': own(u); rewards.setStatus(String(m.id || ''), m.status); broadcastClub(); break;
-        case 'invite': { const code = inviteCode(u, !!m.group); sendWS(ws, { t: 'invite', code, group: !isOwner(u) || !!m.group, max: store.get('invite:' + code).max || 1 }); broadcastClub(); } break;
-        case 'membersInvite': own(u); store.set('settings', { ...(store.get('settings') || {}), membersInvite: !!m.on }); broadcastClub(); break;
-        case 'revoke': own(u); { const inv = store.get('invite:' + m.code); if(inv) store.set('invite:' + m.code, { ...inv, revoked: true }); broadcastClub(); } break;
-        case 'remove': own(u); { const x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); store.del('name:' + x.name.toLowerCase()); revokeSessions(x.id); club.leave(x.id); business.removeUser(x.id); opportunity.removeUser(x.id); } broadcastClub(); } break;
+        case 'claim': rewards.claim(u.id, String(m.rid || ''), m.answer); sendWS(ws, { t: 'claimed' }); broadcastClub(c); break;
+        case 'addReward': own(u); rewards.addReward(m); broadcastClub(c); break;
+        case 'removeReward': own(u); rewards.removeReward(String(m.id || '')); broadcastClub(c); break;
+        case 'redeemStatus': own(u); rewards.setStatus(String(m.id || ''), m.status); broadcastClub(c); break;
+        case 'invite': { const code = inviteCode(c, u, !!m.group); sendWS(ws, { t: 'invite', code, group: !isOwner(u) || !!m.group, max: c.store.get('invite:' + code).max || 1 }); broadcastClub(c); } break;
+        case 'membersInvite': own(u); c.store.set('settings', { ...(c.store.get('settings') || {}), membersInvite: !!m.on }); broadcastClub(c); break;
+        case 'revoke': own(u); { const inv = c.store.get('invite:' + m.code); if(inv) c.store.set('invite:' + m.code, { ...inv, revoked: true }); broadcastClub(c); } break;
+        // removing someone from the main club closes their account (as before); removing them from another club only ends
+        // that membership: their name, PIN and other clubs stay, and only this club's open screens are closed
+        case 'remove': own(u); { const store = c.store, x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); if(c.id === clubs.MAIN){ store.del('name:' + x.name.toLowerCase()); revokeSessions(x.id); } else leaveClub(c, x.id); club.leave(x.id); business.removeUser(x.id); opportunity.removeUser(x.id); } broadcastClub(c); } break;
       }
     }catch(e){ sendWS(ws, { t: 'error', error: e.message }); }
   });
 });
 function own(u){ if(!isOwner(u)) throw new Error('Only the club owner can do that.'); }
+function leaveClub(c, uid){ for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid){ ws.user = null; try{ ws.close(4004, 'removed from club'); }catch(e){} } }
 setInterval(() => { for(const ws of sockets){ if(!ws.isAlive){ ws.terminate(); continue; } ws.isAlive = false; ws.ping(); } }, 30000);
 
 // Staging must never point at the production database: refuse to start if it does.
@@ -470,7 +558,7 @@ let ready = false, stopping = false, fenced = false;
 async function shutdown(why, leaseLost){
   if(stopping) return; stopping = true; fenced = !!leaseLost;
   console.log('shutting down:', why);
-  club.stopAll(); store.freeze();
+  for(const c of clubs.all()) c.club.stopAll(); store.freeze();
   const saved = leaseLost ? false : await Promise.race([store.flush(), new Promise(r => setTimeout(r, 10000, false))]);
   console.log('final save', saved ? 'done' : 'skipped or incomplete', JSON.stringify(store.health()));
   for(const ws of sockets) try{ ws.close(4001, 'server moved'); }catch(e){}
@@ -495,15 +583,15 @@ process.on('SIGINT', () => onSignal('SIGINT'));
   if(process.env.STAGING === '1' && !owner() && process.env.OWNER_CODE){
     try{
       const tok = api.setup({ code: process.env.OWNER_CODE, name: 'Test Director', pin: '246810', agree: true }).token, dir = userByToken(tok);
-      for(let i = 1; i <= 12; i++) api.redeem({ code: inviteCode(dir), name: 'Test Player ' + String(i).padStart(2, '0'), pin: '1357' + String(i % 10).repeat(2), agree: true });
+      for(let i = 1; i <= 12; i++) api.redeem({ code: inviteCode(clubs.get(clubs.MAIN), dir), name: 'Test Player ' + String(i).padStart(2, '0'), pin: '1357' + String(i % 10).repeat(2), agree: true });
       console.log('staging: seeded Test Director and 12 fake members');
     }catch(e){ console.error('staging seed failed', e.message); }
   }
   // Staging only: a few fake demo businesses for the fake Test Player accounts (once; never in production)
-  if(process.env.STAGING === '1'){ const n = business.seedDemo(); if(n) console.log(`staging: seeded ${n} fake demo businesses`); const k = opportunity.seedDemo(); if(k) console.log(`staging: seeded ${k} fake demo opportunity listings`); }
+  if(process.env.STAGING === '1'){ const { business, opportunity } = clubs.get(clubs.MAIN); const n = business.seedDemo(); if(n) console.log(`staging: seeded ${n} fake demo businesses`); const k = opportunity.seedDemo(); if(k) console.log(`staging: seeded ${k} fake demo opportunity listings`); }
   if(stopping) return;
-  if(club.resume()) console.log('resumed running tournament');
+  for(const c of clubs.all()) if(c.club.resume()) console.log(c.id === clubs.MAIN ? 'resumed running tournament' : `resumed running tournament in club ${c.id}`);
   server.listen(PORT, () => { ready = true; console.log(`Blindrise poker club on :${PORT}`); });
-  if(!process.env.NO_BEACON) fair.probe();
+  if(!process.env.NO_BEACON) clubs.get(clubs.MAIN).fair.probe();
 })();
 module.exports = { server };

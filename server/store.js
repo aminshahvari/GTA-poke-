@@ -98,4 +98,78 @@ const freeze = () => { frozen = true; };
 const health = () => ({ mode: file ? 'file' : pool ? 'postgres' : null, epoch, leaseLost: lost, dirty: dirty.size,
   lastWriteError: lastWriteError && { message: lastWriteError.message, ageMs: Date.now() - lastWriteError.at } });
 
-module.exports = { init, get, set, del, keys, values, flush, freeze, health, onLost: fn => { onLost = fn; } };
+// ---------- club switching (CLUB_SWITCHING=1 or STAGING=1 only; production uses the plain store above) ----------
+// One deployment can hold several clubs that share one identity (name + PIN). A club sees the store through scoped(id):
+// identity keys (accounts, names, sessions, pictures, push subscriptions, club list) are shared; everything else
+// (tournaments, history, invites, settings, rewards, Exchange, stats, fairness records) lives under 'club:<id>:'.
+// The default club 'main' keeps today's unprefixed keys, so existing data is read exactly as it is.
+// Membership: an account belongs to 'main' unless it has noMain: true; it belongs to another club when
+// user.clubs[id] exists. A club only ever sees its own members, with that club's role, invitedBy, muted, household
+// and removed fields, so one club's code cannot read or write another club's members or data.
+const SHARED = ['user:', 'name:', 'session:', 'avatar:', 'push:', 'clubdef:'];
+const SHARED_EXACT = ['vapid', LEASE];
+const MEM = ['role', 'invitedBy', 'muted', 'household', 'removed', 'joinedAt'];
+const isShared = k => SHARED_EXACT.includes(k) || SHARED.some(p => k.startsWith(p));
+function scoped(cid){
+  const main = cid === 'main', pre = main ? '' : 'club:' + cid + ':';
+  const isUser = k => k.startsWith('user:');
+  const view = u => {
+    if(!u) return undefined;
+    if(main){ if(u.noMain) return undefined; if(!u.clubs) return u; const { clubs, ...rest } = u; return rest; }
+    const m = u.clubs && u.clubs[cid]; if(!m) return undefined;
+    const out = {}; for(const [k, v] of Object.entries(u)) if(k !== 'clubs' && k !== 'noMain' && !MEM.includes(k)) out[k] = v;
+    return { ...out, ...m };
+  };
+  const s = {
+    get(k){ if(isUser(k)) return view(get(k)); return isShared(k) ? get(k) : get(pre + k); },
+    set(k, v){
+      if(isUser(k)){
+        const cur = get(k);
+        if(main){ set(k, cur && cur.clubs ? { ...v, clubs: cur.clubs } : v); return v; }
+        if(!cur || !(cur.clubs && cur.clubs[cid])) throw new Error('Not a member of this club.');
+        // A club changes only its own membership fields, and only the ones the value carries: they are merged over the
+        // stored membership, so a partial write (say { muted: true }) can never drop role, joinedAt or invitedBy.
+        // To clear a field, pass it as null (as 'household' does), or as an own property set to undefined.
+        const m = { ...cur.clubs[cid] };
+        for(const f of MEM) if(Object.prototype.hasOwnProperty.call(v, f)){ if(v[f] === undefined) delete m[f]; else m[f] = v[f]; }
+        set(k, { ...cur, clubs: { ...cur.clubs, [cid]: m } });
+        return v;
+      }
+      if(isShared(k)){ if(!main && k.startsWith('name:')) return v; return set(k, v); } // a club cannot claim or free a name
+      return set(pre + k, v);
+    },
+    del(k){
+      if(isUser(k)) return; // accounts are never deleted through a club
+      if(isShared(k)){ if(!main && k.startsWith('name:')) return; return del(k); }
+      return del(pre + k);
+    },
+    keys(prefix){
+      if(isUser(prefix) || 'user:'.startsWith(prefix) && prefix) return keys(prefix).filter(k => !isUser(k) || view(get(k)));
+      if(isShared(prefix)) return keys(prefix);
+      return main ? keys(prefix).filter(k => !k.startsWith('club:')) : keys(pre + prefix).map(k => k.slice(pre.length));
+    },
+    values(prefix){ return s.keys(prefix).map(k => s.get(k)); },
+    flush, freeze, health, init, onLost: fn => { onLost = fn; }, id: cid
+  };
+  return s;
+}
+
+// Club switching is on with CLUB_SWITCHING=1 or STAGING=1 (server/clubs.js uses this same test).
+const switching = () => process.env.CLUB_SWITCHING === '1' || process.env.STAGING === '1';
+
+// noMain guard (club switching off, the rollback case). With the flag off the main club uses this plain store, so an
+// account that belongs only to another club (noMain: true) must not exist for it: get/keys/values never return it or
+// its picture, so it is not listed, cannot sign in (by name or with an old session token), cannot join a table, chat,
+// use the Exchange or rewards; set/del leave it untouched, so turning club switching back on finds it intact.
+// The same guard is in the production line (branch nomain-guard). With the flag on, the plain store is unchanged and
+// clubs see accounts through scoped() above, which hides noMain accounts from main the same way.
+const hidden = k => { const u = k.startsWith('user:') ? cache.get(k) : k.startsWith('avatar:') ? cache.get('user:' + k.slice(7)) : null; return !!(u && u.noMain) && !switching(); };
+const shown = {
+  get: k => hidden(k) ? undefined : get(k),
+  set: (k, v) => hidden(k) ? v : set(k, v),
+  del: k => { if(!hidden(k)) del(k); },
+  keys: prefix => keys(prefix).filter(k => !hidden(k))
+};
+shown.values = prefix => shown.keys(prefix).map(k => cache.get(k));
+
+module.exports = { init, ...shown, flush, freeze, health, onLost: fn => { onLost = fn; }, scoped, switching };

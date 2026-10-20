@@ -13,9 +13,10 @@ const consentToken = c => 'j' + CONSENT_V + '.' + crypto.createHmac('sha256', CO
 const sameToken = (a, b) => typeof a === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 
-// the clubs this server has: the main club, plus any club made with club switching (clubdef:<id>, see the club-switching branch)
+// the clubs this server has: the main club, plus, while club switching is on, every club opened with it (clubdef:<id>).
+// With club switching off only the main club has a join page, as only the main club exists for members then.
 const defs = () => [{ id: MAIN, name: (store.get('settings') || {}).clubName || 'Blindrise' },
-  ...store.keys('clubdef:').map(k => store.get(k)).filter(d => d && /^[a-z0-9]{3,24}$/.test(d.id || '') && !d.removed)];
+  ...(store.switching && store.switching() ? store.keys('clubdef:') : []).map(k => store.get(k)).filter(d => d && /^[a-z0-9]{3,24}$/.test(d.id || '') && !d.removed)];
 
 // A club's slug comes from its name the first time it is needed and then stays the same, so a printed code keeps working.
 // Invite codes on /join/ are always 12 characters, so a slug is never 12 characters long.
@@ -71,7 +72,8 @@ const api = {
     if(!c) return { club: false };
     return { club: true, slug: c.slug, name: c.name, initials: initials(c.name), consent: { v: CONSENT_V, text: consentText(c.name) }, token: consentToken(c) };
   },
-  joinClub({ slug, email, agree, token }, _, ip){
+  // ip comes fourth: the server passes (data, user, club context, ip)
+  joinClub({ slug, email, agree, token }, _, __, ip){
     const c = bySlug(slug);
     if(!c) throw notFound();
     // fail closed: no ticked box or no valid token for this club, no sign-up

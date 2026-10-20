@@ -38,11 +38,13 @@ function modal(html, buttons){
 
 // ---------- sign in ----------
 async function post(path, body){
-  const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + (local.get('token', '') || '') }, body: JSON.stringify(body) });
+  const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + (local.get('token', '') || ''), ...clubHeader() }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({ error: 'The club server did not answer. Try again.' }));
   if(j.error) throw new Error(j.error);
   return j;
 }
+// club switching (only when the server has it on): the club this app shows, sent with every call; the server checks membership
+const clubHeader = () => { const id = local.get('club', null); return id ? { 'x-club': id } : {}; };
 // welcome: what Blindrise is, then Join (needs an invite link) or Sign in; the forms below are unchanged
 function welcomeScreen(){
   showScreen('auth');
@@ -89,6 +91,7 @@ function authScreen(mode){
       if(mode === 'join') local.set('askRemind', 1);
       const r = mode === 'join' ? await post('/api/redeem', { ...body, code: invite }) : mode === 'setup' ? await post('/api/setup', { ...body, code: $('aCode').value.trim() }) : await post('/api/login', body);
       local.set('token', r.token);
+      if(r.club) local.set('club', r.club);
       if(location.pathname !== '/') history.replaceState(null, '', '/');
       connect();
     }catch(err){ $('aErr').textContent = err.message; }
@@ -160,7 +163,7 @@ const tables = new Map();
 const myCards = new Map(); // tid -> {hand, cards}
 let editingT = false, tab = 'event', view = 'lobby', watchTid = null, lastSent = null, seen = new Set(), lastStatus = null, lastMyTable = null, clockSkew = 0;
 // Business Club (public/business.js) gets the few app helpers it needs; it builds its own DOM with textContent
-window.BizClub.init({ post, toast, token: () => local.get('token', ''), me: () => club.me, tab: () => tab,
+window.BizClub.init({ post, toast, token: () => local.get('token', ''), clubHeader, me: () => club.me, tab: () => tab,
   openTab: t => { tab = t; view = 'lobby'; showScreen('lobby'); renderLobby(); $('lobbyBody').scrollTop = 0; },
   confirm: (title, text, ok) => modal(`<h2>${esc(title)}</h2><p>${esc(text)}</p>`, [{ label: 'Cancel', value: false }, { label: esc(ok), value: true, primary: true }]) });
 function connect(){
@@ -170,7 +173,7 @@ function connect(){
   if(!token){ return post('/api/status', {}).then(s => s.hasOwner ? welcomeScreen() : authScreen('setup')).catch(() => welcomeScreen()); }
   if(ws) try{ ws.close(); }catch(e){}
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-  ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev })); };
+  ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined })); };
   ws.onmessage = ev => {
     const m = JSON.parse(ev.data);
     if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
@@ -198,8 +201,10 @@ const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
 function onClub(c){
   club = c; clockSkew = c.now - Date.now();
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
-  $('meChip').innerHTML = `<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name)}</span></button><button class="back" id="outBtn">Sign out</button>`;
+  if(c.clubSwitching) clubSwitching(c);
+  $('meChip').innerHTML = `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name)}</span></button><button class="back" id="outBtn">Sign out</button>`;
   $('meBtn').onclick = () => openProfile(c.me.id);
+  if($('clubBtn')) $('clubBtn').onclick = pickClub;
   $('outBtn').onclick = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
   $('dirTab').hidden = !c.me.owner;
   const st = c.tourney && c.tourney.status;
@@ -209,6 +214,21 @@ function onClub(c){
   lastMyTable = c.myTable;
   const typing = document.activeElement && $('lobbyBody').contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(view === 'lobby'){ showScreen('lobby'); if(tab !== 'learn' && tab !== 'biz' && !typing) renderLobby(); } else renderTable();
+}
+// club switching: remember which club this is; a signed-in member who opens another club's invite link joins it
+let joinTried = false;
+function clubSwitching(c){
+  local.set('club', c.club.id);
+  if(joinTried || !location.pathname.startsWith('/join/')) return;
+  joinTried = true;
+  const code = location.pathname.slice(6);
+  history.replaceState(null, '', '/');
+  post('/api/joinInvite', { code }).then(r => { if(r.club !== c.club.id){ local.set('club', r.club); location.replace('/'); } })
+    .catch(e => modal(`<h2>That invite didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]));
+}
+async function pickClub(){
+  const id = await modal(`<h2>Your clubs</h2><p>Same name and PIN everywhere. Each club has its own members, tournaments and Exchange.</p><div class="club-list">${club.clubs.map(x => `<button class="club-pick${x.id === club.club.id ? ' on' : ''}" data-v="${esc(x.id)}">${esc(x.name)}</button>`).join('')}</div>`, [{ label: 'Close', value: null }]);
+  if(id && id !== club.club.id){ local.set('club', id); location.replace('/'); }
 }
 function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)) renderTable(); }
 
@@ -489,7 +509,7 @@ const demoCard = () => `<div class="card-box demo-box"><span class="eyebrow">Dem
   <p>Play a real game at a 6-max table against 5 practice players, with the same buttons, chat bubbles, antes and clock as a club tournament. It runs only on your phone: nothing is saved and no points are given.</p>
   <div class="btn-row"><button class="btn red big" data-demo>Open demo table</button></div></div>`;
 function directorHTML(){
-  return newsHTML() + demoCard() + conflictsHTML() + joinQrHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
+  return newsHTML() + demoCard() + conflictsHTML() + clubListHTML() + joinQrHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
 }
 // ---------- the owner's join QR (Director) ----------
 // Each club the owner runs gets a QR code of its public join address, drawn here on the phone from that address only
@@ -572,6 +592,22 @@ async function wireJoinQr(){
     window.addEventListener('afterprint', done);
     setTimeout(() => { window.print(); setTimeout(done, 1000); }, 50);
   });
+}
+// club switching only: the Blindrise organizer can open another club on this server (needs the setup code)
+function clubListHTML(){
+  if(!club.canCreateClub) return '';
+  return `<div class="card-box"><span class="eyebrow">Clubs on this server · ${club.clubs.length}</span>
+    <div class="table-list">${club.clubs.map(x => `<div class="trow"><b>${esc(x.name)}</b><small>${x.id === club.club.id ? 'This club' : 'Separate members, invites and tournaments'}</small></div>`).join('')}</div>
+    <div class="btn-row"><button class="btn" id="newClubBtn">Open a new club</button></div></div>`;
+}
+async function newClub(){
+  const pm = modal(`<h2>Open a new club</h2><p>It starts empty: its own members, invite links, tournaments and Exchange. You are its organizer. Members join with that club's invite link and keep their name and PIN.</p>
+    <div class="field"><label for="ncName">Club name</label><input id="ncName" maxlength="40"></div><div class="field"><label for="ncCode">Setup code</label><input id="ncCode" autocomplete="off"></div>`, [{ label: 'Cancel', value: false }, { label: 'Open club', value: true, primary: true }]);
+  let name = '', code = '';
+  $('ncName').oninput = e => name = e.target.value; $('ncCode').oninput = e => code = e.target.value;
+  if(!await pm) return;
+  try{ await post('/api/createClub', { name, code: code.trim() }); toast('Club opened. Switch to it from the club button at the top.'); }
+  catch(e){ modal(`<h2>That didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
 }
 // Business Club + Opportunity Club: off until the owner opens them; while off only the owner sees them (to try them out)
 function clubsSwitchHTML(){
@@ -741,6 +777,7 @@ function wireLobby(){
     if(await modal(`<h2>Remove ${esc(name)}?</h2><p>They are signed out and can't come back without a new invite.</p>`, [{ label: 'Keep', value: false }, { label: 'Remove', value: true, primary: true }])) send({ t: 'remove', uid: b.dataset.remove });
   });
   on('inviteBtn', askInvite);
+  on('newClubBtn', newClub);
   on('lateInvite', e => { e.preventDefault(); askInvite(); });
   on('againBtn', () => {
     const T = club.tourney, d = new Date();

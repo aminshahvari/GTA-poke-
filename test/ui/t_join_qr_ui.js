@@ -25,7 +25,7 @@ const decode = file => execFileSync('python3', ['-I', '-c', 'import cv2,sys\nim=
 const noHScroll = pg => pg.evaluate(() => ({ dw: document.documentElement.scrollWidth, vw: innerWidth, aw: document.getElementById('auth').scrollWidth, ac: document.getElementById('auth').clientWidth }));
 
 (async () => {
-  const srv = spawn(process.execPath, ['server/index.js'], { cwd: path.join(__dirname, '..', '..'), env: { ...process.env, PORT, OWNER_CODE: 'secret', DATA_FILE: DATA, NO_BEACON: '1', NO_PUSH: '1', FAST: '', STAGING: '' }, stdio: ['ignore', 'ignore', 'inherit'] });
+  const srv = spawn(process.execPath, ['server/index.js'], { cwd: path.join(__dirname, '..', '..'), env: { ...process.env, PORT, OWNER_CODE: 'secret', DATA_FILE: DATA, NO_BEACON: '1', NO_PUSH: '1', FAST: '', STAGING: '', CLUB_SWITCHING: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
   try{
     for(let i = 0; i < 50; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await new Promise(r => setTimeout(r, 200)); }

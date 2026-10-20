@@ -2061,3 +2061,11 @@ body{background:var(--lx-ink)}
 #game.ovl .dock .controls:not(:has(button,.sizing))>.info-line:not(:empty),#game.land .dock .controls:not(:has(button,.sizing))>.info-line:not(:empty){border:1px solid rgba(216,180,106,.2);border-radius:16px;background:rgba(255,255,255,.03);padding:12px 14px}
 /* sideways the helper is as tall as what it says, just above the buttons (its room is still kept, so nothing moves) */
 #game.land .dock .helper{height:auto;max-height:var(--hlp-h,none)}
+
+/* ---------- club switching (only shown when the server has it on and you belong to more than one club) ---------- */
+.club-btn{flex:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(230,187,104,.1);color:var(--lx-gold,#e6bb68);border:1px solid rgba(230,187,104,.45);border-radius:99px;padding:5px 12px;font-size:12px;font-weight:700;letter-spacing:.02em}
+.club-btn::after{content:' ▾';opacity:.8}
+.club-list{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.club-pick{text-align:left;background:rgba(255,255,255,.04);color:var(--text);border:1px solid rgba(230,187,104,.25);border-radius:12px;padding:12px 14px;font-size:15px;font-weight:600}
+.club-pick.on{border-color:var(--lx-gold,#e6bb68);box-shadow:inset 0 0 0 1px var(--lx-gold,#e6bb68)}
+.club-pick.on::after{content:' · current';color:var(--muted);font-weight:500;font-size:13px}
