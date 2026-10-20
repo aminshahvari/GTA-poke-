@@ -516,6 +516,8 @@ window.BizClub = {
       openBiz: uid => openDetail(uid, 'opp') });
   },
   render, mountHome,
+  // the sponsor's logo (or monogram) for the poker table's sponsor card
+  logo: (b, cls) => logoEl(b, cls),
   open(view){ S.view = view || 'list'; S.listStale = true; if(view === 'mine'){ S.mine = undefined; S.seg = 'biz'; } if(S.seg === 'opp') window.OppClub.open('feed'); },
   myStatus: () => S.feed ? S.feed.mine : null,
   // Member Home cards: open the Business tab on one section ('biz' or 'opp') or straight on the card scanner

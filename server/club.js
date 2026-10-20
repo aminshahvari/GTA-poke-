@@ -36,6 +36,22 @@ function gpOpts(o, keep){
 const gpOn = k => { const t = T(); return GP() && !!t && t[k] === true; };
 const pauseSec = () => { const t = T(); return GP() && t && PAUSES.includes(t.handPause) ? t.handPause : 0; };
 const fmt = n => Math.round(n).toLocaleString('en-US');
+// Tournament breaks: every 10 blind levels the whole tournament stops for a few minutes (3 to 5, set by the director, 5 unless
+// set). The break starts on the clock; a hand already in play is finished first, and no table deals a new hand until the break
+// ends, so every table resumes together. The break end is an absolute time kept with the tournament, so a reconnect or a
+// server restart does not move it. BREAKS=0 on the server turns breaks off.
+const BREAK_EVERY = 10, BREAK_MINS = [3, 4, 5];
+const breaksOn = () => process.env.BREAKS !== '0';
+const breakMinOf = (v, keep) => BREAK_MINS.includes(+v) ? +v : BREAK_MINS.includes(+keep) ? +keep : 5;
+// tests (FAST=1 only) can shorten levels and breaks with LEVEL_MS and BREAK_MS
+const breakMs = t => FAST && +process.env.BREAK_MS || breakMinOf(t.breakMin) * 60000;
+const levelMs = t => FAST && +process.env.LEVEL_MS || t.levelMin * 60000;
+const onBreak = (t = T()) => !!t && !!t.breakUntil && !t.paused && Date.now() < t.breakUntil;
+// Sponsor spotlight: a published business from this club's Exchange the director picks for a tournament (see business.js).
+// Shown for a few seconds when play starts and again during every break. Only its uid is kept here.
+const SPONSOR_SECS = [5, 8, 10];
+const sponsorOf = (v, keep) => v === undefined ? keep || null : typeof v === 'string' && /^u[0-9a-f]{12}$/.test(v) ? v : null;
+const sponsorSecOf = (v, keep) => SPONSOR_SECS.includes(+v) ? +v : SPONSOR_SECS.includes(+keep) ? +keep : 8;
 
 // Disconnect protection (Issue #9): when the player to act has no live connection, their decision gets 30 more seconds by
 // itself, once per hand, without using an extra-time card or marking them away. Tests (FAST=1 only) can set DC_PROTECT_MS.
@@ -76,7 +92,8 @@ function create(o){
   store.set('tourney', { id: 't' + Date.now(), status: 'registering', name: String(name || 'Club Tournament').slice(0, 60), stack, levelMin,
     startAt: startAt ? +startAt : null, repeat: ['daily', 'weekly'].includes(repeat) ? repeat : 'none', regs: [], createdAt: Date.now(),
     anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : 20,
-    tableSize: SIZES.includes(+tableSize) ? +tableSize : 9, lateLevels: LATE.includes(+lateLevels) ? +lateLevels : 0, helper: helper !== false && helper !== 'off', ...gpOpts(o) });
+    tableSize: SIZES.includes(+tableSize) ? +tableSize : 9, lateLevels: LATE.includes(+lateLevels) ? +lateLevels : 0, helper: helper !== false && helper !== 'off', ...gpOpts(o),
+    breakMin: breakMinOf(o.breakMin), sponsor: sponsorOf(o.sponsor), sponsorSec: sponsorSecOf(o.sponsorSec) });
   hooks.onClub();
   hooks.onNotice('open', T());
 }
@@ -90,7 +107,8 @@ function edit(o){
     levelMin: Math.max(1, Math.min(60, Math.round(+levelMin || t.levelMin))), startAt: at, repeat: at && ['daily', 'weekly'].includes(repeat) ? repeat : 'none',
     anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : t.actSec, tableSize: 9,
     lateLevels: LATE.includes(+lateLevels) ? +lateLevels : t.lateLevels, helper: helper !== false && helper !== 'off',
-    reminded: at === t.startAt ? t.reminded : false, ...gpOpts(o, t) });
+    reminded: at === t.startAt ? t.reminded : false, ...gpOpts(o, t),
+    breakMin: breakMinOf(o.breakMin, t.breakMin), sponsor: sponsorOf(o.sponsor, t.sponsor), sponsorSec: sponsorSecOf(o.sponsorSec, t.sponsorSec) });
   hooks.onClub();
 }
 function join(uid){
@@ -160,7 +178,7 @@ function start(){
   });
   const { seed, seal } = fair.newSeed(); fair.prune();
   saveT({ fairSeed: seed, fairSeal: seal });
-  saveT({ status: 'running', startedAt: Date.now(), level: 0, levelEndsAt: Date.now() + t.levelMin * 60000, paused: false, pausedLeft: 0,
+  saveT({ status: 'running', startedAt: Date.now(), level: 0, levelEndsAt: Date.now() + levelMs(t), paused: false, pausedLeft: 0, breakUntil: null, pausedBreakLeft: 0,
     entrants: regs.length, remaining: regs.length, places: [], regs });
   saveLive();
   go();
@@ -178,8 +196,9 @@ function resume(){
     Object.assign(tb.g, { btn: lt.btn, sb: lt.sb, bb: lt.bb, handNo: lt.handNo || 0 });
     tb.note = 'The server restarted. Any hand in progress was replayed from its starting stacks.';
   }
-  // the clock keeps the time that was left in the level
-  if(!t.paused) saveT({ levelEndsAt: Date.now() + Math.max(5000, live.levelLeft || 0) });
+  // the clock keeps the time that was left in the level; a break keeps its end time (a restart does not make it longer)
+  if(!t.paused && t.breakUntil && t.breakUntil > Date.now()) saveT({ levelEndsAt: t.breakUntil + levelMs(t) });
+  else if(!t.paused) saveT({ levelEndsAt: Date.now() + Math.max(5000, live.levelLeft || 0) });
   go();
   return true;
 }
@@ -207,11 +226,28 @@ function stopAll(){
 function tick(){
   const t = T();
   if(!running || !t || t.status !== 'running' || t.paused) return;
-  if(Date.now() >= t.levelEndsAt){ saveT({ level: t.level + 1, levelEndsAt: t.levelEndsAt + t.levelMin * 60000 }); hooks.onClub(); }
+  if(t.breakUntil && Date.now() >= t.breakUntil){ saveT({ breakUntil: null }); hooks.onClub(); return; }
+  if(Date.now() >= t.levelEndsAt){
+    const level = t.level + 1;
+    // after every 10th level: the break, then the next level's full time
+    if(breaksOn() && level % BREAK_EVERY === 0){
+      const until = t.levelEndsAt + breakMs(t);
+      saveT({ level, breakUntil: until, breakNo: level / BREAK_EVERY, levelEndsAt: until + levelMs(t) });
+      hooks.onClub();
+    } else { saveT({ level, levelEndsAt: t.levelEndsAt + levelMs(t) }); hooks.onClub(); }
+  }
 }
-function pause(){ const t = T(); if(!t || t.status !== 'running' || t.paused) return; saveT({ paused: true, pausedLeft: Math.max(0, t.levelEndsAt - Date.now()) }); saveLive(); hooks.onClub(); }
-function unpause(){ const t = T(); if(!t || !t.paused) return; saveT({ paused: false, levelEndsAt: Date.now() + t.pausedLeft }); hooks.onClub(); }
+function pause(){
+  const t = T(); if(!t || t.status !== 'running' || t.paused) return;
+  saveT({ paused: true, pausedLeft: Math.max(0, t.levelEndsAt - Date.now()), pausedBreakLeft: onBreak(t) ? t.breakUntil - Date.now() : 0 }); saveLive(); hooks.onClub();
+}
+function unpause(){
+  const t = T(); if(!t || !t.paused) return;
+  saveT({ paused: false, levelEndsAt: Date.now() + t.pausedLeft, breakUntil: t.pausedBreakLeft > 0 ? Date.now() + t.pausedBreakLeft : null, pausedBreakLeft: 0 }); hooks.onClub();
+}
 async function waitUnpaused(){ while(running && T() && T().paused) await sleep(300); }
+// a table waits here between hands while the tournament is on a break (or paused)
+async function waitBreak(){ while(running && T() && (T().paused || onBreak())) await sleep(250); }
 
 // ---------- table loop ----------
 function saveHand(uid, hand){
@@ -385,7 +421,7 @@ function hfhCheck(){
 async function loop(tb){
   const g = tb.g;
   while(running && !tb.broken && T() && T().status === 'running'){
-    await waitUnpaused();
+    await waitBreak();
     if(!running || tb.broken) return;
     if(hfhNeeded() && !hfh.on){ hfh.on = true; hfh.round = 1; hfh.done.clear(); }
     if(hfh.on){
@@ -540,7 +576,8 @@ function scheduleNext(t){
   let next = t.startAt + step; while(next < Date.now()) next += step;
   setTimeout(() => {
     const cur = T(); if(cur && (cur.status === 'running' || cur.status === 'registering')) return;
-    create({ name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat, anteMode: t.anteMode, actSec: t.actSec, tableSize: t.tableSize, lateLevels: t.lateLevels, helper: t.helper, showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0 });
+    create({ name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat, anteMode: t.anteMode, actSec: t.actSec, tableSize: t.tableSize, lateLevels: t.lateLevels, helper: t.helper, showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0,
+      breakMin: t.breakMin, sponsor: t.sponsor, sponsorSec: t.sponsorSec });
   }, FAST ? 50 : 15000);
 }
 // Starts a scheduled tournament on time.
@@ -616,4 +653,4 @@ function totalChips(){
 }
 
 module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, edit, join, leave, cancel, start, resume, pause, unpause, act, extend, back, offline,
-  snapshot, cardsFor, show, gp: GP, _extras: { resultMs, rabbitCards, resultExtras }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };
+  snapshot, cardsFor, show, gp: GP, onBreak, breaksOn, BREAK_EVERY, _extras: { resultMs, rabbitCards, resultExtras }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };

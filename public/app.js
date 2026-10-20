@@ -241,6 +241,7 @@ $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab
 const nameOf = uid => { const m = club.members.find(x => x.id === uid); if(m) return m.name; for(const h of club.history) for(const r of h.results) if(r.uid === uid) return r.name; return 'Former member'; };
 const pchip = (uid, removable) => `<span class="pchip ${uid === club.me.id ? 'me' : ''}" data-prof="${esc(uid)}">${avHTML(uid, nameOf(uid), 'xs')}${esc(nameOf(uid))}${removable ? `<button data-kick="${esc(uid)}" aria-label="Remove from tournament">×</button>` : ''}</span>`;
 const when = ms => new Date(ms).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const clockAt = ms => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 function renderLobby(){
   if(!club) return;
   const body = $('lobbyBody');
@@ -416,7 +417,8 @@ function eventMainHTML(){
     const mine = T.regs.includes(club.me.id);
     return `<div class="card-box"><span class="status-pill">Registration open</span>${mine ? ' <span class="status-pill reg">✓ You\'re registered</span>' : ''}<h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Starts</small><b>${T.startAt ? esc(when(T.startAt)) : 'When the owner starts it'}</b></div><div><small>Stack</small><b>${fmt(T.stack)}</b></div><div><small>Levels</small><b>${T.levelMin} min</b></div></div>
-      <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act. Every player has 3 extra-time cards (+30 seconds each) for the tournament, and a fresh 5 at the final table.${extrasNote(T)}</p>
+      <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act. Every player has 3 extra-time cards (+30 seconds each) for the tournament, and a fresh 5 at the final table.${extrasNote(T)}${breakNote(T)}</p>
+      ${T.sponsor ? `<p class="note">Presented by <b>${esc(T.sponsor.name)}</b>.</p>` : ''}
       ${T.repeat !== 'none' ? `<p class="note">Repeats ${T.repeat === 'daily' ? 'every day' : 'every week'} at this time.</p>` : ''}
       <p>${T.regs.length} joined</p>
       <div class="plist">${T.regs.map(u => pchip(u, false)).join('') || '<span class="note">Nobody has joined yet.</span>'}</div>
@@ -430,6 +432,7 @@ function eventMainHTML(){
     const [sb, bb] = E.levelFor(T.level, T.anteMode);
     return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Players left</small><b>${T.remaining} of ${T.entrants}</b></div><div><small>Level</small><b>${T.level + 1}</b></div><div><small>Blinds</small><b>${fmt(sb)}/${fmt(bb)}</b></div></div>
+      ${T.breakUntil ? `<p class="brk-note"><b>On break</b> until ${esc(clockAt(T.breakUntil - clockSkew))}. Play resumes by itself.</p>` : ''}
       ${club.myTable ? `<button class="btn red" data-watch="${esc(club.myTable)}">Go to my table</button>` : out ? `<p>You finished ${ord(out.place)}. You can still watch.</p>`
         : (T.regs || []).includes(club.me.id) ? `<p><span class="status-pill reg">✓ You're registered</span></p><p>Finding your seat… your table opens by itself in a moment.</p>`
         : T.lateOpen ? `<p>Late registration is open until the end of level ${T.lateLevels}. You start with ${fmt(T.stack)} chips.</p><button class="btn red" id="joinBtn">Join now</button>` : '<p>You are not playing in this one. You can watch any table.</p>'}
@@ -623,6 +626,17 @@ function extrasNote(T){
   const x = [T.showMuck ? 'after each hand, players may show one or both of their cards' : '', T.rabbit ? 'the unused turn and river are shown when a hand ends early' : '', T.handPause ? `${T.handPause} seconds between hands` : ''].filter(Boolean);
   return x.length ? ` Table extras: ${x.join('; ')}.` : '';
 }
+// tournament breaks (every 10 levels) and the sponsor spotlight: see server/club.js
+const breaksOn = () => !!(club && club.features && club.features.breaks);
+const breakNote = T => breaksOn() && T ? ` A ${T.breakMin || 5}-minute break after every 10 levels; play resumes by itself.` : '';
+function sponsorFields(P, opt){
+  const S = club.sponsors;
+  if(!S || !S.list.length) return `<p class="note">Tournament sponsor: when a member publishes their business in the Exchange, you can pick it here to show on the tables at the start and during breaks.</p>`;
+  const cur = P ? (P.sponsor ? P.sponsor.uid : '') : S.spotlight || '';
+  return `<div class="two"><label>Tournament sponsor<select id="nSponsor">${opt('', 'None', cur)}${S.list.map(b => opt(b.uid, esc(b.name) + (b.uid === S.spotlight ? ' (Spotlight)' : ''), cur)).join('')}</select></label>
+        <label>Sponsor at the start<select id="nSponsorSec">${[5, 8, 10].map(v => opt(v, v + ' seconds', P ? P.sponsorSec || 8 : 8)).join('')}</select></label></div>
+        <p class="note">The sponsor's name and logo from the Exchange show on every table for a few seconds when play starts and during each break. They never cover cards or buttons.</p>`;
+}
 function directorMainHTML(){
   const T = club.tourney;
   const members = `<div class="card-box"><span class="eyebrow">Members · ${club.members.length}</span>
@@ -651,6 +665,8 @@ function directorMainHTML(){
         <div class="two"><label>Ante<select id="nAnte">${opt('each', 'Every player', P ? P.anteMode : 'each')}${opt('bb', 'Big blind (WSOP)', P ? P.anteMode : 'each')}</select></label>
         <label>Time to act<select id="nAct">${[10, 15, 20, 30].map(v => opt(v, v + ' seconds', P ? P.actSec : 20)).join('')}</select></label></div>
         <label>Hand helper<select id="nHelper">${opt('on', 'On: show hand strength and win chance', P && P.helper === false ? 'off' : 'on')}${opt('off', 'Off (pro mode)', P && P.helper === false ? 'off' : 'on')}</select></label>
+        ${breaksOn() ? `<label>Break after every 10 levels<select id="nBreak">${[3, 4, 5].map(v => opt(v, v + ' minutes', P ? P.breakMin || 5 : 5)).join('')}</select></label>` : ''}
+        ${sponsorFields(P, opt)}
         ${extrasOn() ? `<div class="two"><label>Show cards<select id="nShow">${opt('off', 'Off', P && P.showMuck ? 'on' : 'off')}${opt('on', 'Players may show', P && P.showMuck ? 'on' : 'off')}</select></label>
         <label>Rabbit hunt<select id="nRabbit">${opt('off', 'Off', P && P.rabbit ? 'on' : 'off')}${opt('on', 'Show the unused cards', P && P.rabbit ? 'on' : 'off')}</select></label></div>
         <label>Pause between hands<select id="nPause">${[[0, 'Standard (about 3 seconds)'], [2, '2 seconds'], [3, '3 seconds'], [4, '4 seconds'], [5, '5 seconds'], [6, '6 seconds']].map(([v, l]) => opt(v, l, P ? P.handPause || 0 : 0)).join('')}</select></label>` : ''}
@@ -669,7 +685,8 @@ function directorMainHTML(){
       <div class="btn-row"><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button><button class="btn" id="editBtn">Edit</button><button class="btn" id="cancelBtn">Cancel</button></div></div>${members}`;
   }
   return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
-    <div class="kv num"><div><small>Players left</small><b>${T.remaining}</b></div><div><small>Tables</small><b>${club.tables.length}</b></div><div><small>Clock</small><b>${T.paused ? 'Paused' : 'Running'}</b></div></div>
+    <div class="kv num"><div><small>Players left</small><b>${T.remaining}</b></div><div><small>Tables</small><b>${club.tables.length}</b></div><div><small>Clock</small><b>${T.paused ? 'Paused' : T.breakUntil ? 'On break' : 'Running'}</b></div></div>
+    ${T.breakUntil ? `<p class="note">Break until ${esc(clockAt(T.breakUntil - clockSkew))}. Play resumes by itself on level ${T.level + 1}.</p>` : ''}
     <div class="btn-row">${T.paused ? '<button class="btn green" id="resumeBtn">Resume</button>' : '<button class="btn" id="pauseBtn">Pause</button>'}<button class="btn" id="endBtn">End tournament</button></div></div>${members}`;
 }
 
@@ -781,7 +798,8 @@ function wireLobby(){
   on('lateInvite', e => { e.preventDefault(); askInvite(); });
   on('againBtn', () => {
     const T = club.tourney, d = new Date();
-    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: $('againAt') && $('againAt').value ? +$('againAt').value : null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: 9, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true, ...(extrasOn() && T ? { showMuck: !!T.showMuck, rabbit: !!T.rabbit, handPause: T.handPause || 0 } : {}) });
+    send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: $('againAt') && $('againAt').value ? +$('againAt').value : null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: 9, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true, ...(extrasOn() && T ? { showMuck: !!T.showMuck, rabbit: !!T.rabbit, handPause: T.handPause || 0 } : {}),
+      ...(T ? { breakMin: T.breakMin || 5, sponsor: T.sponsor ? T.sponsor.uid : null, sponsorSec: T.sponsorSec || 8 } : {}) });
     send({ t: 'join' }); tab = 'event';
   });
   on('newCustomBtn', () => { tab = 'director'; renderLobby(); });
@@ -791,7 +809,8 @@ function wireLobby(){
     nf.onsubmit = e => {
       e.preventDefault();
       const at = $('nWhen').value === 'at' ? new Date($('nAt').value).getTime() : null;
-      send({ t: editingT ? 'edit' : 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value, helper: $('nHelper').value, ...(extrasOn() ? { showMuck: $('nShow').value, rabbit: $('nRabbit').value, handPause: +$('nPause').value } : {}) });
+      send({ t: editingT ? 'edit' : 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value, helper: $('nHelper').value, ...(extrasOn() ? { showMuck: $('nShow').value, rabbit: $('nRabbit').value, handPause: +$('nPause').value } : {}),
+        ...($('nBreak') ? { breakMin: +$('nBreak').value } : {}), ...($('nSponsor') ? { sponsor: $('nSponsor').value || null, sponsorSec: +$('nSponsorSec').value } : {}) });
       if(editingT){ editingT = false; toast('Tournament updated.'); } else tab = 'event';
     };
     on('editBack', () => { editingT = false; renderLobby(); });
@@ -1863,9 +1882,76 @@ function drawSizing(d, meSeat){
   set(d.street === 0 && presets.length > 2 ? presets[1][1] : presets[0][1]);
   tickClock();
 }
+const mmss = ms => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+// The tournament break card (every 10 levels, server/club.js): over the middle of the felt once this table's hand is over,
+// with the time left and the sponsor if there is one. A hand still being played is never covered.
+let brkKey = '';
+function sponsorHTML(sp, big){
+  return `<div class="sp-card${big ? ' big' : ''}"><span class="sp-logo" data-splogo></span><span class="sp-txt"><small>${big ? 'Presented by' : 'Tonight\'s tournament is presented by'}</small><b>${esc(sp.name)}</b>${big ? `<small class="sp-cat">${esc(sp.categoryLabel)}${sp.area ? ' · ' + esc(sp.area) : ''}</small>` : ''}</span></div>`;
+}
+function fillLogo(el, sp){
+  const slot = el.querySelector('[data-splogo]');
+  if(slot && window.BizClub && window.BizClub.logo) slot.replaceChildren(window.BizClub.logo({ uid: sp.uid, name: sp.name, logoV: sp.logoV }, 'sp'));
+}
+function breakUI(T, d, now){
+  const el = $('brk'); if(!el) return;
+  const paused = T && T.paused && T.pausedBreakLeft > 0;
+  const on = T && T.status === 'running' && (paused || T.breakUntil && T.breakUntil > now);
+  if(!on || (d && d.phase === 'hand')){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; brkKey = ''; $('tableArea').classList.remove('on-break'); } return; }
+  $('tableArea').classList.add('on-break');
+  const key = T.id + ':' + (T.breakUntil || 'p') + ':' + (T.sponsor ? T.sponsor.uid : '');
+  if(key !== brkKey){
+    brkKey = key;
+    const [sb, bb, an] = E.levelFor(T.level, T.anteMode);
+    el.innerHTML = `<div class="brk-card"><span class="brk-eye">Tournament break</span><b class="brk-time num" id="brkTime"></b>
+      <small class="brk-sub">Play resumes by itself · Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}</small>
+      ${T.sponsor ? sponsorHTML(T.sponsor, true) : ''}</div>`;
+    if(T.sponsor) fillLogo(el, T.sponsor);
+    el.hidden = false; el.dataset.sig = '';
+  }
+  // placed again whenever the seats move (the table can arrive after the card, or players get moved)
+  const sig = [...document.querySelectorAll('#seats .seat')].map(q => q.offsetLeft + ',' + q.offsetTop).join(' ') + '|' + $('tableArea').clientWidth + 'x' + $('tableArea').clientHeight;
+  if(el.dataset.sig !== sig){ el.dataset.sig = sig; fitBreak(el); }
+  else if(el.dataset.fit === 'ok'){ const r = el.getBoundingClientRect(); if(brkSeats().some(q => r.left < q.right && q.left < r.right && r.top < q.bottom && q.top < r.bottom)) fitBreak(el); }
+  $('brkTime').textContent = paused ? 'Paused · ' + mmss(T.pausedBreakLeft) : mmss(T.breakUntil - now);
+}
+// Place the break card where it clears every player's seat: try a few heights on the felt, narrowing it between the seats
+// on either side. On a felt too small for that it stays compact in the middle (there is no hand being played under it).
+function fitBreak(el){
+  const area = $('tableArea').getBoundingClientRect(), cx = area.left + area.width / 2;
+  const seats = brkSeats();
+  const hitsOf = r => seats.filter(q => r.left < q.right && q.left < r.right && r.top < q.bottom && q.top < r.bottom);
+  for(const top of [45, 52, 58, 40, 64]){
+    el.style.top = top + '%'; el.style.width = ''; el.classList.remove('tight');
+    for(let pass = 0; pass < 4; pass++){
+      const hits = hitsOf(el.getBoundingClientRect());
+      if(!hits.length){ el.dataset.fit = 'ok'; return; }
+      const half = Math.min(...hits.map(q => q.right <= cx ? cx - q.right : q.left >= cx ? q.left - cx : 0)) - 6;
+      if(half < 85) break;
+      el.style.width = Math.floor(2 * half) + 'px';
+      if(2 * half < 250) el.classList.add('tight');
+    }
+  }
+  el.style.top = ''; el.style.width = ''; el.classList.add('tight'); el.dataset.fit = 'small';
+}
+// each player's seat as drawn: the seat with its avatar, name plate and cards (they reach outside the seat's own box)
+function brkSeats(){
+  return [...document.querySelectorAll('#seats .seat')].map(s => [s, ...s.querySelectorAll('.av,.plate,.hole')].map(x => x.getBoundingClientRect()).filter(q => q.width)
+    .reduce((a, q) => a ? { left: Math.min(a.left, q.left), top: Math.min(a.top, q.top), right: Math.max(a.right, q.right), bottom: Math.max(a.bottom, q.bottom) } : q, null)).filter(Boolean);
+}
+// The sponsor ribbon over the clock bar for a few seconds after the tournament starts (never over the felt or the buttons).
+let spnKey = '';
+function sponsorUI(T, now){
+  const el = $('spn'); if(!el) return;
+  const sp = T && T.status === 'running' && T.sponsor, left = sp && T.startedAt ? T.startedAt + (T.sponsorSec || 8) * 1000 - now : 0;
+  if(!sp || left <= 0){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; spnKey = ''; } return; }
+  const key = T.id + ':' + sp.uid;
+  if(key !== spnKey){ spnKey = key; el.innerHTML = sponsorHTML(sp, false); fillLogo(el, sp); el.hidden = false; }
+  el.classList.toggle('out', left < 600);
+}
 function tickClock(){
   const T = demo ? demo.T : club && club.tourney;
-  if(!T || T.status !== 'running' || view !== 'table') return;
+  if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(null); return; }
   const now = Date.now() + clockSkew;
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;
@@ -1873,9 +1959,11 @@ function tickClock(){
   const one = $('game').classList.contains('row1');
   $('cBlinds').textContent = `${fmt(sb)}/${fmt(bb)}${an && !one ? ' · ante ' + fmt(an) : ''}`;
   $('cNext').textContent = one && an ? `Ante ${fmt(an)}` : `Next: ${fmt(nsb)}/${fmt(nbb)}${nan ? ' · ante ' + fmt(nan) : ''}`;
-  const ms = T.paused ? T.pausedLeft : Math.max(0, T.levelEndsAt - now), s = Math.ceil(ms / 1000);
-  $('cTime').textContent = T.paused ? 'Paused' : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  $('cTimeLbl').textContent = !T.paused && ms <= 0 ? 'Blinds up next hand' : 'Time left';
+  const brk = !T.paused && T.breakUntil ? Math.max(0, T.breakUntil - now) : 0;
+  const ms = T.paused ? T.pausedLeft : brk || Math.max(0, T.levelEndsAt - now);
+  $('cTime').textContent = T.paused ? 'Paused' : mmss(ms);
+  $('cTimeLbl').textContent = brk ? 'Break' : !T.paused && ms <= 0 ? 'Blinds up next hand' : 'Time left';
+  breakUI(T, tables.get(watchTid || club.myTable), now); sponsorUI(T, now);
   $('sAvg').textContent = fmt(T.entrants * T.stack / Math.max(1, T.remaining));
   const d = tables.get(watchTid || club.myTable);
   const all = [...tables.values()].flatMap(t => t.seats.filter(Boolean));

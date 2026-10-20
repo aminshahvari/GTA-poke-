@@ -290,4 +290,8 @@ function seedDemo(){
   return n;
 }
 
-module.exports = { api, CATEGORIES, logoFor, removeUser, seedDemo, validate: { text, website, instagram, email, phone, logo } };
+// Sponsor spotlight on the poker table (server/club.js keeps only the uid): what the table shows, only while the business
+// is published and not hidden by the director; the businesses the director can pick, the Spotlight one first.
+const sponsorCard = uid => { const b = uid && store.get('biz:' + uid); return visible(b) ? { uid: b.uid, name: b.name, categoryLabel: label(b), area: b.area || '', logoV: logoV(b.uid) } : null; };
+function sponsorOptions(){ const s = spotlight(); return { spotlight: s ? s.uid : null, list: all().sort((a, b) => (s && b.uid === s.uid) - (s && a.uid === s.uid) || a.name.localeCompare(b.name)).map(b => ({ uid: b.uid, name: b.name })) }; }
+module.exports = { api, sponsorCard, sponsorOptions, CATEGORIES, logoFor, removeUser, seedDemo, validate: { text, website, instagram, email, phone, logo } };
