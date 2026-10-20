@@ -251,8 +251,11 @@ function dropEvent(uid){
 // Business Club (members-only directory, separate from poker): see server/business.js
 // Opportunity Club ("I need help" / "I can help" listings inside Business Club): see server/opportunity.js
 // Both run inside the caller's club context, so each club has its own Exchange.
-const CLUB_API = new Set([...Object.keys(clubs.get(clubs.MAIN).business.api), ...Object.keys(clubs.get(clubs.MAIN).opportunity.api)]);
-const clubApi = (name, c) => Object.hasOwn(c.opportunity.api, name) ? c.opportunity.api[name] : c.business.api[name];
+const CLUB_API = new Set([...Object.keys(clubs.get(clubs.MAIN).business.api), ...Object.keys(clubs.get(clubs.MAIN).opportunity.api), ...Object.keys(clubs.get(clubs.MAIN).domino.api)]);
+// Domino tournaments and the Smart Scorepad (server/domino/): off unless DOMINO=1, and then a 404 for every call
+const DOMINO = () => process.env.DOMINO === '1';
+const DOMINO_API = new Set(Object.keys(clubs.get(clubs.MAIN).domino.api));
+const clubApi = (name, c) => DOMINO_API.has(name) ? c.domino.api[name] : Object.hasOwn(c.opportunity.api, name) ? c.opportunity.api[name] : c.business.api[name];
 // calls that act on the shared account, not on a club
 const ACCOUNT_API = ['avatar', 'push', 'unpush', 'joinInvite', 'createClub', 'joinInfo', 'joinClub', 'clubModerate', 'platformPost', 'platformUnpost', 'eventsOpen', 'eventLeave'];
 // which club an invite code belongs to (main when club switching is off)
@@ -333,7 +336,7 @@ const server = http.createServer((req, res) => {
       let acct = null;
       try{
         const name = url.pathname.slice(5), fn = Object.hasOwn(api, name) ? api[name] : CLUB_API.has(name) && name;
-        if(!fn || (!clubs.ON() && (name === 'joinInvite' || name === 'createClub' || PLATFORM_API.includes(name)))) return send(res, 404, { error: 'Not found' });
+        if(!fn || (!clubs.ON() && (name === 'joinInvite' || name === 'createClub' || PLATFORM_API.includes(name))) || (DOMINO_API.has(name) && !DOMINO())) return send(res, 404, { error: 'Not found' });
         if(blocked(ip, 30)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const data = body ? JSON.parse(body) : {};
         acct = acctKey(url.pathname, data);
@@ -348,7 +351,7 @@ const server = http.createServer((req, res) => {
         if(extra && c.id === clubs.EVENTS) return send(res, 404, { error: 'Not found' }, undefined, extra); // no Exchange in the Blindrise Open
         if(extra && clubsClosedFor(c, u)) return send(res, 403, { error: 'Business Club opens soon.' }, undefined, extra);
         send(res, 200, typeof fn === 'string' ? clubApi(fn, c)(data, u) : fn(data, u, c, clientIp(req)), undefined, extra);
-      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner', '/api/joinClub', '/api/createClub'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); if(RECOVERY.includes(url.pathname) && /setup code/.test(e.message)){ recordFailure('rec' + ip); recordFailure('rec:all'); } } send(res, [401, 403, 404, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.' }, undefined, extra); }
+      }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner', '/api/joinClub', '/api/createClub'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); if(RECOVERY.includes(url.pathname) && /setup code/.test(e.message)){ recordFailure('rec' + ip); recordFailure('rec:all'); } } send(res, [401, 403, 404, 409, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.', ...(e.status === 409 && e.current != null ? { current: e.current } : {}) }, undefined, extra); }
     });
     return;
   }
@@ -607,10 +610,15 @@ function eventsChanged(e){
   const sig = t ? JSON.stringify([t.id, t.status, t.regs.length, t.entrants, t.remaining, e.club.lateOpen(), t.name, t.startAt, t.stack, t.levelMin, seated]) : '';
   if(sig !== eventsSig){ eventsSig = sig; for(const x of clubs.all()) if(x !== e) broadcastClub(x); }
 }
+// domino: every member of the club with the app open gets the new state (one small view each: it marks their own match)
+function dominoPush(c){ if(!DOMINO()) return; for(const ws of sockets) if(ws.ctx === c && ws.user && !clubs.suspended(c.id)){ const u = c.store.get('user:' + ws.user.id); if(u) sendWS(ws, { t: 'domino', v: c.domino.view(u) }); } }
+// the match clocks: every few seconds, matches whose time ran out move on (server/domino/match.js tick)
+setInterval(() => { if(DOMINO()) for(const c of clubs.all()) if(!clubs.suspended(c.id)) c.domino.sweep(); }, process.env.FAST === '1' ? 300 : 5000).unref();
 // every club context (only 'main' with club switching off) gets its own live state and hooks
 function wire(c){
   c.memo = null; c.clubTimer = null; c.chatLogs = new Map(); c.linkCache = new Map();
   c.club.setLinker((a, b) => linkReason(c, a, b));
+  c.domino.setHooks({ isOwner, canHost: () => hosts(c), changed: () => dominoPush(c) });
   const halted = () => { const d = clubs.ON() && c.id !== clubs.MAIN ? rootStore.get('clubdef:' + c.id) : null; return d && (d.removed || d.suspended) ? (d.removed ? 'This club was cancelled by Blindrise.' : 'This club is suspended by Blindrise.') : null; };
   c.club.setHooks({ halted, hosts: () => hosts(c), isConnected: uid => online(c, uid), onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { if(halted()) return; const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => c.id === clubs.EVENTS ? eventsChanged(c) : broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
 }
@@ -644,6 +652,7 @@ wss.on('connection', (ws, req) => {
       sendWS(ws, { t: 'club', club: clubView(c, u) });
       if(clubs.suspended(c.id)) return;
       const mine = c.club.tableOf(u.id); if(mine){ pushTable(c, mine); chatLogFor(c, ws, mine); }
+      if(DOMINO()) sendWS(ws, { t: 'domino', v: c.domino.view(u) }); // a reconnect gets the whole scorepad state again
       return;
     }
     const c = ws.ctx, { club, rewards, players, fair, business, opportunity } = c || {};
