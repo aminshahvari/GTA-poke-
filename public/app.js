@@ -713,10 +713,21 @@ function eventsRunHTML(){
     <div class="btn-row"><button class="btn red" id="runEventsBtn">Run the Blindrise Open</button></div></div>`;
 }
 // Blindrise posts, shown in every club and always marked as Blindrise's, never the club's own
+// Web addresses in a post become links: http(s) ones, and bare blindrise.com/.club/.ca ones (shared without "https://").
+// Each piece is escaped on its own, so nothing the founder typed can turn into markup or a script link.
+const POST_URL = /\bhttps?:\/\/[^\s<>"']+|\bblindrise\.(?:com|club|ca)\/[^\s<>"']*/gi;
+function linkText(t){
+  t = String(t ?? ''); let out = '', at = 0;
+  for(const m of t.matchAll(POST_URL)){
+    const url = m[0].replace(/[.,;:!?)\]]+$/, ''), href = /^https?:/i.test(url) ? url : 'https://' + url;
+    out += esc(t.slice(at, m.index)) + `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`; at = m.index + url.length;
+  }
+  return out + esc(t.slice(at));
+}
 function blindriseHTML(){
   const list = club.blindrise || []; if(!list.length) return '';
   return list.map(b => `<article class="card-box br-post" aria-label="From Blindrise"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">${b.kind === 'event' ? 'Official event' : 'Official announcement'}</span></div>
-    <h3>${esc(b.title)}</h3>${b.when ? `<p class="br-when">${esc(when(b.when))}</p>` : ''}<p>${esc(b.body)}</p></article>`).join('');
+    <h3>${esc(b.title)}</h3>${b.when ? `<p class="br-when">${esc(when(b.when))}</p>` : ''}<p>${linkText(b.body)}</p></article>`).join('');
 }
 // a member of a suspended club gets this instead of the club
 function suspendedHTML(){

@@ -2143,6 +2143,7 @@ body{background:var(--lx-ink)}
 .br-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:#1a1408}
 .br-post p{margin:0;line-height:1.5;color:var(--lx-ivory);overflow-wrap:anywhere}
 .br-post .br-when{color:var(--lx-gold-hi);font-weight:600}
+.br-post p a{color:var(--lx-gold-hi);text-decoration:underline;text-underline-offset:3px;font-weight:600}
 .cs-notice{text-align:center;justify-items:center;padding:28px 18px;border-color:var(--lx-hair2)}
 .cs-notice h2{margin:0;font-size:22px;color:var(--lx-ivory);overflow-wrap:anywhere}
 .cs-notice p{margin:0;max-width:40ch;line-height:1.5;color:var(--lx-mute)}

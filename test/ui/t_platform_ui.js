@@ -2,6 +2,7 @@
 // - a business member sees "Create your club" on Home; it opens the Club Rules first (Continue waits for the tick), then the name
 // - the founder's Director: clubs with counts only and Suspend / Restore / Cancel, the moderation log, the broadcast form
 // - a member of a suspended club sees the notice instead of the club; Blindrise posts show badged in every club
+// - addresses in a Blindrise post are tappable links; markup in a post shows as text and never runs
 // Usage: PLAYWRIGHT=/path/to/playwright-core CHROMIUM=/path/to/chromium [FONTS_DIR=..] node test/ui/t_platform_ui.js [shotDir]
 const fs = require('fs');
 const path = require('path');
@@ -44,6 +45,9 @@ const shot = (pg, name) => SHOTS ? pg.screenshot({ path: path.join(SHOTS, name) 
   const P = (await api('redeem', { code: (await api('invite', {}, O, B)).code, name: 'Test Member', pin: '2468', agree: true })).token;
   await api('joinInvite', { code: (await api('invite', {}, O)).code }, P); // Test Member is in main and Test Lounge
   await api('platformPost', { kind: 'event', title: 'Blindrise Open Night', body: 'Every club is invited to a night of free social play.', when: Date.now() + 5 * 864e5 }, O);
+  // a post with join links (one bare, as people paste them) and a hostile tail: only http(s) addresses become links
+  const HOSTILE = 'javascript:alert(1) <img src=x onerror="window.__x=1"> <script>window.__x=1</script> "q" \'q\'';
+  await api('platformPost', { kind: 'announcement', title: 'Join my club', body: `Tap ${BASE}/join/test-lounge or blindrise.com/join/test-lounge. ${HOSTILE}` }, O);
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 
   // ---------- business member: Create your club → rules → name ----------
@@ -52,6 +56,16 @@ const shot = (pg, name) => SHOTS ? pg.screenshot({ path: path.join(SHOTS, name) 
     const pg = await page(tok, vp, 'main');
     check(await pg.locator('#openClubBtn').isVisible(), `${w}px: a business member sees "Create your club" on Home`);
     check(await pg.locator('.br-post .br-badge').first().isVisible() && /Blindrise/.test(await pg.locator('.br-post .br-badge').first().textContent()), `${w}px: the Blindrise post shows on Home, badged Blindrise`);
+    const lk = pg.locator('.br-post:has(h3:text("Join my club")) p a');
+    const links = await lk.evaluateAll(as => as.map(a => [a.getAttribute('href'), a.textContent, a.target, a.rel, getComputedStyle(a).textDecorationLine, getComputedStyle(a).color]));
+    check(links.length === 2 && links[0][0] === BASE + '/join/test-lounge' && links[1][0] === 'https://blindrise.com/join/test-lounge' && links[1][1] === 'blindrise.com/join/test-lounge', `${w}px: join links in a Blindrise post are links, the bare one gets https:// (${JSON.stringify(links.map(l => l[0]))})`);
+    check(links.every(l => l[2] === '_blank' && /noopener/.test(l[3]) && l[4] === 'underline' && l[5] !== 'rgb(232, 235, 241)'), `${w}px: post links are underlined in gold and open safely in a new tab`);
+    const post = pg.locator('.br-post:has(h3:text("Join my club"))');
+    check(await post.locator('img, script, [onerror]').count() === 0 && (await post.locator('p').textContent()).includes(HOSTILE) && !(await pg.evaluate(() => window.__x)), `${w}px: markup and script: text in a post show as plain text and never run`);
+    await post.scrollIntoViewIfNeeded(); await shot(pg, `broadcast-link-${w}.png`);
+    check(await inView(pg, '.br-post:has(h3:text("Join my club")) p a', w) && await noSideScroll(pg), `${w}px: the link fits the screen, no sideways scroll`);
+    const [tab] = await Promise.all([pg.context().waitForEvent('page'), lk.first().tap()]);
+    await tab.waitForLoadState(); await tab.waitForFunction(() => /Test Lounge/.test(document.body.innerText), null, { timeout: 5000 }).catch(() => {}); check(tab.url() === BASE + '/join/test-lounge' && /Test Lounge/.test(await tab.evaluate(() => document.body.innerText)), `${w}px: tapping the link opens the club's join page`); await tab.close();
     await pg.locator('.br-post').first().scrollIntoViewIfNeeded(); await shot(pg, `broadcast-home-${w}.png`);
     await pg.click('#openClubBtn'); await sleep(250);
     const items = await pg.locator('.cr-rules p').allTextContents();
@@ -101,7 +115,7 @@ const shot = (pg, name) => SHOTS ? pg.screenshot({ path: path.join(SHOTS, name) 
     const w = vp[0], pg = await page(P, vp, B);
     check(await pg.locator('.cs-notice').isVisible() && /Test Lounge is suspended/.test(await pg.locator('.cs-notice h2').textContent()), `${w}px: the member sees the suspended notice`);
     check(await pg.locator('#tabs').isHidden() && await pg.locator('.pchip, .lx-doors').count() === 0, `${w}px: no club tabs, members or doors behind it`);
-    check(await pg.locator('.br-post').isVisible(), `${w}px: Blindrise posts still show, badged`);
+    check(await pg.locator('.br-post').first().isVisible(), `${w}px: Blindrise posts still show, badged`);
     check(await inView(pg, '#csSwitch', w) && await noSideScroll(pg), `${w}px: the way back to another club fits, no sideways scroll`);
     await shot(pg, `suspended-member-${w}.png`);
     if(w === 320){ await pg.click('#csSwitch'); await pg.waitForLoadState('load'); await sleep(900); check(await pg.locator('.cs-notice').count() === 0 && (await pg.evaluate(() => JSON.parse(localStorage.getItem('stacked:club')))) === 'main', `${w}px: "Go to" takes the member to their other club`); }
