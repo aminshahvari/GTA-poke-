@@ -191,18 +191,56 @@ const api = {
     broadcastAll();
     return { club: d.id, status: platform.statusOf(d) };
   },
+  // ---------- the Blindrise Open (club switching only): Blindrise tournaments for members of every club ----------
+  // The founder runs them from the events context (server/clubs.js); this makes him its director and takes him there.
+  eventsOpen(_, u){
+    founderOnly(u);
+    const e = clubs.get(clubs.EVENTS), x = rootStore.get('user:' + u.id), cur = (x.clubs || {})[clubs.EVENTS];
+    if(!cur || cur.removed || cur.role !== 'owner') rootStore.set('user:' + u.id, { ...x, clubs: { ...(x.clubs || {}), [clubs.EVENTS]: { role: 'owner', joinedAt: Date.now() } } });
+    e.store.set('owner', u.id); e.memo = null;
+    broadcastAll();
+    return { club: clubs.EVENTS };
+  },
+  // a member of any club registers for the open Blindrise tournament, from their own club (c). Registering is what
+  // makes them a member of the Blindrise Open; the club they came from is kept only to tell look-alike names apart.
+  eventJoin(_, u, c){
+    if(!u) throw new Error('Sign in first.');
+    const e = clubs.get(clubs.EVENTS), t = e.club.T();
+    if(!t || !(t.status === 'registering' || (t.status === 'running' && e.club.lateOpen()))) throw new Error('Registration for the Blindrise Open is closed.');
+    const x = rootStore.get('user:' + u.id), cur = (x.clubs || {})[clubs.EVENTS], fresh = !cur || cur.removed;
+    if(fresh) rootStore.set('user:' + u.id, { ...x, clubs: { ...(x.clubs || {}), [clubs.EVENTS]: { ...(cur && cur.role === 'owner' ? cur : { role: 'member', joinedAt: Date.now() }), removed: false, home: c.id === clubs.EVENTS ? (cur && cur.home) || clubs.MAIN : c.id } } });
+    try{ e.club.join(u.id); }
+    catch(err){ if(fresh) dropEvent(u.id); throw err; }
+    broadcastAll();
+    return { ok: true };
+  },
+  // unregister before it starts: someone who never played a Blindrise Open stops being a member of it
+  eventLeave(_, u){
+    if(!u) throw new Error('Sign in first.');
+    const e = clubs.get(clubs.EVENTS), t = e.club.T();
+    if(!t || t.status !== 'registering') throw new Error('You can only unregister before the tournament starts.');
+    e.club.leave(u.id);
+    if(!e.store.values('history:').some(h => h.results.some(r => r.uid === u.id))) dropEvent(u.id);
+    broadcastAll();
+    return { ok: true };
+  },
   // one-way Blindrise posts shown in every club
   platformPost(data, u){ founderOnly(u); const p = platform.post(data || {}); broadcastAll(); return { id: p.id }; },
   platformUnpost(data, u){ founderOnly(u); platform.unpost(data || {}); broadcastAll(); return { ok: true }; }
 };
-const PLATFORM_API = ['clubModerate', 'platformPost', 'platformUnpost'];
+const PLATFORM_API = ['clubModerate', 'platformPost', 'platformUnpost', 'eventsOpen', 'eventJoin', 'eventLeave'];
+// end a Blindrise Open membership (never the founder's)
+function dropEvent(uid){
+  const x = rootStore.get('user:' + uid), cur = x && (x.clubs || {})[clubs.EVENTS];
+  if(cur && cur.role !== 'owner') rootStore.set('user:' + uid, { ...x, clubs: { ...x.clubs, [clubs.EVENTS]: { ...cur, removed: true } } });
+}
 // Business Club (members-only directory, separate from poker): see server/business.js
 // Opportunity Club ("I need help" / "I can help" listings inside Business Club): see server/opportunity.js
 // Both run inside the caller's club context, so each club has its own Exchange.
 const CLUB_API = new Set([...Object.keys(clubs.get(clubs.MAIN).business.api), ...Object.keys(clubs.get(clubs.MAIN).opportunity.api)]);
 const clubApi = (name, c) => Object.hasOwn(c.opportunity.api, name) ? c.opportunity.api[name] : c.business.api[name];
 // calls that act on the shared account, not on a club
-const ACCOUNT_API = ['avatar', 'push', 'unpush', 'joinInvite', 'createClub', 'joinInfo', 'joinClub', 'clubModerate', 'platformPost', 'platformUnpost'];
+const ACCOUNT_API = ['avatar', 'push', 'unpush', 'joinInvite', 'createClub', 'joinInfo', 'joinClub', 'clubModerate', 'platformPost', 'platformUnpost', 'eventsOpen', 'eventLeave'];
 // which club an invite code belongs to (main when club switching is off)
 function inviteClub(code){
   if(clubs.ON() && typeof code === 'string') for(const c of clubs.all()) if(c.store.get('invite:' + code)) return c;
@@ -224,15 +262,16 @@ function joined(c, uid, code, inv){
 }
 // Business Club + Opportunity Club: closed to members until the owner opens them in the Director tab (the owner can always use them).
 // Staging opens them by default so they can be tested; CLUBS_DEFAULT=on does the same for local test runs.
-const clubsOn = c => { const s = c.store.get('settings') || {}; return typeof s.clubsOn === 'boolean' ? s.clubsOn : process.env.STAGING === '1' || process.env.CLUBS_DEFAULT === 'on'; };
+const clubsOn = c => { if(c.id === clubs.EVENTS) return false; const s = c.store.get('settings') || {}; return typeof s.clubsOn === 'boolean' ? s.clubsOn : process.env.STAGING === '1' || process.env.CLUBS_DEFAULT === 'on'; };
 const clubsClosedFor = (c, u) => !!u && !isOwner(u) && !clubsOn(c);
 const GROUP_MAX = 100, GROUP_DAYS = 30, MEMBER_DAYS = 7;
 // Members can invite friends too (the owner can switch that off). A member's link joins at most MEMBER_MAX people,
 // and asking again hands back the member's open link instead of piling up new ones.
 const MEMBER_MAX = 10;
-const membersInvite = c => (c.store.get('settings') || {}).membersInvite !== false;
+const membersInvite = c => c.id !== clubs.EVENTS && (c.store.get('settings') || {}).membersInvite !== false;
 const openInvite = i => !i.revoked && (i.multi ? Date.now() < i.expiresAt && (i.uses || []).length < i.max : !i.usedBy);
 function inviteCode(c, u, group){
+  if(c.id === clubs.EVENTS) throw new Error('The Blindrise Open has no invite links: members of every club register from their own club.');
   const store = c.store;
   if(!isOwner(u)){
     if(!membersInvite(c)) throw new Error('The organizer has turned off member invites. Ask them for a link.');
@@ -292,6 +331,7 @@ const server = http.createServer((req, res) => {
         if(!c) return send(res, 403, { error: 'You are not a member of that club.' }, undefined, extra);
         if(ur && !ACCOUNT_API.includes(name) && clubs.suspended(c.id)) return send(res, 403, { error: SUSPENDED }, undefined, extra);
         const u = clubs.ON() && ur && !ACCOUNT_API.includes(name) ? c.store.get('user:' + ur.id) || null : ur;
+        if(extra && c.id === clubs.EVENTS) return send(res, 404, { error: 'Not found' }, undefined, extra); // no Exchange in the Blindrise Open
         if(extra && clubsClosedFor(c, u)) return send(res, 403, { error: 'Business Club opens soon.' }, undefined, extra);
         send(res, 200, typeof fn === 'string' ? clubApi(fn, c)(data, u) : fn(data, u, c, clientIp(req)), undefined, extra);
       }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner', '/api/joinClub', '/api/createClub'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); if(RECOVERY.includes(url.pathname) && /setup code/.test(e.message)){ recordFailure('rec' + ip); recordFailure('rec:all'); } } send(res, [401, 403, 404, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.' }, undefined, extra); }
@@ -310,7 +350,7 @@ const server = http.createServer((req, res) => {
     const lr = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
     const c = clubs.ON() ? ctxFor(lr, req.headers['x-club']) : clubs.get(clubs.MAIN);
     const lu = clubs.ON() && lr && c ? c.store.get('user:' + lr.id) || null : lr;
-    const r = !c || clubs.suspended(c.id) || clubsClosedFor(c, lu) ? { status: 404 } : c.business.logoFor(bl[1], lu);
+    const r = !c || c.id === clubs.EVENTS || clubs.suspended(c.id) || clubsClosedFor(c, lu) ? { status: 404 } : c.business.logoFor(bl[1], lu);
     if(r.status !== 200) return send(res, r.status, 'Not found', 'text/plain', NOINDEX);
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
@@ -403,7 +443,7 @@ function clubView(c, u){
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
     // who invited whom is for the owner only: a member's payload carries no inviter for anyone (Muse P10)
     members: isOwner(u) ? members : members.map(m => m.invitedBy ? { ...m, invitedBy: null } : m),
-    history, now: Date.now(), shop: rewards.view(u.id, isOwner(u)),
+    history, now: Date.now(), shop: c.id === clubs.EVENTS ? null : rewards.view(u.id, isOwner(u)), // no rewards shop in the Blindrise Open
     features: { clubs: clubsOn(c), ...(club.gp() ? { tableExtras: true } : {}) }, chatOff: !!(store.get('settings') || {}).chatOff, muted: !!u.muted, version: VERSION,
     pushOn: push.hasPush(u.id), membersInvite: membersInvite(c), invitedCount: invitedCount(c, u.id), myInvite: (() => { const i = store.values('invite:').find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
   };
@@ -425,6 +465,10 @@ function clubView(c, u){
     if(c.id === clubs.MAIN && !view.canCreateClub && clubCreateMode(rootStore.get('user:' + u.id)) === 'member') view.openClub = { rules: platform.rules() };
     // Blindrise posts, in every club, to every member (only what the founder typed)
     view.blindrise = platform.feed();
+    // the Blindrise Open: inside it, say so; in every other club, its card for this member (counts only, no names)
+    if(c.id === clubs.EVENTS) view.events = true;
+    else { const ev = eventCard(u.id); if(ev) view.bevent = ev; }
+    if(c.id === clubs.MAIN && view.canCreateClub) view.canRunEvents = true;
     // the founder, in his own club's Director: the Club Rules new clubs accept, every club with counts only (no names or
     // emails), the moderation log and the posts
     if(view.canCreateClub && isFounder(rootStore.get('user:' + u.id))) view.platform = { rules: platform.rules(), clubs: platform.overview(), log: platform.log().slice(-30).reverse() };
@@ -433,6 +477,16 @@ function clubView(c, u){
   const jq = joinqr.ownerView(rootStore.get('user:' + u.id), rootStore.get('owner')).filter(x => x.id === c.id);
   if(jq.length) view.joinQr = jq;
   return view;
+}
+// The Blindrise Open as every other club shows it: what it is, when, how many have registered, and whether this member
+// is in it. Never who registered: the registration list belongs to Blindrise (owner decision, Issue #10).
+function eventCard(uid){
+  const e = clubs.get(clubs.EVENTS), t = e && e.club.T();
+  if(!t || (t.status !== 'registering' && t.status !== 'running')) return null;
+  const tid = e.club.tableOf(uid), late = t.status === 'running' && e.club.lateOpen();
+  return { id: t.id, name: t.name, status: t.status, startAt: t.startAt || null, stack: t.stack, levelMin: t.levelMin,
+    count: t.status === 'running' ? t.entrants || 0 : t.regs.length, remaining: t.status === 'running' ? t.remaining || 0 : null,
+    registered: t.regs.includes(uid) || !!tid, playing: !!tid, open: t.status === 'registering' || late };
 }
 // the club an account is using: the one asked for if they belong to it, otherwise their first club (main first);
 // null when they asked for a club they do not belong to, or belong to none
@@ -513,12 +567,21 @@ function notice(c, kind, t){
   }
   if(kind === 'start') push.notify(t.regs, { title: `${t.name} is starting!`, body: 'Cards are in the air. Tap to take your seat.', tag: 'start-' + t.id, ttl: 600 }).catch(() => {});
 }
+// the Blindrise Open changed: its own members get its view; the other clubs only when what their card shows changed
+// (status, counts, times, or who is seated), not on every hand
+let eventsSig = '';
+function eventsChanged(e){
+  broadcastClub(e);
+  const t = e.club.T(), seated = [...e.club.tables.values()].filter(x => !x.broken).flatMap(x => x.g.seats.filter(Boolean).map(p => p.uid)).sort().join();
+  const sig = t ? JSON.stringify([t.id, t.status, t.regs.length, t.entrants, t.remaining, e.club.lateOpen(), t.name, t.startAt, t.stack, t.levelMin, seated]) : '';
+  if(sig !== eventsSig){ eventsSig = sig; for(const x of clubs.all()) if(x !== e) broadcastClub(x); }
+}
 // every club context (only 'main' with club switching off) gets its own live state and hooks
 function wire(c){
   c.memo = null; c.clubTimer = null; c.chatLogs = new Map(); c.linkCache = new Map();
   c.club.setLinker((a, b) => linkReason(c, a, b));
   const halted = () => { const d = clubs.ON() && c.id !== clubs.MAIN ? rootStore.get('clubdef:' + c.id) : null; return d && (d.removed || d.suspended) ? (d.removed ? 'This club was cancelled by Blindrise.' : 'This club is suspended by Blindrise.') : null; };
-  c.club.setHooks({ halted, onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { if(halted()) return; const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
+  c.club.setHooks({ halted, onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { if(halted()) return; const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => c.id === clubs.EVENTS ? eventsChanged(c) : broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
 }
 clubs.get(clubs.MAIN);
 
@@ -556,6 +619,7 @@ wss.on('connection', (ws, req) => {
     ws.user = u;
     if(clubs.suspended(c.id)) return; // a suspended club: nothing can be done in it (the app shows the notice)
     try{
+      if(c.id === clubs.EVENTS && ['skillq', 'claim', 'addReward', 'removeReward', 'redeemStatus'].includes(m.t)) throw new Error('The Blindrise Open has no rewards.');
       switch(m.t){
         case 'watch': ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(c, ws.watch); chatLogFor(c, ws, ws.watch); } break;
         case 'act': club.act(u.id, m); break;
