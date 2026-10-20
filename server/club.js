@@ -178,7 +178,7 @@ function start(){
   });
   const { seed, seal } = fair.newSeed(); fair.prune();
   saveT({ fairSeed: seed, fairSeal: seal });
-  saveT({ status: 'running', startedAt: Date.now(), level: 0, levelEndsAt: Date.now() + levelMs(t), paused: false, pausedLeft: 0, breakUntil: null, pausedBreakLeft: 0,
+  saveT({ status: 'running', startedAt: Date.now(), level: 0, levelEndsAt: Date.now() + levelMs(t), paused: false, pausedLeft: 0, breakUntil: null, breakPending: false, pausedBreakLeft: 0,
     entrants: regs.length, remaining: regs.length, places: [], regs });
   saveLive();
   go();
@@ -227,13 +227,21 @@ function tick(){
   const t = T();
   if(!running || !t || t.status !== 'running' || t.paused) return;
   if(t.breakUntil && Date.now() >= t.breakUntil){ saveT({ breakUntil: null }); hooks.onClub(); return; }
+  // the break is due: it starts once the last table has finished its hand, so every table gets the full break
+  // (Muse #11 D1: breakUntil = max(level end, last hand's end) + the break). No new hand is dealt meanwhile.
+  if(t.breakPending){
+    if(active().some(x => x.inHand)) return;
+    const until = Math.max(t.levelEndsAt, Date.now()) + breakMs(t);
+    saveT({ breakPending: false, breakUntil: until, levelEndsAt: until + levelMs(t) });
+    hooks.onClub(); return;
+  }
   if(Date.now() >= t.levelEndsAt){
     const level = t.level + 1;
-    // after every 10th level: the break, then the next level's full time
+    // after every 10th level: the break (once every hand in play has finished), then the next level's full time
     if(breaksOn() && level % BREAK_EVERY === 0){
-      const until = t.levelEndsAt + breakMs(t);
-      saveT({ level, breakUntil: until, breakNo: level / BREAK_EVERY, levelEndsAt: until + levelMs(t) });
-      hooks.onClub();
+      saveT({ level, breakPending: true, breakNo: level / BREAK_EVERY });
+      tick(); // starts the break at once when no hand is in play
+      if(T().breakPending) hooks.onClub();
     } else { saveT({ level, levelEndsAt: t.levelEndsAt + levelMs(t) }); hooks.onClub(); }
   }
 }
@@ -247,7 +255,7 @@ function unpause(){
 }
 async function waitUnpaused(){ while(running && T() && T().paused) await sleep(300); }
 // a table waits here between hands while the tournament is on a break (or paused)
-async function waitBreak(){ while(running && T() && (T().paused || onBreak())) await sleep(250); }
+async function waitBreak(){ while(running && T() && (T().paused || T().breakPending || onBreak())) await sleep(250); }
 
 // ---------- table loop ----------
 function saveHand(uid, hand){
@@ -434,6 +442,7 @@ async function loop(tb){
     }
     const live = g.seats.filter(p => p && p.stack > 0);
     if(live.length < 2){ if(hfh.on){ hfh.done.add(tb.tid); hfhCheck(); } publish(tb); await sleep(1000 * Math.max(SPEED, .2)); continue; }
+    if(T().paused || T().breakPending || onBreak()) continue; // checked again with no wait before the deal, so a break can never start under a new hand
     g.level = T().level; g.levelMsLeft = 1; g.anteMode = T().anteMode;
     tb.handStart = Object.fromEntries(live.map(p => [p.uid, p.stack]));
     tb.inHand = true; tb.show = null;
