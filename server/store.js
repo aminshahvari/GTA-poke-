@@ -118,7 +118,8 @@ function scoped(cid){
     if(main){ if(u.noMain) return undefined; if(!u.clubs) return u; const { clubs, ...rest } = u; return rest; }
     const m = u.clubs && u.clubs[cid]; if(!m) return undefined;
     const out = {}; for(const [k, v] of Object.entries(u)) if(k !== 'clubs' && k !== 'noMain' && !MEM.includes(k)) out[k] = v;
-    return { ...out, ...m };
+    // a closed account (removed from main: name freed, signed out everywhere) is gone from every club, not only main
+    return u.removed ? { ...out, ...m, removed: true } : { ...out, ...m };
   };
   const s = {
     get(k){ if(isUser(k)) return view(get(k)); return isShared(k) ? get(k) : get(pre + k); },

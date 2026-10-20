@@ -28,7 +28,7 @@ function start(sw){
 (async () => {
   let s = start(true); await s.up();
   const O = (await s.ok('setup', { code: 'secret', name: 'Sean', pin: '1234', agree: true })).token;
-  const { club: cid } = await s.ok('createClub', { name: 'Sean Ventures', code: 'secret' }, O);
+  const { club: cid } = await s.ok('createClub', { name: 'Sean Ventures', code: 'secret', rulesV: 1, acceptRules: true }, O);
   // a phone that signed out keeps its club header: signing in and invite links must still work (hotfix after 5df63cc)
   const inv = (await s.ok('invite', {}, O)).code;
   await s.ok('redeem', { code: inv, name: 'Alex', pin: '1111', agree: true }, null, cid);
@@ -53,6 +53,9 @@ function start(sw){
   assert.strictEqual((await s.ok('joinInfo', { slug: 'blindrise' })).club, true);
   assert.deepStrictEqual((await s.view(O)).joinQr.map(c => c.slug), ['blindrise']);
   pass('club switching off (rollback): only the main club keeps a join page; the other club\'s page is not active');
+  for(const p of ['clubModerate', 'platformPost', 'platformUnpost', 'createClub']) assert.strictEqual((await s.call(p, { club: cid, action: 'suspend', title: 'x', body: 'y' }, O)).status, 404, p);
+  assert.strictEqual((await s.view(O)).blindrise, undefined);
+  pass('club switching off (rollback): the platform calls do not exist (404) and no Blindrise posts are sent');
   await s.stop();
   console.log(`t_join_qr_clubs: ${n} ok, 0 failed`); try{ fs.unlinkSync(DATA); }catch(e){} process.exit(0);
 })().catch(e => { console.error(e); try{ fs.unlinkSync(DATA); }catch(x){} process.exit(1); });

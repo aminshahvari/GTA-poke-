@@ -15,8 +15,9 @@ const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 
 // the clubs this server has: the main club, plus, while club switching is on, every club opened with it (clubdef:<id>).
 // With club switching off only the main club has a join page, as only the main club exists for members then.
+// A suspended or cancelled club (server/platform.js) has no join page: it shows "not active" and takes no sign-ups.
 const defs = () => [{ id: MAIN, name: (store.get('settings') || {}).clubName || 'Blindrise' },
-  ...(store.switching && store.switching() ? store.keys('clubdef:') : []).map(k => store.get(k)).filter(d => d && /^[a-z0-9]{3,24}$/.test(d.id || '') && !d.removed)];
+  ...(store.switching && store.switching() ? store.keys('clubdef:') : []).map(k => store.get(k)).filter(d => d && /^[a-z0-9]{3,24}$/.test(d.id || '') && !d.removed && !d.suspended)];
 
 // A club's slug comes from its name the first time it is needed and then stays the same, so a printed code keeps working.
 // Invite codes on /join/ are always 12 characters, so a slug is never 12 characters long.

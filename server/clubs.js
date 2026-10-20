@@ -35,7 +35,10 @@ function build(id){
 
 const ctxs = new Map();
 const validId = id => typeof id === 'string' && /^[a-z0-9]{3,24}$/.test(id);
-const def = id => id === MAIN ? { id: MAIN, name: (store.get('settings') || {}).clubName || 'Blindrise' } : store.get('clubdef:' + id) || null;
+// a cancelled club (removed: true, see server/platform.js) no longer exists for anyone; its data stays stored
+const def = id => { if(id === MAIN) return { id: MAIN, name: (store.get('settings') || {}).clubName || 'Blindrise' }; const d = store.get('clubdef:' + id); return d && !d.removed ? d : null; };
+// a suspended club exists (members still see it, with a notice) but nothing in it can be used
+const suspended = id => id !== MAIN && !!(def(id) || {}).suspended;
 function get(id){
   if(!ON() || id === MAIN || id == null) id = MAIN;
   else if(!validId(id) || !def(id)) return null;
@@ -47,16 +50,17 @@ let onNew = null;
 const all = () => [MAIN, ...(ON() ? store.keys('clubdef:').map(k => k.slice(8)).sort() : [])].map(get).filter(Boolean);
 // the clubs an account belongs to (raw account record from the plain store)
 function memberships(u){
-  if(!u) return [];
-  if(!ON()) return u.removed || u.noMain ? [] : [MAIN]; // noMain: only in another club, never in main
+  if(!u || u.removed) return []; // removed: the account was closed (from main), so it is in no club at all
+  if(!ON()) return u.noMain ? [] : [MAIN]; // noMain: only in another club, never in main
   const out = [];
-  if(!u.noMain && !u.removed) out.push(MAIN);
+  if(!u.noMain) out.push(MAIN);
   for(const [id, m] of Object.entries(u.clubs || {})) if(m && !m.removed && def(id)) out.push(id);
   return out;
 }
-function create(name, ownerId){
+// extra: more fields for the club's definition (the Club Rules acceptance, { rules: { uid, at, v } })
+function create(name, ownerId, extra){
   const id = 'c' + require('crypto').randomBytes(5).toString('hex');
-  store.set('clubdef:' + id, { id, name, createdAt: Date.now(), createdBy: ownerId });
+  store.set('clubdef:' + id, { ...extra, id, name, createdAt: Date.now(), createdBy: ownerId });
   const u = store.get('user:' + ownerId);
   store.set('user:' + ownerId, { ...u, clubs: { ...(u.clubs || {}), [id]: { role: 'owner', joinedAt: Date.now() } } });
   const c = get(id);
@@ -74,4 +78,4 @@ function addMember(c, uid, invitedBy){
     store.set('user:' + uid, { ...u, clubs: { ...(u.clubs || {}), [c.id]: { ...(cur && !cur.removed ? cur : { role: 'member', joinedAt: Date.now() }), removed: false, ...(invitedBy && !(cur && !cur.removed) ? { invitedBy } : {}) } } });
   }
 }
-module.exports = { ON, MAIN, get, all, def, memberships, create, addMember, validId, onNew: f => { onNew = f; } };
+module.exports = { ON, MAIN, get, all, def, suspended, memberships, create, addMember, validId, onNew: f => { onNew = f; } };

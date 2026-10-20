@@ -25,7 +25,7 @@ async function signedIn(browser, tok, [w, h]){
   const dir = (await post('login', { name: 'Test Director', pin: '246810' })).token;
   const p1 = (await post('login', { name: 'Test Player 01', pin: '135711' })).token;
   const p2 = (await post('login', { name: 'Test Player 02', pin: '135722' })).token;
-  const B = (await post('createClub', { name: 'Test Lounge Two', code: 'secret' }, dir)).club;
+  const B = (await post('createClub', { name: 'Test Lounge Two', code: 'secret', rulesV: 1, acceptRules: true }, dir)).club;
   const code = (await post('invite', {}, dir, B)).code;
   const j = await post('joinInvite', { code }, p1);
   check(B && j.club === B, 'test club made and Test Player 01 joined it');
@@ -62,10 +62,12 @@ async function signedIn(browser, tok, [w, h]){
   await pd.click('#tabs [data-tab=director]'); await sleep(400);
   check(await pd.locator('#newClubBtn').isVisible(), 'organizer sees "Open a new club" in Director');
   await pd.click('#newClubBtn'); await sleep(200);
+  check(await pd.locator('.cr-rules').isVisible() && await pd.locator('.modal button:has-text("Continue")').isDisabled(), 'the Club Rules come first, and Continue waits for the tick');
+  await pd.check('#crAgree'); await pd.click('.modal button:has-text("Continue")'); await sleep(200);
   await pd.fill('#ncName', 'Second Test Club'); await pd.fill('#ncCode', 'secret');
   await pd.click('.modal button:has-text("Open club")'); await sleep(700);
-  const listed = await pd.locator('#lobby .card-box:has(#newClubBtn) .trow b').allTextContents();
-  check(listed.includes('Second Test Club') && listed.length === 3, 'the new club is listed in Director');
+  const listed = await pd.locator('#lobby .card-box:has(#newClubBtn) .pf-row b').allTextContents();
+  check(listed.includes('Second Test Club') && listed.length === 2, 'the new club is listed in Director (the other clubs, with counts)');
   check(await pd.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no sideways scroll on Director');
   if(SHOTS){ await pd.locator('#newClubBtn').scrollIntoViewIfNeeded(); await pd.screenshot({ path: path.join(SHOTS, 'club-director-390.png') }); }
   await browser.close();

@@ -57,7 +57,9 @@ const sponsorSecOf = (v, keep) => SPONSOR_SECS.includes(+v) ? +v : SPONSOR_SECS.
 // itself, once per hand, without using an extra-time card or marking them away. Tests (FAST=1 only) can set DC_PROTECT_MS.
 const DC_MS = FAST && +process.env.DC_PROTECT_MS || 30000;
 
-let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(){}, isConnected: () => true };
+let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(){}, isConnected: () => true,
+  // halted(): a reason this club may not start tournaments right now (suspended or cancelled by Blindrise), or null
+  halted(){ return null; } };
 const tables = new Map();   // tid -> live table
 const waiters = new Map();  // uid -> pending decision
 let running = false, clockTimer = null;
@@ -146,6 +148,7 @@ function newTable(tid, n){
 }
 function start(){
   const t = T();
+  const halt = hooks.halted(); if(halt) throw new Error(halt);
   if(!t || t.status !== 'registering') throw new Error('No tournament is open.');
   const regs = t.regs.filter(u => { const us = store.get('user:' + u); return us && !us.removed; });
   if(regs.length < 2) throw new Error('At least 2 players need to join.');
@@ -584,6 +587,7 @@ function scheduleNext(t){
 setInterval(() => {
   const t = T();
   if(!t || t.status !== 'registering' || !t.startAt) return;
+  if(hooks.halted()) return; // suspended: no reminder, no start, nothing cancelled; it waits as it is
   // a reminder 15 minutes before a scheduled start
   if(!t.reminded && t.startAt - Date.now() <= 15 * 60000 && t.startAt - Date.now() > 60000){ saveT({ reminded: true }); hooks.onNotice('soon', T()); }
   if(Date.now() < t.startAt) return;
