@@ -28,7 +28,7 @@ function start(sw){
 (async () => {
   let s = start(true); await s.up();
   const O = (await s.ok('setup', { code: 'secret', name: 'Sean', pin: '1234', agree: true })).token;
-  const { club: cid } = await s.ok('createClub', { name: 'Sean Ventures', code: 'secret' }, O);
+  const { club: cid } = await s.ok('createClub', { name: 'Sean Ventures', code: 'secret', rulesV: 1, acceptRules: true }, O);
   // a phone that signed out keeps its club header: signing in and invite links must still work (hotfix after 5df63cc)
   const inv = (await s.ok('invite', {}, O)).code;
   await s.ok('redeem', { code: inv, name: 'Alex', pin: '1111', agree: true }, null, cid);

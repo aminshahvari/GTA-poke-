@@ -13,6 +13,7 @@ const clubs = require('./clubs');
 const rootStore = store; // the plain store, for shared accounts, inside functions that work on a club's own store
 clubs.onNew(wire);
 const joinqr = require('./joinqr');
+const platform = require('./platform'); // Club Rules, suspend/cancel, Blindrise broadcast (club switching only)
 
 const PORT = +process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -43,6 +44,34 @@ function revokeSessions(uid){
 }
 const sameCode = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const isOwner = u => u && u.role === 'owner';
+// the Blindrise founder: the owner of the main club (an account record from the plain store)
+const isFounder = u => !!u && u.id === owner() && !u.noMain && !u.removed;
+const founderOnly = u => { if(!isFounder(u)) throw Object.assign(new Error('Only the Blindrise founder can do that.'), { status: 403 }); };
+// Who may open a club. These two functions are the one place that decides it (owner decision 2026-10-20, Issue #10):
+// - the founder, proved by the setup code, as before (no limit on how many);
+// - a "business member": a member of the main Blindrise club whose business is published in the main club's Exchange
+//   and not hidden by the director. No setup code; one club per account, counting every club it ever opened, including
+//   suspended and cancelled ones, so a cancelled club cannot be opened again by the same account.
+// Everything else in createClub (Club Rules, name, the 50-club cap) is the same for both.
+const clubsOpenedBy = uid => store.values('clubdef:').filter(d => d && d.createdBy === uid).length;
+function clubCreateMode(u){
+  if(!u || u.removed) return null;
+  if(isFounder(u)) return 'founder';
+  if(u.noMain || !clubs.memberships(u).includes(clubs.MAIN) || !clubs.get(clubs.MAIN).business.listed(u.id) || clubsOpenedBy(u.id) >= 1) return null;
+  return 'member';
+}
+function clubCreateGate(u, data){
+  if(!u) throw new Error('Sign in first.');
+  const mode = clubCreateMode(u);
+  if(mode === 'founder'){
+    if(!process.env.OWNER_CODE || !sameCode(data.code, process.env.OWNER_CODE)) throw new Error('That setup code is not right.');
+    return;
+  }
+  if(mode === 'member') return;
+  const forbid = m => Object.assign(new Error(m), { status: 403 });
+  if(!u.noMain && clubs.get(clubs.MAIN).business.listed(u.id) && clubsOpenedBy(u.id) >= 1) throw forbid('You have already opened a club. Each member can open one.');
+  throw forbid('To open a club, publish your business in the Blindrise Exchange first.');
+}
 
 // simple per-IP rate limit for login attempts
 const attempts = new Map();
@@ -105,15 +134,16 @@ const api = {
     clubs.addMember(c, u.id, inv.by); joined(c, u.id, code, inv);
     return { club: c.id };
   },
-  // club switching only: the deployment owner (the main club's owner) opens a new club, proved by the setup code
-  createClub({ code, name }, u){
+  // club switching only: open a new club. Who may: clubCreateGate. The Blindrise Club Rules must be accepted, in their
+  // current version, or no club is made (fail closed); the acceptance is kept on the club's definition.
+  createClub(data, u){
     if(!clubs.ON()) throw Object.assign(new Error('Not found'), { status: 404 });
-    if(!u || u.id !== owner() || u.noMain) throw new Error('Only the Blindrise organizer can open a new club.');
-    if(!process.env.OWNER_CODE || !sameCode(code, process.env.OWNER_CODE)) throw new Error('That setup code is not right.');
-    name = cleanName(name);
+    clubCreateGate(u, data);
+    const rules = platform.acceptance(data, u.id);
+    const name = cleanName(data.name);
     if(!/^[\p{L}\p{N} .&'-]{2,40}$/u.test(name)) throw new Error('Pick a club name of 2 to 40 letters or numbers.');
     if(store.keys('clubdef:').length >= 50) throw new Error('This server already has 50 clubs.');
-    const c = clubs.create(name, u.id);
+    const c = clubs.create(name, u.id, { rules });
     broadcastAll();
     return { club: c.id };
   },
@@ -145,21 +175,41 @@ const api = {
     return { ok: true };
   },
   // club join page and QR code (/join/<club-slug>): see server/joinqr.js. Account-level: a lead is kept per club id.
-  ...joinqr.api
+  ...joinqr.api,
+  // ---------- Blindrise platform (founder only, club switching only): see server/platform.js ----------
+  // suspend, restore or cancel another club. It acts on a live club at once: its tournament is paused (suspend) or
+  // cancelled (cancel), its members' screens switch to the notice, and its join page and QR sign-ups stop.
+  clubModerate(data, u){
+    founderOnly(u);
+    const id = data && data.club, c = typeof id === 'string' && id !== clubs.MAIN ? clubs.get(id) : null;
+    const d = platform.moderate(data || {}, u);
+    if(c){
+      if(data.action === 'suspend'){ c.club.pause(); for(const ws of sockets) if(ws.ctx === c && ws.user) sendWS(ws, { t: 'club', club: clubView(c, ws.user) }); }
+      if(data.action === 'cancel'){ c.club.cancel(); leaveClub(c); }
+      c.memo = null;
+    }
+    broadcastAll();
+    return { club: d.id, status: platform.statusOf(d) };
+  },
+  // one-way Blindrise posts shown in every club
+  platformPost(data, u){ founderOnly(u); const p = platform.post(data || {}); broadcastAll(); return { id: p.id }; },
+  platformUnpost(data, u){ founderOnly(u); platform.unpost(data || {}); broadcastAll(); return { ok: true }; }
 };
+const PLATFORM_API = ['clubModerate', 'platformPost', 'platformUnpost'];
 // Business Club (members-only directory, separate from poker): see server/business.js
 // Opportunity Club ("I need help" / "I can help" listings inside Business Club): see server/opportunity.js
 // Both run inside the caller's club context, so each club has its own Exchange.
 const CLUB_API = new Set([...Object.keys(clubs.get(clubs.MAIN).business.api), ...Object.keys(clubs.get(clubs.MAIN).opportunity.api)]);
 const clubApi = (name, c) => Object.hasOwn(c.opportunity.api, name) ? c.opportunity.api[name] : c.business.api[name];
 // calls that act on the shared account, not on a club
-const ACCOUNT_API = ['avatar', 'push', 'unpush', 'joinInvite', 'createClub', 'joinInfo', 'joinClub'];
+const ACCOUNT_API = ['avatar', 'push', 'unpush', 'joinInvite', 'createClub', 'joinInfo', 'joinClub', 'clubModerate', 'platformPost', 'platformUnpost'];
 // which club an invite code belongs to (main when club switching is off)
 function inviteClub(code){
   if(clubs.ON() && typeof code === 'string') for(const c of clubs.all()) if(c.store.get('invite:' + code)) return c;
   return clubs.get(clubs.MAIN);
 }
 function inviteCheck(c, inv){
+  if(clubs.suspended(c.id)) throw new Error('This club is suspended by Blindrise right now, so its invite links do not work.');
   const dead = !inv || inv.revoked || (inv.multi ? (inv.uses || []).length >= inv.max || Date.now() > inv.expiresAt : inv.usedBy);
   if(inv && !dead && inv.by && inv.by !== c.store.get('owner') && !membersInvite(c)) throw new Error('Member invites are switched off right now. Ask the organizer for a link.');
   if(dead) throw new Error(inv && inv.multi ? 'This group link is full, expired or was cancelled. Ask the organizer for a new one.' : 'This invite link has already been used or was cancelled. Ask for a new one.');
@@ -230,7 +280,7 @@ const server = http.createServer((req, res) => {
       let acct = null;
       try{
         const name = url.pathname.slice(5), fn = Object.hasOwn(api, name) ? api[name] : CLUB_API.has(name) && name;
-        if(!fn || (!clubs.ON() && (name === 'joinInvite' || name === 'createClub'))) return send(res, 404, { error: 'Not found' });
+        if(!fn || (!clubs.ON() && (name === 'joinInvite' || name === 'createClub' || PLATFORM_API.includes(name)))) return send(res, 404, { error: 'Not found' });
         if(blocked(ip, 30)) return send(res, 429, { error: 'Too many tries. Wait a few minutes.' });
         const data = body ? JSON.parse(body) : {};
         acct = acctKey(url.pathname, data);
@@ -240,6 +290,7 @@ const server = http.createServer((req, res) => {
         // the club this call is about: the one the app says it is showing (x-club), only if the caller belongs to it
         const c = clubs.ON() && !ACCOUNT_API.includes(name) ? ctxFor(ur, req.headers['x-club']) : clubs.get(clubs.MAIN);
         if(!c) return send(res, 403, { error: 'You are not a member of that club.' }, undefined, extra);
+        if(ur && !ACCOUNT_API.includes(name) && clubs.suspended(c.id)) return send(res, 403, { error: SUSPENDED }, undefined, extra);
         const u = clubs.ON() && ur && !ACCOUNT_API.includes(name) ? c.store.get('user:' + ur.id) || null : ur;
         if(extra && clubsClosedFor(c, u)) return send(res, 403, { error: 'Business Club opens soon.' }, undefined, extra);
         send(res, 200, typeof fn === 'string' ? clubApi(fn, c)(data, u) : fn(data, u, c, clientIp(req)), undefined, extra);
@@ -259,7 +310,7 @@ const server = http.createServer((req, res) => {
     const lr = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
     const c = clubs.ON() ? ctxFor(lr, req.headers['x-club']) : clubs.get(clubs.MAIN);
     const lu = clubs.ON() && lr && c ? c.store.get('user:' + lr.id) || null : lr;
-    const r = !c || clubsClosedFor(c, lu) ? { status: 404 } : c.business.logoFor(bl[1], lu);
+    const r = !c || clubs.suspended(c.id) || clubsClosedFor(c, lu) ? { status: 404 } : c.business.logoFor(bl[1], lu);
     if(r.status !== 200) return send(res, r.status, 'Not found', 'text/plain', NOINDEX);
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
@@ -330,7 +381,16 @@ function membersView(c){
   c.memo = { at: Date.now(), members, history: history.slice(0, 200), all: history };
   return c.memo;
 }
+const SUSPENDED = 'This club is suspended by Blindrise. Its members and data are kept, but nothing in it can be used until it is restored.';
+// what a member of a suspended club gets instead of the club: the notice, their clubs, and Blindrise posts. No members,
+// tournament, tables or anything else of the club.
+function suspendedView(c, u){
+  return { suspended: true, notice: SUSPENDED, me: { id: u.id, name: u.name, owner: false }, clubSwitching: true, club: { id: c.id, name: clubs.def(c.id).name, suspended: true },
+    clubs: clubList(u), blindrise: platform.feed(), members: [], history: [], tables: [], tourney: null, myTable: null, now: Date.now(), version: VERSION, features: { clubs: false } };
+}
+const clubList = u => clubs.memberships(rootStore.get('user:' + u.id)).map(id => ({ id, name: clubs.def(id).name, ...(clubs.suspended(id) ? { suspended: true } : {}) }));
 function clubView(c, u){
+  if(clubs.ON() && clubs.suspended(c.id)) return suspendedView(c, u);
   const { store, club, rewards } = c;
   const t = club.T();
   const { members, history } = membersView(c);
@@ -359,8 +419,15 @@ function clubView(c, u){
     // club switching: which club this is, and the clubs this account belongs to (names only)
     view.clubSwitching = true;
     view.club = { id: c.id, name: clubs.def(c.id).name };
-    view.clubs = clubs.memberships(rootStore.get('user:' + u.id)).map(id => ({ id, name: clubs.def(id).name }));
+    view.clubs = clubList(u);
     view.canCreateClub = c.id === clubs.MAIN && isOwner(u) && rootStore.get('owner') === u.id;
+    // a business member who may open their own club (see clubCreateMode) gets the offer and the Club Rules in main
+    if(c.id === clubs.MAIN && !view.canCreateClub && clubCreateMode(rootStore.get('user:' + u.id)) === 'member') view.openClub = { rules: platform.rules() };
+    // Blindrise posts, in every club, to every member (only what the founder typed)
+    view.blindrise = platform.feed();
+    // the founder, in his own club's Director: the Club Rules new clubs accept, every club with counts only (no names or
+    // emails), the moderation log and the posts
+    if(view.canCreateClub && isFounder(rootStore.get('user:' + u.id))) view.platform = { rules: platform.rules(), clubs: platform.overview(), log: platform.log().slice(-30).reverse() };
   }
   // the join page and QR code of this club, if this account owns it, with this club's email sign-ups only
   const jq = joinqr.ownerView(rootStore.get('user:' + u.id), rootStore.get('owner')).filter(x => x.id === c.id);
@@ -423,7 +490,7 @@ joinqr.setOnJoin(j => { const c = clubs.get(j.id); if(c) broadcastClub(c); });
 const broadcastAll = () => clubs.all().forEach(broadcastClub);
 function pushTable(c, tid){
   const club = c.club;
-  const tb = club.tables.get(tid); if(!tb) return;
+  const tb = club.tables.get(tid); if(!tb || clubs.suspended(c.id)) return; // suspended: no table data at all
   const snap = club.snapshot(tb), uids = new Set(snap.seats.filter(Boolean).map(s => s.uid));
   for(const ws of sockets){
     if(!ws.user || ws.ctx !== c) continue;
@@ -450,7 +517,8 @@ function notice(c, kind, t){
 function wire(c){
   c.memo = null; c.clubTimer = null; c.chatLogs = new Map(); c.linkCache = new Map();
   c.club.setLinker((a, b) => linkReason(c, a, b));
-  c.club.setHooks({ onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
+  const halted = () => { const d = clubs.ON() && c.id !== clubs.MAIN ? rootStore.get('clubdef:' + c.id) : null; return d && (d.removed || d.suspended) ? (d.removed ? 'This club was cancelled by Blindrise.' : 'This club is suspended by Blindrise.') : null; };
+  c.club.setHooks({ halted, onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { if(halted()) return; const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
 }
 clubs.get(clubs.MAIN);
 
@@ -474,9 +542,11 @@ wss.on('connection', (ws, req) => {
       // club switching: the app says which club it shows; an unknown or foreign club falls back to the account's first club
       const c = clubs.ON() ? (typeof m.club === 'string' && ctxFor(ur, m.club)) || ctxFor(ur, null) : clubs.get(clubs.MAIN);
       const u = c && c.store.get('user:' + ur.id);
-      if(!u) return sendWS(ws, { t: 'auth', ok: false });
+      // signed in, but in no club any more (the only club was cancelled): say so, so the app can explain
+      if(!u) return sendWS(ws, { t: 'auth', ok: false, ...(clubs.ON() && !c ? { reason: 'noclub' } : {}) });
       ws.ctx = c; ws.user = u; ws.sess = sha(m.token); remember(ur, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); sendWS(ws, { t: 'auth', ok: true });
       sendWS(ws, { t: 'club', club: clubView(c, u) });
+      if(clubs.suspended(c.id)) return;
       const mine = c.club.tableOf(u.id); if(mine){ pushTable(c, mine); chatLogFor(c, ws, mine); }
       return;
     }
@@ -484,6 +554,7 @@ wss.on('connection', (ws, req) => {
     const u = ws.user && store.get('session:' + ws.sess) && c.store.get('user:' + ws.user.id);
     if(!u || u.removed) return sendWS(ws, { t: 'auth', ok: false });
     ws.user = u;
+    if(clubs.suspended(c.id)) return; // a suspended club: nothing can be done in it (the app shows the notice)
     try{
       switch(m.t){
         case 'watch': ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(c, ws.watch); chatLogFor(c, ws, ws.watch); } break;
@@ -540,7 +611,8 @@ wss.on('connection', (ws, req) => {
   });
 });
 function own(u){ if(!isOwner(u)) throw new Error('Only the club owner can do that.'); }
-function leaveClub(c, uid){ for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid){ ws.user = null; try{ ws.close(4004, 'removed from club'); }catch(e){} } }
+// uid left out: everyone in that club (it was cancelled)
+function leaveClub(c, uid){ for(const ws of sockets) if(ws.user && ws.ctx === c && (uid === undefined || ws.user.id === uid)){ ws.user = null; try{ ws.close(4004, 'removed from club'); }catch(e){} } }
 setInterval(() => { for(const ws of sockets){ if(!ws.isAlive){ ws.terminate(); continue; } ws.isAlive = false; ws.ping(); } }, 30000);
 
 // Staging must never point at the production database: refuse to start if it does.

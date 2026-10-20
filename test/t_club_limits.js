@@ -35,12 +35,12 @@ const end = code => { srv.kill(); try{ fs.rmSync(tmp, { recursive: true, force: 
 
   // opening a club: 5 wrong setup codes from one address lock that address, even for the right code
   const ip = '10.9.9.9', st = [];
-  for(let i = 0; i < 5; i++) st.push((await call('createClub', { name: 'Guess Club', code: 'guess' + i }, O, ip)).status);
+  for(let i = 0; i < 5; i++) st.push((await call('createClub', { name: 'Guess Club', code: 'guess' + i, rulesV: 1, acceptRules: true }, O, ip)).status);
   check(st.every(x => x === 400), 'wrong setup codes are refused when opening a club');
-  const locked = await call('createClub', { name: 'Guess Club', code: 'secret' }, O, ip);
+  const locked = await call('createClub', { name: 'Guess Club', code: 'secret', rulesV: 1, acceptRules: true }, O, ip);
   check(locked.status === 429, 'after 5 wrong setup codes, opening a club from that address is locked');
   check((await call('resetOwner', { code: 'secret', pin: '1234' }, null, ip)).status === 429, 'the lock is the same one that guards owner recovery');
-  const B = (await ok('createClub', { name: 'Lounge B', code: 'secret' }, O)).club;
+  const B = (await ok('createClub', { name: 'Lounge B', code: 'secret', rulesV: 1, acceptRules: true }, O)).club;
   check(/^c[0-9a-f]{10}$/.test(B), 'from another address the organizer still opens a club (control)');
 
   // an invite link with an existing name: wrong PINs count against that name, from any address, like sign-in

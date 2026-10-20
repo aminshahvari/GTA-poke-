@@ -37,7 +37,8 @@ const gpOn = k => { const t = T(); return GP() && !!t && t[k] === true; };
 const pauseSec = () => { const t = T(); return GP() && t && PAUSES.includes(t.handPause) ? t.handPause : 0; };
 const fmt = n => Math.round(n).toLocaleString('en-US');
 
-let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(){} };
+// halted(): a reason this club may not start tournaments right now (suspended or cancelled by Blindrise), or null
+let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(){}, halted(){ return null; } };
 const tables = new Map();   // tid -> live table
 const waiters = new Map();  // uid -> pending decision
 let running = false, clockTimer = null;
@@ -124,6 +125,7 @@ function newTable(tid, n){
 }
 function start(){
   const t = T();
+  const halt = hooks.halted(); if(halt) throw new Error(halt);
   if(!t || t.status !== 'registering') throw new Error('No tournament is open.');
   const regs = t.regs.filter(u => { const us = store.get('user:' + u); return us && !us.removed; });
   if(regs.length < 2) throw new Error('At least 2 players need to join.');
@@ -527,6 +529,7 @@ function scheduleNext(t){
 setInterval(() => {
   const t = T();
   if(!t || t.status !== 'registering' || !t.startAt) return;
+  if(hooks.halted()) return; // suspended: no reminder, no start, nothing cancelled; it waits as it is
   // a reminder 15 minutes before a scheduled start
   if(!t.reminded && t.startAt - Date.now() <= 15 * 60000 && t.startAt - Date.now() > 60000){ saveT({ reminded: true }); hooks.onNotice('soon', T()); }
   if(Date.now() < t.startAt) return;

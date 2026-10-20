@@ -25,7 +25,7 @@ async function signedIn(browser, tok, [w, h]){
   const dir = (await post('login', { name: 'Test Director', pin: '246810' })).token;
   const p1 = (await post('login', { name: 'Test Player 01', pin: '135711' })).token;
   const p2 = (await post('login', { name: 'Test Player 02', pin: '135722' })).token;
-  const B = (await post('createClub', { name: 'Test Lounge Two', code: 'secret' }, dir)).club;
+  const B = (await post('createClub', { name: 'Test Lounge Two', code: 'secret', rulesV: 1, acceptRules: true }, dir)).club;
   const code = (await post('invite', {}, dir, B)).code;
   const j = await post('joinInvite', { code }, p1);
   check(B && j.club === B, 'test club made and Test Player 01 joined it');

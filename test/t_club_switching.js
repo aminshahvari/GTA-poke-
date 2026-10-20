@@ -41,10 +41,10 @@ const ids = v => v.members.map(m => m.id).sort();
   check(mainV.club.id === 'main' && mainV.clubs.length === 1 && mainV.canCreateClub === true, 'organizer starts with one club and may open another');
 
   // opening a club: organizer + setup code only
-  check((await call('createClub', { name: 'Lounge Two', code: 'nope' }, O)).status === 400, 'a wrong setup code cannot open a club');
-  check((await call('createClub', { name: 'Lounge Two', code: 'secret' }, M1)).status === 400, 'a member cannot open a club, even with the code');
-  check((await call('createClub', { name: 'Lounge Two', code: 'secret' })).status === 400, 'nobody signed out can open a club');
-  const B = (await ok('createClub', { name: 'Lounge Two', code: 'secret' }, O)).club;
+  check((await call('createClub', { name: 'Lounge Two', code: 'nope', rulesV: 1, acceptRules: true }, O)).status === 400, 'a wrong setup code cannot open a club');
+  check((await call('createClub', { name: 'Lounge Two', code: 'secret', rulesV: 1, acceptRules: true }, M1)).status === 403, 'a member without a published business cannot open a club, even with the code');
+  check((await call('createClub', { name: 'Lounge Two', code: 'secret', rulesV: 1, acceptRules: true })).status === 400, 'nobody signed out can open a club');
+  const B = (await ok('createClub', { name: 'Lounge Two', code: 'secret', rulesV: 1, acceptRules: true }, O)).club;
   check(/^c[0-9a-f]{10}$/.test(B), 'organizer opened club B');
 
   // joining B: a new account, an existing account by name + PIN, and a signed-in member

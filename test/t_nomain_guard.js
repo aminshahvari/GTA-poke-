@@ -63,7 +63,7 @@ const sha = s => crypto.createHash('sha256').update(String(s)).digest('hex');
   await ok(s, 'avatar', { kind: 'photo', data: JPEG }, M);
   let B, BT;
   if(SWITCHING){
-    B = (await ok(s, 'createClub', { name: 'Lounge Two', code: 'secret' }, O)).club;
+    B = (await ok(s, 'createClub', { name: 'Lounge Two', code: 'secret', rulesV: 1, acceptRules: true }, O)).club;
     const r = await ok(s, 'redeem', { code: (await ok(s, 'invite', {}, O, B)).code, name: 'Bonly', pin: '3333', agree: true });
     BT = r.token;
     check(r.club === B, 'flag on: Bonly joined club B only, with B\'s invite');

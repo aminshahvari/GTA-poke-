@@ -290,4 +290,6 @@ function seedDemo(){
   return n;
 }
 
-module.exports = { api, CATEGORIES, logoFor, removeUser, seedDemo, validate: { text, website, instagram, email, phone, logo } };
+// is this member's business published and shown in this club's Exchange (not hidden by the director)? (club creation gate)
+const listed = uid => visible(store.get('biz:' + uid));
+module.exports = { api, CATEGORIES, logoFor, removeUser, seedDemo, listed, validate: { text, website, instagram, email, phone, logo } };
