@@ -89,7 +89,7 @@ const end = code => { srv.kill(); try{ fs.rmSync(tmp, { recursive: true, force: 
 
   // ---------- the founder's overview: counts only ----------
   const pv = (await view(O)).platform, row = pv.clubs.find(x => x.id === C);
-  check(JSON.stringify(Object.keys(row).sort()) === JSON.stringify(['createdAt', 'id', 'members', 'name', 'signups', 'status']), 'each club row has id, name, status, date and counts only');
+  check(JSON.stringify(Object.keys(row).sort()) === JSON.stringify(['createdAt', 'host', 'id', 'members', 'mine', 'name', 'signups', 'status']), 'each club row has id, name, status, date, counts and whether it hosts only');
   check(row.members === 2 && row.signups === 1 && row.status === 'active', 'counts are right (2 members, 1 sign-up)');
   const pvs = JSON.stringify(pv);
   check(!/Nika|Mina|Bakery Bo|lead@example\.com|@/.test(pvs), 'no member names and no emails in the founder\'s overview');

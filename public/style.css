@@ -2132,7 +2132,7 @@ body{background:var(--lx-ink)}
 .pf-row{flex-wrap:wrap}
 .pf-row .pf-t{flex:1 1 160px;min-width:0;display:grid;gap:2px}
 .pf-row .pf-t b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pf-row .row-btns{flex:1 1 100%;justify-content:flex-end}
+.pf-row .row-btns{flex:1 1 100%;justify-content:flex-end;flex-wrap:wrap;min-width:0}
 #lobby .status-pill.warn{background:rgba(216,180,106,.14);border-color:rgba(216,180,106,.6);color:var(--lx-gold-hi)}
 #lobby .pf-row .status-pill.idle{background:transparent}
 .pf-card textarea,.pf-card select{width:100%;box-sizing:border-box}

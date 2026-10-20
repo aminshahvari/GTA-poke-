@@ -2,7 +2,8 @@
 // platform as a whole, as opposed to running his own club. Owner decisions of 2026-10-20 (Issue #10):
 // - Club Rules: shown verbatim to whoever opens a club, accepted actively; the acceptance { uid, at, v } is kept on the
 //   club's definition, and a club cannot be opened without accepting the current version (fail closed).
-// - Moderation: the founder can suspend, restore or cancel another club. Every use is logged (who, when, club, action,
+// - Moderation: the founder can suspend, restore or cancel another club, and allow or stop its tournaments (clubs that
+//   members open don't run their own unless he allows it). Every use is logged (who, when, club, action,
 //   reason). There is no browsing of another club's members or emails: the founder sees aggregate counts only.
 // - Broadcast: one-way Blindrise announcements and events, posted once and shown in every club, badged Blindrise. A post
 //   carries only what the founder typed (no author id, no member data), and nothing ever flows back from a club.
@@ -32,7 +33,7 @@ function acceptance(data, uid){
 
 // ---------- moderation ----------
 const MAIN = 'main';
-const ACTIONS = ['suspend', 'unsuspend', 'cancel'];
+const ACTIONS = ['suspend', 'unsuspend', 'cancel', 'host', 'unhost'];
 const fail = (status, msg) => Object.assign(new Error(msg), { status });
 const clean = (s, max) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 // The log is append-only: one key per entry (platform:modlog:<time>-<random>), written once, never changed or deleted,
@@ -44,17 +45,21 @@ const append = e => store.set(LOG + String(e.at).padStart(15, '0') + '-' + crypt
 const statusOf = d => d.removed ? 'cancelled' : d.suspended ? 'suspended' : 'active';
 // the change itself; the caller (server/index.js) checks who asks, halts the club's tournament and tells its clients
 function moderate({ club: id, action, reason }, by){
-  if(!ACTIONS.includes(action)) throw fail(400, 'Pick suspend, restore or cancel.');
+  if(!ACTIONS.includes(action)) throw fail(400, 'Pick suspend, restore, cancel, or allow or stop tournaments.');
   if(id === MAIN) throw fail(400, 'The Blindrise club cannot be suspended or cancelled.');
   const d = typeof id === 'string' && /^[a-z0-9]{3,24}$/.test(id) ? store.get('clubdef:' + id) : null;
   if(!d) throw fail(404, 'That club was not found.');
   if(d.removed) throw fail(400, 'That club was cancelled and is closed for good.');
   if(action === 'suspend' && d.suspended) throw fail(400, 'That club is already suspended.');
   if(action === 'unsuspend' && !d.suspended) throw fail(400, 'That club is not suspended.');
+  if(action === 'host' && d.host) throw fail(400, 'That club can already run tournaments.');
+  if(action === 'unhost' && !d.host) throw fail(400, 'That club cannot run tournaments.');
   const rec = { by: by.id, at: Date.now(), reason: clean(reason, 300) || null };
   let next;
   if(action === 'suspend') next = { ...d, suspended: rec };
   else if(action === 'unsuspend'){ const { suspended, ...rest } = d; next = rest; }
+  else if(action === 'host') next = { ...d, host: rec };
+  else if(action === 'unhost'){ const { host, ...rest } = d; next = rest; }
   else { const { suspended, ...rest } = d; next = { ...rest, removed: true, cancelled: rec }; }
   store.set('clubdef:' + id, next);
   append({ at: rec.at, by: by.id, byName: by.name, club: id, clubName: d.name, action, reason: rec.reason });
@@ -64,7 +69,7 @@ function moderate({ club: id, action, reason }, by){
 function overview(){
   const users = store.values('user:');
   return store.values('clubdef:').filter(d => d && d.id).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).map(d => ({
-    id: d.id, name: d.name, status: statusOf(d), createdAt: d.createdAt || null,
+    id: d.id, name: d.name, status: statusOf(d), createdAt: d.createdAt || null, host: !!d.host,
     members: users.filter(u => !u.removed && u.clubs && u.clubs[d.id] && !u.clubs[d.id].removed).length,
     signups: store.keys('joinlead:' + d.id + ':').length
   }));

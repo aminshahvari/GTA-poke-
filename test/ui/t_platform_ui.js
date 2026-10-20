@@ -82,6 +82,13 @@ const shot = (pg, name) => SHOTS ? pg.screenshot({ path: path.join(SHOTS, name) 
     await pg.fill('#ncName', w === 390 ? 'Test Bakery Club' : 'Test Cafe Club');
     await pg.click('.modal button:has-text("Open club")'); await sleep(900);
     check(await pg.locator('#clubBtn').isVisible() && await pg.locator('#openClubBtn').count() === 0, `${w}px: the club is opened, the club button appears and the offer is gone`);
+    // a club a member opens is practice only: tournaments are Blindrise's (owner decision of 2026-10-20)
+    await pg.click('#clubBtn'); await sleep(200); await pg.click(`.club-pick:has-text("${w === 390 ? 'Test Bakery Club' : 'Test Cafe Club'}")`); await sleep(900);
+    check(/Tournaments are run by Blindrise/.test(await pg.locator('#lobby').textContent()), `${w}px: its Home says tournaments are run by Blindrise`);
+    await pg.click('#tabs [data-tab=director]'); await sleep(400);
+    check(await pg.locator('#newForm').count() === 0 && /Run by Blindrise/.test(await pg.locator('#lobby').textContent()) && await pg.locator('.demo-box').count() > 0, `${w}px: its Director has no tournament form, only "Run by Blindrise" and the practice table`);
+    await pg.locator('h3:text("Run by Blindrise")').scrollIntoViewIfNeeded(); await shot(pg, `member-club-director-${w}.png`);
+    check(await noSideScroll(pg), `${w}px: no sideways scroll`);
     await pg.context().close();
   }
 
@@ -95,6 +102,9 @@ const shot = (pg, name) => SHOTS ? pg.screenshot({ path: path.join(SHOTS, name) 
     await pg.locator('.pf-row [data-pfact=suspend]').first().scrollIntoViewIfNeeded();
     check(await inView(pg, '.pf-row [data-pfact=suspend]', w) && await noSideScroll(pg), `${w}px: the suspend control fits, no sideways scroll`);
     await pg.locator('.pf-card').first().scrollIntoViewIfNeeded(); await shot(pg, `founder-clubs-${w}.png`);
+    const own = await pg.locator(`.pf-row[data-pfclub="${B}"]`).textContent(), theirs = await pg.locator('.pf-row:not([data-pfclub="' + B + '"])').allTextContents();
+    check(/runs tournaments/.test(own) && !/Allow tournaments/.test(own) && theirs.length === 2 && theirs.every(r => /practice only/.test(r) && /Allow tournaments/.test(r)), `${w}px: his own club runs tournaments; members' clubs read practice only, with Allow tournaments`);
+    check(await inView(pg, '.pf-row [data-pfact=host]', w) || (await pg.locator('.pf-row [data-pfact=host]').first().scrollIntoViewIfNeeded(), await inView(pg, '.pf-row [data-pfact=host]', w)), `${w}px: Allow tournaments fits the screen`);
     if(w === 390){
       await pg.click(`.pf-row[data-pfclub="${B}"] [data-pfact=suspend]`); await sleep(200);
       await shot(pg, `suspend-confirm-${w}.png`);

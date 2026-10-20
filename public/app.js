@@ -233,7 +233,7 @@ function clubSwitching(c){
     .catch(e => modal(`<h2>That invite didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]));
 }
 async function pickClub(){
-  const id = await modal(`<h2>Your clubs</h2><p>Same name and PIN everywhere. Each club has its own members, tournaments and Exchange.</p><div class="club-list">${club.clubs.map(x => `<button class="club-pick${x.id === club.club.id ? ' on' : ''}" data-v="${esc(x.id)}">${esc(x.name)}${x.suspended ? ' <small class="cs-tag">Suspended</small>' : ''}</button>`).join('')}</div>`, [{ label: 'Close', value: null }]);
+  const id = await modal(`<h2>Your clubs</h2><p>Same name and PIN everywhere. Each club has its own members and Exchange.</p><div class="club-list">${club.clubs.map(x => `<button class="club-pick${x.id === club.club.id ? ' on' : ''}" data-v="${esc(x.id)}">${esc(x.name)}${x.suspended ? ' <small class="cs-tag">Suspended</small>' : ''}</button>`).join('')}</div>`, [{ label: 'Close', value: null }]);
   if(id && id !== club.club.id){ local.set('club', id); location.replace('/'); }
 }
 function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)) renderTable(); }
@@ -278,7 +278,7 @@ function homeNavHTML(){
 }
 function pokerHeadHTML(){
   const st = club.tourney && club.tourney.status;
-  const sub = 'Poker · ' + (st === 'registering' ? 'Registration open' : st === 'running' ? 'Live now' : 'Club tournaments');
+  const sub = 'Poker · ' + (st === 'registering' ? 'Registration open' : st === 'running' ? 'Live now' : club.hosts === false ? 'Practice table' : 'Club tournaments');
   return `<div class="hsec-head" id="hs-poker"><span class="hsec-ic poker">${Icons.svg('spade')}</span><div class="hsec-t"><h2>The Strategy Table</h2><small class="${st === 'running' ? 'live' : ''}">${sub}</small></div>
     <button type="button" class="hsec-link" data-gotab="board">Leaderboard${Icons.svg('chev')}</button></div>`;
 }
@@ -413,6 +413,10 @@ function ownerNextHTML(){
     <div class="btn-row"><button class="btn red big" id="againBtn">${T ? 'Play again' : 'Open a tournament'}</button><button class="btn" id="newCustomBtn">Change settings</button></div></div>`;
 }
 function eventHTML(){
+  // a club a member opened: real tournaments are Blindrise's, so Home points there (one it already had still shows)
+  if(club.hosts === false && !(club.tourney && ['registering', 'running'].includes(club.tourney.status)))
+    return `<div class="card-box"><span class="status-pill idle">Practice only</span><h3>Tournaments are run by Blindrise</h3>
+      <p>Play real tournaments in the <b>Blindrise Open</b>: when one is open, register from its card on this page. Here you can play the practice table any time.</p></div>`;
   return ownerNextHTML() + eventMainHTML();
 }
 function eventMainHTML(){
@@ -620,7 +624,7 @@ async function openClubFlow(rules, founder){
   $('crAgree').onchange = sync; sync();
   if(!await step1) return;
   const step2 = modal(`<div class="cr-sheet"><span class="eyebrow">Step 2 of 2 · Your club</span><h2>Name your club</h2>
-    <p class="cr-lead">It starts empty: its own members, invite links, QR code, tournaments and Exchange. You are its owner, and only you see its members and sign-ups.</p>
+    <p class="cr-lead">It starts empty: its own members, invite links, QR code${founder ? ', tournaments' : ''} and Exchange.${founder ? '' : ' Tournaments are run by Blindrise: your members play them in the Blindrise Open.'} You are its owner, and only you see its members and sign-ups.</p>
     <div class="field"><label for="ncName">Club name</label><input id="ncName" maxlength="40" autocomplete="off"></div>
     ${founder ? '<div class="field"><label for="ncCode">Setup code</label><input id="ncCode" autocomplete="off"></div>' : ''}</div>`, [{ label: 'Cancel', value: false }, { label: 'Open club', value: true, primary: true }]);
   let name = '', code = '';
@@ -634,7 +638,7 @@ const newClub = () => openClubFlow(club.platform.rules, true);
 function openClubHTML(){
   if(!club.openClub) return '';
   return `<div class="card-box cr-offer"><span class="eyebrow">For business members</span><h3>Create your club</h3>
-    <p class="note">Your business is in the Exchange, so you can open your own private club on Blindrise: your members, your QR code, your events. One club per member.</p>
+    <p class="note">Your business is in the Exchange, so you can open your own private club on Blindrise: your members, your QR code, your Exchange. One club per member.</p>
     <div class="btn-row"><button class="btn red" id="openClubBtn">Create your club</button></div></div>`;
 }
 // ---------- the founder's platform controls (club switching only) ----------
@@ -646,11 +650,11 @@ function clubListHTML(){
   const P = club.platform, active = P.clubs.filter(x => x.status !== 'cancelled').length;
   return `<div class="card-box pf-card"><span class="eyebrow">Blindrise clubs · ${active} open</span>
     <p class="note">Counts only. You never see another club's members, emails or content.</p>
-    ${P.clubs.length ? `<div class="table-list">${P.clubs.map(x => `<div class="trow pf-row" data-pfclub="${esc(x.id)}"><div class="pf-t"><b>${esc(x.name)}</b><small>${x.members} member${x.members === 1 ? '' : 's'} · ${x.signups} QR sign-up${x.signups === 1 ? '' : 's'}</small></div>
+    ${P.clubs.length ? `<div class="table-list">${P.clubs.map(x => `<div class="trow pf-row" data-pfclub="${esc(x.id)}"><div class="pf-t"><b>${esc(x.name)}</b><small>${x.members} member${x.members === 1 ? '' : 's'} · ${x.signups} QR sign-up${x.signups === 1 ? '' : 's'} · ${x.mine || x.host ? 'runs tournaments' : 'practice only'}</small></div>
       <span class="status-pill${CLUB_STATUS[x.status][1]}">${CLUB_STATUS[x.status][0]}</span>
-      ${x.status === 'cancelled' ? '' : `<span class="row-btns">${x.status === 'suspended' ? `<button class="back" data-pfact="unsuspend" data-club="${esc(x.id)}">Restore</button>` : `<button class="back" data-pfact="suspend" data-club="${esc(x.id)}">Suspend</button>`}<button class="back" data-pfact="cancel" data-club="${esc(x.id)}">Cancel club</button></span>`}</div>`).join('')}</div>` : '<p class="note">No other clubs yet.</p>'}
+      ${x.status === 'cancelled' ? '' : `<span class="row-btns">${x.mine ? '' : `<button class="back" data-pfact="${x.host ? 'unhost' : 'host'}" data-club="${esc(x.id)}">${x.host ? 'Stop tournaments' : 'Allow tournaments'}</button>`}${x.status === 'suspended' ? `<button class="back" data-pfact="unsuspend" data-club="${esc(x.id)}">Restore</button>` : `<button class="back" data-pfact="suspend" data-club="${esc(x.id)}">Suspend</button>`}<button class="back" data-pfact="cancel" data-club="${esc(x.id)}">Cancel club</button></span>`}</div>`).join('')}</div>` : '<p class="note">No other clubs yet.</p>'}
     <div class="btn-row"><button class="btn" id="newClubBtn">Open a new club</button></div>
-    <details class="pf-log"><summary>Moderation log · ${P.log.length}</summary>${P.log.length ? `<div class="table-list">${P.log.map(e => `<div class="trow"><b>${esc({ suspend: 'Suspended', unsuspend: 'Restored', cancel: 'Cancelled' }[e.action] || e.action)} · ${esc(e.clubName)}</b><small>${new Date(e.at).toLocaleString()} · by ${esc(e.byName)}${e.reason ? ' · ' + esc(e.reason) : ''}</small></div>`).join('')}</div>` : '<p class="note">Nothing yet. Every suspend, restore and cancel is recorded here.</p>'}</details></div>
+    <details class="pf-log"><summary>Moderation log · ${P.log.length}</summary>${P.log.length ? `<div class="table-list">${P.log.map(e => `<div class="trow"><b>${esc({ suspend: 'Suspended', unsuspend: 'Restored', cancel: 'Cancelled', host: 'Tournaments allowed', unhost: 'Tournaments stopped' }[e.action] || e.action)} · ${esc(e.clubName)}</b><small>${new Date(e.at).toLocaleString()} · by ${esc(e.byName)}${e.reason ? ' · ' + esc(e.reason) : ''}</small></div>`).join('')}</div>` : '<p class="note">Nothing yet. Every suspend, restore and cancel is recorded here.</p>'}</details></div>
   <div class="card-box pf-card"><span class="eyebrow">Blindrise broadcast</span>
     <p class="note">Post once: it shows in every club, to every member, marked Blindrise. Nothing comes back from the clubs.</p>
     <div class="field"><label for="bcKind">Type</label><select id="bcKind"><option value="announcement">Announcement</option><option value="event">Event</option></select></div>
@@ -664,11 +668,13 @@ async function moderateClub(id, action){
   const x = club.platform.clubs.find(c => c.id === id); if(!x) return;
   const what = { suspend: ['Suspend', `Members of ${x.name} see a notice instead of the club, a running tournament is paused, and its QR join page and invite links stop. Nothing is deleted.`],
     unsuspend: ['Restore', `${x.name} opens again for its members. A paused tournament stays paused until the club's owner resumes it.`],
-    cancel: ['Cancel club', `${x.name} closes for good: its members lose access and it can't be opened again. Its records are kept. This can't be undone.`] }[action];
+    cancel: ['Cancel club', `${x.name} closes for good: its members lose access and it can't be opened again. Its records are kept. This can't be undone.`],
+    host: ['Allow tournaments', `${x.name}'s owner gets the tournament form in their Director and can pick a sponsor from their club's Exchange. You can stop it again.`],
+    unhost: ['Stop tournaments', `${x.name} goes back to practice only: its owner can't open or start a tournament. One already running plays out.`] }[action];
   const pm = modal(`<h2>${esc(what[0])} ${esc(x.name)}?</h2><p>${esc(what[1])}</p><div class="field"><label for="pfReason">Reason (kept in the log)</label><input id="pfReason" maxlength="300"></div>`, [{ label: 'Back', value: false }, { label: esc(what[0]), value: true, primary: true }]);
   let reason = ''; $('pfReason').oninput = e => reason = e.target.value;
   if(!await pm) return;
-  try{ await post('/api/clubModerate', { club: id, action, reason }); toast(action === 'suspend' ? 'Club suspended.' : action === 'cancel' ? 'Club cancelled.' : 'Club restored.'); }
+  try{ await post('/api/clubModerate', { club: id, action, reason }); toast({ suspend: 'Club suspended.', cancel: 'Club cancelled.', unsuspend: 'Club restored.', host: 'Tournaments allowed.', unhost: 'Tournaments stopped.' }[action]); }
   catch(e){ modal(`<h2>That didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
 }
 async function postBroadcast(){
@@ -774,6 +780,10 @@ function directorMainHTML(){
     <p class="note">Table chat is ${club.chatOff ? '<b>off</b>' : '<b>on</b>'}. <b>Mute</b> stops one person from chatting or throwing things.</p>
     <p class="note">Use <b>Home</b> to mark people who live together (for example a couple). They're never seated at the same table. Players on the same internet or the same phone are kept apart automatically.</p></div>`;
   const editing = editingT && T && T.status === 'registering';
+  // a club a member opened doesn't run tournaments (Blindrise does); the founder can allow one
+  if(club.hosts === false && (!T || ['finished', 'cancelled'].includes(T.status) || editing))
+    return `<div class="card-box"><span class="eyebrow">Tournaments</span><h3>Run by Blindrise</h3>
+      <p class="note">Your members play real tournaments in the <b>Blindrise Open</b>, from this club. Here everyone can play the practice table any time.</p></div>${members}`;
   if(!T || ['finished', 'cancelled'].includes(T.status) || editing){
     const P = editing ? T : null, opt = (v, l, cur) => `<option value="${v}"${String(v) === String(cur) ? ' selected' : ''}>${l}</option>`;
     const d = P && P.startAt ? new Date(P.startAt) : new Date(Date.now() + 864e5); if(!(P && P.startAt)) d.setHours(20, 0, 0, 0);

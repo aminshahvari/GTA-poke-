@@ -59,7 +59,9 @@ const DC_MS = FAST && +process.env.DC_PROTECT_MS || 30000;
 
 let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(){}, isConnected: () => true,
   // halted(): a reason this club may not start tournaments right now (suspended or cancelled by Blindrise), or null
-  halted(){ return null; } };
+  halted(){ return null; },
+  // hosts(): whether this club runs its own tournaments (a club a member opened doesn't, unless the founder allows it)
+  hosts(){ return true; } };
 const tables = new Map();   // tid -> live table
 const waiters = new Map();  // uid -> pending decision
 let running = false, clockTimer = null;
@@ -587,7 +589,7 @@ function scheduleNext(t){
   const step = t.repeat === 'daily' ? 864e5 : 7 * 864e5;
   let next = t.startAt + step; while(next < Date.now()) next += step;
   setTimeout(() => {
-    const cur = T(); if(cur && (cur.status === 'running' || cur.status === 'registering')) return;
+    const cur = T(); if(cur && (cur.status === 'running' || cur.status === 'registering') || !hooks.hosts()) return;
     create({ name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat, anteMode: t.anteMode, actSec: t.actSec, tableSize: t.tableSize, lateLevels: t.lateLevels, helper: t.helper, showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0,
       breakMin: t.breakMin, sponsor: t.sponsor, sponsorSec: t.sponsorSec });
   }, FAST ? 50 : 15000);
@@ -596,7 +598,7 @@ function scheduleNext(t){
 setInterval(() => {
   const t = T();
   if(!t || t.status !== 'registering' || !t.startAt) return;
-  if(hooks.halted()) return; // suspended: no reminder, no start, nothing cancelled; it waits as it is
+  if(hooks.halted() || !hooks.hosts()) return; // suspended, or no longer hosting: no reminder, no start, nothing cancelled; it waits as it is
   // a reminder 15 minutes before a scheduled start
   if(!t.reminded && t.startAt - Date.now() <= 15 * 60000 && t.startAt - Date.now() > 60000){ saveT({ reminded: true }); hooks.onNotice('soon', T()); }
   if(Date.now() < t.startAt) return;

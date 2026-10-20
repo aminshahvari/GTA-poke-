@@ -46,6 +46,12 @@ const sameCode = (a, b) => typeof a === 'string' && typeof b === 'string' && a.l
 const isOwner = u => u && u.role === 'owner';
 // the Blindrise founder: the owner of the main club (an account record from the plain store)
 const isFounder = u => !!u && u.id === owner() && !u.noMain && !u.removed;
+// Who runs tournaments (owner decision of 2026-10-20, "Blindrise only"): the Blindrise club, the Blindrise Open, clubs
+// the founder opened himself, and clubs he has allowed. A club a member opened is their team: members, invites, QR,
+// Exchange and chat, but its Director has no tournament form or sponsor pick. A tournament it already has can still be
+// cancelled, and one already running plays out.
+const hosts = c => !clubs.ON() || c.id === clubs.MAIN || c.id === clubs.EVENTS || (d => !!d && (d.createdBy === owner() || !!d.host))(rootStore.get('clubdef:' + c.id));
+const NO_HOST = 'Tournaments are run by Blindrise. Your members play them in the Blindrise Open.';
 const founderOnly = u => { if(!isFounder(u)) throw Object.assign(new Error('Only the Blindrise founder can do that.'), { status: 403 }); };
 // Who may open a club. These two functions are the one place that decides it (owner decision 2026-10-20, Issue #10):
 // - the founder, proved by the setup code, as before (no limit on how many);
@@ -450,7 +456,7 @@ function clubView(c, u){
       ...(club.gp() ? { showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0 } : {}),
       startedAt: t.startedAt || null, breaks: club.breaksOn(), breakEvery: club.BREAK_EVERY, breakMin: t.breakMin || 5, breakUntil: club.onBreak(t) ? t.breakUntil : null, breakPending: !!t.breakPending && !t.paused,
       pausedBreakLeft: t.paused ? t.pausedBreakLeft || 0 : 0, sponsor: c.business.sponsorCard(t.sponsor), sponsorSec: t.sponsorSec || 8 } : null,
-    ...(isOwner(u) ? { sponsors: c.business.sponsorOptions() } : {}),
+    ...(isOwner(u) && hosts(c) ? { sponsors: c.business.sponsorOptions() } : {}), hosts: hosts(c),
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
     // who invited whom is for the owner only: a member's payload carries no inviter for anyone (Muse P10)
     members: isOwner(u) ? members : members.map(m => m.invitedBy ? { ...m, invitedBy: null } : m),
@@ -482,7 +488,7 @@ function clubView(c, u){
     if(c.id === clubs.MAIN && view.canCreateClub) view.canRunEvents = true;
     // the founder, in his own club's Director: the Club Rules new clubs accept, every club with counts only (no names or
     // emails), the moderation log and the posts
-    if(view.canCreateClub && isFounder(rootStore.get('user:' + u.id))) view.platform = { rules: platform.rules(), clubs: platform.overview(), log: platform.log().slice(-30).reverse() };
+    if(view.canCreateClub && isFounder(rootStore.get('user:' + u.id))) view.platform = { rules: platform.rules(), clubs: platform.overview().map(x => ({ ...x, mine: (rootStore.get('clubdef:' + x.id) || {}).createdBy === owner() })), log: platform.log().slice(-30).reverse() };
   }
   // the join page and QR code of this club, if this account owns it, with this club's email sign-ups only
   const jq = joinqr.ownerView(rootStore.get('user:' + u.id), rootStore.get('owner')).filter(x => x.id === c.id);
@@ -606,7 +612,7 @@ function wire(c){
   c.memo = null; c.clubTimer = null; c.chatLogs = new Map(); c.linkCache = new Map();
   c.club.setLinker((a, b) => linkReason(c, a, b));
   const halted = () => { const d = clubs.ON() && c.id !== clubs.MAIN ? rootStore.get('clubdef:' + c.id) : null; return d && (d.removed || d.suspended) ? (d.removed ? 'This club was cancelled by Blindrise.' : 'This club is suspended by Blindrise.') : null; };
-  c.club.setHooks({ halted, isConnected: uid => online(c, uid), onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { if(halted()) return; const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => c.id === clubs.EVENTS ? eventsChanged(c) : broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
+  c.club.setHooks({ halted, hosts: () => hosts(c), isConnected: uid => online(c, uid), onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { if(halted()) return; const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => c.id === clubs.EVENTS ? eventsChanged(c) : broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
 }
 clubs.get(clubs.MAIN);
 
@@ -671,9 +677,9 @@ wss.on('connection', (ws, req) => {
         case 'avatarClear': own(u); if(c.id !== clubs.MAIN) throw new Error('Only the Blindrise organizer can remove a picture.'); { const x = c.store.get('user:' + m.uid); if(x){ c.store.set('user:' + x.id, players.setAvatar(x, { kind: 'none' })); c.memo = null; broadcastAll(); } } break;
         case 'leave': club.leave(u.id); break;
         // owner controls
-        case 'create': own(u); club.create(m); break;
-        case 'edit': own(u); club.edit(m); break;
-        case 'start': own(u); club.start(); break;
+        case 'create': own(u); if(!hosts(c)) throw new Error(NO_HOST); club.create(m); break;
+        case 'edit': own(u); if(!hosts(c)) throw new Error(NO_HOST); club.edit(m); break;
+        case 'start': own(u); if(!hosts(c)) throw new Error(NO_HOST); club.start(); break;
         case 'cancel': own(u); club.cancel(); break;
         case 'pause': own(u); club.pause(); break;
         case 'resume': own(u); club.unpause(); break;
