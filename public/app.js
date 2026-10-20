@@ -799,7 +799,7 @@ function directorMainHTML(){
       <div class="btn-row"><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button><button class="btn" id="editBtn">Edit</button><button class="btn" id="cancelBtn">Cancel</button></div></div>${members}`;
   }
   return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
-    <div class="kv num"><div><small>Players left</small><b>${T.remaining}</b></div><div><small>Tables</small><b>${club.tables.length}</b></div><div><small>Clock</small><b>${T.paused ? 'Paused' : T.breakUntil ? 'On break' : 'Running'}</b></div></div>
+    <div class="kv num"><div><small>Players left</small><b>${T.remaining}</b></div><div><small>Tables</small><b>${club.tables.length}</b></div><div><small>Clock</small><b>${T.paused ? 'Paused' : T.breakUntil ? 'On break' : T.breakPending ? 'Break next' : 'Running'}</b></div></div>
     ${T.breakUntil ? `<p class="note">Break until ${esc(clockAt(T.breakUntil - clockSkew))}. Play resumes by itself on level ${T.level + 1}.</p>` : ''}
     <div class="btn-row">${T.paused ? '<button class="btn green" id="resumeBtn">Resume</button>' : '<button class="btn" id="pauseBtn">Pause</button>'}<button class="btn" id="endBtn">End tournament</button></div></div>${members}`;
 }
@@ -2091,8 +2091,8 @@ function tickClock(){
   $('cNext').textContent = one && an ? `Ante ${fmt(an)}` : `Next: ${fmt(nsb)}/${fmt(nbb)}${nan ? ' · ante ' + fmt(nan) : ''}`;
   const brk = !T.paused && T.breakUntil ? Math.max(0, T.breakUntil - now) : 0;
   const ms = T.paused ? T.pausedLeft : brk || Math.max(0, T.levelEndsAt - now);
-  $('cTime').textContent = T.paused ? 'Paused' : mmss(ms);
-  $('cTimeLbl').textContent = brk ? 'Break' : !T.paused && ms <= 0 ? 'Blinds up next hand' : 'Time left';
+  $('cTime').textContent = T.paused ? 'Paused' : T.breakPending ? 'Break' : mmss(ms);
+  $('cTimeLbl').textContent = brk ? 'Break' : T.breakPending ? 'After this hand' : !T.paused && ms <= 0 ? 'Blinds up next hand' : 'Time left';
   breakUI(T, tables.get(watchTid || club.myTable), now); sponsorUI(T, now);
   $('sAvg').textContent = fmt(T.entrants * T.stack / Math.max(1, T.remaining));
   const d = tables.get(watchTid || club.myTable);

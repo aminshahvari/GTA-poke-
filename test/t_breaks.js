@@ -181,6 +181,42 @@ function firstSeen(cs){
   ok(T(c5[0]).breaks === false && !sawBreak && (T(c5[0]).level >= 11 || T(c5[0]).status !== 'running'), 'with BREAKS=0 levels run past 10 with no break');
   c5.forEach(c => c.ws.close()); s5.p.kill('SIGKILL');
 
+  // ---------- 6. a hand that runs past the break's start: the break waits for it (Muse #11 D1) ----------
+  // One player takes 1.5 s over every decision, so hands run across level ends. The break must start only when the last
+  // hand has finished (breakUntil = max(level end, last hand's end) + the break), so every table gets the full break.
+  const s6 = await boot({ LEVEL_MS: '300', BREAK_MS: '3000', TIME_BANK_MS: '4000' });
+  const c6 = await makeClub(s6, 2);
+  const slow = c6[1];
+  slow.ws.removeAllListeners('message');
+  slow.ws.on('message', raw => {
+    const m = JSON.parse(raw);
+    if(m.t === 'club'){ slow.club = m.club; slow.id = m.club.me.id; }
+    if(m.t !== 'table') return;
+    const tb = m.table; slow.log.push({ at: Date.now(), tid: tb.tid, handNo: tb.handNo, phase: tb.phase, result: !!tb.result, blinds: tb.blinds });
+    if(tb.actUid === slow.id && tb.legal && slow.lastSeq !== tb.tid + tb.seq){
+      slow.lastSeq = tb.tid + tb.seq;
+      const L = tb.legal, a = L.canCheck ? { t: 'check' } : { t: 'call' };
+      setTimeout(() => slow.send({ t: 'act', tid: tb.tid, hand: tb.handNo, seq: tb.seq, a }), 1500);
+    }
+  });
+  c6[0].send({ t: 'create', name: 'Overrun', stack: 1000000, levelMin: 20 });
+  await until(() => T(c6[0]) && T(c6[0]).status === 'registering');
+  c6.forEach(c => c.send({ t: 'join' }));
+  await until(() => T(c6[0]).regs.length === 2);
+  c6[0].send({ t: 'start' });
+  let pendingSeen = false;
+  ok(await until(() => { if(T(c6[0]) && T(c6[0]).breakPending) pendingSeen = true; return T(c6[0]).breakUntil; }, 30000), 'the overrun break starts');
+  const ob = T(c6[0]).breakUntil;
+  ok(pendingSeen, 'while the last hand finishes, players see the break is next ("After this hand")');
+  // the hand in play at the level end: its result is the last hand update before the break
+  const results = c6[0].log.filter(e => e.result && e.at < ob);
+  const lastEnd = results.length ? results[results.length - 1].at : 0;
+  ok(lastEnd && ob - lastEnd >= 3000 - 1100, 'the break is the full break after the last hand ended: ' + (ob - lastEnd) + ' ms (break 3000, tick up to 1000)');
+  const newHands = [...firstSeen(c6)].filter(([, at]) => at > lastEnd + 50 && at < ob - 50);
+  ok(newHands.length === 0, 'no hand is dealt between the last hand and the end of the break');
+  ok(T(c6[0]).levelEndsAt - ob >= 299 && T(c6[0]).levelEndsAt - ob <= 301, 'the next level still gets its full time after the break');
+  c6.forEach(c => c.ws.close()); s6.p.kill('SIGKILL');
+
   console.log(`t_breaks: ${oks} ok, ${fails} failed`);
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
