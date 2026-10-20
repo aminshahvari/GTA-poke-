@@ -47,10 +47,10 @@ let onNew = null;
 const all = () => [MAIN, ...(ON() ? store.keys('clubdef:').map(k => k.slice(8)).sort() : [])].map(get).filter(Boolean);
 // the clubs an account belongs to (raw account record from the plain store)
 function memberships(u){
-  if(!u) return [];
-  if(!ON()) return u.removed || u.noMain ? [] : [MAIN]; // noMain: only in another club, never in main
+  if(!u || u.removed) return []; // removed: the account was closed (from main), so it is in no club at all
+  if(!ON()) return u.noMain ? [] : [MAIN]; // noMain: only in another club, never in main
   const out = [];
-  if(!u.noMain && !u.removed) out.push(MAIN);
+  if(!u.noMain) out.push(MAIN);
   for(const [id, m] of Object.entries(u.clubs || {})) if(m && !m.removed && def(id)) out.push(id);
   return out;
 }
