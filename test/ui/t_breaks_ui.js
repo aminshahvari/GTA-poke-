@@ -127,6 +127,14 @@ const overlaps = (pg, sel) => pg.evaluate(sel => {
   await pg.click('#lobbyBtn'); await sleep(500);
   check(/On break/.test(await pg.textContent('#lobbyBody')), 'lobby: shows On break and when play resumes');
   await shot(pg, 'break-lobby');
+  // the sponsor on the break card opens its Exchange page; the player is back at the table when the break ends
+  await pg.click('[data-watch]'); await until(() => pg.evaluate(() => !document.getElementById('game').hidden && !document.getElementById('brk').hidden), 8000);
+  check(await pg.evaluate(() => /See their page/.test(document.getElementById('brk').textContent)), 'break: the sponsor says See their page');
+  await pg.click('#brk [data-spbiz]');
+  const opened = await until(() => pg.evaluate(() => !document.getElementById('lobby').hidden && /Aurora Coffee Co\./.test(document.getElementById('lobbyBody').textContent) && /Test business/.test(document.getElementById('lobbyBody').textContent)), 8000);
+  check(opened, "tap: opens the sponsor's Exchange page");
+  await shot(pg, 'sponsor-page');
+  check(await until(() => pg.evaluate(() => !document.getElementById('game').hidden), 50000), 'break over: the player is back at the table');
 
   console.log(`t_breaks_ui (${TAG}): ${oks} ok, ${fails} failed`);
   await browser.close();
