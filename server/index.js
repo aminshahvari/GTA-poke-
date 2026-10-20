@@ -49,17 +49,22 @@ const isFounder = u => !!u && u.id === owner() && !u.noMain && !u.removed;
 const founderOnly = u => { if(!isFounder(u)) throw Object.assign(new Error('Only the Blindrise founder can do that.'), { status: 403 }); };
 // Who may open a club. These two functions are the one place that decides it (owner decision 2026-10-20, Issue #10):
 // - the founder, proved by the setup code, as before (no limit on how many);
-// - a "business member": a member of the main Blindrise club whose business is published in the main club's Exchange
-//   and not hidden by the director. No setup code; one club per account, counting every club it ever opened, including
-//   suspended and cancelled ones, so a cancelled club cannot be opened again by the same account.
-// Everything else in createClub (Club Rules, name, the 50-club cap) is the same for both.
+// - a "business member": a member of any club whose business is published in that club's Exchange and not hidden by
+//   its director (Muse #10 D3: the decision says any member with a published Exchange business, so a club's members can
+//   found clubs of their own, not only main's). A suspended club's Exchange does not count, nor does the Blindrise Open,
+//   which has none. No setup code; one club per account, counting every club it ever opened, including suspended and
+//   cancelled ones, so a cancelled club cannot be opened again by the same account.
+// Everything else in createClub (Club Rules, name, the club cap) is the same for both.
 const clubsOpenedBy = uid => store.values('clubdef:').filter(d => d && d.createdBy === uid).length;
+const listedSomewhere = u => clubs.memberships(u).some(id => id !== clubs.EVENTS && !clubs.suspended(id) && clubs.get(id).business.listed(u.id));
 function clubCreateMode(u){
   if(!u || u.removed) return null;
   if(isFounder(u)) return 'founder';
-  if(u.noMain || !clubs.memberships(u).includes(clubs.MAIN) || !clubs.get(clubs.MAIN).business.listed(u.id) || clubsOpenedBy(u.id) >= 1) return null;
+  if(!listedSomewhere(u) || clubsOpenedBy(u.id) >= 1) return null;
   return 'member';
 }
+// the most clubs one server holds (Muse #10 D2: was a fixed 50); MAX_CLUBS in the environment changes it
+const MAX_CLUBS = Math.max(1, Math.floor(+process.env.MAX_CLUBS) || 1000);
 function clubCreateGate(u, data){
   if(!u) throw new Error('Sign in first.');
   const mode = clubCreateMode(u);
@@ -69,8 +74,8 @@ function clubCreateGate(u, data){
   }
   if(mode === 'member') return;
   const forbid = m => Object.assign(new Error(m), { status: 403 });
-  if(!u.noMain && clubs.get(clubs.MAIN).business.listed(u.id) && clubsOpenedBy(u.id) >= 1) throw forbid('You have already opened a club. Each member can open one.');
-  throw forbid('To open a club, publish your business in the Blindrise Exchange first.');
+  if(listedSomewhere(u) && clubsOpenedBy(u.id) >= 1) throw forbid('You have already opened a club. Each member can open one.');
+  throw forbid("To open a club, publish your business in your club's Exchange first.");
 }
 
 // simple per-IP rate limit for login attempts
@@ -142,8 +147,11 @@ const api = {
     const rules = platform.acceptance(data, u.id);
     const name = cleanName(data.name);
     if(!/^[\p{L}\p{N} .&'-]{2,40}$/u.test(name)) throw new Error('Pick a club name of 2 to 40 letters or numbers.');
-    if(store.keys('clubdef:').length >= 50) throw new Error('This server already has 50 clubs.');
+    if(store.keys('clubdef:').length >= MAX_CLUBS) throw new Error(`This server already has ${MAX_CLUBS} clubs.`);
     const c = clubs.create(name, u.id, { rules });
+    // the founder is told when a member opens a club (decision of 2026-10-20, Muse #10 D4): a notification, and the
+    // club is in his Director list from now on. Only the club's name, never the member's details.
+    if(!isFounder(u) && owner()) push.notify([owner()], { title: 'A new club opened', body: `${name} was opened on Blindrise.`, tag: 'club-' + c.id, ttl: 24 * 3600 }).catch(() => {});
     broadcastAll();
     return { club: c.id };
   },
@@ -464,8 +472,8 @@ function clubView(c, u){
     view.club = { id: c.id, name: clubs.def(c.id).name };
     view.clubs = clubList(u);
     view.canCreateClub = c.id === clubs.MAIN && isOwner(u) && rootStore.get('owner') === u.id;
-    // a business member who may open their own club (see clubCreateMode) gets the offer and the Club Rules in main
-    if(c.id === clubs.MAIN && !view.canCreateClub && clubCreateMode(rootStore.get('user:' + u.id)) === 'member') view.openClub = { rules: platform.rules() };
+    // a business member who may open their own club (see clubCreateMode) gets the offer and the Club Rules in their clubs
+    if(c.id !== clubs.EVENTS && !view.canCreateClub && clubCreateMode(rootStore.get('user:' + u.id)) === 'member') view.openClub = { rules: platform.rules() };
     // Blindrise posts, in every club, to every member (only what the founder typed)
     view.blindrise = platform.feed();
     // the Blindrise Open: inside it, say so; in every other club, its card for this member (counts only, no names)
