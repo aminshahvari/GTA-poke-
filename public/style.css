@@ -2069,3 +2069,42 @@ body{background:var(--lx-ink)}
 .club-pick{text-align:left;background:rgba(255,255,255,.04);color:var(--text);border:1px solid rgba(230,187,104,.25);border-radius:12px;padding:12px 14px;font-size:15px;font-weight:600}
 .club-pick.on{border-color:var(--lx-gold,#e6bb68);box-shadow:inset 0 0 0 1px var(--lx-gold,#e6bb68)}
 .club-pick.on::after{content:' · current';color:var(--muted);font-weight:500;font-size:13px}
+
+/* ---------- tournament break card and sponsor spotlight (Issues #11, #12) ---------- */
+/* the break card sits over the middle of the felt only between hands; the sponsor ribbon covers the clock bar for a few
+   seconds at the start. Neither takes taps, and neither is ever over the cards, the seats or the action buttons. */
+.brk{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);z-index:5;width:min(78%,300px);pointer-events:none}
+.brk.tight .brk-card{padding:10px 10px 9px;gap:2px}.brk.tight .brk-time{font-size:28px}.brk.tight .sp-card.big .sp-logo .bz-logo.sp{width:36px;height:36px}.brk.tight .sp-card.big .sp-txt b{font-size:16px}.brk.tight .sp-card{gap:8px}
+.brk-card{display:grid;justify-items:center;gap:4px;padding:14px 16px 12px;border-radius:var(--lx-r-lg,18px);text-align:center;
+  background:radial-gradient(120% 120% at 50% 0%,rgba(216,180,106,.16),transparent 60%),linear-gradient(180deg,rgba(17,26,46,.94),rgba(7,11,20,.94));
+  border:1px solid var(--lx-hair2,rgba(241,223,176,.26));box-shadow:0 14px 40px rgba(0,0,0,.45);animation:brkIn .5s cubic-bezier(.2,.8,.2,1) both}
+.brk-eye{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--lx-gold,#d8b46a)}
+.brk-time{font-size:34px;line-height:1.05;font-weight:600;color:var(--lx-ivory,#f4eee2)}
+.brk-sub{font-size:12px;color:var(--lx-mute,#a3abbb)}
+.brk .sp-card{margin-top:8px;padding-top:10px;border-top:1px solid var(--lx-hair,rgba(241,223,176,.13));width:100%;justify-content:center}
+.sp-card{display:flex;align-items:center;gap:10px;min-width:0}
+.sp-txt{display:grid;min-width:0;text-align:left}
+.sp-txt small{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--lx-gold,#d8b46a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-txt b{font-family:var(--lx-serif,Georgia,serif);font-size:17px;font-weight:600;color:var(--lx-ivory,#f4eee2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-txt small.sp-cat{text-transform:none;letter-spacing:0;font-size:11px;color:var(--lx-mute,#a3abbb)}
+.sp-card.big .sp-txt b{font-size:19px}
+.sp-logo{flex:none;display:grid;place-items:center}
+.sp-logo .bz-logo.sp{width:40px;height:40px;border-radius:10px;font-size:14px}
+.sp-card.big .sp-logo .bz-logo.sp{width:48px;height:48px;font-size:16px}
+.sp-logo .bz-logo.sp img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
+#game .clock{position:relative}
+.spn{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;padding:4px 12px;pointer-events:none;overflow:hidden;
+  background:linear-gradient(90deg,#070b14,#17223b 50%,#070b14);border-bottom:1px solid var(--lx-gold-deep,#9c7a3c);
+  animation:spnIn .55s cubic-bezier(.2,.8,.2,1) both;transition:opacity .5s,transform .5s}
+.spn::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(241,223,176,.14) 50%,transparent 70%);transform:translateX(-100%);animation:spnSheen 2.4s .5s ease-in-out}
+.spn.out{opacity:0;transform:translateY(-6px)}
+.spn .sp-logo .bz-logo.sp{width:32px;height:32px;border-radius:8px;font-size:12px}
+.spn .sp-txt b{font-size:16px}
+@keyframes brkIn{from{opacity:0}to{opacity:1}}
+@keyframes spnIn{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:none}}
+@keyframes spnSheen{to{transform:translateX(100%)}}
+@media (prefers-reduced-motion:reduce){.brk-card,.spn,.spn::after{animation:none}.spn{transition:none}}
+.brk-note{margin:6px 0 2px;color:var(--lx-gold-hi,#f1dfb0)}
+/* the card sits under the seats (same layer, earlier in the page), so a player's seat always shows on top of it;
+   the chips left from the last pot are hidden while it shows */
+#tableArea.on-break #fx,#tableArea.on-break .center .pot{visibility:hidden}
