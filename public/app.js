@@ -176,7 +176,7 @@ function connect(){
   ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined })); };
   ws.onmessage = ev => {
     const m = JSON.parse(ev.data);
-    if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
+    if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
     if(m.t === 'club'){ onClub(m.club); return; }
     if(m.t === 'table'){ tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
@@ -210,6 +210,7 @@ function onClub(c){
   const st = c.tourney && c.tourney.status;
   if(st === 'finished' && lastStatus === 'running'){ view = 'lobby'; watchTid = null; showScreen('lobby'); tab = 'event'; celebrate(); }
   lastStatus = st;
+  if(c.suspended && view === 'table'){ view = 'lobby'; watchTid = null; tables.clear(); showScreen('lobby'); }
   if(c.myTable && c.myTable !== lastMyTable && st === 'running'){ watchTid = c.myTable; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid: watchTid }); }
   lastMyTable = c.myTable;
   const typing = document.activeElement && $('lobbyBody').contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
@@ -227,7 +228,7 @@ function clubSwitching(c){
     .catch(e => modal(`<h2>That invite didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]));
 }
 async function pickClub(){
-  const id = await modal(`<h2>Your clubs</h2><p>Same name and PIN everywhere. Each club has its own members, tournaments and Exchange.</p><div class="club-list">${club.clubs.map(x => `<button class="club-pick${x.id === club.club.id ? ' on' : ''}" data-v="${esc(x.id)}">${esc(x.name)}</button>`).join('')}</div>`, [{ label: 'Close', value: null }]);
+  const id = await modal(`<h2>Your clubs</h2><p>Same name and PIN everywhere. Each club has its own members, tournaments and Exchange.</p><div class="club-list">${club.clubs.map(x => `<button class="club-pick${x.id === club.club.id ? ' on' : ''}" data-v="${esc(x.id)}">${esc(x.name)}${x.suspended ? ' <small class="cs-tag">Suspended</small>' : ''}</button>`).join('')}</div>`, [{ label: 'Close', value: null }]);
   if(id && id !== club.club.id){ local.set('club', id); location.replace('/'); }
 }
 function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)) renderTable(); }
@@ -244,6 +245,8 @@ const when = ms => new Date(ms).toLocaleString([], { weekday: 'short', month: 's
 function renderLobby(){
   if(!club) return;
   const body = $('lobbyBody');
+  $('tabs').hidden = !!club.suspended;
+  if(club.suspended){ document.querySelector('.app').classList.remove('wide'); body.innerHTML = suspendedHTML(); wireLobby(); return; }
   // Business Club and Opportunity Club stay hidden from members until the owner opens them (Director tab); the owner can always preview
   const clubsOn = !!(club.features && club.features.clubs), clubsVisible = clubsOn || club.me.owner;
   const bizTab = document.querySelector('#tabs [data-tab="biz"]');
@@ -286,7 +289,7 @@ function renderHome(body, clubsOn, showClubs){
   // members get the practice table on Home too (the owner has it in Director); not while seated in a running tournament
   const seated = !!(club.myTable && club.tourney && club.tourney.status === 'running');
   const extra = document.createElement('div'); extra.innerHTML = (clubsOn ? '' : comingHTML()) + (club.me.owner || seated ? '' : demoCard()) + picNudgeHTML();
-  body.innerHTML = memberHomeHTML(clubsOn || club.me.owner) + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
+  body.innerHTML = memberHomeHTML(clubsOn || club.me.owner) + blindriseHTML() + openClubHTML() + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
   body.append(...cards.slice(0, n), ...[...extra.children]);
   if(showClubs){
     const biz = document.createElement('section'); biz.className = 'hsec hsec-biz'; biz.setAttribute('aria-labelledby', 'hs-biz');
@@ -593,21 +596,88 @@ async function wireJoinQr(){
     setTimeout(() => { window.print(); setTimeout(done, 1000); }, 50);
   });
 }
-// club switching only: the Blindrise organizer can open another club on this server (needs the setup code)
-function clubListHTML(){
-  if(!club.canCreateClub) return '';
-  return `<div class="card-box"><span class="eyebrow">Clubs on this server · ${club.clubs.length}</span>
-    <div class="table-list">${club.clubs.map(x => `<div class="trow"><b>${esc(x.name)}</b><small>${x.id === club.club.id ? 'This club' : 'Separate members, invites and tournaments'}</small></div>`).join('')}</div>
-    <div class="btn-row"><button class="btn" id="newClubBtn">Open a new club</button></div></div>`;
-}
-async function newClub(){
-  const pm = modal(`<h2>Open a new club</h2><p>It starts empty: its own members, invite links, tournaments and Exchange. You are its organizer. Members join with that club's invite link and keep their name and PIN.</p>
-    <div class="field"><label for="ncName">Club name</label><input id="ncName" maxlength="40"></div><div class="field"><label for="ncCode">Setup code</label><input id="ncCode" autocomplete="off"></div>`, [{ label: 'Cancel', value: false }, { label: 'Open club', value: true, primary: true }]);
+// ---------- opening a club (club switching only) ----------
+// Two steps on one sheet: first the Blindrise Club Rules, shown in full, which must be ticked; then the club's name (and,
+// for the founder, the setup code). The server refuses a club without acceptance of this exact rules version.
+const rulesHTML = r => `<div class="cr-rules" tabindex="0" aria-label="Blindrise Club Rules"><h3>${esc(r.title)}</h3>${r.items.map(i => `<p>${esc(i)}</p>`).join('')}<small>Version ${r.v}</small></div>`;
+async function openClubFlow(rules, founder){
+  const step1 = modal(`<div class="cr-sheet"><span class="eyebrow">Step 1 of 2 · Club Rules</span><h2>Before you open a club</h2>
+    <p class="cr-lead">Read the Blindrise Club Rules. You need to accept them to open a club.</p>${rulesHTML(rules)}
+    <label class="cr-agree"><input type="checkbox" id="crAgree"> <span>I have read and accept the Blindrise Club Rules (version ${rules.v}).</span></label>
+    <div class="err" id="crErr" role="alert"></div></div>`, [{ label: 'Cancel', value: false }, { label: 'Continue', value: true, primary: true }]);
+  const cont = document.querySelector('#modalRoot [data-i="1"]');
+  const sync = () => { cont.disabled = !$('crAgree').checked; cont.setAttribute('aria-disabled', String(cont.disabled)); };
+  $('crAgree').onchange = sync; sync();
+  if(!await step1) return;
+  const step2 = modal(`<div class="cr-sheet"><span class="eyebrow">Step 2 of 2 · Your club</span><h2>Name your club</h2>
+    <p class="cr-lead">It starts empty: its own members, invite links, QR code, tournaments and Exchange. You are its owner, and only you see its members and sign-ups.</p>
+    <div class="field"><label for="ncName">Club name</label><input id="ncName" maxlength="40" autocomplete="off"></div>
+    ${founder ? '<div class="field"><label for="ncCode">Setup code</label><input id="ncCode" autocomplete="off"></div>' : ''}</div>`, [{ label: 'Cancel', value: false }, { label: 'Open club', value: true, primary: true }]);
   let name = '', code = '';
-  $('ncName').oninput = e => name = e.target.value; $('ncCode').oninput = e => code = e.target.value;
-  if(!await pm) return;
-  try{ await post('/api/createClub', { name, code: code.trim() }); toast('Club opened. Switch to it from the club button at the top.'); }
+  $('ncName').oninput = e => name = e.target.value; if($('ncCode')) $('ncCode').oninput = e => code = e.target.value;
+  if(!await step2) return;
+  try{ await post('/api/createClub', { name, ...(founder ? { code: code.trim() } : {}), rulesV: rules.v, acceptRules: true }); toast('Club opened. Switch to it from the club button at the top.'); }
   catch(e){ modal(`<h2>That didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
+}
+const newClub = () => openClubFlow(club.platform.rules, true);
+// a business member (published, visible business in the Exchange) may open one club of their own
+function openClubHTML(){
+  if(!club.openClub) return '';
+  return `<div class="card-box cr-offer"><span class="eyebrow">For business members</span><h3>Create your club</h3>
+    <p class="note">Your business is in the Exchange, so you can open your own private club on Blindrise: your members, your QR code, your events. One club per member.</p>
+    <div class="btn-row"><button class="btn red" id="openClubBtn">Create your club</button></div></div>`;
+}
+// ---------- the founder's platform controls (club switching only) ----------
+// Every other club with counts only (members, QR sign-ups): never names or emails. Suspend, restore or cancel, each
+// asking for a reason and logged by the server. Blindrise posts go to every club.
+const CLUB_STATUS = { active: ['Active', ''], suspended: ['Suspended', ' warn'], cancelled: ['Cancelled', ' idle'] };
+function clubListHTML(){
+  if(!club.canCreateClub || !club.platform) return '';
+  const P = club.platform, active = P.clubs.filter(x => x.status !== 'cancelled').length;
+  return `<div class="card-box pf-card"><span class="eyebrow">Blindrise clubs · ${active} open</span>
+    <p class="note">Counts only. You never see another club's members, emails or content.</p>
+    ${P.clubs.length ? `<div class="table-list">${P.clubs.map(x => `<div class="trow pf-row" data-pfclub="${esc(x.id)}"><div class="pf-t"><b>${esc(x.name)}</b><small>${x.members} member${x.members === 1 ? '' : 's'} · ${x.signups} QR sign-up${x.signups === 1 ? '' : 's'}</small></div>
+      <span class="status-pill${CLUB_STATUS[x.status][1]}">${CLUB_STATUS[x.status][0]}</span>
+      ${x.status === 'cancelled' ? '' : `<span class="row-btns">${x.status === 'suspended' ? `<button class="back" data-pfact="unsuspend" data-club="${esc(x.id)}">Restore</button>` : `<button class="back" data-pfact="suspend" data-club="${esc(x.id)}">Suspend</button>`}<button class="back" data-pfact="cancel" data-club="${esc(x.id)}">Cancel club</button></span>`}</div>`).join('')}</div>` : '<p class="note">No other clubs yet.</p>'}
+    <div class="btn-row"><button class="btn" id="newClubBtn">Open a new club</button></div>
+    <details class="pf-log"><summary>Moderation log · ${P.log.length}</summary>${P.log.length ? `<div class="table-list">${P.log.map(e => `<div class="trow"><b>${esc({ suspend: 'Suspended', unsuspend: 'Restored', cancel: 'Cancelled' }[e.action] || e.action)} · ${esc(e.clubName)}</b><small>${new Date(e.at).toLocaleString()} · by ${esc(e.byName)}${e.reason ? ' · ' + esc(e.reason) : ''}</small></div>`).join('')}</div>` : '<p class="note">Nothing yet. Every suspend, restore and cancel is recorded here.</p>'}</details></div>
+  <div class="card-box pf-card"><span class="eyebrow">Blindrise broadcast</span>
+    <p class="note">Post once: it shows in every club, to every member, marked Blindrise. Nothing comes back from the clubs.</p>
+    <div class="field"><label for="bcKind">Type</label><select id="bcKind"><option value="announcement">Announcement</option><option value="event">Event</option></select></div>
+    <div class="field"><label for="bcTitle">Title</label><input id="bcTitle" maxlength="80"></div>
+    <div class="field"><label for="bcBody">Message</label><textarea id="bcBody" maxlength="600" rows="3"></textarea></div>
+    <div class="field"><label for="bcWhen">Date and time (needed for an event)</label><input id="bcWhen" type="datetime-local"></div>
+    <div class="btn-row"><button class="btn red" id="bcPost">Post to every club</button></div>
+    ${(club.blindrise || []).length ? `<div class="table-list">${club.blindrise.map(b => `<div class="trow"><b>${esc(b.title)}</b><small>${b.kind === 'event' ? 'Event' : 'Announcement'} · posted ${new Date(b.at).toLocaleDateString()}</small><button class="back" data-unpost="${esc(b.id)}">Remove</button></div>`).join('')}</div>` : ''}</div>`;
+}
+async function moderateClub(id, action){
+  const x = club.platform.clubs.find(c => c.id === id); if(!x) return;
+  const what = { suspend: ['Suspend', `Members of ${x.name} see a notice instead of the club, a running tournament is paused, and its QR join page and invite links stop. Nothing is deleted.`],
+    unsuspend: ['Restore', `${x.name} opens again for its members. A paused tournament stays paused until the club's owner resumes it.`],
+    cancel: ['Cancel club', `${x.name} closes for good: its members lose access and it can't be opened again. Its records are kept. This can't be undone.`] }[action];
+  const pm = modal(`<h2>${esc(what[0])} ${esc(x.name)}?</h2><p>${esc(what[1])}</p><div class="field"><label for="pfReason">Reason (kept in the log)</label><input id="pfReason" maxlength="300"></div>`, [{ label: 'Back', value: false }, { label: esc(what[0]), value: true, primary: true }]);
+  let reason = ''; $('pfReason').oninput = e => reason = e.target.value;
+  if(!await pm) return;
+  try{ await post('/api/clubModerate', { club: id, action, reason }); toast(action === 'suspend' ? 'Club suspended.' : action === 'cancel' ? 'Club cancelled.' : 'Club restored.'); }
+  catch(e){ modal(`<h2>That didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
+}
+async function postBroadcast(){
+  const w = $('bcWhen').value, body = { kind: $('bcKind').value, title: $('bcTitle').value, body: $('bcBody').value, when: w ? new Date(w).getTime() : null };
+  try{ await post('/api/platformPost', body); toast('Posted to every club.'); $('bcTitle').value = ''; $('bcBody').value = ''; $('bcWhen').value = ''; }
+  catch(e){ modal(`<h2>That didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
+}
+// Blindrise posts, shown in every club and always marked as Blindrise's, never the club's own
+function blindriseHTML(){
+  const list = club.blindrise || []; if(!list.length) return '';
+  return list.map(b => `<article class="card-box br-post" aria-label="From Blindrise"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">${b.kind === 'event' ? 'Official event' : 'Official announcement'}</span></div>
+    <h3>${esc(b.title)}</h3>${b.when ? `<p class="br-when">${esc(when(b.when))}</p>` : ''}<p>${esc(b.body)}</p></article>`).join('');
+}
+// a member of a suspended club gets this instead of the club
+function suspendedHTML(){
+  const others = (club.clubs || []).filter(x => x.id !== club.club.id && !x.suspended);
+  return `<section class="card-box cs-notice" role="status"><span class="cs-ic" aria-hidden="true">!</span><span class="eyebrow">Club suspended</span>
+    <h2>${esc(club.club.name)} is suspended</h2><p>Blindrise has suspended this club for now. Its members, tournaments and records are kept safe, but nothing in it can be used until it is restored.</p>
+    ${others.length ? `<div class="btn-row"><button class="btn red" id="csSwitch">Go to ${esc(others[0].name)}</button></div>` : ''}</section>` + blindriseHTML();
 }
 // Business Club + Opportunity Club: off until the owner opens them; while off only the owner sees them (to try them out)
 function clubsSwitchHTML(){
@@ -778,6 +848,11 @@ function wireLobby(){
   });
   on('inviteBtn', askInvite);
   on('newClubBtn', newClub);
+  on('openClubBtn', () => openClubFlow(club.openClub.rules, false));
+  on('bcPost', postBroadcast);
+  on('csSwitch', () => { const x = club.clubs.find(c => c.id !== club.club.id && !c.suspended); if(x){ local.set('club', x.id); location.replace('/'); } });
+  document.querySelectorAll('[data-pfact]').forEach(b => b.onclick = () => moderateClub(b.dataset.club, b.dataset.pfact));
+  document.querySelectorAll('[data-unpost]').forEach(b => b.onclick = async () => { try{ await post('/api/platformUnpost', { id: b.dataset.unpost }); }catch(e){ toast(e.message); } });
   on('lateInvite', e => { e.preventDefault(); askInvite(); });
   on('againBtn', () => {
     const T = club.tourney, d = new Date();
