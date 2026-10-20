@@ -96,12 +96,12 @@ A match view carries `scores`, `hands` and `seq`, plus `events` (each with `wort
 | 2. All Fives, Block, Draw presets | Built, with fixtures (`docs/domino/RULES.md`) |
 | 3. Heads-up and partnership | Built |
 | 4. Teams and physical tables | Built: random or manual pairs; table allocation |
-| 5. Mobile Smart Scorepad | Next: UI on top of the contracts above |
+| 5. Mobile Smart Scorepad | Built: full-screen pad (`public/domino.js`), +points buttons, hand sheet with pips, undo, confirm and dispute; taps resent after a reconnect |
 | 6. Append-only events, undo, corrections, idempotency | Built |
 | 7. Real-time, server-authoritative | Built: WS push and full state on reconnect |
 | 8. Dual verification, disputes, override, audit | Built |
 | 9. Single elimination and round-robin pods | Built: pods to a playoff is next |
-| 10. Director controls and synced timers | Built server-side; UI next |
+| 10. Director controls and synced timers | Built: Director card (create, start, cancel, override, log); clocks from server `endsAt` |
 
 Phase 2 (not started): networking profiles with privacy controls, overall club rankings built from placements (never from mixing raw poker and domino scores), sponsor display, read-only TV view, the Blindrise Open for dominoes, and pods feeding a playoff.
 
@@ -127,7 +127,7 @@ Phase 2 (not started): networking profiles with privacy controls, overall club r
 | Club isolation: another club's member gets 403; a match id from another club is not found there | `t_domino` |
 | Verification, dispute, override, bracket advancement with tables | both |
 | Poker regression | full `npm test` and the UI suite; poker view checked unchanged after a domino tournament (`t_domino`) |
-| Mobile layouts | with the scorepad UI (next) |
+| Mobile layouts | `test/ui/t_domino_ui.js` at 390x844 and 320x568: no sideways scroll, live update on the other phone, dual confirm |
 
 ## 9. Risks and recommendation
 
@@ -136,4 +136,4 @@ Phase 2 (not started): networking profiles with privacy controls, overall club r
 - **Legal:** same footing as poker: no money, no buy-ins, no prizes in the app. Hosting stays with Blindrise per the 2026-10-20 decision.
 - **One process:** like poker, everything runs in one instance. A deploy during a live domino round restarts clocks from stored `endsAt` values, and the stored records survive.
 
-**Recommendation: NO-GO for production enablement** until the scorepad UI is built, Muse PASSes, and the owner has played on Preview. **GO** to continue on the branch and stage on Preview.
+**Recommendation: NO-GO for production enablement** until Muse PASSes and the owner has played on Preview. **GO** to continue on the branch and stage on Preview.
