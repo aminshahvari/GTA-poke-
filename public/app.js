@@ -743,6 +743,7 @@ function extrasNote(T){
 const breaksOn = () => !!(club && club.features && club.features.breaks);
 const breakNote = T => breaksOn() && T ? ` A ${T.breakMin || 5}-minute break after every 10 levels; play resumes by itself.` : '';
 function sponsorFields(P, opt){
+  if(club.events) return ''; // the Blindrise Open has no Exchange to pick a sponsor from
   const S = club.sponsors;
   if(!S || !S.list.length) return `<p class="note">Tournament sponsor: when a member publishes their business in the Exchange, you can pick it here to show on the tables at the start and during breaks.</p>`;
   const cur = P ? (P.sponsor ? P.sponsor.uid : '') : S.spotlight || '';
