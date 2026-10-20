@@ -212,6 +212,11 @@ function onClub(c){
   lastStatus = st;
   if(c.myTable && c.myTable !== lastMyTable && st === 'running'){ watchTid = c.myTable; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid: watchTid }); }
   lastMyTable = c.myTable;
+  // back from the sponsor's page: the break is over, so the player goes back to their seat
+  if(leftForSponsor && !(c.tourney && c.tourney.id === leftForSponsor && c.tourney.status === 'running' && (c.tourney.breakUntil || c.tourney.paused))){
+    if(view === 'lobby' && c.myTable && st === 'running') openTable(c.myTable);
+    leftForSponsor = null;
+  }
   const typing = document.activeElement && $('lobbyBody').contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(view === 'lobby'){ showScreen('lobby'); if(tab !== 'learn' && tab !== 'biz' && !typing) renderLobby(); } else renderTable();
 }
@@ -1884,8 +1889,12 @@ const mmss = ms => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60
 // The tournament break card (every 10 levels, server/club.js): over the middle of the felt once this table's hand is over,
 // with the time left and the sponsor if there is one. A hand still being played is never covered.
 let brkKey = '';
+// a break card's sponsor opens its Exchange page when tapped (only where members can see the Exchange); the player is
+// brought back to their table when the break ends
+let leftForSponsor = null;
+const sponsorTap = () => !!(club && club.features && club.features.clubs);
 function sponsorHTML(sp, big){
-  return `<div class="sp-card${big ? ' big' : ''}"><span class="sp-logo" data-splogo></span><span class="sp-txt"><small>${big ? 'Presented by' : 'Tonight\'s tournament is presented by'}</small><b>${esc(sp.name)}</b>${big ? `<small class="sp-cat">${esc(sp.categoryLabel)}${sp.area ? ' · ' + esc(sp.area) : ''}</small>` : ''}</span></div>`;
+  return `<div class="sp-card${big ? ' big' : ''}"${big && sponsorTap() ? ` role="button" tabindex="0" data-spbiz="${esc(sp.uid)}" aria-label="See ${esc(sp.name)} in the Exchange"` : ''}><span class="sp-logo" data-splogo></span><span class="sp-txt"><small>${big ? 'Presented by' : 'Tonight\'s tournament is presented by'}</small><b>${esc(sp.name)}</b>${big ? `<small class="sp-cat">${esc(sp.categoryLabel)}${sp.area ? ' · ' + esc(sp.area) : ''}</small>` : ''}${big && sponsorTap() ? '<small class="sp-more">See their page ›</small>' : ''}</span></div>`;
 }
 function fillLogo(el, sp){
   const slot = el.querySelector('[data-splogo]');
@@ -1905,6 +1914,8 @@ function breakUI(T, d, now){
       <small class="brk-sub">Play resumes by itself · Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}</small>
       ${T.sponsor ? sponsorHTML(T.sponsor, true) : ''}</div>`;
     if(T.sponsor) fillLogo(el, T.sponsor);
+    const sb2 = el.querySelector('[data-spbiz]');
+    if(sb2){ const go = () => { leftForSponsor = T.id; view = 'lobby'; showScreen('lobby'); window.BizClub.openBiz(sb2.dataset.spbiz); }; sb2.onclick = go; sb2.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } }; }
     el.hidden = false; el.dataset.sig = '';
   }
   // placed again whenever the seats move (the table can arrive after the card, or players get moved)

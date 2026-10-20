@@ -2105,6 +2105,9 @@ body{background:var(--lx-ink)}
 @keyframes spnSheen{to{transform:translateX(100%)}}
 @media (prefers-reduced-motion:reduce){.brk-card,.spn,.spn::after{animation:none}.spn{transition:none}}
 .brk-note{margin:6px 0 2px;color:var(--lx-gold-hi,#f1dfb0)}
+.brk [data-spbiz]{pointer-events:auto;cursor:pointer;transition:opacity .2s}
+.brk [data-spbiz]:active{opacity:.75}
+.sp-txt small.sp-more{text-transform:none;letter-spacing:0;font-size:12px;margin-top:2px}
 /* the card sits under the seats (same layer, earlier in the page), so a player's seat always shows on top of it;
    the chips left from the last pot are hidden while it shows */
 #tableArea.on-break #fx,#tableArea.on-break .center .pot{visibility:hidden}
