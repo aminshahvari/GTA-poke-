@@ -53,9 +53,9 @@ function start(sw){
   assert.strictEqual((await s.ok('joinInfo', { slug: 'blindrise' })).club, true);
   assert.deepStrictEqual((await s.view(O)).joinQr.map(c => c.slug), ['blindrise']);
   pass('club switching off (rollback): only the main club keeps a join page; the other club\'s page is not active');
-  for(const p of ['clubModerate', 'platformPost', 'platformUnpost', 'createClub']) assert.strictEqual((await s.call(p, { club: cid, action: 'suspend', title: 'x', body: 'y' }, O)).status, 404, p);
-  assert.strictEqual((await s.view(O)).blindrise, undefined);
-  pass('club switching off (rollback): the platform calls do not exist (404) and no Blindrise posts are sent');
+  for(const p of ['clubModerate', 'platformPost', 'platformUnpost', 'createClub', 'eventsOpen', 'eventJoin', 'eventLeave']) assert.strictEqual((await s.call(p, { club: cid, action: 'suspend', title: 'x', body: 'y' }, O)).status, 404, p);
+  assert.strictEqual((await s.view(O)).blindrise, undefined); assert.strictEqual((await s.view(O)).bevent, undefined);
+  pass('club switching off (rollback): the platform calls do not exist (404) and no Blindrise posts or Blindrise Open card are sent');
   await s.stop();
   console.log(`t_join_qr_clubs: ${n} ok, 0 failed`); try{ fs.unlinkSync(DATA); }catch(e){} process.exit(0);
 })().catch(e => { console.error(e); try{ fs.unlinkSync(DATA); }catch(x){} process.exit(1); });

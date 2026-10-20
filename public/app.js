@@ -202,7 +202,7 @@ function onClub(c){
   club = c; clockSkew = c.now - Date.now();
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   if(c.clubSwitching) clubSwitching(c);
-  $('meChip').innerHTML = `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name)}</span></button><button class="back" id="outBtn">Sign out</button>`;
+  $('meChip').innerHTML = `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
   $('meBtn').onclick = () => openProfile(c.me.id);
   if($('clubBtn')) $('clubBtn').onclick = pickClub;
   $('outBtn').onclick = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
@@ -254,7 +254,7 @@ function renderLobby(){
   $('tabs').hidden = !!club.suspended;
   if(club.suspended){ document.querySelector('.app').classList.remove('wide'); body.innerHTML = suspendedHTML(); wireLobby(); return; }
   // Business Club and Opportunity Club stay hidden from members until the owner opens them (Director tab); the owner can always preview
-  const clubsOn = !!(club.features && club.features.clubs), clubsVisible = clubsOn || club.me.owner;
+  const clubsOn = !!(club.features && club.features.clubs), clubsVisible = !club.events && (clubsOn || club.me.owner);
   const bizTab = document.querySelector('#tabs [data-tab="biz"]');
   bizTab.hidden = !clubsVisible;
   if(tab === 'biz' && !clubsVisible) tab = 'event';
@@ -294,8 +294,8 @@ function renderHome(body, clubsOn, showClubs){
   if(main){ main.classList.add('poker-hero'); main.insertAdjacentHTML('afterbegin', HERO_ART); }
   // members get the practice table on Home too (the owner has it in Director); not while seated in a running tournament
   const seated = !!(club.myTable && club.tourney && club.tourney.status === 'running');
-  const extra = document.createElement('div'); extra.innerHTML = (clubsOn ? '' : comingHTML()) + (club.me.owner || seated ? '' : demoCard()) + picNudgeHTML();
-  body.innerHTML = memberHomeHTML(clubsOn || club.me.owner) + blindriseHTML() + openClubHTML() + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
+  const extra = document.createElement('div'); extra.innerHTML = (clubsOn || club.events ? '' : comingHTML()) + (club.me.owner || seated ? '' : demoCard()) + picNudgeHTML();
+  body.innerHTML = memberHomeHTML(clubsOn || club.me.owner) + beventHTML() + blindriseHTML() + openClubHTML() + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
   body.append(...cards.slice(0, n), ...[...extra.children]);
   if(showClubs){
     const biz = document.createElement('section'); biz.className = 'hsec hsec-biz'; biz.setAttribute('aria-labelledby', 'hs-biz');
@@ -324,10 +324,10 @@ function memberHomeHTML(clubsOpen){
     ? `<button type="button" class="lx-door lx-${k}" data-lx="${k}"><span class="lx-door-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${LX_IC[k]}</svg></span><span class="lx-door-t"><b>${title}</b><small>${sub}</small></span><svg class="lx-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`
     : `<div class="lx-door lx-${k} soon" aria-disabled="true"><span class="lx-door-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${LX_IC[k]}</svg></span><span class="lx-door-t"><b>${title}</b><small>${sub}</small></span><em>Opening soon</em></div>`;
   return `<section class="lx-hello" aria-label="The Lounge">
-    <div class="lx-brandline"><span class="eyebrow">Blindrise · Private Members Club</span><span class="lx-lounge">The Lounge</span></div>
+    <div class="lx-brandline"><span class="eyebrow">${club.events ? 'Blindrise · Open to every club' : 'Blindrise · Private Members Club'}</span><span class="lx-lounge">${club.events ? 'The Open' : 'The Lounge'}</span></div>
     <div class="lx-id">${avHTML(me.id, me.name, 'big')}<div class="lx-id-t"><span class="lx-greet">${greet},</span><h2>${esc(me.name.split(' ')[0])}</h2>
       <div class="lx-id-meta">${me.owner ? '<span class="lx-role">Club director</span>' : '<span class="lx-role">Member</span>'}${tierPill(m)}${pts != null ? `<span class="lx-pts"><b class="num">${fmt(pts)}</b> points</span>` : ''}</div></div></div>
-    <div class="lx-doors">${door('poker', 'The Strategy Table', 'Poker · ' + poker, true)}${door('biz', 'The Exchange', "Business Club · members' businesses", clubsOpen)}${door('opp', 'The Bulletin', 'Opportunity Club · ask for help, or offer it', clubsOpen)}${door('scan', 'Business Card Scanner', 'Turn a business card into your profile', clubsOpen)}</div>
+    <div class="lx-doors">${door('poker', club.events ? 'Blindrise Open' : 'The Strategy Table', 'Poker · ' + poker, true)}${club.events ? '' : door('biz', 'The Exchange', "Business Club · members' businesses", clubsOpen) + door('opp', 'The Bulletin', 'Opportunity Club · ask for help, or offer it', clubsOpen) + door('scan', 'Business Card Scanner', 'Turn a business card into your profile', clubsOpen)}</div>
     <p class="lx-motto"><b>Pull Up a Chair.</b> Good Company. Meaningful Connections.</p>
   </section>`;
 }
@@ -496,8 +496,8 @@ function boardHTML(){
     agg.set(r.uid, a);
   }));
   const rows = [...agg.values()].sort((a, b) => b.pts - a.pts || b.wins - a.wins);
-  if(boardSeg === 'prizes') return prizesHTML();
-  return `<div class="seg2">${[['board','Leaderboard'],['prizes','Prizes']].map(([k, l]) => `<button data-bseg="${k}" aria-pressed="${boardSeg === k}">${l}</button>`).join('')}</div><div class="card-box"><span class="eyebrow">Recognition for good play</span>
+  if(boardSeg === 'prizes' && !club.events) return prizesHTML();
+  return `${club.events ? '' : `<div class="seg2">${[['board','Leaderboard'],['prizes','Prizes']].map(([k, l]) => `<button data-bseg="${k}" aria-pressed="${boardSeg === k}">${l}</button>`).join('')}</div>`}<div class="card-box"><span class="eyebrow">Recognition for good play</span>
     <div class="seg2 small">${[['week','This week'],['month','30 days'],['all','All time']].map(([k, l]) => `<button data-range="${k}" aria-pressed="${boardRange === k}">${l}</button>`).join('')}</div>
     ${rows.length ? `<table class="tbl dark"><thead><tr><th>#</th><th>Player</th><th>Played</th><th>Wins</th><th>Cashes</th><th>Points</th></tr></thead><tbody>
       ${rows.map((r, i) => `<tr class="${r.uid === club.me.id ? 'me' : ''}"><td>${i + 1}</td><td><span class="lb-name" data-prof="${esc(r.uid)}">${avHTML(r.uid, nameOf(r.uid), 'xs')}${esc(nameOf(r.uid))}</span></td><td class="num">${r.played}</td><td class="num">${r.wins}</td><td class="num">${r.cashes}</td><td class="num">${r.pts}</td></tr>`).join('')}</tbody></table>`
@@ -520,7 +520,9 @@ const demoCard = () => `<div class="card-box demo-box"><span class="eyebrow">Dem
   <p>Play a real game at a 6-max table against 5 practice players, with the same buttons, chat bubbles, antes and clock as a club tournament. It runs only on your phone: nothing is saved and no points are given.</p>
   <div class="btn-row"><button class="btn red big" data-demo>Open demo table</button></div></div>`;
 function directorHTML(){
-  return newsHTML() + demoCard() + conflictsHTML() + clubListHTML() + joinQrHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
+  // the Blindrise Open: no Exchange, invites or prizes to run there, only its tournaments and players
+  if(club.events) return conflictsHTML() + directorMainHTML();
+  return newsHTML() + demoCard() + conflictsHTML() + clubListHTML() + eventsRunHTML() + joinQrHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
 }
 // ---------- the owner's join QR (Director) ----------
 // Each club the owner runs gets a QR code of its public join address, drawn here on the phone from that address only
@@ -674,6 +676,42 @@ async function postBroadcast(){
   try{ await post('/api/platformPost', body); toast('Posted to every club.'); $('bcTitle').value = ''; $('bcBody').value = ''; $('bcWhen').value = ''; }
   catch(e){ modal(`<h2>That didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
 }
+// ---------- the Blindrise Open (club switching only) ----------
+// Blindrise tournaments for members of every club. Each club shows this card: what it is, when, and how many have
+// registered (never who). Registering takes you into the Blindrise Open, where you play under your table name.
+function beventHTML(){
+  const e = club.bevent; if(!e) return '';
+  const live = e.status === 'running';
+  const sub = live ? `Live now · ${e.remaining} of ${e.count} players left` : e.startAt ? esc(when(e.startAt)) : 'Starts when the director is ready';
+  const acts = e.playing ? '<button class="btn red" data-bev="go">Go to your table</button>'
+    : e.registered ? `<button class="btn red" data-bev="go">Open</button>${live ? '' : '<button class="btn" data-bev="leave">Unregister</button>'}`
+    : e.open ? '<button class="btn red" data-bev="join">Register</button>' : '';
+  return `<article class="card-box br-post bo-card" aria-label="Blindrise Open"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">Blindrise Open · every club</span>${live ? '<span class="status-pill live">LIVE</span>' : ''}</div>
+    <h3>${esc(e.name)}</h3><p class="br-when">${sub}</p>
+    <p class="bo-meta"><span><b class="num">${e.count}</b> registered</span><span><b class="num">${fmt(e.stack)}</b> chips</span><span><b class="num">${e.levelMin}</b>-min levels</span></p>
+    ${e.registered && !e.playing ? `<p class="bo-in">${live ? 'You played in this one.' : "You're registered."}</p>` : '<p class="note">Play members of every Blindrise club. Everyone plays under their table name.</p>'}
+    ${acts ? `<div class="btn-row">${acts}</div>` : ''}</article>`;
+}
+const goEvents = () => { local.set('club', 'events'); location.replace('/'); };
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-bev]'); if(!b || !club) return;
+  const k = b.dataset.bev;
+  if(k === 'go') return goEvents();
+  try{
+    if(k === 'join'){
+      if(!await modal(`<h2>Register for ${esc(club.bevent.name)}?</h2><p>You'll play members of every Blindrise club under your table name, <b>${esc(club.me.name)}</b>. Nothing else about you is shown to them. If another player's name looks like yours, your club's name is added so you can be told apart.</p>`, [{ label: 'Not now', value: false }, { label: 'Register', value: true, primary: true }])) return;
+      await post('/api/eventJoin', {}); toast(`You're registered for ${club.bevent.name}.`);
+    }
+    if(k === 'leave'){ await post('/api/eventLeave', {}); toast('You are no longer registered.'); }
+  }catch(err){ modal(`<h2>That didn't work</h2><p>${esc(err.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
+});
+// the founder runs the Blindrise Open from its own space, with the Director he knows
+function eventsRunHTML(){
+  if(!club.canRunEvents) return '';
+  return `<div class="card-box pf-card"><span class="eyebrow">Blindrise Open</span>
+    <p class="note">Tournaments members of every club can join. They register from their own club and play under their table names. The registration list stays with Blindrise: clubs only see how many have registered.</p>
+    <div class="btn-row"><button class="btn red" id="runEventsBtn">Run the Blindrise Open</button></div></div>`;
+}
 // Blindrise posts, shown in every club and always marked as Blindrise's, never the club's own
 function blindriseHTML(){
   const list = club.blindrise || []; if(!list.length) return '';
@@ -714,10 +752,10 @@ function sponsorFields(P, opt){
 }
 function directorMainHTML(){
   const T = club.tourney;
-  const members = `<div class="card-box"><span class="eyebrow">Members · ${club.members.length}</span>
-    <div class="btn-row"><button class="btn red" id="inviteBtn">Create invite link</button><button class="btn" id="memInvBtn">${club.membersInvite ? 'Members can invite: on' : 'Members can invite: off'}</button></div>
+  const members = `<div class="card-box"><span class="eyebrow">${club.events ? 'Players' : 'Members'} · ${club.members.length}</span>
+    ${club.events ? '<p class="note">Members of every club register from their own club. Everyone shows under their table name; names that look alike get their club\'s name.</p>' : `<div class="btn-row"><button class="btn red" id="inviteBtn">Create invite link</button><button class="btn" id="memInvBtn">${club.membersInvite ? 'Members can invite: on' : 'Members can invite: off'}</button></div>
     <p class="note">Pick a <b>group link</b> for a WhatsApp or Telegram group (up to 100 people, 30 days; it stays the same link until you cancel it), or a <b>personal link</b> for one friend. They open it, pick a name and PIN, and they're in.</p>
-    ${club.invites && club.invites.length ? `<div class="table-list">${club.invites.map(i => `<div class="trow"><b>${i.multi ? (i.by && i.by !== club.me.id ? esc(nameOf(i.by)) + "'s link" : 'Group link') : 'Unused invite'}</b><small>${i.multi ? `${i.used} of ${i.max} joined · until ${new Date(i.expiresAt).toLocaleDateString()}` : new Date(i.createdAt).toLocaleDateString()}</small><button class="back" data-copy="${esc(i.code)}" data-group="${i.multi ? 1 : ''}">Copy</button><button class="back" data-revoke="${esc(i.code)}">Cancel</button></div>`).join('')}</div>` : ''}
+    ${club.invites && club.invites.length ? `<div class="table-list">${club.invites.map(i => `<div class="trow"><b>${i.multi ? (i.by && i.by !== club.me.id ? esc(nameOf(i.by)) + "'s link" : 'Group link') : 'Unused invite'}</b><small>${i.multi ? `${i.used} of ${i.max} joined · until ${new Date(i.expiresAt).toLocaleDateString()}` : new Date(i.createdAt).toLocaleDateString()}</small><button class="back" data-copy="${esc(i.code)}" data-group="${i.multi ? 1 : ''}">Copy</button><button class="back" data-revoke="${esc(i.code)}">Cancel</button></div>`).join('')}</div>` : ''}`}
     <div class="table-list">${club.members.map(m => { const hh = club.households && club.households[m.id], mates = hh ? club.members.filter(x => x.id !== m.id && club.households[x.id] === hh).map(x => x.name) : [];
       return `<div class="trow"><b>${esc(m.name)}</b><small>${m.role === 'owner' ? 'Owner' : 'Member since ' + new Date(m.createdAt).toLocaleDateString()}${m.invitedBy && m.invitedBy !== club.me.id ? ' · invited by ' + esc(nameOf(m.invitedBy)) : ''}${mates.length ? ` · Home with ${esc(mates.join(', '))}` : ''}</small><span class="row-btns">${m.role === 'owner' ? '' : `<button class="back" data-mute="${esc(m.id)}" data-on="${(club.mutedIds || []).includes(m.id) ? 1 : 0}">${(club.mutedIds || []).includes(m.id) ? 'Unmute' : 'Mute'}</button>`}<button class="back" data-home="${esc(m.id)}">Home</button>${m.role === 'owner' ? '' : `<button class="back" data-remove="${esc(m.id)}">Remove</button>`}</span></div>`; }).join('')}</div>
     <div class="btn-row"><button class="btn" id="chatOffBtn">${club.chatOff ? 'Turn table chat on' : 'Turn table chat off'}</button></div>
@@ -870,6 +908,7 @@ function wireLobby(){
   });
   on('inviteBtn', askInvite);
   on('newClubBtn', newClub);
+  on('runEventsBtn', async () => { try{ await post('/api/eventsOpen', {}); goEvents(); }catch(err){ modal(`<h2>That didn't work</h2><p>${esc(err.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); } });
   on('openClubBtn', () => openClubFlow(club.openClub.rules, false));
   on('bcPost', postBroadcast);
   on('csSwitch', () => { const x = club.clubs.find(c => c.id !== club.club.id && !c.suspended); if(x){ local.set('club', x.id); location.replace('/'); } });
@@ -1328,7 +1367,8 @@ function cardHTML(c, cls = '', extra = ''){
   return `<div class="card ${red ? 'red' : ''} ${cls}" ${extra}><span class="r">${r === 'T' ? '10' : r}</span><span class="s1">${E.SUITS[s]}</span><span class="s2">${E.SUITS[s]}</span></div>`;
 }
 // (a one-word name shows its first two letters, Dev as De: a lone D on an avatar reads as the dealer button)
-const initials = n => { const w = String(n || '?').trim().split(/\s+/); return w.length > 1 ? w.slice(0, 2).map(x => x[0]).join('').toUpperCase() : w[0].slice(0, 1).toUpperCase() + w[0].slice(1, 2).toLowerCase(); };
+// a Blindrise Open club tag, "AIi (HC)", is not part of the name
+const initials = n => { const w = String(n || '?').replace(/ \([^()]*\)$/, '').trim().split(/\s+/); return w.length > 1 ? w.slice(0, 2).map(x => x[0]).join('').toUpperCase() : w[0].slice(0, 1).toUpperCase() + w[0].slice(1, 2).toLowerCase(); };
 const chipsIcon = (n = 3) => `<span class="chips">${'<i></i>'.repeat(n)}</span>`;
 const COLORS = ['#3b6fb6','#7a5aa6','#2f8a8f','#3d8a62','#b07a2a','#5a6fc2','#4b6680','#8a6a5c','#b0505a'];
 const colorOf = uid => { let h = 0; for(const c of String(uid)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
@@ -1485,6 +1525,9 @@ function seatNicks(all){
   const w = n => String(n).trim().split(/\s+/);
   const at = (n, L) => { const x = w(n); if(x.length < 2) return x[0] || ''; if(L === 0) return x[0]; const last = x[x.length - 1]; return x[0] + ' ' + (/^\d+$/.test(last) || last.length <= 3 ? last : last[0].toUpperCase() + '.'); };
   return n => {
+    // a Blindrise Open name with its club tag, "AIi (HC)": the tag is what tells two look-alike names apart, so it stays
+    const tg = /^(.*\S) (\([^()]*\))$/.exec(String(n));
+    if(tg) return (tg[1].length <= 10 ? tg[1] : w(tg[1])[0]) + ' ' + tg[2];
     if(String(n).trim().length <= 10) return n;
     const taken = new Set(all.filter(o => o !== n).flatMap(o => [String(o).trim(), at(o, 0), at(o, 1)].map(t => t.toLowerCase())));
     for(const L of [0, 1]){ const c = at(n, L); if(!taken.has(c.toLowerCase())) return c; }
