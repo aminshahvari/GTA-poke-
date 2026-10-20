@@ -2104,3 +2104,10 @@ body{background:var(--lx-ink)}
 .cs-ic{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:24px;color:#1a1408;background:var(--lx-gold-grad)}
 .cs-tag{color:var(--lx-gold-hi);font-weight:500;font-size:12px;margin-left:6px}
 #modalRoot .cr-rules,#modalRoot .cr-rules p,#modalRoot .cr-rules h3,#modalRoot .cr-agree{text-align:left}
+/* Blindrise Open card (every club): counts only, gold like the other Blindrise posts */
+.bo-card .status-pill{margin-left:auto}
+.bo-meta{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--lx-mute)!important;font-size:13px}
+.bo-meta b{color:var(--lx-ivory);font-weight:600}
+.bo-in{color:var(--lx-gold-hi)!important;font-weight:600}
+.bo-card .btn-row{margin-top:4px}
+@media (max-width:360px){ .club-btn{max-width:96px} }
