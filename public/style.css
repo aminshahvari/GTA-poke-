@@ -2069,3 +2069,7 @@ body{background:var(--lx-ink)}
 .club-pick{text-align:left;background:rgba(255,255,255,.04);color:var(--text);border:1px solid rgba(230,187,104,.25);border-radius:12px;padding:12px 14px;font-size:15px;font-weight:600}
 .club-pick.on{border-color:var(--lx-gold,#e6bb68);box-shadow:inset 0 0 0 1px var(--lx-gold,#e6bb68)}
 .club-pick.on::after{content:' · current';color:var(--muted);font-weight:500;font-size:13px}
+
+/* disconnect protection (Issue #9): the acting player is offline and on their protection time */
+#game .badge.dc,.badge.dc{background:#b4561c;color:#fff4ea;box-shadow:none}
+#game .shot i.dc,.shot i.dc{background:#f08a3c}

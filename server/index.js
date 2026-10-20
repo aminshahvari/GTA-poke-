@@ -444,11 +444,25 @@ function notice(c, kind, t){
   }
   if(kind === 'start') push.notify(t.regs, { title: `${t.name} is starting!`, body: 'Cards are in the air. Tap to take your seat.', tag: 'start-' + t.id, ttl: 600 }).catch(() => {});
 }
+// Is this player connected to this club right now (for disconnect protection, Issue #9)? A closed socket is caught at once
+// (see the close handler below). A dropped phone connection can leave its socket looking open for up to a minute, so a
+// socket we have not heard from lately is pinged, and one that leaves that ping unanswered for a few seconds counts as gone.
+// (tests, FAST=1 only, can shorten that with DC_GONE_MS)
+const GONE_MS = process.env.FAST === '1' && +process.env.DC_GONE_MS || 5000, QUIET_MS = Math.min(2000, GONE_MS / 3);
+function online(c, uid){
+  const now = Date.now();
+  for(const ws of sockets){
+    if(!ws.user || ws.ctx !== c || ws.user.id !== uid || ws.readyState !== 1) continue;
+    if(!(ws.probed > ws.heard) && now - ws.heard > QUIET_MS){ ws.probed = now; try{ ws.ping(); }catch(e){} }
+    if(!(ws.probed > ws.heard) || now - ws.probed < GONE_MS) return true;
+  }
+  return false;
+}
 // every club context (only 'main' with club switching off) gets its own live state and hooks
 function wire(c){
   c.memo = null; c.clubTimer = null; c.chatLogs = new Map(); c.linkCache = new Map();
   c.club.setLinker((a, b) => linkReason(c, a, b));
-  c.club.setHooks({ onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
+  c.club.setHooks({ isConnected: uid => online(c, uid), onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
 }
 clubs.get(clubs.MAIN);
 
@@ -459,10 +473,12 @@ wss.on('connection', (ws, req) => {
   if(origin && originHost !== req.headers.host){ ws.close(1008, 'origin'); return; }
   sockets.add(ws);
   ws.ip = ipOf(req);
-  ws.isAlive = true;
-  ws.on('pong', () => ws.isAlive = true);
-  ws.on('close', () => sockets.delete(ws));
+  ws.isAlive = true; ws.heard = Date.now();
+  ws.on('pong', () => { ws.isAlive = true; ws.heard = Date.now(); });
+  // a closing socket of the player to act gives them their disconnect protection straight away (Issue #9)
+  ws.on('close', () => { sockets.delete(ws); if(ws.user && ws.ctx) ws.ctx.club.offline(ws.user.id); });
   ws.on('message', raw => {
+    ws.heard = Date.now();
     if(stopping) return; // shutting down: no more actions
     let m; try{ m = JSON.parse(raw); }catch(e){ return; }
     if(!m || typeof m !== 'object') return;

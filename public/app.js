@@ -1654,13 +1654,15 @@ function renderTable(){
     if(res && p.won > 0) badge = '<span class="badge won">Winner</span>';
     else if(res && res.showdown && p.cat) badge = `<span class="badge hand">${esc(p.cat)}</span>`;
     else if(p.away) badge = '<span class="badge">Away</span>';
+    // the player to act lost their connection: the server gave them 30 seconds of protection time (Issue #9)
+    else if(acting && d.dcProtect) badge = '<span class="badge dc" title="Disconnected · protection time">Disconnected</span>';
     // the seat whose turn it is shows no pill from its last action (that CALL is history); the gold ring marks it
     else if(p.act && !acting){ const amt = (p.act === 'Raise' || p.act === 'Bet') ? ' ' + fmt(p.lastAmt) : ''; badge = `<span class="badge act-${p.act.toLowerCase().replace(/[^a-z]+/g, '-')}">${esc(p.act)}${amt}</span>`; }
     const stackTxt = p.inHand && p.allIn && !res ? 'All-in' : fmt(p.stack);
     const cls = `seat ${isMe || foot ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
     const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
     const av = avHTML(p.uid, p.name);
-    const shot = acting ? '<div class="shot"><i class="shotBar"></i></div>' : '';
+    const shot = acting ? `<div class="shot"><i class="shotBar${d.dcProtect ? ' dc' : ''}"></i></div>` : '';
     parts.push(isMe || foot
       ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
       : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`);
@@ -1736,7 +1738,7 @@ function renderControls(d, mySeat, mine){
     const HT = demo ? { helper: true } : club.tourney, helped = !!(HT && HT.helper !== false && mine && d.phase === 'hand' && !d.result);
     if(mine && d.board.length && !helped) line = `${meSeat.allIn ? "You're all-in · " : 'You have '}<b>${esc(E.describe(E.evaluate(mine.concat(d.board.map(cs)))))}</b>`;
     else if(meSeat.allIn) line = "You're all-in";
-    else line = d.acting >= 0 ? `Waiting for ${esc((d.seats[d.acting] || {}).name || '')}…` : 'Dealing…';
+    else line = d.acting >= 0 ? `Waiting for ${esc((d.seats[d.acting] || {}).name || '')}${d.dcProtect ? ' · disconnected, protection time' : ''}…` : 'Dealing…';
     if(!meSeat.allIn && d.acting >= 0 && !d.result){
       const toCall = Math.min(Math.max(0, (d.cur || 0) - meSeat.bet), meSeat.stack);
       if(preAct && preAct.kind === 'check' && toCall > 0) preAct = null;

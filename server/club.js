@@ -37,7 +37,11 @@ const gpOn = k => { const t = T(); return GP() && !!t && t[k] === true; };
 const pauseSec = () => { const t = T(); return GP() && t && PAUSES.includes(t.handPause) ? t.handPause : 0; };
 const fmt = n => Math.round(n).toLocaleString('en-US');
 
-let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(){} };
+// Disconnect protection (Issue #9): when the player to act has no live connection, their decision gets 30 more seconds by
+// itself, once per hand, without using an extra-time card or marking them away. Tests (FAST=1 only) can set DC_PROTECT_MS.
+const DC_MS = FAST && +process.env.DC_PROTECT_MS || 30000;
+
+let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(){}, isConnected: () => true };
 const tables = new Map();   // tid -> live table
 const waiters = new Map();  // uid -> pending decision
 let running = false, clockTimer = null;
@@ -307,13 +311,15 @@ async function ask(tb, p, L){
   tb.seq++;
   const h = tb.g.hand;
   const ms = p.away ? AWAY_BANK : actMs();
-  tb.acting = { seat: p.seat, uid: p.uid, seq: tb.seq, deadline: Date.now() + ms, ms, usingBank: false,
+  tb.acting = { seat: p.seat, uid: p.uid, seq: tb.seq, deadline: Date.now() + ms, ms, usingBank: false, dc: false,
     legal: { ...L, pot: E.potTotal(h), cur: h.currentBet, bb: h.bbAmt } };
+  dcCheck(tb, h, false); // a decision that starts while they are offline gets the protection from the start
   publish(tb);
   const a = await new Promise(resolve => {
     const w = { tid: tb.tid, hand: h.no, seq: tb.seq, resolve: null };
     const timer = setInterval(() => {
       if(T() && T().paused){ tb.acting.deadline += 250; return; }
+      dcCheck(tb, h, true);
       if(Date.now() > tb.acting.deadline) done(null, true);
     }, 250);
     const done = (v, timedOut) => { clearInterval(timer); if(waiters.get(p.uid) === w) waiters.delete(p.uid); if(timedOut){ p.away = true; } resolve(v); };
@@ -325,6 +331,20 @@ async function ask(tb, p, L){
   p.away = false;
   return a;
 }
+// Gives the acting player their disconnect protection when they are offline and have not had it this hand; clears the
+// table's "disconnected" mark when they come back (the time they were given stays on the clock).
+function dcCheck(tb, h, pub){
+  const a = tb.acting; if(!a) return;
+  const off = !hooks.isConnected(a.uid);
+  if(off && !a.dc){
+    if(!tb.dcUsed || tb.dcUsed.hand !== h.no) tb.dcUsed = { hand: h.no, uids: new Set() };
+    if(tb.dcUsed.uids.has(a.uid)) return;
+    tb.dcUsed.uids.add(a.uid); a.dc = true; a.deadline = Math.max(a.deadline, Date.now()) + DC_MS; a.ms = a.deadline - Date.now();
+    if(pub) publish(tb);
+  } else if(!off && a.dc){ a.dc = false; if(pub) publish(tb); }
+}
+// a socket of this player just closed: if it is their turn and they have no other connection, protect them at once
+function offline(uid){ const w = waiters.get(uid), tb = w && tables.get(w.tid); if(tb && tb.acting && tb.acting.uid === uid && tb.g.hand) dcCheck(tb, tb.g.hand, true); }
 function act(uid, msg){
   const w = waiters.get(uid);
   if(!w || msg.tid !== w.tid || msg.hand !== w.hand || msg.seq !== w.seq) return false;
@@ -555,6 +575,7 @@ function snapshot(tb){
     deadline: tb.acting ? tb.acting.deadline : 0, bank: tb.acting ? tb.acting.ms : actMs(), usingBank: !!(tb.acting && tb.acting.usingBank), extras: tb.acting ? extrasLeft(tb.acting.uid) : 0, legal: tb.acting ? tb.acting.legal : null,
     result: res ? { lines: resultLines(g, h), winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null,
     note: tb.note || '',
+    ...(tb.acting && tb.acting.dc ? { dcProtect: true } : {}), // the player to act is offline, on protection time
     ...(res && h.rabbit ? { rabbit: h.rabbit.map(E.cardStr) } : {}),
     ...(res && tb.show && tb.show.hand === h.no ? { showOffer: { done: !!tb.show.done, can: tb.show.done ? [] : h.players.filter(p => canShow(p) && !tb.show.closed.has(p.uid)).map(p => p.uid) } } : {})
   };
@@ -594,5 +615,5 @@ function totalChips(){
   return sum;
 }
 
-module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, edit, join, leave, cancel, start, resume, pause, unpause, act, extend, back,
-  snapshot, cardsFor, show, gp: GP, _extras: { resultMs, rabbitCards, resultExtras }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK };
+module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, edit, join, leave, cancel, start, resume, pause, unpause, act, extend, back, offline,
+  snapshot, cardsFor, show, gp: GP, _extras: { resultMs, rabbitCards, resultExtras }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };
