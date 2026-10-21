@@ -15,7 +15,12 @@ const store = require('../server/store');
   push.subscribe('u1', sub('a')); push.subscribe('u1', sub('a')); push.subscribe('u2', sub('b')); push.subscribe('u2', sub('gone'));
   assert.strictEqual(store.get('push:u1').length, 1, 'same phone stored once');
   assert.ok(push.hasPush('u2') && !push.hasPush('u3'));
-  const n = await push.notify(['u1', 'u2', 'u3'], { title: 'Thursday starts in 15 minutes', body: 'x' });
+  // every send logs one line of counts, no ids and no endpoints (Issue #23)
+  const logs = [], log0 = console.log; console.log = (...a) => logs.push(a.join(' '));
+  const n = await push.notify(['u1', 'u2', 'u3'], { title: 'Thursday starts in 15 minutes', body: 'x', tag: 'soon-t1' });
+  console.log = log0;
+  assert.deepStrictEqual(logs, ['push soon-t1: 3 players, 2 with notifications, 3 devices, 2 sent, 1 expired, 0 failed']);
+  assert.ok(!/u1|u2|push\.example/.test(logs[0]), 'the log line names no one');
   assert.strictEqual(n, 2); assert.deepStrictEqual(sent.map(x => x[0]).sort(), ['https://push.example/a', 'https://push.example/b']);
   assert.strictEqual(sent[0][1].title, 'Thursday starts in 15 minutes');
   assert.strictEqual(store.get('push:u2').length, 1, 'dead subscription removed');

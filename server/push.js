@@ -31,10 +31,13 @@ async function notify(uids, msg){
   if(process.env.NO_PUSH) return 0;
   init();
   const body = JSON.stringify({ title: msg.title, body: msg.body, tag: msg.tag || 'club', url: msg.url || '/' });
-  let sent = 0;
-  await Promise.all([...new Set(uids)].flatMap(uid => (store.get('push:' + uid) || []).map(s =>
-    webpush.sendNotification(s, body, { TTL: msg.ttl || 3600, urgency: 'high' }).then(() => { sent++; })
-      .catch(e => { if(e.statusCode === 404 || e.statusCode === 410) unsubscribe(uid, s.endpoint); else console.error('push failed', e.statusCode || e.message); }))));
+  let sent = 0, gone = 0, failed = 0, subs = 0;
+  const who = [...new Set(uids)], withSub = who.filter(hasPush).length;
+  await Promise.all(who.flatMap(uid => (store.get('push:' + uid) || []).map(s => { subs++;
+    return webpush.sendNotification(s, body, { TTL: msg.ttl || 3600, urgency: 'high' }).then(() => { sent++; })
+      .catch(e => { if(e.statusCode === 404 || e.statusCode === 410){ gone++; unsubscribe(uid, s.endpoint); } else { failed++; console.error('push failed', e.statusCode || e.message); } }); })));
+  // one line per send, counts only (no ids, no endpoints), so a night's delivery can be read off the logs (Issue #23)
+  console.log(`push ${msg.tag || 'club'}: ${who.length} players, ${withSub} with notifications, ${subs} devices, ${sent} sent, ${gone} expired, ${failed} failed`);
   return sent;
 }
 module.exports = { publicKey, subscribe, unsubscribe, hasPush, notify };

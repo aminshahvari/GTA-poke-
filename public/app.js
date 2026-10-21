@@ -202,8 +202,12 @@ function connect(){
 }
 const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
 
+let pushChecked = false;
 function onClub(c){
   club = c; clockSkew = c.now - Date.now();
+  // (once per page: does this context hold a subscription? the lobby redraws with the answer on the next club update,
+  // or now if the answer differs from the account's flag)
+  if(!pushChecked){ pushChecked = true; checkPushHere().then(() => { if(pushHere != null && pushHere !== club.pushOn) onClub(club); }); }
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   if(c.clubSwitching) clubSwitching(c);
   $('meChip').innerHTML = `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
@@ -1406,8 +1410,21 @@ const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in win
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+// Whether THIS browser context holds a subscription (Issue #23): on iPhone the Safari tab and the Home Screen app are
+// separate, so the account can have notifications on while the app the player actually opens has none. null = not
+// checked yet (then the account's flag decides, as before).
+let pushHere = null;
+async function checkPushHere(){
+  try{
+    if(!pushSupported() || Notification.permission !== 'granted'){ pushHere = false; return; }
+    const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+    pushHere = !!sub;
+    // the server lost every subscription of this account (a dropped endpoint, a store reset): hand it this one again
+    if(sub && club && club.pushOn === false) await post('/api/push', sub.toJSON());
+  }catch(e){ pushHere = null; }
+}
 function remindHTML(T){
-  const bell = club.pushOn ? '<span class="status-pill">🔔 Notifications on</span>'
+  const bell = (pushHere == null ? club.pushOn : pushHere) ? '<span class="status-pill">🔔 Notifications on</span>'
     : pushSupported() && Notification.permission !== 'denied' ? '<button class="btn" data-remind>🔔 Notify me when it starts</button>'
     : isIOS() && !standalone() ? '<button class="btn" data-iosnote>🔔 Notifications on iPhone</button>' : '';
   const cal = T.startAt ? '<button class="btn" data-cal>📅 Add to calendar</button>' : '';
@@ -1422,12 +1439,12 @@ async function enablePush(){
     const { key } = await post('/api/pushKey', {});
     const raw = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - key.length % 4) % 4)), c => c.charCodeAt(0));
     const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: raw });
-    await post('/api/push', sub.toJSON());
+    await post('/api/push', sub.toJSON()); pushHere = true;
     toast("Done. We'll notify you 15 minutes before and when it starts.");
   }catch(e){ toast(isIOS() && !standalone() ? 'On iPhone, add the app to your Home Screen first.' : 'Notifications could not be turned on on this device.'); }
 }
 async function offerReminder(){
-  const T = club.tourney; if(!T || T.status !== 'registering' || club.pushOn) return;
+  const T = club.tourney; if(!T || T.status !== 'registering' || (pushHere == null ? club.pushOn : pushHere)) return;
   if(pushSupported() && Notification.permission === 'default'){
     const v = await modal(`<h2>Get a reminder?</h2><p>We'll send a notification to this phone 15 minutes before ${esc(T.name)} starts, and again when the cards are dealt.</p>`, [{ label: 'No thanks', value: null }, { label: 'Notify me', value: 1, primary: true }]);
     if(v) enablePush();
