@@ -67,8 +67,10 @@
 /* ---------- table: seats (Issue #21: bigger names, stacks at least 13px) ---------- */
 [data-ui="quiet"] #game .plate{background:rgba(12,19,34,.86);border:1px solid var(--q-hair);border-radius:12px;
   box-shadow:0 6px 16px rgba(0,0,0,.45);backdrop-filter:var(--q-blur);-webkit-backdrop-filter:var(--q-blur)}
-[data-ui="quiet"] #game .nm{font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--q-text)}
-[data-ui="quiet"] #game .st{font-size:13.5px;font-weight:600;color:var(--q-gold-hi)}
+[data-ui="quiet"] #game .nm{font-weight:600;letter-spacing:-.01em;color:var(--q-text)}
+[data-ui="quiet"] #game .st{font-weight:600;color:var(--q-gold-hi)}
+/* larger type only where the seats have room (the full-size table); compact and small tables keep their sizes */
+[data-ui="quiet"] #game .table-area:not(.compact):not(.mini):not(.micro) .seat:not([data-side]) :is(.nm,.st){font-size:13.5px}
 [data-ui="quiet"] #game .seat.hero .plate{border-color:var(--q-hair-gold)}
 [data-ui="quiet"] #game .av{box-shadow:0 0 0 1px rgba(255,255,255,.14),0 4px 10px rgba(0,0,0,.5);font-weight:600}
 [data-ui="quiet"] #game .seat.acting .av{box-shadow:0 0 0 2px var(--q-gold),0 0 0 6px rgba(212,178,108,.18)}
