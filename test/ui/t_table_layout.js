@@ -35,9 +35,12 @@ const REPORT = process.env.REPORT === '1', SHOTS = process.env.SHOTS || '';
 // bar showing, 852x393 / 844x390 Pro and standard, 852x330 with the bar showing, 844x340 / 812x320 in-app browsers
 // (Instagram, WhatsApp) with their own bars, 667x375 and 568x320 the small ones.
 // (393x659, 430x739: iPhone 15 / 15 Pro Max upright with Safari's bars showing, the room a hand usually starts with)
-const DEF = '320x568,375x667,390x844,393x852,430x932,393x659,430x739,320x500,390x760,430x850,956x440,932x430,956x370@59,0,21,932x360@0,59,21,852x393@59,0,21,844x390,852x330,844x340,812x320@44,0,21,667x375@0,0,21,568x320';
+// (393x852@0,0,34,59 and 375x667@0,0,0,20: added to the Home Screen app, where the top inset is real (Issue #19); the
+// fourth number is the top inset, which Chromium can't emulate either, so with it the page's env(safe-area-inset-top)
+// and env(safe-area-inset-bottom) are written as those many px)
+const DEF = '320x568,375x667,390x844,393x852,430x932,393x659,430x739,320x500,390x760,430x850,956x440,932x430,956x370@59,0,21,932x360@0,59,21,852x393@59,0,21,844x390,852x330,844x340,812x320@44,0,21,667x375@0,0,21,568x320,393x852@0,0,34,59,375x667@0,0,0,20';
 const SIZES = (process.env.SIZES || DEF).split(',').reduce((a, v) => { if(/^\d+x\d+/.test(v)) a.push(v); else a[a.length - 1] += ',' + v; return a; }, [])
-  .map(v => { const [wh, ins] = v.split('@'), [w, h] = wh.split('x').map(Number), [l = 0, r = 0, b = 0] = ins ? ins.split(',').map(Number) : []; return [w, h, { l, r, b }, v]; })
+  .map(v => { const [wh, ins] = v.split('@'), [w, h] = wh.split('x').map(Number), [l = 0, r = 0, b = 0, t = 0] = ins ? ins.split(',').map(Number) : []; return [w, h, { l, r, b, t }, v]; })
   .filter(v => !process.env.ONLY || process.env.ONLY === v[3]);
 const NS = (process.env.NS || '2,3,4,5,6,7,8,9').split(',').map(Number);
 const OVAL_MIN = 1.35, OVAL_MAX = 1.5, RAIL_MIN = 14, RAIL_MAX = 18, RAIL_TOL = 6, PEEK = .25, FELT_MIN = .75, FELT_SHORT = .75, FELT_MAX = 1.8, STAD_MIN = 1.2, DOCK_GAP = 24, LAND_MAX = .8;
@@ -97,6 +100,8 @@ const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b -
     if(ins.l || ins.r || ins.b) await pg.addInitScript(i => { const put = () => { const st = document.createElement('style');
       st.textContent = `:root{--sa-l:${i.l}px;--sa-r:${i.r}px;--sa-b:${i.b}px;--test-sa-l:${i.l}px;--test-sa-r:${i.r}px;--test-sa-b:${i.b}px}`; document.head.appendChild(st); };
       if(document.head) put(); else document.addEventListener('DOMContentLoaded', put); }, ins);
+    if(ins.t) await pg.route(u => { const x = new URL(u); return x.origin === BASE && (x.pathname === '/' || x.pathname.endsWith('.css')); }, async r => {
+      const res = await r.fetch(); r.fulfill({ response: res, body: (await res.text()).replace(/env\(safe-area-inset-top(,\s*0px)?\)/g, ins.t + 'px').replace(/env\(safe-area-inset-bottom(,\s*0px)?\)/g, ins.b + 'px') }); });
     if(process.env.FONTS_DIR){
       const dir = process.env.FONTS_DIR;
       await pg.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => { const u = r.request().url();
@@ -136,6 +141,8 @@ const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b -
       m.seats.forEach((a, i) => { m.seats.slice(i + 1).forEach(b => { if(hit(a.box, b.box, .5)) over.push(`${a.name} x ${b.name}`); }); if(m.board && hit(a.box, m.board, .5)) over.push(`${a.name} x board`); });
       const out = m.seats.filter(s => s.box.l < -.5 || s.box.t < -.5 || s.box.r > w + .5 || s.box.b > h + .5 || s.box.t < m.area.t - .5 || s.box.l < m.area.l - .5 || s.box.r > m.area.r + .5 || s.box.b > m.area.b + .5 || hit(s.box, m.dock, .5)).map(s => s.name);
       check(m.seats.length === n, `${tag}: ${n} seats drawn (${m.seats.length})`);
+      // the page is no taller than the screen (the top inset counted once: Issue #19, Home Screen app)
+      if(ins.t){ const ph = await pg.evaluate(() => document.scrollingElement.scrollHeight); check(ph <= h + .5, `${tag}: the page fits the screen with the top inset (${ph} of ${h} px)`); }
       check(!over.length, `${tag}: no seat overlaps another seat or the board${over.length ? ' — ' + over.join('; ') : ''}`);
       check(!out.length, `${tag}: every seat inside the screen and the table area, clear of the dock${out.length ? ' — ' + out.join(', ') : ''}`);
       check(m.hero && m.hero.t >= -.5 && m.hero.b <= h + .5 && !hit(m.hero, m.dock, .5), `${tag}: your cards are on screen, clear of the action bar`);
