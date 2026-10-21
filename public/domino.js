@@ -55,12 +55,21 @@ function homeHTML(){
   return `<div class="card-box dm-card">${head}<p>${champ ? `Winner: <b>${esc(champ)}</b>` : 'Finished.'}</p>${V.stats ? `<p class="note">Your dominoes: ${V.stats.won} won of ${V.stats.played}</p>` : ''}</div>`;
 }
 function finalWinner(t){
-  const last = t.structure === 'elim' ? [...t.matches].sort((a, b) => b.round - a.round)[0] : null;
+  const ko = t.matches.filter(m => t.structure === 'elim' || m.place.stage === 'playoff');
+  const last = ko.length ? [...ko].sort((a, b) => b.round - a.round)[0] : null;
   return last && last.result ? sideName(last, last.result.winner) : null;
+}
+// where a match sits: its pod, its knockout round, or its playoff round (Final and Semi-final named)
+function stageText(m){
+  const p = m.place;
+  if(p.pod) return 'Pod ' + esc(p.pod);
+  const left = (p.stage === 'playoff' ? p.prounds - p.pround : null);
+  const name = left === 0 ? 'Final' : left === 1 ? 'Semi-final' : null;
+  return p.stage === 'playoff' ? 'Playoff · ' + (name || 'Round ' + p.pround) : 'Round ' + m.round;
 }
 function listHTML(t){
   const rows = t.matches.filter(m => m.status !== 'final' || m.result && m.result.by !== 'bye').map(m => `<div class="trow dm-row"><div class="dm-t"><b>${esc(sideName(m, 0))} v ${esc(sideName(m, 1))}</b>
-    <small>${t.structure === 'pods' ? 'Pod ' + esc(m.place.pod) + ' · ' : 'Round ' + m.round + ' · '}${m.table ? 'Table ' + m.table + ' · ' : ''}${esc(STATUS[m.status])}${m.status !== 'waiting' && m.status !== 'ready' ? ` · ${m.scores[0]}–${m.scores[1]}` : ''}</small></div>
+    <small>${stageText(m)} · ${m.table ? 'Table ' + m.table + ' · ' : ''}${esc(STATUS[m.status])}${m.status !== 'waiting' && m.status !== 'ready' ? ` · ${m.scores[0]}–${m.scores[1]}` : ''}</small></div>
     ${V.owner && m.status !== 'waiting' ? `<button class="back" data-dm="pad" data-mid="${esc(m.id)}">Open</button>` : ''}</div>`).join('');
   const st = t.standings ? t.standings.map(p => `<p class="note"><b>Pod ${esc(p.pod)}</b>: ${p.rows.map(r => `${esc((t.teams.find(x => x.id === r.id) || { members: [] }).members.map(x => x.name).join(' & '))} ${r.wins}W`).join(' · ')}</p>`).join('') : '';
   return `<div class="table-list">${rows}</div>${st}`;
@@ -80,6 +89,8 @@ function directorHTML(){
         <label>Players<select id="dmFormat">${opt('hu', 'Heads-up 1v1', 1)}${opt('pairs', 'Partnership 2v2')}</select></label></div>
         <div class="two"><label>Play to<select id="dmTarget">${opt('', 'Game default', 1)}${[50, 61, 100, 150, 200, 250].map(v => opt(v, v)).join('')}</select></label>
         <label>Format<select id="dmStruct">${opt('elim', 'Knockout', 1)}${opt('pods', 'Pods (round robin)')}</select></label></div>
+        <div class="two dm-podopts" hidden><label>Pod size<select id="dmPod">${[3, 4, 5, 6].map(v => opt(v, v + ' per pod', v === 4)).join('')}</select></label>
+        <label>Pods then<select id="dmAdv">${opt(0, 'Pods only', 1)}${opt(1, 'Playoff: pod winners')}${opt(2, 'Playoff: top 2 of each pod')}</select></label></div>
         <div class="two"><label>Tables<input id="dmTables" type="number" inputmode="numeric" min="1" max="50" value="4"></label>
         <label>Match time<select id="dmMin">${opt(0, 'No limit', 1)}${[20, 30, 45, 60].map(v => opt(v, v + ' min')).join('')}</select></label></div>
         <button class="btn red" type="submit">Open registration</button></form>
@@ -162,9 +173,10 @@ async function padAction(k, d, m){
 function wire(root){
   root.querySelectorAll('[data-dm]').forEach(b => b.onclick = () => act(b.dataset.dm, b.dataset));
   const f = root.querySelector('#dmForm');
+  if(f) f.querySelector('#dmStruct').onchange = e => f.querySelector('.dm-podopts').hidden = e.target.value !== 'pods';
   if(f) f.onsubmit = async e => { e.preventDefault();
     const v = id => document.getElementById(id).value;
-    try{ const r = await C.post('/api/dominoCreate', { name: v('dmName'), preset: v('dmPreset'), format: v('dmFormat'), target: v('dmTarget') ? +v('dmTarget') : null, structure: v('dmStruct'), tables: +v('dmTables'), roundMin: +v('dmMin') }); document.activeElement.blur(); onState(r); C.toast('Registration is open.'); }
+    try{ const r = await C.post('/api/dominoCreate', { name: v('dmName'), preset: v('dmPreset'), format: v('dmFormat'), target: v('dmTarget') ? +v('dmTarget') : null, structure: v('dmStruct'), podSize: +v('dmPod'), advance: +v('dmAdv'), tables: +v('dmTables'), roundMin: +v('dmMin') }); document.activeElement.blur(); onState(r); C.toast('Registration is open.'); }
     catch(err){ C.toast(err.message); } };
 }
 async function act(k, d){

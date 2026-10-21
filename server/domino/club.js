@@ -4,7 +4,7 @@
 // leaderboard are untouched, and domino stats are kept under their own keys.
 //
 // Storage (additive kv keys in the club's scope; see docs/domino/DESIGN.md):
-//   dom:t:<tid>        a tournament { id, name, rules, structure, podSize, tables, roundMin, status, entrants, teams,
+//   dom:t:<tid>        a tournament { id, name, rules, structure, podSize, advance, playoff, tables, roundMin, status, entrants, teams,
 //                      matches: [bracket/pod places], createdAt, startedAt, endedAt, by }
 //   dom:m:<mid>        a match: its append-only event record (server/domino/match.js)
 //   dom:stats:<uid>    { played, won, lost, hands, points } domino only
@@ -41,11 +41,14 @@ module.exports = function makeDomino(store, hooks = {}){
     const structure = d.structure === 'pods' ? 'pods' : 'elim';
     const podSize = structure === 'pods' ? Math.round(+d.podSize || 4) : null;
     if(structure === 'pods' && !(podSize >= 3 && podSize <= 8)) throw fail(400, 'A pod has 3 to 8 teams.');
+    // pods can feed a knockout playoff: the top 1 or 2 of each pod go through (0 = pods only)
+    const advance = structure === 'pods' ? Math.round(+d.advance || 0) : 0;
+    if(![0, 1, 2].includes(advance)) throw fail(400, 'Pick how many from each pod go to the playoff (none, 1 or 2).');
     const tables = Math.round(+d.tables || 0); if(!(tables >= 1 && tables <= TABLES_MAX)) throw fail(400, `Say how many tables you have (1 to ${TABLES_MAX}).`);
     const roundMin = d.roundMin == null ? 0 : +d.roundMin; if(!ROUND_MIN.includes(roundMin)) throw fail(400, 'Pick a match time from the list.');
     const name = clean(d.name, 60) || `${r.name} ${r.format === 'pairs' ? 'Partnership' : 'Heads-up'}`;
     const id = 'd' + crypto.randomBytes(5).toString('hex');
-    const t = { id, name, rules: r, structure, podSize, tables, roundMin, status: 'registering', entrants: [], teams: [], matches: [], pods: null, createdAt: h.now(), by: u.id };
+    const t = { id, name, rules: r, structure, podSize, advance, playoff: false, tables, roundMin, status: 'registering', entrants: [], teams: [], matches: [], pods: null, createdAt: h.now(), by: u.id };
     saveT(t); store.set('dom:current', id); log(u.id, 'create', { tid: id, name });
     h.changed(); return view(u);
   }
@@ -91,6 +94,11 @@ module.exports = function makeDomino(store, hooks = {}){
     const need = t.structure === 'pods' ? 3 : 2;
     if(tm.length < need) throw fail(400, `At least ${need} ${t.rules.perSide === 2 ? 'teams' : 'players'} are needed.`);
     const s = t.structure === 'pods' ? B.pods(tm, t.podSize) : B.elimination(tm);
+    if(t.advance){
+      const smallest = Math.min(...s.pods.map(p => p.teams.length));
+      if(s.pods.length * t.advance < 2) throw fail(400, 'The playoff needs at least 2 teams: send 2 from each pod, or have more pods.');
+      if(smallest <= t.advance) throw fail(400, 'Each pod needs more teams than it sends to the playoff.');
+    }
     const next = { ...t, teams: tm, matches: s.matches, pods: s.pods || null, status: 'running', startedAt: h.now() };
     for(const p of s.matches) saveM(M.create({ id: t.id + '-' + p.id, tid: t.id, round: p.round, slot: p.slot, sides: sidesOf(next, p), rules: t.rules }));
     if(t.structure === 'elim'){ B.byes(next.matches, id => started(next, id)); syncSides(next); }
@@ -144,9 +152,10 @@ module.exports = function makeDomino(store, hooks = {}){
       const s = store.get('dom:stats:' + uid) || { played: 0, won: 0, lost: 0, hands: 0, points: 0 };
       store.set('dom:stats:' + uid, { played: s.played + 1, won: s.won + (m.result.winner === i ? 1 : 0), lost: s.lost + (m.result.winner === i ? 0 : 1), hands: s.hands + hands, points: s.points + scores[i] });
     }));
-    if(t.structure === 'elim' && p) { B.advance(t.matches, p.id, p.teams[m.result.winner], id => started(t, id)); syncSides(t); }
+    if(p && knockout(t, p)) { B.advance(t.matches, p.id, p.teams[m.result.winner], id => started(t, id)); syncSides(t); }
     const all = t.matches.map(x => Mget(t.id + '-' + x.id));
-    const done = all.every(x => x && x.status === 'final');
+    let done = all.every(x => x && x.status === 'final');
+    if(done && t.advance && !t.playoff){ buildPlayoff(t); done = false; }
     saveT(done ? { ...t, status: 'finished', endedAt: h.now() } : t);
     if(!done) seat(T(t.id));
   }
@@ -161,7 +170,40 @@ module.exports = function makeDomino(store, hooks = {}){
       store.set('dom:stats:' + uid, { ...s, won: s.won - (was ? 1 : 0) + (now ? 1 : 0), lost: s.lost - (was ? 0 : 1) + (now ? 0 : 1), hands: s.hands - M.score(before).hands + hands, points: s.points - M.score(before).scores[i] + scores[i] });
     }));
     const p = t.matches.find(x => t.id + '-' + x.id === after.id);
-    if(t.structure === 'elim' && p){ B.advance(t.matches, p.id, p.teams[after.result.winner], id => started(t, id)); syncSides(t); saveT(t); }
+    if(p && knockout(t, p)){ B.advance(t.matches, p.id, p.teams[after.result.winner], id => started(t, id)); syncSides(t); saveT(t); }
+    // a pod result changed after the playoff was drawn but before any playoff match began: draw it again
+    else if(p && t.playoff && !p.stage){ const pods = { ...t, matches: t.matches.filter(x => !x.stage), playoff: false }; buildPlayoff(pods); saveT(pods); seat(T(t.id)); }
+  }
+  // ---------- pods into a playoff ----------
+  const knockout = (t, p) => t.structure === 'elim' || p.stage === 'playoff';
+  // a playoff match counts as begun once anything is recorded on it (being seated at a table is not enough; a bye
+  // does not count)
+  const playoffBegun = t => t.matches.some(p => { if(p.stage !== 'playoff') return false; const m = Mget(t.id + '-' + p.id); return !!m && (m.events.length > 0 || (m.status === 'final' && !(m.result && m.result.by === 'bye'))); });
+  function podStandings(t){
+    return t.pods.map(pd => ({ pod: pd.id, rows: B.standings(pd, t.matches.filter(p => p.pod === pd.id).map(p => ({ p, m: Mget(t.id + '-' + p.id) }))
+      .filter(x => x.m && x.m.status === 'final' && x.m.result).map(x => ({ teams: x.p.teams, winner: x.m.result.winner, scores: x.m.result.scores })), id => +id.slice(1)) }));
+  }
+  // Every pod is final: the top `advance` of each pod go into a knockout. Seeds: all pod winners first, then the
+  // runners-up; within each group the better record seeds higher (wins, points difference, points scored). Two teams
+  // from the same pod are kept apart in the first playoff round where a swap allows it.
+  // Mutates t (matches, playoff); the caller saves it.
+  function buildPlayoff(t){
+    const st = podStandings(t), better = (a, b) => (b.wins - a.wins) || ((b.pf - b.pa) - (a.pf - a.pa)) || (b.pf - a.pf) || (+a.id.slice(1) - +b.id.slice(1));
+    const qs = [];
+    for(let k = 0; k < t.advance; k++) qs.push(...st.map(x => x.rows[k]).filter(Boolean).sort(better));
+    const s = B.elimination(qs.map(r => teamOf(t, r.id)), 'k'), podOf = Object.fromEntries(st.flatMap(x => x.rows.map(r => [r.id, x.pod])));
+    // no pod meets itself in the first playoff round: swap the lower seed with another first-round match's lower seed
+    const first = s.matches.filter(p => p.round === 1), same = p => p.teams[0] && p.teams[1] && podOf[p.teams[0]] === podOf[p.teams[1]];
+    for(const p of first) if(same(p)){
+      const q = first.find(o => o !== p && o.teams[1] && podOf[o.teams[1]] !== podOf[p.teams[0]] && podOf[p.teams[1]] !== podOf[o.teams[0]]);
+      if(q) [p.teams[1], q.teams[1]] = [q.teams[1], p.teams[1]];
+    }
+    const off = Math.max(0, ...t.matches.map(p => p.round));
+    const places = s.matches.map(p => ({ ...p, stage: 'playoff', prounds: s.rounds, pround: p.round, round: p.round + off }));
+    t.matches = [...t.matches, ...places]; t.playoff = true;
+    for(const p of places) saveM(M.create({ id: t.id + '-' + p.id, tid: t.id, round: p.round, slot: p.slot, sides: sidesOf(t, p), rules: t.rules }));
+    for(const p of places) if(p.pround === 1 && p.bye){ const team = p.teams.find(Boolean); if(team) B.advance(t.matches, p.id, team, id => started(t, id)); }
+    syncSides(t);
   }
 
   // ---------- the scorepad ----------
@@ -170,10 +212,14 @@ module.exports = function makeDomino(store, hooks = {}){
     const t = current(), mid = d && d.mid, m0 = typeof mid === 'string' ? Mget(mid) : null;
     if(!t || !m0 || m0.tid !== t.id) throw fail(404, 'That match was not found.');
     const actor = { uid: u.id, director: h.isOwner(u) };
-    if(d.op && d.op.type === 'override' && actor.director && t.structure === 'elim'){
+    if(d.op && d.op.type === 'override' && actor.director){
       // check the bracket can take a new winner before recording anything
       const p = t.matches.find(x => t.id + '-' + x.id === mid);
-      if(p && p.next && m0.result && m0.result.winner !== d.op.winner && m0.counted && started(t, p.next.id)) throw fail(409, 'The next match already started with the earlier winner. Reset it first.');
+      if(p && knockout(t, p) && p.next && m0.result && m0.result.winner !== d.op.winner && m0.counted && started(t, p.next.id)) throw fail(409, 'The next match already started with the earlier winner. Reset it first.');
+    }
+    if(d.op && d.op.type === 'override' && actor.director && t.playoff && m0.counted && m0.result && m0.result.winner !== d.op.winner){
+      const p = t.matches.find(x => t.id + '-' + x.id === mid);
+      if(p && !p.stage && playoffBegun(t)) throw fail(409, 'The playoff has already begun with these pod results.');
     }
     const { match: m, dup } = M.apply(m0, d.op, actor, h.now());
     if(dup) return { match: M.view(m0, h.now()), dup: true };
@@ -199,8 +245,8 @@ module.exports = function makeDomino(store, hooks = {}){
     const team = id => { const x = teamOf(t, id); return x ? { id: x.id, members: x.members.map(uid => ({ uid, name: nameOf(uid) })) } : null; };
     const matches = t.matches.map(p => { const m = Mget(t.id + '-' + p.id); return { ...M.view(m, h.now()), place: p, teams: p.teams.map(team) }; });
     const mine = u ? matches.find(m => m.sides.flat().includes(u.id) && ['ready', 'live', 'review', 'disputed'].includes(m.status)) || null : null;
-    const standings = t.pods ? t.pods.map(pd => ({ pod: pd.id, rows: B.standings(pd, matches.filter(m => m.place.pod === pd.id && m.status === 'final' && m.result).map(m => ({ teams: m.place.teams, winner: m.result.winner, scores: m.result.scores })), id => +id.slice(1)) })) : null;
-    return { now: h.now(), owner, canHost: h.canHost(), t: { id: t.id, name: t.name, rules: t.rules, structure: t.structure, podSize: t.podSize, tables: t.tables, roundMin: t.roundMin, status: t.status,
+    const standings = t.pods ? podStandings(t) : null;
+    return { now: h.now(), owner, canHost: h.canHost(), t: { id: t.id, name: t.name, rules: t.rules, structure: t.structure, podSize: t.podSize, advance: t.advance || 0, playoff: !!t.playoff, tables: t.tables, roundMin: t.roundMin, status: t.status,
       entrants: t.entrants.map(e => ({ uid: e.uid, name: nameOf(e.uid) })), registered: !!(u && t.entrants.some(e => e.uid === u.id)),
       teams: t.teams.map(x => team(x.id)), matches: t.status === 'registering' ? [] : matches, standings },
       mine: mine ? mine.id : null, stats: u ? store.get('dom:stats:' + u.id) || null : null };

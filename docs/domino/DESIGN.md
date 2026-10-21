@@ -23,7 +23,7 @@ All keys live inside the club's scope (stored as `club:<id>:dom:...` for clubs o
 | Key | Value |
 |---|---|
 | `dom:current` | id of the tournament the club shows |
-| `dom:t:<tid>` | `{ id, name, rules, structure: elim\|pods, podSize, tables, roundMin, status: registering\|running\|finished\|cancelled, entrants:[{uid,at}], teams:[{id,members}], matches:[{id,round,slot,teams,next,bye,pod}], pods, createdAt, startedAt, endedAt, by }` |
+| `dom:t:<tid>` | `{ id, name, rules, structure: elim\|pods, podSize, advance, playoff, tables, roundMin, status: registering\|running\|finished\|cancelled, entrants:[{uid,at}], teams:[{id,members}], matches:[{id,round,slot,teams,next,bye,pod}], pods, createdAt, startedAt, endedAt, by }` |
 | `dom:m:<tid>-<place>` | the match record (`server/domino/match.js`): `{ id, tid, round, slot, sides:[[uid],[uid]], table, status, rules, events:[...], startedAt, endsAt, confirm, dispute, result, counted }` |
 | `dom:stats:<uid>` | `{ played, won, lost, hands, points }`, domino only |
 | `dom:log:<time>-<rand>` | director actions: create, teams, start, cancel, override (with reason). Written once, never changed. |
@@ -39,7 +39,7 @@ All calls are `POST /api/<name>` with `Authorization: Bearer <token>` and `x-clu
 | Call | Who | Body | Result |
 |---|---|---|---|
 | `dominoState` | member | `{}` | view (below) |
-| `dominoCreate` | director, club hosts | `{ name?, preset: allfives\|block\|draw, format: hu\|pairs, target?, blocked?: opponents\|difference, structure?: elim\|pods, podSize?, tables: 1..50, roundMin?: 0\|20\|30\|45\|60 }` | view |
+| `dominoCreate` | director, club hosts | `{ name?, preset: allfives\|block\|draw, format: hu\|pairs, target?, blocked?: opponents\|difference, structure?: elim\|pods, podSize?, advance?: 0\|1\|2, tables: 1..50, roundMin?: 0\|20\|30\|45\|60 }` | view |
 | `dominoJoin` / `dominoLeave` | member, while registering | `{}` | view |
 | `dominoTeams` | director, partnership | `{ mode: random }` or `{ mode: manual, pairs: [[uid,uid],...] }` | view |
 | `dominoStart` | director, club hosts | `{}` | view: teams, bracket or pods built, tables assigned, clocks started |
@@ -85,6 +85,10 @@ A match view carries `scores`, `hands` and `seq`, plus `events` (each with `wort
   - After a finished hand, the side ahead wins (to review).
   - If the score is level, they play another hand, and keep going until it isn't (sudden death).
   - The server checks every 5 s.
+- **Pods into a playoff** (`advance`: 0, 1 or 2 per pod):
+  - When every pod match is final, the top teams of each pod go into a knockout. Pod winners are seeded first, then the runners-up, and the better record seeds higher within each group.
+  - Two teams from the same pod are kept apart in the first playoff round where a swap allows it.
+  - If the director changes a pod result before any playoff hand is recorded, the playoff is drawn again. After that, a pod override is refused (409).
 - **No-shows:** not automated. The director overrides with the reason "no-show".
 - **Tables:** each live match holds one numbered table. Ready matches take free tables in round order. A player in a live match is never seated twice, and a match without a free table shows as waiting.
 
@@ -100,10 +104,10 @@ A match view carries `scores`, `hands` and `seq`, plus `events` (each with `wort
 | 6. Append-only events, undo, corrections, idempotency | Built |
 | 7. Real-time, server-authoritative | Built: WS push and full state on reconnect |
 | 8. Dual verification, disputes, override, audit | Built |
-| 9. Single elimination and round-robin pods | Built: pods to a playoff is next |
+| 9. Single elimination and round-robin pods | Built, including pods feeding a playoff |
 | 10. Director controls and synced timers | Built: Director card (create, start, cancel, override, log); clocks from server `endsAt` |
 
-Phase 2 (not started): networking profiles with privacy controls, overall club rankings built from placements (never from mixing raw poker and domino scores), sponsor display, read-only TV view, the Blindrise Open for dominoes, and pods feeding a playoff.
+Phase 2 (not started): networking profiles with privacy controls, overall club rankings built from placements (never from mixing raw poker and domino scores), sponsor display, read-only TV view and the Blindrise Open for dominoes. Pods feeding a playoff is built (`test/t_domino_playoff.js`).
 
 ## 6. Staging plan
 
