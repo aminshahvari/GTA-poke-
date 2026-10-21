@@ -2,6 +2,7 @@
 // - the director opens registration from the Director form; members register from the Home card
 // - after the start, each player's Home shows their match and table; the scorepad records an All Fives scoring play
 //   and a hand (pips only), the other phone updates live, both confirm, the result is final
+// - the director's TV board follows the live table (phone and 1280x720) and names the winner
 // - Home then names the winner and shows the club's domino rankings
 // - the scorepad fits the screen with no sideways scroll; screenshots of each step
 // Usage: PLAYWRIGHT_CORE=/path/to/playwright-core CHROMIUM=/path/to/chromium [FONTS_DIR=..] node test/ui/t_domino_ui.js [shotDir]
@@ -69,6 +70,17 @@ const shot = (pg, name) => SHOTS ? pg.screenshot({ path: path.join(SHOTS, name) 
     await a.locator('[data-dmp=count][data-p="15"]').click(); await sleep(500);
     const sc = async p => (await p.locator('.dm-score').allTextContents()).map(Number);
     check(JSON.stringify(await sc(a)) === JSON.stringify([15, 0]) && JSON.stringify(await sc(b)) === JSON.stringify([15, 0]), `${w}px: a +15 scoring play shows on both phones (15 – 0)`);
+    // the director's TV board (read-only) follows the same match live, on the phone and on a big screen
+    await dp.locator('[data-dm=tv]').click(); await sleep(300);
+    const tile = async p => (await p.locator('#dmTV .dm-tile').allTextContents()).join(' ');
+    check(await dp.locator('#dmTV').isVisible() && /Table 1/.test(await tile(dp)) && /15/.test(await tile(dp)) && await noSideScroll(dp) && await dp.locator('#dmTV button:not([data-tv])').count() === 0,
+      `${w}px: the TV board shows Table 1 at 15 – 0, has no scoring buttons, and no sideways scroll`);
+    await shot(dp, `tv-board-${w}.png`);
+    if(w === 390){
+      const tvp = await page(O, [1280, 720]); await tvp.click('#tabs [data-tab=director]'); await sleep(300); await tvp.locator('[data-dm=tv]').click(); await sleep(400);
+      check(await tvp.locator('#dmTV .dm-tile').count() === 1 && await noSideScroll(tvp), '1280x720: the TV board fills a big screen with the live table');
+      await shot(tvp, 'tv-board-1280.png'); await tvp.context().close();
+    }
     await a.locator('[data-dmp=hand]').click(); await sleep(200);
     await shot(a, `hand-sheet-${w}.png`);
     const uids = await a.locator('.dm-pip').evaluateAll(xs => xs.map(x => [x.dataset.uid, x.disabled]));
@@ -87,6 +99,8 @@ const shot = (pg, name) => SHOTS ? pg.screenshot({ path: path.join(SHOTS, name) 
     check(/won/.test(await b.locator('.dm-final').textContent()) && /Final/.test(await a.locator('.dm-status').textContent()), `${w}px: both confirmed: final on both phones`);
     check(await noSideScroll(a) && await noSideScroll(b), `${w}px: no sideways scroll on the record`);
     await shot(b, `scorepad-final-${w}.png`);
+    check(/Winner/.test(await dp.locator('#dmTV').textContent()), `${w}px: the TV board names the winner when it is over`);
+    await shot(dp, `tv-board-final-${w}.png`); await dp.locator('[data-tv=close]').click();
     await b.locator('[data-dmp=close]').click(); await sleep(300);
     const fin = await b.locator('.dm-card').first().textContent();
     check(/Winner: (Annabelle Moreau|Ben)/.test(fin) && /Club rankings/.test(fin) && await b.locator('.dm-rank').count() === 2 && await noSideScroll(b), `${w}px: Home names the winner and shows the club's domino rankings, no sideways scroll`);

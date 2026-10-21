@@ -3,7 +3,7 @@
 // what happened at the table (a scoring play, the pips left in each hand, who went out) and never a score. Every tap
 // has its own id, so one that is sent again after a lost connection is recorded once. See docs/domino/DESIGN.md.
 (function(){
-let C = null, V = null, pad = null, skew = 0, clock = null;
+let C = null, V = null, pad = null, tv = false, skew = 0, clock = null;
 const pending = new Map(); // opId -> { mid, op }: taps whose answer has not come back yet
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const tapId = () => 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -37,7 +37,7 @@ function onState(v){
   if(!first) resend();
   draw();
 }
-function draw(){ if(pad) drawPad(); C.rerender(); }
+function draw(){ if(pad) drawPad(); if(tv) drawTV(); C.rerender(); }
 
 // ---------- Home: the club's tournament ----------
 function homeHTML(){
@@ -105,12 +105,38 @@ function directorHTML(){
     ${t.status === 'registering' ? `<p>${t.entrants.length} registered: ${t.entrants.map(e => esc(e.name)).join(', ') || 'nobody yet'}</p>
       ${need ? `<p class="note">${t.teams.length ? 'Partnerships: ' + t.teams.map(x => x.members.map(m => esc(m.name)).join(' & ')).join(' · ') : 'Set the partnerships before you start.'}</p>` : ''}
       <div class="btn-row">${need ? '<button class="btn" data-dm="teams">Draw partners</button>' : ''}<button class="btn red" data-dm="start">Start</button><button class="btn" data-dm="cancel">Cancel</button></div>`
-    : `${listHTML(t)}<div class="btn-row"><button class="btn" data-dm="cancel">Cancel tournament</button></div>`}</div>`;
+    : `${listHTML(t)}<div class="btn-row"><button class="btn" data-dm="tv">TV board</button><button class="btn" data-dm="cancel">Cancel tournament</button></div>`}</div>`;
+}
+
+// ---------- the TV board: a read-only screen for the room (big scores by table, the queue, standings) ----------
+function openTV(){ tv = true; drawTV(); const el = document.getElementById('dmTV'); if(el && el.requestFullscreen) el.requestFullscreen().catch(() => {}); if(!clock) clock = setInterval(tickClocks, 1000); }
+function closeTV(){ tv = false; const el = document.getElementById('dmTV'); if(el) el.remove(); if(document.fullscreenElement) document.exitFullscreen().catch(() => {}); if(!pad){ clearInterval(clock); clock = null; } }
+function tickClocks(){
+  const el = document.getElementById('dmClock'), m = pad && matchOf(pad.mid); if(el && m) el.textContent = clockText(m);
+  document.querySelectorAll('#dmTV [data-clock]').forEach(c => { const x = matchOf(c.dataset.clock); if(x) c.textContent = clockText(x); });
+}
+function drawTV(){
+  const t = T(); if(!t){ closeTV(); return; }
+  let el = document.getElementById('dmTV'); if(!el){ el = document.createElement('div'); el.id = 'dmTV'; el.className = 'dm-tv'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'TV board'); (document.getElementById('lobby') || document.body).append(el); }
+  const playing = t.matches.filter(m => ['live', 'review', 'disputed'].includes(m.status)).sort((a, b) => a.table - b.table);
+  const queue = t.matches.filter(m => m.status === 'ready');
+  const recent = t.matches.filter(m => m.status === 'final' && m.result && m.result.by !== 'bye').slice(-6).reverse();
+  const tile = m => `<div class="dm-tile${m.status === 'live' ? '' : ' wait'}"><div class="dm-tile-h"><b>Table ${m.table}</b><small>${stageText(m)}</small><span data-clock="${esc(m.id)}">${clockText(m)}</span></div>
+    <div class="dm-tile-s"><span>${esc(sideName(m, 0))}</span><b>${m.scores[0]}</b></div><div class="dm-tile-s"><span>${esc(sideName(m, 1))}</span><b>${m.scores[1]}</b></div>
+    ${m.status !== 'live' ? `<small class="dm-tile-st">${esc(STATUS[m.status])}</small>` : ''}</div>`;
+  const champ = V.champion && V.champion.members.map(x => x.name).join(' & ');
+  const side = `${queue.length ? `<section><span class="eyebrow">Next up</span>${queue.slice(0, 6).map(m => `<p>${esc(sideName(m, 0))} v ${esc(sideName(m, 1))}<small>${stageText(m)}</small></p>`).join('')}</section>` : ''}
+    ${recent.length ? `<section><span class="eyebrow">Results</span>${recent.map(m => `<p><b>${esc(sideName(m, m.result.winner))}</b> beat ${esc(sideName(m, 1 - m.result.winner))}<small>${m.scores[m.result.winner]}–${m.scores[1 - m.result.winner]} · ${stageText(m)}</small></p>`).join('')}</section>` : ''}
+    ${t.standings ? t.standings.map(p => `<section><span class="eyebrow">Pod ${esc(p.pod)}</span>${p.rows.map((r, i) => `<p>${i + 1}. ${esc((t.teams.find(x => x.id === r.id) || { members: [] }).members.map(x => x.name).join(' & '))}<small>${r.wins}W ${r.losses}L · ${r.pf - r.pa >= 0 ? '+' : ''}${r.pf - r.pa}</small></p>`).join('')}</section>`).join('') : ''}`;
+  el.innerHTML = `<div class="dm-tv-top"><div><span class="eyebrow">Blindrise Dominoes</span><h2>${esc(t.name)}</h2><small>${esc(rulesLine(t.rules))}</small></div><button class="back" data-tv="close">Close</button></div>
+    ${t.status === 'finished' ? `<div class="dm-tv-champ"><span class="eyebrow">Winner</span><b>${esc(champ || 'Finished')}</b></div>` : ''}
+    <div class="dm-tv-body"><div class="dm-tiles">${playing.map(tile).join('') || (t.status === 'running' ? '<p class="note">No match on a table right now.</p>' : '')}</div><aside>${side}</aside></div>`;
+  el.querySelector('[data-tv=close]').onclick = closeTV;
 }
 
 // ---------- the scorepad ----------
-function openPad(mid){ pad = { mid, sheet: null, side: 0 }; drawPad(); if(!clock) clock = setInterval(() => { const el = document.getElementById('dmClock'); const m = pad && matchOf(pad.mid); if(el && m) el.textContent = clockText(m); }, 1000); }
-function closePad(){ pad = null; const el = document.getElementById('dmPad'); if(el) el.remove(); clearInterval(clock); clock = null; }
+function openPad(mid){ pad = { mid, sheet: null, side: 0 }; drawPad(); if(!clock) clock = setInterval(tickClocks, 1000); }
+function closePad(){ pad = null; const el = document.getElementById('dmPad'); if(el) el.remove(); if(!tv){ clearInterval(clock); clock = null; } }
 function drawPad(){
   const m = matchOf(pad.mid); if(!m){ closePad(); return; }
   let el = document.getElementById('dmPad'); if(!el){ el = document.createElement('div'); el.id = 'dmPad'; el.className = 'dm-pad'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Scorepad'); (document.getElementById('lobby') || document.body).append(el); }
@@ -184,6 +210,7 @@ function wire(root){
 }
 async function act(k, d){
   if(k === 'pad') return openPad(d.mid);
+  if(k === 'tv') return openTV();
   const call = { join: 'dominoJoin', leave: 'dominoLeave', start: 'dominoStart', teams: 'dominoTeams', cancel: 'dominoCancel' }[k];
   if(k === 'cancel' && !await C.modal('<h2>Cancel this domino tournament?</h2><p>Matches stop where they are. Everything recorded is kept.</p>', [{ label: 'Back', value: false }, { label: 'Cancel it', value: true, primary: true }])) return;
   try{ onState(await C.post('/api/' + call, k === 'teams' ? { mode: 'random' } : {})); }catch(e){ C.toast(e.message); }
