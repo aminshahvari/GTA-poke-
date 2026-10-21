@@ -129,6 +129,17 @@ const contrastOf = (pg, sel) => pg.evaluate(sel => {
     await shot(w, 'quiet-watcher-390x844.png');
   }
   await w.context().close();
+  // the demo table: its line opens the sheet too, with the demo's own field (owner's iPhone, 2026-10-21: the tap did nothing)
+  const dm = await page(O, [390, 844]);
+  await dm.locator('#tabs [data-tab=director]').click().catch(() => {}); await sleep(300); await dm.locator('[data-demo]').first().click().catch(() => {}); await sleep(2500);
+  let dl = false; for(let i = 0; i < 20 && !dl; i++){ dl = await dm.locator('#qline').isVisible().catch(() => false); if(!dl) await sleep(300); }
+  check(dl, 'demo table: the line shows');
+  if(dl){
+    await dm.locator('#qline').click(); await sleep(500);
+    const st = await dm.locator('#modalRoot .qsheet').textContent().catch(() => '');
+    check(/Demo table/.test(st) && /Players left/.test(st) && /Your place/.test(st), 'demo table: a tap on the line opens the sheet with the players left and my place');
+  }
+  await dm.context().close();
   // the Lounge
   for(const sz of [[390, 844], [1280, 800]]){
     const pg = await page(toks[1], sz); await pg.locator('#lobbyBtn').click().catch(() => {}); await sleep(800);

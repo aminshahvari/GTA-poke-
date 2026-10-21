@@ -2155,12 +2155,13 @@ function qLine(T, d, me){
   el.setAttribute('aria-label', `${f.players} of ${f.total} players left. Chip leader ${f.leader ? (f.meLead ? 'you' : f.leader.name) + ', ' + fmt(f.leader.stack) + ' chips' : 'not known yet'}. ${f.rank ? 'You are ' + ord(f.rank) : 'You are watching'}. Tap for details.`);
 }
 function qSheet(){
-  const T = club && club.tourney, d = tables.get(watchTid || club.myTable); if(!T) return;
+  // (the demo table's tournament is its own: on it the sheet read the club's, which is none, and the tap did nothing)
+  const T = demo ? demo.T : club && club.tourney, d = tables.get(watchTid || club.myTable); if(!T) return;
   const me = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id), f = qFacts(T, d, me);
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), inBB = n => (n / bb >= 100 ? Math.round(n / bb) : Math.round(n / bb * 10) / 10).toLocaleString('en-US') + ' BB';
   const row = (k, v, sub) => `<div class="qs-row"><dt>${k}</dt><dd><b class="num">${v}</b>${sub ? `<small>${sub}</small>` : ''}</dd></div>`;
   const vsAvg = !me ? '' : me.stack > f.avg * 1.05 ? 'above average' : me.stack < f.avg * .95 ? 'below average' : 'about average';
-  modal(`<div class="qsheet"><h2>${esc(T.name)}</h2><p class="qs-sub num">Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}</p><dl>`
+  modal(`<div class="qsheet"><h2>${esc(T.name || 'Demo table')}</h2><p class="qs-sub num">Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}</p><dl>`
     + row('Players left', `${f.players} of ${f.total}`, `${f.tables} ${f.tables === 1 ? 'table' : 'tables'}`)
     + (f.leader ? row('Chip leader', f.meLead ? 'You' : esc(f.leader.name), `${fmt(f.leader.stack)} · ${inBB(f.leader.stack)} · Table ${f.leader.table}`) : '')
     + (f.rank ? row('Your place', `${ord(f.rank)} of ${f.players}`, me ? `${fmt(me.stack)} · ${inBB(me.stack)} · ${vsAvg}` : '') : '')
