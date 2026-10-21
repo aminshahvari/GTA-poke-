@@ -1838,7 +1838,8 @@ function renderTable(){
     const stackTxt = p.inHand && p.allIn && !res ? 'All-in' : fmt(p.stack);
     // (quiet design: another seat's action goes in its name line, not in a pill under the plate)
     // (the amount of a bet or raise is on its chips in front of the seat, so the name line says only the action)
-    const inl = QUIET && !isMe && !foot && badge ? badge.replace('class="badge', 'class="badge inl').replace(/>(Raise|Bet) [^<]*</, '>$1<') : '';
+    // (Disconnected stays a pill of its own, with its orange clock: a status the table must not miss)
+    const inl = QUIET && !isMe && !foot && badge && !/class="badge[^"]*\bdc\b/.test(badge) ? badge.replace('class="badge', 'class="qact').replace(/>(Raise|Bet) [^<]*</, '>$1<') : '';
     if(inl) badge = '';
     const cls = `seat ${isMe || foot ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
     const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
@@ -1846,7 +1847,7 @@ function renderTable(){
     const shot = acting ? `<div class="shot"><i class="shotBar${d.dcProtect ? ' dc' : ''}"></i></div>` : '';
     parts.push(isMe || foot
       ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
-      : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm${inl ? ' nm-act' : ''}" title="${esc(p.name)}">${inl || esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`);
+      : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate">${inl}<div class="nm${inl ? ' nm-off' : ''}" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`);
     if(p.inHand && p.bet > 0){
       const [bx, by] = LY.betOf(s), bp = pxToPct([bx, by]), [sx, sy] = pctToPx(pos);
       const key = `b${handKey}-${d.street}-${s}-${p.bet}`, isNew = !seen.has(key); seen.add(key);
@@ -2140,11 +2141,11 @@ function qFacts(T, d, me){
 function qLine(T, d, me){
   const el = $('qline'), f = qFacts(T, d, me);
   el.hidden = false;
-  if($('game').classList.contains('row1')){
-    el.innerHTML = `<b class="num">${f.players}<small>/${f.total}</small></b><small>${f.rank ? ord(f.rank) + ' of ' + f.players : 'Watching'}</small>`;
-  } else el.innerHTML = `<span class="ql-a"><i class="ql-dot" aria-hidden="true"></i><b class="num">${f.players}</b><small>/${f.total}</small><small class="ql-w">&nbsp;players left</small></span>`
+  // (one markup for both headers: the one-row header's cell is drawn from it by quiet.css, so the line never changes
+  // height when the header changes and the table is not laid out twice)
+  el.innerHTML = `<span class="ql-a"><i class="ql-dot" aria-hidden="true"></i><b class="num">${f.players}</b><small>/${f.total}</small><small class="ql-w">&nbsp;players left</small></span>`
     // (collapsed: players left and your place only; the chip leader and the rest are in the sheet a tap away, Muse, Issue #31)
-    + `<span class="ql-c${f.rank ? '' : ' w'}">${f.rank ? `<small>Your rank</small><b class="num">${ord(f.rank)}</b><small>of ${f.players}</small>` : '<small>Watching</small>'}${Q_CHEV}</span>`;
+    + `<span class="ql-c${f.rank ? '' : ' w'}">${f.rank ? `<small class="ql-r">Your rank</small><b class="num">${ord(f.rank)}</b><small>of ${f.players}</small>` : '<small>Watching</small>'}${Q_CHEV}</span>`;
   el.setAttribute('aria-label', `${f.players} of ${f.total} players left. Chip leader ${f.leader ? (f.meLead ? 'you' : f.leader.name) + ', ' + fmt(f.leader.stack) + ' chips' : 'not known yet'}. ${f.rank ? 'You are ' + ord(f.rank) : 'You are watching'}. Tap for details.`);
 }
 function qSheet(){

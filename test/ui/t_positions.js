@@ -51,7 +51,7 @@ async function drawn(pg){
     const spot = s => { if(s.classList.contains('hero')){ const bs = [s.querySelector('.plate'), ...s.querySelectorAll('.hole .card')].filter(Boolean).map(box);
         return [(Math.min(...bs.map(b => b.left)) + Math.max(...bs.map(b => b.right))) / 2, (Math.min(...bs.map(b => b.top)) + Math.max(...bs.map(b => b.bottom))) / 2]; }
       const host = box(s.offsetParent); return [host.left + parseFloat(s.style.left) / 100 * host.width, host.top + parseFloat(s.style.top) / 100 * host.height]; };
-    const seats = [...document.querySelectorAll('#seats .seat')].map(s => ({ uid: s.dataset.uid, at: spot(s), badge: (s.querySelector('.badge') || {}).textContent || '' }));
+    const seats = [...document.querySelectorAll('#seats .seat')].map(s => ({ uid: s.dataset.uid, at: spot(s), badge: (s.querySelector('.badge, .qact') || {}).textContent || '' }));   // (.qact: the quiet design writes it in the plate)
     const bets = [...document.querySelectorAll('#seats .bet')].map(b => ({ amt: b.textContent.replace(/[^0-9]/g, ''), at: c(b) }));
     const d = document.querySelector('#seats .dealer');
     return { felt, seats, bets, dealer: d ? c(d) : null, pot: document.getElementById('pot').textContent.trim() };

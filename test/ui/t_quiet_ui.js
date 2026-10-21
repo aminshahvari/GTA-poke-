@@ -82,7 +82,7 @@ const contrastOf = (pg, sel) => pg.evaluate(sel => {
     // (short screens and phones held sideways, the one-row header: the line is the header's first cell, "9/9 · 1st of 9",
     // where the level box was, and the level is written under or beside the clock; its tap area reaches 44px with ::after)
     const row1 = await pg.evaluate(() => document.getElementById('game').classList.contains('row1'));
-    check(await ql.isVisible() && /9\s*\/9/.test(qt) && (row1 ? /\d+(st|nd|rd|th) of 9/ : /Your rank\s*\d+(st|nd|rd|th)\s*of 9/).test(qt), `${tag}: the line shows players left and my rank (the rest is in the sheet): ${qt.trim()}`);
+    check(await ql.isVisible() && /9\s*\/9/.test(qt) && (row1 ? /\d+(st|nd|rd|th)\s*of 9/ : /Your rank\s*\d+(st|nd|rd|th)\s*of 9/).test(qt), `${tag}: the line shows players left and my rank (the rest is in the sheet): ${qt.trim()}`);
     check(await pg.evaluate(r1 => { const q = document.getElementById('qline'), b = q.getBoundingClientRect(), tap = b.height + (r1 ? 2 * -parseFloat(getComputedStyle(q, '::after').top) : 0);
       return tap >= 44 && [...q.children].every(s => { const r = s.getBoundingClientRect(); return r.left >= b.left - 1 && r.right <= b.right + 1; }); }, row1), `${tag}: the line is a 44px tap target and nothing in it spills over`);
     if(row1) check(await pg.evaluate(() => document.querySelector('#game .clock').contains(document.getElementById('qline')) && /Level \d+/.test(document.getElementById('cTimeLbl').offsetParent ? document.getElementById('cTimeLbl').textContent : document.getElementById('cNext').textContent)),
