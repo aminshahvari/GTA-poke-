@@ -1646,7 +1646,8 @@ function renderPlayNote(d){
   if(!k || !clear || playNoteSeen(k)) return;
   playNoted.add(k); try{ localStorage.setItem('stacked:playnote', k); }catch(e){}
   el.dataset.key = k; el.hidden = false; placePlayNote(el);
-  clearTimeout(playNoteTimer); playNoteTimer = setTimeout(hidePlayNote, 10000);
+  // (quiet design: four seconds, over the helper's line only briefly; the line under the strip says it all the time)
+  clearTimeout(playNoteTimer); playNoteTimer = setTimeout(hidePlayNote, QUIET ? 4000 : 10000);
 }
 // over the board's five empty slots (and, when no message is showing, the message line under them: the layout keeps
 // both clear of seats and chips), the text as large as fits there, on two lines or, if need be, three
@@ -1839,7 +1840,9 @@ function renderTable(){
     // (quiet design: another seat's action goes in its name line, not in a pill under the plate)
     // (the amount of a bet or raise is on its chips in front of the seat, so the name line says only the action)
     // (Disconnected stays a pill of its own, with its orange clock: a status the table must not miss)
-    const inl = QUIET && !isMe && !foot && badge && !/class="badge[^"]*\bdc\b/.test(badge) ? (m => m && { cls: m[1].trim(), txt: m[2].replace(/<[^>]*>/g, '').replace(/^(Raise|Bet) .*/, '$1') })(badge.match(/class="badge([^"]*)"[^>]*>([\s\S]*?)<\/span>/)) : null;
+    let inl = QUIET && !isMe && !foot && badge && !/class="badge[^"]*\bdc\b/.test(badge) ? (m => m && { cls: m[1].trim(), txt: m[2].replace(/<[^>]*>/g, '').replace(/^(Raise|Bet) .*/, '$1') })(badge.match(/class="badge([^"]*)"[^>]*>([\s\S]*?)<\/span>/)) : null;
+    // (an all-in seat's stack line already says All-in: the name stays, so the plate never reads "All-in / All-in")
+    if(inl && inl.txt === stackTxt) inl = null;
     if(inl) badge = '';
     const cls = `seat ${isMe || foot ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
     const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
@@ -1972,6 +1975,9 @@ function sendAction(d, a){
     if(lastSent !== key || !t || t.tid + ':' + t.handNo + ':' + t.seq !== key || t.actUid !== club.me.id) return;
     lastSent = null; $('controls').dataset.turn = ''; if(view === 'table' && watchTid === d.tid) renderTable();
   }, 4000);
+  // (quiet design: the free-play notice steps aside at my first action, so it never sits on the helper while I play,
+  // Muse on Issue #31 from the owner's iPhone)
+  if(QUIET) hidePlayNote();
   if(d.tid === 'demo' && demo){ if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){} $('controls').innerHTML = '<div class="info-line">…</div>'; return demo.answer(a); }
   const words = { fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' };
   $('controls').innerHTML = `<div class="info-line">${words[a.t] || ''}${a.t === 'raise' ? ' to ' + fmt(a.to) : ''} · sending…</div>`;
