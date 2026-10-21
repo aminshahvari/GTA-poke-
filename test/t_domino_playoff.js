@@ -3,6 +3,7 @@
 //   drawn from the standings (pod winners seeded first; no pod meets itself in the semi-finals)
 // - a pod result the director changes before any playoff hand is recorded redraws the playoff; after, it is refused
 // - the playoff winner finishes the tournament; pods only (no playoff) still finish when the pods are done
+// - a bye cannot be overridden and never counts in stats
 // - club rankings: titles (worked out from finished tournaments, so an override moves them), then match wins
 // - bad settings are refused: an unknown playoff size, or pods too small for what they send on
 const assert = require('assert');
@@ -96,8 +97,15 @@ playAll(x, m => !m.place.stage);
 v = A(x, 'dominoState', {}, x.own);
 const po3 = v.t.matches.filter(m => m.place.stage === 'playoff');
 check(po3.length === 3 && po3.filter(m => m.place.bye).length === 1 && po3.find(m => m.place.pround === 2).sides.some(s => s.length), '3 pod winners: a 4-slot playoff where the best winner has a bye into the final');
+// the bye cannot be overridden (nothing was played), and nobody gets stats from it
+const bye = po3.find(m => m.place.bye), byeUid = bye.sides.find(s => s.length)[0], before = JSON.stringify(x.store.get('dom:stats:' + byeUid));
+throws(() => A(x, 'dominoOp', { mid: bye.id, op: { opId: opId(), type: 'override', winner: bye.sides[0].length ? 1 : 0, reason: 'test' } }, x.own), /This is a bye/, 'a director override on a bye is refused');
+throws(() => A(x, 'dominoOp', { mid: bye.id, op: { opId: opId(), type: 'override', winner: bye.sides[0].length ? 0 : 1, reason: 'test' } }, x.own), /This is a bye/, 'even for the side that has the bye');
+check(JSON.stringify(x.store.get('dom:stats:' + byeUid)) === before, 'the player with the bye gets no played, won or lost from it');
 playAll(x);
 check(A(x, 'dominoState', {}, x.own).t.status === 'finished', 'the 3-team playoff finishes');
+const tot = x.users.map(u => x.store.get('dom:stats:' + u.id) || { played: 0 }).reduce((n, s) => n + s.played, 0);
+check(tot === 2 * (9 + 2), 'stats count only matches played: 9 pod matches and 2 playoff matches, two players each (no bye)');
 
 // ---------- pods only still finish after the pods ----------
 x = setup(6); start(x, { structure: 'pods', podSize: 3 }); playAll(x);

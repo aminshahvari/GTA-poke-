@@ -166,7 +166,13 @@ async function padAction(k, d, m){
   if(k === 'close') return closePad();
   if(k === 'side'){ pad.side = +d.i; return drawPad(); }
   if(k === 'count') return send(m.id, { opId: tapId(), type: 'count', side: pad.side, points: +d.p, base: m.seq }).catch(() => {});
-  if(k === 'undo') return send(m.id, { opId: tapId(), type: 'undo', target: +d.seq, base: m.seq }).catch(() => {});
+  if(k === 'undo'){
+    // confirm first: an undo changes the score on every phone (it stays in the record, crossed out)
+    const e = m.events.find(x => x.seq === +d.seq), base = m.seq;
+    const what = e && e.worth ? (e.worth.side === null ? 'the blocked hand (no score)' : `${esc(sideName(m, e.worth.side))} +${e.worth.points}`) : 'this entry';
+    if(!await C.modal(`<h2>Undo #${+d.seq}?</h2><p>This takes away ${what}. It stays in the record, crossed out.</p>`, [{ label: 'Back', value: false }, { label: 'Undo it', value: true, primary: true }])) return;
+    return send(m.id, { opId: tapId(), type: 'undo', target: +d.seq, base }).catch(() => {});
+  }
   if(k === 'confirm') return send(m.id, { opId: tapId(), type: 'confirm' }).catch(() => {});
   if(k === 'dispute'){
     let reason = ''; const p = C.modal(`<h2>What is wrong?</h2><div class="field"><label for="dmWhy">The director sees this</label><input id="dmWhy" maxlength="300"></div>`, [{ label: 'Back', value: false }, { label: 'Dispute', value: true, primary: true }]);

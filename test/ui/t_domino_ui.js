@@ -2,6 +2,7 @@
 // - the director opens registration from the Director form; members register from the Home card
 // - after the start, each player's Home shows their match and table; the scorepad records an All Fives scoring play
 //   and a hand (pips only), the other phone updates live, both confirm, the result is final
+// - Undo asks for confirmation first (Back changes nothing)
 // - the director's TV board follows the live table (phone and 1280x720) and names the winner
 // - Home then names the winner and shows the club's domino rankings
 // - the scorepad fits the screen with no sideways scroll; screenshots of each step
@@ -70,6 +71,15 @@ const shot = (pg, name) => SHOTS ? pg.screenshot({ path: path.join(SHOTS, name) 
     await a.locator('[data-dmp=count][data-p="15"]').click(); await sleep(500);
     const sc = async p => (await p.locator('.dm-score').allTextContents()).map(Number);
     check(JSON.stringify(await sc(a)) === JSON.stringify([15, 0]) && JSON.stringify(await sc(b)) === JSON.stringify([15, 0]), `${w}px: a +15 scoring play shows on both phones (15 – 0)`);
+    // Undo asks first: Back changes nothing; "Undo it" takes the 15 away on both phones; then the play is entered again
+    await a.locator('[data-dmp=undo]').first().click(); await sleep(200);
+    check(/Undo #1\?/.test(await a.locator('#modalRoot').textContent()) && /\+15/.test(await a.locator('#modalRoot').textContent()), `${w}px: Undo asks for confirmation and names what it takes away (+15)`);
+    await a.click('#modalRoot button:has-text("Back")'); await sleep(300);
+    check(JSON.stringify(await sc(b)) === JSON.stringify([15, 0]), `${w}px: Back leaves the score as it was`);
+    await a.locator('[data-dmp=undo]').first().click(); await sleep(200);
+    await a.click('#modalRoot button:has-text("Undo it")'); await sleep(500);
+    check(JSON.stringify(await sc(b)) === JSON.stringify([0, 0]) && await a.locator('.dm-ev.undone').count() === 1, `${w}px: "Undo it" takes the 15 away on both phones and keeps it crossed out in the record`);
+    await a.locator('[data-dmp=count][data-p="15"]').click(); await sleep(500);
     // the director's TV board (read-only) follows the same match live, on the phone and on a big screen
     await dp.locator('[data-dm=tv]').click(); await sleep(300);
     const tile = async p => (await p.locator('#dmTV .dm-tile').allTextContents()).join(' ');

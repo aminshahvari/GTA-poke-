@@ -144,7 +144,7 @@ module.exports = function makeDomino(store, hooks = {}){
   }
   // a match became final: stats once, the winner moves on, tables free up, and the tournament may be over
   function finished(t, m){
-    if(m.counted) return;
+    if(m.counted || (m.result && m.result.by === 'bye')) return;
     const p = t.matches.find(x => t.id + '-' + x.id === m.id);
     saveM({ ...m, counted: true });
     const { scores, hands } = M.score(m);
@@ -162,6 +162,7 @@ module.exports = function makeDomino(store, hooks = {}){
   // An override can change the winner of a match that was already final and counted. Stats move with it, and the
   // bracket takes the new winner only while the next match has not started (otherwise the director is told).
   function recount(t, before, after){
+    if(before.result && before.result.by === 'bye') return; // a bye is never counted, so there is nothing to move
     if(!before.counted) return finished(t, after);
     const { scores, hands } = M.score(after);
     before.sides.forEach((side, i) => side.forEach(uid => {
@@ -212,6 +213,8 @@ module.exports = function makeDomino(store, hooks = {}){
     const t = current(), mid = d && d.mid, m0 = typeof mid === 'string' ? Mget(mid) : null;
     if(!t || !m0 || m0.tid !== t.id) throw fail(404, 'That match was not found.');
     const actor = { uid: u.id, director: h.isOwner(u) };
+    // a bye (or a match still waiting for a side) has nothing to score or decide: refuse every op, override included
+    if(!m0.sides[0].length || !m0.sides[1].length) throw fail(400, m0.result && m0.result.by === 'bye' ? 'This is a bye: there is no match to score or decide.' : 'This match is still waiting for its players.');
     if(d.op && d.op.type === 'override' && actor.director){
       // check the bracket can take a new winner before recording anything
       const p = t.matches.find(x => t.id + '-' + x.id === mid);

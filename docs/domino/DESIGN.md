@@ -77,7 +77,8 @@ A match view carries `scores`, `hands` and `seq`, plus `events` (each with `wort
 - **Totals:** the server folds every score from the events. A total sent by a client is ignored (tested).
 - **Concurrent edits:** two writes from the same view mean one wins and one gets 409 (tested over HTTP with simultaneous requests). The Node event loop applies writes one at a time, so a match record cannot be half-written.
 - **Duplicates:** the per-tap `opId` makes retries safe. Bracket advancement is idempotent: the same winner twice is placed once. Stats are counted once per match (`counted` flag).
-- **Undo and corrections:** nothing is deleted. Undo marks an entry, and a correction replaces one with the new facts. Both keep who did it and when.
+- **Byes:** a bye is recorded as final with no play. No op is accepted on it (a director override included), and it never counts in stats or rankings.
+- **Undo and corrections:** the scorepad asks for confirmation before an undo. Nothing is deleted. Undo marks an entry, and a correction replaces one with the new facts. Both keep who did it and when.
 - **Result verification:** reaching the target, or time with a leader, moves the match to *review*. Both sides confirm, and then it is *final*. Any score change in review goes back to *live* and clears confirmations. A side can *dispute* with a reason; the match then waits for the director. The director cannot confirm for players but can *override* with a reason at any time. The override is in the match record and in the director's log.
 - **Changing a final result:** an override on a final match moves stats with it. It moves the bracket winner only if the next match has not started. If it has, the override is refused, and the director must reset that next match first.
 - **Match time** (`roundMin`, 0 = untimed): the clock is server time (`endsAt`).
