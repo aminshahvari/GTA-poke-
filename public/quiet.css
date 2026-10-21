@@ -129,7 +129,9 @@
 [data-ui="quiet"] :is(#lobby,#modalRoot,#game) .btn:active{transform:scale(.97)}
 
 /* ---------- sheets and modals: slide up like a native sheet ---------- */
-[data-ui="quiet"] #modalRoot .modal{border-radius:var(--q-r-xl) var(--q-r-xl) 0 0;animation:qSheet var(--q-slow) var(--q-ease)}
+[data-ui="quiet"] #modalRoot .modal{background:rgba(3,5,10,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+[data-ui="quiet"] #modalRoot .glass{border-radius:var(--q-r-xl);background:var(--q-surface);border:1px solid var(--q-hair);box-shadow:0 30px 80px rgba(0,0,0,.55);animation:qSheet var(--q-slow) var(--q-ease)}
+[data-ui="quiet"] #modalRoot .glass h2{font-family:var(--q-font);font-weight:600;font-size:var(--q-t-title);letter-spacing:-.02em}
 @keyframes qSheet{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
 
 /* ---------- accessibility ---------- */
@@ -163,3 +165,39 @@
 [data-ui="quiet"] #lobby .lx-motto b{font-weight:600;font-size:var(--q-t-title);letter-spacing:-.015em}
 [data-ui="quiet"] #lobby .lx-motto{color:var(--q-text2);letter-spacing:0}
 [data-ui="quiet"] #lobby .lx-pagehead h2{font-weight:700;letter-spacing:-.03em}
+
+/* ---------- table: the whole tournament in one line (players, chip leader, your place), details on a tap ---------- */
+/* the line takes the place of the old stats row; the chat and Lobby buttons move up into the clock row */
+[data-ui="quiet"] #game .stats{display:none}
+[data-ui="quiet"] #game .clock{grid-template-columns:auto minmax(0,1fr) auto auto}
+[data-ui="quiet"] #game .clock .hdr-btns{display:flex;gap:6px}
+[data-ui="quiet"] #game .clock .menu-btn{min-height:38px;padding:0 13px}
+[data-ui="quiet"] #game .clock .chat-btn{min-width:42px;padding:0}
+[data-ui="quiet"] #game .qline{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px max(14px,var(--sa-l,0px)) 6px max(14px,var(--sa-r,0px));margin:0;border:0;border-bottom:1px solid var(--q-hair);
+  background:transparent;color:var(--q-text);font:inherit;font-size:var(--q-t-sub);text-align:left;cursor:pointer;transition:background var(--q-fast) var(--q-ease)}
+[data-ui="quiet"] #game .qline[hidden]{display:none}
+[data-ui="quiet"] #game .qline:active{background:var(--q-fill)}
+[data-ui="quiet"] #game .qline b{font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+[data-ui="quiet"] #game .qline small{font-size:var(--q-t-foot);color:var(--q-text2);white-space:nowrap}
+[data-ui="quiet"] #game .ql-a{display:flex;align-items:baseline;gap:1px;flex:none}
+[data-ui="quiet"] #game .ql-dot{align-self:center}
+[data-ui="quiet"] #game .ql-dot{width:7px;height:7px;margin-right:6px;border-radius:50%;background:var(--q-good);box-shadow:0 0 0 3px rgba(92,207,152,.16)}
+[data-ui="quiet"] #game .ql-b{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;padding-left:10px;border-left:1px solid var(--q-hair)}
+[data-ui="quiet"] #game .ql-b svg{width:17px;height:17px;flex:none;fill:none;stroke:var(--q-gold);stroke-width:1.6;stroke-linejoin:round}
+[data-ui="quiet"] #game .ql-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--q-text)}
+[data-ui="quiet"] #game .ql-b b{color:var(--q-gold-hi)}
+[data-ui="quiet"] #game .ql-c{display:flex;align-items:center;gap:5px;flex:none;padding:4px 6px 4px 11px;border-radius:999px;background:var(--q-gold-fill);box-shadow:inset 0 0 0 1px rgba(212,178,108,.35)}
+[data-ui="quiet"] #game .ql-c b{color:var(--q-gold-hi)}
+[data-ui="quiet"] #game .ql-c.w{background:var(--q-fill);box-shadow:none}
+[data-ui="quiet"] #game .ql-c svg{width:14px;height:14px;fill:none;stroke:var(--q-text2);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:359px){ [data-ui="quiet"] #game .qline{gap:8px;font-size:14px} [data-ui="quiet"] #game .ql-w{display:none} }
+/* the details sheet */
+[data-ui="quiet"] #modalRoot .qsheet{display:grid;gap:4px;text-align:left}
+[data-ui="quiet"] #modalRoot .qsheet h2{margin:0;font-size:var(--q-t-title);font-weight:600;letter-spacing:-.02em;color:var(--q-text)}
+[data-ui="quiet"] #modalRoot .qs-sub{margin:0 0 8px;color:var(--q-text2);font-size:var(--q-t-foot);text-align:left}
+[data-ui="quiet"] #modalRoot .qsheet dl{margin:0;display:grid}
+[data-ui="quiet"] #modalRoot .qs-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 0;border-top:1px solid var(--q-hair)}
+[data-ui="quiet"] #modalRoot .qs-row dt{color:var(--q-text2);font-size:var(--q-t-sub);white-space:nowrap}
+[data-ui="quiet"] #modalRoot .qs-row dd{margin:0;display:grid;justify-items:end;gap:2px;text-align:right;min-width:0}
+[data-ui="quiet"] #modalRoot .qs-row dd b{font-size:var(--q-t-body);font-weight:600;color:var(--q-text)}
+[data-ui="quiet"] #modalRoot .qs-row dd small{font-size:var(--q-t-foot);color:var(--q-text3)}

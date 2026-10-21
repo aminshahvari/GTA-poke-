@@ -567,13 +567,36 @@ const broadcastAll = () => clubs.all().forEach(broadcastClub);
 function pushTable(c, tid){
   const club = c.club;
   const tb = club.tables.get(tid); if(!tb || clubs.suspended(c.id)) return; // suspended: no table data at all
-  const snap = club.snapshot(tb), uids = new Set(snap.seats.filter(Boolean).map(s => s.uid));
+  const snap = club.snapshot(tb), uids = new Set(snap.seats.filter(Boolean).map(s => s.uid)), field = fieldOf(c);
   for(const ws of sockets){
     if(!ws.user || ws.ctx !== c) continue;
     const seatedHere = uids.has(ws.user.id);
     if(!seatedHere && ws.watch !== tid) continue;
-    sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null });
+    // a seated player also gets their place among everyone still playing (1 = chip leader)
+    const mine = field.chips.get(ws.user.id);
+    sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null, field: { ...field.shown, rank: mine == null ? null : 1 + field.stacks.filter(x => x > mine).length } });
   }
+}
+// the whole tournament as every table shows it (players' feedback, 2026-10-21; same as branch field-bar, 2becf2d): how
+// many are still playing and at how many tables, each player's place among all of them, the chip leader of all tables
+// (the same name and chip count their seat shows), and how many people are watching (a count only, never who).
+// Read-only: it reads the tables, it changes nothing in them.
+function fieldOf(c){
+  let players = 0, tables = 0, leader = null;
+  const chips = new Map();
+  for(const tb of c.club.tables.values()){
+    if(tb.broken) continue;
+    tables++;
+    for(const p of tb.g.seats){
+      if(!p) continue;
+      players++;
+      chips.set(p.uid, p.stack);
+      if(!leader || p.stack > leader.stack) leader = { name: p.name, stack: p.stack, table: tb.n };
+    }
+  }
+  const watching = new Set();
+  for(const ws of sockets) if(ws.user && ws.ctx === c && ws.watch && !chips.has(ws.user.id)) watching.add(ws.user.id);
+  return { shown: { players, tables, leader, watchers: watching.size }, chips, stacks: [...chips.values()] };
 }
 const clock = ms => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: process.env.CLUB_TZ || 'America/Toronto' });
 const dayOf = ms => { const tz = process.env.CLUB_TZ || 'America/Toronto', f = d => new Date(d).toLocaleDateString('en-CA', { timeZone: tz });

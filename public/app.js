@@ -2,6 +2,8 @@
 'use strict';
 const E = Engine;
 const $ = id => document.getElementById(id);
+// the quiet-luxury design (UI_QUIET on the server, preview only): the server marks the page, the app reads the mark
+const QUIET = document.documentElement.dataset.ui === 'quiet';
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const ord = n => n + (['th','st','nd','rd'][(n % 100 - 20) % 10] || ['th','st','nd','rd'][n % 100] || 'th');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -182,7 +184,7 @@ function connect(){
     if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
     if(m.t === 'club'){ onClub(m.club); return; }
     if(m.t === 'domino'){ window.Domino.onState(m.v); return; }
-    if(m.t === 'table'){ tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
+    if(m.t === 'table'){ tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); if(m.field) field = m.field; onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
     if(m.t === 'invite'){ showInvite(m.code, m.group, m.max); return; }
     if(m.t === 'skillq'){ askSkill(m.rid, m.q); return; }
@@ -1699,7 +1701,7 @@ function newLock(d){
   const wpt = false;
   if(g.classList.contains('wpt') !== wpt){ g.classList.toggle('wpt', wpt); LOCK = null; }
   g.style.setProperty('--dock-w', Math.min(184, Math.round(window.innerWidth * .47)) + 'px');
-  const hb = g.querySelector('.hdr-btns'), home = g.querySelector(row1 ? '.clock' : '.stats');
+  const hb = g.querySelector('.hdr-btns'), home = g.querySelector(row1 || QUIET ? '.clock' : '.stats');
   if(hb && hb.parentNode !== home) home.appendChild(hb);
   LOCK = { w: g.clientWidth, hand, h: 0, iw: window.innerWidth, ih: H };
   return true;
@@ -2105,14 +2107,59 @@ function sponsorUI(T, now){
   if(key !== spnKey){ spnKey = key; el.innerHTML = sponsorHTML(sp, false); fillLogo(el, sp); el.hidden = false; }
   el.classList.toggle('out', left < 600);
 }
+// ---------- quiet design: the whole tournament in one line, the details one tap away ----------
+// Players still playing, the chip leader of all tables and your place among everyone (players' feedback, 2026-10-21),
+// from the field every table update carries. Before the first update it shows this table only.
+let field = null;
+if(QUIET){
+  const b = document.createElement('button');
+  b.type = 'button'; b.id = 'qline'; b.className = 'qline'; b.hidden = true;
+  document.querySelector('#game .stats').after(b);
+  b.onclick = () => qSheet();
+}
+const Q_CROWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8l4.2 3.6L12 5l3.8 6.6L20 8l-1.6 10H5.6z"/></svg>';
+const Q_CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+function qFacts(T, d, me){
+  const seats = d ? d.seats.filter(Boolean) : [], top = seats.reduce((a, p) => !a || p.stack > a.stack ? p : a, null);
+  const F = field, players = F ? F.players : seats.length;
+  const leader = F ? F.leader : top && { name: top.name, stack: top.stack, table: d.n };
+  const rank = F ? F.rank : me ? 1 + seats.filter(p => p.stack > me.stack).length : null;
+  const bb = E.levelFor(T.level, T.anteMode)[1], avg = T.entrants * T.stack / Math.max(1, T.remaining);
+  return { players, total: T.entrants || players, tables: F ? F.tables : 1, leader, rank, me, bb, avg, watchers: F ? F.watchers : null, whole: !!F,
+    meLead: !!(leader && me && rank === 1 && leader.name === me.name) };
+}
+function qLine(T, d, me){
+  const el = $('qline'), f = qFacts(T, d, me);
+  el.hidden = false;
+  const lead = f.leader ? (f.meLead ? 'You' : esc(f.leader.name)) : '-';
+  el.innerHTML = `<span class="ql-a"><i class="ql-dot" aria-hidden="true"></i><b class="num">${f.players}</b><small>/${f.total}</small><small class="ql-w">&nbsp;players</small></span>`
+    + `<span class="ql-b">${Q_CROWN}<span class="ql-n">${lead}</span>${f.leader ? `<b class="num">${fmt(f.leader.stack)}</b>` : ''}</span>`
+    + `<span class="ql-c${f.rank ? '' : ' w'}">${f.rank ? `<small>You</small><b class="num">${ord(f.rank)}</b>` : '<small>Watching</small>'}${Q_CHEV}</span>`;
+  el.setAttribute('aria-label', `${f.players} of ${f.total} players left. Chip leader ${f.leader ? (f.meLead ? 'you' : f.leader.name) + ', ' + fmt(f.leader.stack) + ' chips' : 'not known yet'}. ${f.rank ? 'You are ' + ord(f.rank) : 'You are watching'}. Tap for details.`);
+}
+function qSheet(){
+  const T = club && club.tourney, d = tables.get(watchTid || club.myTable); if(!T) return;
+  const me = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id), f = qFacts(T, d, me);
+  const [sb, bb, an] = E.levelFor(T.level, T.anteMode), inBB = n => (n / bb >= 100 ? Math.round(n / bb) : Math.round(n / bb * 10) / 10).toLocaleString('en-US') + ' BB';
+  const row = (k, v, sub) => `<div class="qs-row"><dt>${k}</dt><dd><b class="num">${v}</b>${sub ? `<small>${sub}</small>` : ''}</dd></div>`;
+  const vsAvg = !me ? '' : me.stack > f.avg * 1.05 ? 'above average' : me.stack < f.avg * .95 ? 'below average' : 'about average';
+  modal(`<div class="qsheet"><h2>${esc(T.name)}</h2><p class="qs-sub num">Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}</p><dl>`
+    + row('Players left', `${f.players} of ${f.total}`, `${f.tables} ${f.tables === 1 ? 'table' : 'tables'}`)
+    + (f.leader ? row('Chip leader', f.meLead ? 'You' : esc(f.leader.name), `${fmt(f.leader.stack)} · ${inBB(f.leader.stack)} · Table ${f.leader.table}`) : '')
+    + (f.rank ? row('Your place', `${ord(f.rank)} of ${f.players}`, me ? `${fmt(me.stack)} · ${inBB(me.stack)} · ${vsAvg}` : '') : '')
+    + row('Average stack', fmt(Math.round(f.avg)), inBB(f.avg))
+    + (f.watchers != null ? row('Watching', f.watchers, 'Members looking on') : '')
+    + (d ? row('This table', `Table ${d.n}`, `${d.seats.filter(Boolean).length} seated`) : '')
+    + `</dl></div>`, [{ label: 'Done', value: true, primary: true }]);
+}
 function tickClock(){
   const T = demo ? demo.T : club && club.tourney;
-  if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(null); return; }
+  if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(null); if(QUIET) $('qline').hidden = true; return; }
   const now = Date.now() + clockSkew;
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;
   // in the one-row header of the shortest screens the ante takes the second line, in place of the next level
-  const one = $('game').classList.contains('row1');
+  const one = $('game').classList.contains('row1') || QUIET;   // the quiet design always keeps the clock row short
   $('cBlinds').textContent = `${fmt(sb)}/${fmt(bb)}${an && !one ? ' · ante ' + fmt(an) : ''}`;
   $('cNext').textContent = one && an ? `Ante ${fmt(an)}` : `Next: ${fmt(nsb)}/${fmt(nbb)}${nan ? ' · ante ' + fmt(nan) : ''}`;
   const brk = !T.paused && T.breakUntil ? Math.max(0, T.breakUntil - now) : 0;
@@ -2125,6 +2172,7 @@ function tickClock(){
   const all = [...tables.values()].flatMap(t => t.seats.filter(Boolean));
   const me = all.find(p => p.uid === club.me.id);
   $('sPos').textContent = me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching';
+  if(QUIET) qLine(T, d, me);
   const bar = document.querySelector('.shotBar');
   if(bar && d && d.deadline){ const left = Math.max(0, d.deadline - now); bar.style.transform = `scaleX(${Math.min(1, left / d.bank)})`; }
   const tbar = $('turnBar');
