@@ -107,7 +107,9 @@ A match view carries `scores`, `hands` and `seq`, plus `events` (each with `wort
 | 9. Single elimination and round-robin pods | Built, including pods feeding a playoff |
 | 10. Director controls and synced timers | Built: Director card (create, start, cancel, override, log); clocks from server `endsAt` |
 
-Phase 2 (not started): networking profiles with privacy controls, overall club rankings built from placements (never from mixing raw poker and domino scores), sponsor display, read-only TV view and the Blindrise Open for dominoes. Pods feeding a playoff is built (`test/t_domino_playoff.js`).
+Phase 2 (not started): networking profiles with privacy controls, overall club rankings built from placements (never from mixing raw poker and domino scores), sponsor display, read-only TV view and the Blindrise Open for dominoes. Built so far: pods feeding a playoff, and club domino rankings (`test/t_domino_playoff.js`).
+
+**Club rankings:** ranked by titles (tournaments won), then match wins, then win rate, then matches played. Titles are worked out from the stored results each time, so a director's override after the end moves the title. No points are invented, nothing is mixed with poker, and players who left the club are not shown.
 
 ## 6. Staging plan
 

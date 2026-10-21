@@ -3,6 +3,7 @@
 //   drawn from the standings (pod winners seeded first; no pod meets itself in the semi-finals)
 // - a pod result the director changes before any playoff hand is recorded redraws the playoff; after, it is refused
 // - the playoff winner finishes the tournament; pods only (no playoff) still finish when the pods are done
+// - club rankings: titles (worked out from finished tournaments, so an override moves them), then match wins
 // - bad settings are refused: an unknown playoff size, or pods too small for what they send on
 const assert = require('assert');
 const makeDomino = require('../server/domino/club');
@@ -67,6 +68,26 @@ v = A(x, 'dominoState', {}, x.own);
 const fin = v.t.matches.find(m => m.place.stage === 'playoff' && m.place.pround === 2);
 check(v.t.status === 'finished' && fin.status === 'final', 'the final is played and the tournament finishes');
 check(Object.values(x.store.keys('dom:stats:')).length === 8 && x.store.get('dom:stats:' + fin.sides[fin.result.winner][0]).won >= 3, 'stats are kept for every player, the champion with at least 3 wins');
+
+// ---------- club rankings ----------
+const champUid = fin.sides[fin.result.winner][0];
+let rk = A(x, 'dominoState', {}, x.users[7]);
+check(rk.champion && rk.champion.members[0].uid === champUid, 'the finished tournament names its winner');
+check(rk.ranking.top[0].uid === champUid && rk.ranking.top[0].titles === 1 && rk.ranking.top[0].rank === 1 && rk.ranking.players === 8 && rk.ranking.top.length === 8,
+  'club rankings: the winner is first with 1 title; all 8 players are ranked');
+check(rk.ranking.top.slice(1).every(r => r.titles === 0) && rk.ranking.top.every((r, i, a) => !i || a[i - 1].titles > r.titles || a[i - 1].won >= r.won), 'below the winner: ordered by match wins');
+// a director's override of the final after the end moves the title
+A(x, 'dominoOp', { mid: fin.id, op: { opId: opId(), type: 'override', winner: 1 - fin.result.winner, reason: 'wrong player confirmed' } }, x.own);
+rk = A(x, 'dominoState', {}, x.own);
+const newChamp = fin.sides[1 - fin.result.winner][0];
+check(rk.champion.members[0].uid === newChamp && rk.ranking.top.find(r => r.uid === newChamp).titles === 1 && rk.ranking.top.find(r => r.uid === champUid).titles === 0, 'an override of the final after the end moves the title to the new winner');
+// a removed player leaves the rankings
+const gone = x.store.get('user:u8'); x.store.set('user:u8', { ...gone, removed: true });
+check(!A(x, 'dominoState', {}, x.own).ranking.top.some(r => r.uid === 'u8'), 'a player who left the club is not ranked');
+// a new tournament registering still shows the rankings, and with none at all they are empty
+A(x, 'dominoCreate', { preset: 'block', format: 'hu', tables: 2 }, x.own);
+check(A(x, 'dominoState', {}, x.users[0]).ranking.players === 7, 'the rankings stay visible while the next tournament registers');
+check(setup(2).D.view(null).ranking.top.length === 0, 'a club with no domino games has an empty ranking');
 
 // ---------- pod winners only, 3 pods: 3 qualifiers, so the best pod winner gets a bye ----------
 x = setup(9);

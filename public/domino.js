@@ -41,7 +41,9 @@ function draw(){ if(pad) drawPad(); C.rerender(); }
 
 // ---------- Home: the club's tournament ----------
 function homeHTML(){
-  const t = T(); if(!C || !C.on() || !t || t.status === 'cancelled') return '';
+  if(!C || !C.on() || !V) return '';
+  const t = T();
+  if(!t || t.status === 'cancelled') return V.ranking && V.ranking.top.length ? `<div class="card-box dm-card"><span class="eyebrow">Dominoes</span><h3>Club rankings</h3>${rankHTML()}</div>` : '';
   const head = `<span class="eyebrow">Dominoes</span><h3>${esc(t.name)}</h3><p class="note">${esc(rulesLine(t.rules))}</p>`;
   if(t.status === 'registering') return `<div class="card-box dm-card">${head}
     <p>${t.entrants.length} registered${t.registered ? ' · <b>you\'re in</b>' : ''}</p>
@@ -51,13 +53,14 @@ function homeHTML(){
     ${mine ? `<div class="dm-mine"><b>Your match${mine.table ? ' · Table ' + mine.table : ''}</b><span class="dm-big">${mine.scores[0]} – ${mine.scores[1]}</span><small>${esc(STATUS[mine.status])}</small></div>
       <div class="btn-row"><button class="btn red" data-dm="pad" data-mid="${esc(mine.id)}">Open scorepad</button></div>` : '<p>No match for you right now. The bracket is below.</p>'}
     ${listHTML(t)}</div>`;
-  const champ = finalWinner(t);
-  return `<div class="card-box dm-card">${head}<p>${champ ? `Winner: <b>${esc(champ)}</b>` : 'Finished.'}</p>${V.stats ? `<p class="note">Your dominoes: ${V.stats.won} won of ${V.stats.played}</p>` : ''}</div>`;
+  const champ = V.champion && V.champion.members.map(x => x.name).join(' & ');
+  return `<div class="card-box dm-card">${head}<p>${champ ? `Winner: <b>${esc(champ)}</b>` : 'Finished.'}</p>${V.stats ? `<p class="note">Your dominoes: ${V.stats.won} won of ${V.stats.played}</p>` : ''}${rankHTML()}</div>`;
 }
-function finalWinner(t){
-  const ko = t.matches.filter(m => t.structure === 'elim' || m.place.stage === 'playoff');
-  const last = ko.length ? [...ko].sort((a, b) => b.round - a.round)[0] : null;
-  return last && last.result ? sideName(last, last.result.winner) : null;
+// the club's domino table: titles, then match wins (worked out on the server)
+function rankHTML(){
+  const r = V.ranking; if(!r || !r.top.length) return '';
+  const me = C.me() && C.me().id, row = x => `<div class="trow dm-rank${x.uid === me ? ' me' : ''}"><span class="dm-rk">${x.rank}</span><b>${esc(x.name)}</b><small>${x.titles ? x.titles + (x.titles === 1 ? ' title · ' : ' titles · ') : ''}${x.won} won of ${x.played}</small></div>`;
+  return `<div class="dm-ranks"><span class="eyebrow">Club rankings · dominoes</span><div class="table-list">${r.top.map(row).join('')}${r.me ? row(r.me) : ''}</div></div>`;
 }
 // where a match sits: its pod, its knockout round, or its playoff round (Final and Semi-final named)
 function stageText(m){

@@ -238,10 +238,34 @@ module.exports = function makeDomino(store, hooks = {}){
     return moved;
   }
 
+  // ---------- club rankings (dominoes only) ----------
+  // The winner of a finished tournament: its knockout final (straight knockout or the playoff), or the top of the
+  // table when it was a single pod. Several pods without a playoff have no single winner. Worked out from the stored
+  // results every time, so a director's override after the end is reflected.
+  function champion(t){
+    if(t.status !== 'finished') return null;
+    const fin = t.matches.find(p => knockout(t, p) && !p.next);
+    if(fin){ const m = Mget(t.id + '-' + fin.id); return m && m.result ? fin.teams[m.result.winner] : null; }
+    if(t.pods && t.pods.length === 1){ const st = podStandings(t)[0]; return st.rows[0] ? st.rows[0].id : null; }
+    return null;
+  }
+  // Ranked by titles, then match wins, then win rate, then matches played. Only players still in the club; no points
+  // are invented and nothing is mixed with poker.
+  function ranking(u){
+    const titles = {};
+    for(const t of store.values('dom:t:')){ const c = champion(t), tm = c && teamOf(t, c); if(tm) tm.members.forEach(uid => titles[uid] = (titles[uid] || 0) + 1); }
+    const rows = store.keys('dom:stats:').map(k => { const uid = k.slice('dom:stats:'.length), x = store.get('user:' + uid), s = store.get(k);
+      return x && !x.removed && s.played ? { uid, name: x.name, titles: titles[uid] || 0, won: s.won, played: s.played } : null; }).filter(Boolean);
+    rows.sort((a, b) => (b.titles - a.titles) || (b.won - a.won) || (b.won / b.played - a.won / a.played) || (b.played - a.played) || a.name.localeCompare(b.name));
+    rows.forEach((r, i) => r.rank = i + 1);
+    const me = u ? rows.find(r => r.uid === u.id) : null;
+    return { top: rows.slice(0, 10), me: me && me.rank > 10 ? me : null, players: rows.length };
+  }
+
   // ---------- what members see ----------
   function view(u){
     const t = current(), owner = !!(u && h.isOwner(u));
-    if(!t) return { t: null, now: h.now(), owner, canHost: h.canHost(), mine: null, stats: u ? store.get('dom:stats:' + u.id) || null : null };
+    if(!t) return { t: null, now: h.now(), owner, canHost: h.canHost(), mine: null, stats: u ? store.get('dom:stats:' + u.id) || null : null, ranking: ranking(u) };
     const team = id => { const x = teamOf(t, id); return x ? { id: x.id, members: x.members.map(uid => ({ uid, name: nameOf(uid) })) } : null; };
     const matches = t.matches.map(p => { const m = Mget(t.id + '-' + p.id); return { ...M.view(m, h.now()), place: p, teams: p.teams.map(team) }; });
     const mine = u ? matches.find(m => m.sides.flat().includes(u.id) && ['ready', 'live', 'review', 'disputed'].includes(m.status)) || null : null;
@@ -249,7 +273,8 @@ module.exports = function makeDomino(store, hooks = {}){
     return { now: h.now(), owner, canHost: h.canHost(), t: { id: t.id, name: t.name, rules: t.rules, structure: t.structure, podSize: t.podSize, advance: t.advance || 0, playoff: !!t.playoff, tables: t.tables, roundMin: t.roundMin, status: t.status,
       entrants: t.entrants.map(e => ({ uid: e.uid, name: nameOf(e.uid) })), registered: !!(u && t.entrants.some(e => e.uid === u.id)),
       teams: t.teams.map(x => team(x.id)), matches: t.status === 'registering' ? [] : matches, standings },
-      mine: mine ? mine.id : null, stats: u ? store.get('dom:stats:' + u.id) || null : null };
+      champion: t.status === 'finished' ? team(champion(t)) : null,
+      mine: mine ? mine.id : null, stats: u ? store.get('dom:stats:' + u.id) || null : null, ranking: ranking(u) };
   }
   // the director's log for this club
   const auditLog = u => { director(u); return store.values('dom:log:').sort((a, b) => a.at - b.at).slice(-100); };

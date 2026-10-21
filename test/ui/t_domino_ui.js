@@ -2,6 +2,7 @@
 // - the director opens registration from the Director form; members register from the Home card
 // - after the start, each player's Home shows their match and table; the scorepad records an All Fives scoring play
 //   and a hand (pips only), the other phone updates live, both confirm, the result is final
+// - Home then names the winner and shows the club's domino rankings
 // - the scorepad fits the screen with no sideways scroll; screenshots of each step
 // Usage: PLAYWRIGHT_CORE=/path/to/playwright-core CHROMIUM=/path/to/chromium [FONTS_DIR=..] node test/ui/t_domino_ui.js [shotDir]
 const fs = require('fs');
@@ -86,6 +87,10 @@ const shot = (pg, name) => SHOTS ? pg.screenshot({ path: path.join(SHOTS, name) 
     check(/won/.test(await b.locator('.dm-final').textContent()) && /Final/.test(await a.locator('.dm-status').textContent()), `${w}px: both confirmed: final on both phones`);
     check(await noSideScroll(a) && await noSideScroll(b), `${w}px: no sideways scroll on the record`);
     await shot(b, `scorepad-final-${w}.png`);
+    await b.locator('[data-dmp=close]').click(); await sleep(300);
+    const fin = await b.locator('.dm-card').first().textContent();
+    check(/Winner: (Annabelle Moreau|Ben)/.test(fin) && /Club rankings/.test(fin) && await b.locator('.dm-rank').count() === 2 && await noSideScroll(b), `${w}px: Home names the winner and shows the club's domino rankings, no sideways scroll`);
+    await b.locator('.dm-ranks').scrollIntoViewIfNeeded(); await shot(b, `home-rankings-${w}.png`);
     for(const p of [a, b, dp]) await p.context().close();
   }
   await browser.close(); srv.kill(); try{ fs.unlinkSync(DATA); }catch(e){}
