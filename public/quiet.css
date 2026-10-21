@@ -236,9 +236,8 @@
 
 /* the quiet face sets wider than the old condensed one: the dock's status line and the hand helper keep the line
    count the layout was measured with (a showdown line wrapping to a third line moved the dock, t_stability) */
-[data-ui="quiet"] #game .info-line,[data-ui="quiet"] #game .helper{letter-spacing:-.01em}
-@media (max-width:359px){ [data-ui="quiet"] #game .info-line{font-size:13px} }
-[data-ui="quiet"] #game.land .helper .h-line{font-size:13px}
+[data-ui="quiet"] #game .info-line{letter-spacing:-.01em}
+@media (max-width:359px){ [data-ui="quiet"] #game .controls>.info-line:has(br){font-size:13px} }
 /* (sideways the helper keeps the height of its fullest state, the hand, the odds and a two-line tip, so a tip
    appearing does not push the dock column up) */
 [data-ui="quiet"] #game.land .helper{min-height:72px;align-content:center}
