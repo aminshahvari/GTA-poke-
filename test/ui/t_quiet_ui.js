@@ -76,13 +76,19 @@ const contrastOf = (pg, sel) => pg.evaluate(sel => {
     const sizes = await pg.evaluate(() => [...document.querySelectorAll('#seats .seat')].map(s => [s.dataset.side ? 'side' : 'top', parseFloat(getComputedStyle(s.querySelector('.nm')).fontSize), parseFloat(getComputedStyle(s.querySelector('.st')).fontSize)]));
     check(sizes.every(([, nm, st]) => nm >= 9 && st >= 10), `${tag}: plate type (side/top name/stack px): ${sizes.map(x => x.join(' ')).join(', ')}`);
     check(await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${tag}: no sideways scroll`);
-    // the whole tournament in one line: players left of the field, the chip leader of all tables, my place
+    // the whole tournament in one line: players left of the field and my rank; the chip leader is in the sheet (Issue #31)
     const ql = pg.locator('#qline'); let qt = '';
     for(let i = 0; i < 20 && !/\/9/.test(qt); i++){ qt = (await ql.textContent().catch(() => '')).replace(/\s+/g, ' '); if(!/\/9/.test(qt)) await sleep(250); }
-    check(await ql.isVisible() && /9\s*\/9/.test(qt) && /Test \w+|You/.test(qt) && /[\d,]{4,}/.test(qt) && /You\s*\d+(st|nd|rd|th)/.test(qt), `${tag}: the line shows players, chip leader and my place: ${qt.trim()}`);
-    check(await pg.evaluate(() => { const b = document.getElementById('qline').getBoundingClientRect(); return b.height >= 44 && [...document.querySelectorAll('#qline > span')].every(s => { const r = s.getBoundingClientRect(); return r.left >= b.left - 1 && r.right <= b.right + 1; }); }), `${tag}: the line is a 44px tap target and nothing in it spills over`);
+    // (short screens and phones held sideways, the one-row header: the line is the header's first cell, "9/9 · 1st of 9",
+    // where the level box was, and the level is written under or beside the clock; its tap area reaches 44px with ::after)
+    const row1 = await pg.evaluate(() => document.getElementById('game').classList.contains('row1'));
+    check(await ql.isVisible() && /9\s*\/9/.test(qt) && (row1 ? /\d+(st|nd|rd|th) of 9/ : /Your rank\s*\d+(st|nd|rd|th)\s*of 9/).test(qt), `${tag}: the line shows players left and my rank (the rest is in the sheet): ${qt.trim()}`);
+    check(await pg.evaluate(r1 => { const q = document.getElementById('qline'), b = q.getBoundingClientRect(), tap = b.height + (r1 ? 2 * -parseFloat(getComputedStyle(q, '::after').top) : 0);
+      return tap >= 44 && [...q.children].every(s => { const r = s.getBoundingClientRect(); return r.left >= b.left - 1 && r.right <= b.right + 1; }); }, row1), `${tag}: the line is a 44px tap target and nothing in it spills over`);
+    if(row1) check(await pg.evaluate(() => document.querySelector('#game .clock').contains(document.getElementById('qline')) && /Level \d+/.test(document.getElementById('cTimeLbl').offsetParent ? document.getElementById('cTimeLbl').textContent : document.getElementById('cNext').textContent)),
+      `${tag}: one-row header: the line sits in the clock row and the level is still written`);
     check(await pg.locator('#game .stats').isHidden() && await pg.locator('#game .clock #lobbyBtn').isVisible(), `${tag}: the old stats row gives way; Lobby sits in the clock row`);
-    if(tag === '390x844' || tag === '1280x800'){
+    if(tag === '390x844' || tag === '1280x800' || tag === '320x568'){
       await ql.click(); await sleep(500);
       const sh = (await pg.locator('#modalRoot .qsheet').textContent().catch(() => '')).replace(/\s+/g, ' ');
       check(/Players left\s*9 of 9/.test(sh) && /Chip leader/.test(sh) && /Your place\s*\d+(st|nd|rd|th) of 9/.test(sh) && /Average stack/.test(sh) && /BB/.test(sh), `${tag}: a tap opens the details: ${sh.slice(0, 140)}`);
@@ -91,16 +97,20 @@ const contrastOf = (pg, sel) => pg.evaluate(sel => {
       check(!(await pg.locator('#modalRoot .qsheet').count()), `${tag}: Done closes it`);
     }
     // wait for my turn: the action buttons
-    let mine = false; for(let i = 0; i < 60 && !mine; i++){ mine = await pg.locator('.act-btn.fold').isVisible().catch(() => false); if(!mine) await sleep(500); }
+    // (a turn that came while the test was between pages timed out and sat me out: I'm back, as a player would)
+    let mine = false; for(let i = 0; i < 60 && !mine; i++){ mine = await pg.locator('.act-btn.fold, .act-btn.call').first().isVisible().catch(() => false);
+      if(!mine && await pg.locator('#backBtn').isVisible().catch(() => false)) await pg.locator('#backBtn').click().catch(() => {}); if(!mine) await sleep(500); }
     check(mine, `${tag}: my turn comes and the action buttons show`);
     if(mine){
       await sleep(400);
       check(await pg.evaluate(() => [...document.querySelectorAll('.act-btn')].filter(b => b.offsetParent).every(b => { const r = b.getBoundingClientRect(); return r.width >= 44 && r.height >= 44 && r.bottom <= innerHeight + 1 && r.left >= -1 && r.right <= innerWidth + 1; })), `${tag}: every action button is on screen and at least 44x44`);
       for(const k of ['fold', 'call', 'raise']){ const c = await contrastOf(pg, `.act-btn.${k} b`); if(c) check(c >= 4.5, `${tag}: ${k} label contrast ${c.toFixed(1)}:1 (at least 4.5)`); }
       await shot(pg, `quiet-table-${tag}.png`);
-      await pg.locator('.act-btn.fold').click();
-      let gone = false; for(let i = 0; i < 20 && !gone; i++){ gone = !(await pg.locator('.act-btn.fold').isVisible().catch(() => false)); if(!gone) await sleep(150); }
-      check(gone, `${tag}: a tap on Fold plays (the buttons go away)`);
+      // (Fold when I face a bet; when I can check there is no Fold button, so Check)
+      const k = await pg.locator('.act-btn.fold').isVisible() ? 'fold' : 'call';
+      await pg.locator('.act-btn.' + k).click();
+      let gone = false; for(let i = 0; i < 20 && !gone; i++){ gone = !(await pg.locator('.act-btn.' + k).isVisible().catch(() => false)); if(!gone) await sleep(150); }
+      check(gone, `${tag}: a tap on ${k === 'fold' ? 'Fold' : 'Check'} plays (the buttons go away)`);
     }
     await pg.context().close();
   }

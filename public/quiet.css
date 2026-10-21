@@ -171,7 +171,7 @@
 [data-ui="quiet"] #game .stats{display:none}
 [data-ui="quiet"] #game .clock{grid-template-columns:auto minmax(0,1fr) auto auto}
 [data-ui="quiet"] #game .clock .hdr-btns{display:flex;gap:6px}
-[data-ui="quiet"] #game .clock .menu-btn{min-height:38px;padding:0 13px}
+[data-ui="quiet"] #game:not(.row1) .clock .menu-btn{min-height:38px;padding:0 13px}
 [data-ui="quiet"] #game .clock .chat-btn{min-width:42px;padding:0}
 [data-ui="quiet"] #game .qline{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px max(14px,var(--sa-l,0px)) 6px max(14px,var(--sa-r,0px));margin:0;border:0;border-bottom:1px solid var(--q-hair);
   background:transparent;color:var(--q-text);font:inherit;font-size:var(--q-t-sub);text-align:left;cursor:pointer;transition:background var(--q-fast) var(--q-ease)}
@@ -186,7 +186,7 @@
 [data-ui="quiet"] #game .ql-b svg{width:17px;height:17px;flex:none;fill:none;stroke:var(--q-gold);stroke-width:1.6;stroke-linejoin:round}
 [data-ui="quiet"] #game .ql-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--q-text)}
 [data-ui="quiet"] #game .ql-b b{color:var(--q-gold-hi)}
-[data-ui="quiet"] #game .ql-c{display:flex;align-items:center;gap:5px;flex:none;padding:4px 6px 4px 11px;border-radius:999px;background:var(--q-gold-fill);box-shadow:inset 0 0 0 1px rgba(212,178,108,.35)}
+[data-ui="quiet"] #game .ql-c{margin-left:auto;display:flex;align-items:center;gap:5px;flex:none;padding:4px 6px 4px 11px;border-radius:999px;background:var(--q-gold-fill);box-shadow:inset 0 0 0 1px rgba(212,178,108,.35)}
 [data-ui="quiet"] #game .ql-c b{color:var(--q-gold-hi)}
 [data-ui="quiet"] #game .ql-c.w{background:var(--q-fill);box-shadow:none}
 [data-ui="quiet"] #game .ql-c svg{width:14px;height:14px;fill:none;stroke:var(--q-text2);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -201,3 +201,29 @@
 [data-ui="quiet"] #modalRoot .qs-row dd{margin:0;display:grid;justify-items:end;gap:2px;text-align:right;min-width:0}
 [data-ui="quiet"] #modalRoot .qs-row dd b{font-size:var(--q-t-body);font-weight:600;color:var(--q-text)}
 [data-ui="quiet"] #modalRoot .qs-row dd small{font-size:var(--q-t-foot);color:var(--q-text3)}
+
+/* ---------- 9-max density (Muse audit, Issue #31): the action label lives inside the plate ---------- */
+/* A seat's last action (Call, Raise 1,200, Away, Winner, a showdown hand) is written in the plate's name line, as
+   broadcast tables do, instead of a pill floating under the plate (app.js, QUIET): one ring of furniture fewer around
+   the rail, and the layout no longer keeps room for it. The avatar's initials still say whose seat it is. */
+[data-ui="quiet"] #game .nm .badge.inl{position:static;transform:none;display:inline;padding:0;margin:0;background:none!important;box-shadow:none!important;
+  font:inherit;font-weight:700;letter-spacing:0;text-transform:none;color:var(--q-text2);animation:qBadge .22s var(--q-ease) both}
+[data-ui="quiet"] #game .nm .badge.inl:is(.act-raise,.act-bet,.act-all-in){color:var(--q-gold-hi)}
+[data-ui="quiet"] #game .nm .badge.inl:is(.act-call,.act-check){color:#9fe3c2}
+[data-ui="quiet"] #game .nm .badge.inl.act-fold{color:var(--q-text3)}
+[data-ui="quiet"] #game .nm .badge.inl.won{color:var(--q-gold-hi)}
+[data-ui="quiet"] #game .nm .badge.inl.dc{color:#f0a36a}
+@keyframes qBadge{from{opacity:0}to{opacity:1}}
+
+/* the "Free social play" note never covers the hand strip: the line under the strip already says it, all the time */
+[data-ui="quiet"] #game #playNote{display:none}
+
+/* short screens (the one-row header) and phones held sideways: the line is the header's first cell, where the level
+   box was (the level moves under the clock), two lines like the cells beside it; the whole cell is the tap target */
+[data-ui="quiet"] #game.row1 .clock .lvl{display:none}
+[data-ui="quiet"] #game.row1 .qline{display:grid;justify-items:center;align-content:center;gap:1px;width:auto;min-width:52px;min-height:34px;padding:1px 9px;position:relative;
+  border:0;border-radius:var(--q-r-md);background:var(--q-fill);box-shadow:inset 0 0 0 1px rgba(212,178,108,.28)}
+[data-ui="quiet"] #game.row1 .qline b{font-size:17px;line-height:1.1;color:var(--q-text)}
+[data-ui="quiet"] #game.row1 .qline b small{font-size:12px;color:var(--q-text2);font-weight:500}
+[data-ui="quiet"] #game.row1 .qline>small{font-size:12px;line-height:1.1;color:var(--q-gold-hi)}
+[data-ui="quiet"] #game.row1 .qline::after{content:"";position:absolute;inset:-5px 0}

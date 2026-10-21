@@ -1012,11 +1012,13 @@ function seatSizes(area, look, bet){
   if(SIZES.has(key)) return SIZES.get(key);
   const S = inLook(area, look, () => {
     const txt = '<div class="nm">Wwwwwwwwwwwwww</div><div class="st num">8,888,888</div>', badge = '<span class="badge act-raise">Raise 888,888</span>', at = 'style="left:0;top:0"';
+    // (in the quiet design the other seats write their action in the name line, so they keep no room for a pill)
+    const sb = QUIET ? '' : badge;
     const p = document.createElement('div');
     p.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;pointer-events:none';
-    p.innerHTML = `<div class="seat" ${at}><div class="hole">${cardHTML(null, 'mini')}${cardHTML(null, 'mini')}</div>${avHTML('', 'W W')}<div class="plate">${txt}${badge}</div></div>`
+    p.innerHTML = `<div class="seat" ${at}><div class="hole">${cardHTML(null, 'mini')}${cardHTML(null, 'mini')}</div>${avHTML('', 'W W')}<div class="plate">${txt}${sb}</div></div>`
       + `<div class="seat hero" ${at}><div class="hole">${cardHTML(null, 'hero')}${cardHTML(null, 'hero')}</div><div class="plate">${avHTML('', 'W W')}<div class="pl-txt">${txt}</div>${badge}</div></div>`
-      + ['l', 'r', 't', 'tl', 'tr'].map(sd => `<div class="seat" data-side="${sd}" ${at}><div class="hole">${cardHTML(null, 'mini')}${cardHTML(null, 'mini')}</div>${avHTML('', 'W W')}<div class="plate">${txt}${badge}</div></div>`).join('')
+      + ['l', 'r', 't', 'tl', 'tr'].map(sd => `<div class="seat" data-side="${sd}" ${at}><div class="hole">${cardHTML(null, 'mini')}${cardHTML(null, 'mini')}</div>${avHTML('', 'W W')}<div class="plate">${txt}${sb}</div></div>`).join('')
       + `<div class="bet num" ${at}>${chipsIcon(3)}${bet}</div><div class="bet num tight" ${at}>${chipsIcon(3)}${bet}</div><div class="dealer" ${at}>D</div>`;
     area.appendChild(p);
     const o = p.getBoundingClientRect(), box = els => {
@@ -1703,6 +1705,10 @@ function newLock(d){
   g.style.setProperty('--dock-w', Math.min(184, Math.round(window.innerWidth * .47)) + 'px');
   const hb = g.querySelector('.hdr-btns'), home = g.querySelector(row1 || QUIET ? '.clock' : '.stats');
   if(hb && hb.parentNode !== home) home.appendChild(hb);
+  // quiet design, one-row header: the tournament line becomes the header's first cell (in place of the level, which
+  // the clock's second line carries), so the short screens keep every pixel of their table (Muse, Issue #31)
+  const ql = QUIET && $('qline'), qhome = row1 ? g.querySelector('.clock') : g.querySelector('.stats');
+  if(ql && (row1 ? ql.parentNode !== qhome : ql.previousElementSibling !== qhome)) row1 ? qhome.prepend(ql) : qhome.after(ql);
   LOCK = { w: g.clientWidth, hand, h: 0, iw: window.innerWidth, ih: H };
   return true;
 }
@@ -1830,13 +1836,17 @@ function renderTable(){
     // the seat whose turn it is shows no pill from its last action (that CALL is history); the gold ring marks it
     else if(p.act && !acting){ const amt = (p.act === 'Raise' || p.act === 'Bet') ? ' ' + fmt(p.lastAmt) : ''; badge = `<span class="badge act-${p.act.toLowerCase().replace(/[^a-z]+/g, '-')}">${esc(p.act)}${amt}</span>`; }
     const stackTxt = p.inHand && p.allIn && !res ? 'All-in' : fmt(p.stack);
+    // (quiet design: another seat's action goes in its name line, not in a pill under the plate)
+    // (the amount of a bet or raise is on its chips in front of the seat, so the name line says only the action)
+    const inl = QUIET && !isMe && !foot && badge ? badge.replace('class="badge', 'class="badge inl').replace(/>(Raise|Bet) [^<]*</, '>$1<') : '';
+    if(inl) badge = '';
     const cls = `seat ${isMe || foot ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
     const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
     const av = avHTML(p.uid, p.name);
     const shot = acting ? `<div class="shot"><i class="shotBar${d.dcProtect ? ' dc' : ''}"></i></div>` : '';
     parts.push(isMe || foot
       ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
-      : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`);
+      : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm${inl ? ' nm-act' : ''}" title="${esc(p.name)}">${inl || esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`);
     if(p.inHand && p.bet > 0){
       const [bx, by] = LY.betOf(s), bp = pxToPct([bx, by]), [sx, sy] = pctToPx(pos);
       const key = `b${handKey}-${d.street}-${s}-${p.bet}`, isNew = !seen.has(key); seen.add(key);
@@ -2117,7 +2127,6 @@ if(QUIET){
   document.querySelector('#game .stats').after(b);
   b.onclick = () => qSheet();
 }
-const Q_CROWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8l4.2 3.6L12 5l3.8 6.6L20 8l-1.6 10H5.6z"/></svg>';
 const Q_CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 function qFacts(T, d, me){
   const seats = d ? d.seats.filter(Boolean) : [], top = seats.reduce((a, p) => !a || p.stack > a.stack ? p : a, null);
@@ -2131,10 +2140,11 @@ function qFacts(T, d, me){
 function qLine(T, d, me){
   const el = $('qline'), f = qFacts(T, d, me);
   el.hidden = false;
-  const lead = f.leader ? (f.meLead ? 'You' : esc(f.leader.name)) : '-';
-  el.innerHTML = `<span class="ql-a"><i class="ql-dot" aria-hidden="true"></i><b class="num">${f.players}</b><small>/${f.total}</small><small class="ql-w">&nbsp;players</small></span>`
-    + `<span class="ql-b">${Q_CROWN}<span class="ql-n">${lead}</span>${f.leader ? `<b class="num">${fmt(f.leader.stack)}</b>` : ''}</span>`
-    + `<span class="ql-c${f.rank ? '' : ' w'}">${f.rank ? `<small>You</small><b class="num">${ord(f.rank)}</b>` : '<small>Watching</small>'}${Q_CHEV}</span>`;
+  if($('game').classList.contains('row1')){
+    el.innerHTML = `<b class="num">${f.players}<small>/${f.total}</small></b><small>${f.rank ? ord(f.rank) + ' of ' + f.players : 'Watching'}</small>`;
+  } else el.innerHTML = `<span class="ql-a"><i class="ql-dot" aria-hidden="true"></i><b class="num">${f.players}</b><small>/${f.total}</small><small class="ql-w">&nbsp;players left</small></span>`
+    // (collapsed: players left and your place only; the chip leader and the rest are in the sheet a tap away, Muse, Issue #31)
+    + `<span class="ql-c${f.rank ? '' : ' w'}">${f.rank ? `<small>Your rank</small><b class="num">${ord(f.rank)}</b><small>of ${f.players}</small>` : '<small>Watching</small>'}${Q_CHEV}</span>`;
   el.setAttribute('aria-label', `${f.players} of ${f.total} players left. Chip leader ${f.leader ? (f.meLead ? 'you' : f.leader.name) + ', ' + fmt(f.leader.stack) + ' chips' : 'not known yet'}. ${f.rank ? 'You are ' + ord(f.rank) : 'You are watching'}. Tap for details.`);
 }
 function qSheet(){
@@ -2161,11 +2171,13 @@ function tickClock(){
   // in the one-row header of the shortest screens the ante takes the second line, in place of the next level
   const one = $('game').classList.contains('row1') || QUIET;   // the quiet design always keeps the clock row short
   $('cBlinds').textContent = `${fmt(sb)}/${fmt(bb)}${an && !one ? ' · ante ' + fmt(an) : ''}`;
-  $('cNext').textContent = one && an ? `Ante ${fmt(an)}` : `Next: ${fmt(nsb)}/${fmt(nbb)}${nan ? ' · ante ' + fmt(nan) : ''}`;
+  // (quiet, sideways: the clock has no second line, so the level the line's cell replaced is written here)
+  const qLand = QUIET && $('game').classList.contains('row1') && $('game').classList.contains('land');
+  $('cNext').textContent = qLand ? `Level ${T.level + 1}${an ? ' · Ante ' + fmt(an) : ''}` : one && an ? `Ante ${fmt(an)}` : `Next: ${fmt(nsb)}/${fmt(nbb)}${nan ? ' · ante ' + fmt(nan) : ''}`;
   const brk = !T.paused && T.breakUntil ? Math.max(0, T.breakUntil - now) : 0;
   const ms = T.paused ? T.pausedLeft : brk || Math.max(0, T.levelEndsAt - now);
   $('cTime').textContent = T.paused ? 'Paused' : T.breakPending ? 'Break' : mmss(ms);
-  $('cTimeLbl').textContent = brk ? 'Break' : T.breakPending ? 'After this hand' : !T.paused && ms <= 0 ? 'Blinds up next hand' : 'Time left';
+  $('cTimeLbl').textContent = brk ? 'Break' : T.breakPending ? 'After this hand' : !T.paused && ms <= 0 ? 'Blinds up next hand' : QUIET && $('game').classList.contains('row1') ? `Level ${T.level + 1}` : 'Time left';
   breakUI(T, tables.get(watchTid || club.myTable), now); sponsorUI(T, now);
   $('sAvg').textContent = fmt(T.entrants * T.stack / Math.max(1, T.remaining));
   const d = tables.get(watchTid || club.myTable);
