@@ -1839,7 +1839,7 @@ function renderTable(){
     // (quiet design: another seat's action goes in its name line, not in a pill under the plate)
     // (the amount of a bet or raise is on its chips in front of the seat, so the name line says only the action)
     // (Disconnected stays a pill of its own, with its orange clock: a status the table must not miss)
-    const inl = QUIET && !isMe && !foot && badge && !/class="badge[^"]*\bdc\b/.test(badge) ? badge.replace('class="badge', 'class="qact').replace(/>(Raise|Bet) [^<]*</, '>$1<') : '';
+    const inl = QUIET && !isMe && !foot && badge && !/class="badge[^"]*\bdc\b/.test(badge) ? (m => m && { cls: m[1].trim(), txt: m[2].replace(/<[^>]*>/g, '').replace(/^(Raise|Bet) .*/, '$1') })(badge.match(/class="badge([^"]*)"[^>]*>([\s\S]*?)<\/span>/)) : null;
     if(inl) badge = '';
     const cls = `seat ${isMe || foot ? 'hero' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${res && p.won > 0 ? 'win' : ''}`;
     const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
@@ -1847,7 +1847,7 @@ function renderTable(){
     const shot = acting ? `<div class="shot"><i class="shotBar${d.dcProtect ? ' dc' : ''}"></i></div>` : '';
     parts.push(isMe || foot
       ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
-      : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate">${inl}<div class="nm${inl ? ' nm-off' : ''}" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`);
+      : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm${inl ? ' nm-act ' + inl.cls : ''}"${inl ? ` data-act="${esc(inl.txt)}"` : ''} title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`);
     if(p.inHand && p.bet > 0){
       const [bx, by] = LY.betOf(s), bp = pxToPct([bx, by]), [sx, sy] = pctToPx(pos);
       const key = `b${handKey}-${d.street}-${s}-${p.bet}`, isNew = !seen.has(key); seen.add(key);

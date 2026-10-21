@@ -206,20 +206,16 @@
 /* A seat's last action (Call, Raise 1,200, Away, Winner, a showdown hand) is written in the plate's name line, as
    broadcast tables do, instead of a pill floating under the plate (app.js, QUIET): one ring of furniture fewer around
    the rail, and the layout no longer keeps room for it. The avatar's initials still say whose seat it is. */
-[data-ui="quiet"] #game .plate{position:relative}
-[data-ui="quiet"] #game .plate .nm.nm-off{visibility:hidden}
-[data-ui="quiet"] #game .plate .qact{position:absolute;left:0;right:0;top:auto;display:block;line-height:inherit;padding:inherit;padding-top:0;padding-bottom:0;margin:0;text-align:center;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;
-  font-weight:700;letter-spacing:0;text-transform:none;color:var(--q-text2);animation:qBadge .22s var(--q-ease) both}
-[data-ui="quiet"] #game .plate .qact:is(.act-raise,.act-bet,.act-all-in){color:var(--q-gold-hi)}
-[data-ui="quiet"] #game .plate .qact:is(.act-call,.act-check){color:#9fe3c2}
-[data-ui="quiet"] #game .plate .qact.act-fold{color:var(--q-text3)}
-[data-ui="quiet"] #game .plate .qact.won{color:var(--q-gold-hi)}
-[data-ui="quiet"] #game .plate .qact.dc{color:#f0a36a}
+/* (drawn by the name line itself, ::after over its own box, so it takes the name's size and place exactly; the name
+   stays in the page, see-through, for screen readers and the title tooltip) */
+[data-ui="quiet"] #game .nm.nm-act{position:relative;color:transparent}
+[data-ui="quiet"] #game .nm.nm-act::after{content:attr(data-act);position:absolute;inset:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-weight:700;color:var(--q-text2);animation:qBadge .22s var(--q-ease) both}
+[data-ui="quiet"] #game .nm.nm-act:is(.act-raise,.act-bet,.act-all-in,.won)::after{color:var(--q-gold-hi)}
+[data-ui="quiet"] #game .nm.nm-act:is(.act-call,.act-check)::after{color:#9fe3c2}
+[data-ui="quiet"] #game .nm.nm-act.act-fold::after{color:var(--q-text3)}
 @keyframes qBadge{from{opacity:0}to{opacity:1}}
 
-/* the "Free social play" note never covers the hand strip: the line under the strip already says it, all the time */
-[data-ui="quiet"] #game #playNote{display:none}
 
 /* short screens (the one-row header) and phones held sideways: the line is the header's first cell, where the level
    box was (the level moves under the clock), two lines like the cells beside it; the whole cell is the tap target */
