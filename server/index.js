@@ -380,6 +380,7 @@ const server = http.createServer((req, res) => {
   const cache = url.pathname.startsWith('/vendor/') ? { 'Cache-Control': 'public, max-age=31536000, immutable' } : undefined;
   fs.readFile(full, (err, buf) => {
     if(err) return send(res, 404, 'Not found', 'text/plain');
+    if(file === 'index.html' && quietUI()) buf = quietPage(buf);
     // app files: the phone keeps a copy but asks every time ("no-cache"); an unchanged file costs a 304 instead of the whole file
     const tag = '"' + crypto.createHash('sha1').update(buf).digest('base64url').slice(0, 20) + '"';
     const fresh = cache || { 'Cache-Control': 'no-cache', ETag: tag };
@@ -724,6 +725,12 @@ setInterval(() => { for(const ws of sockets){ if(!ws.isAlive){ ws.terminate(); c
 
 // Staging must never point at the production database: refuse to start if it does.
 const PROD_DB_HOST = 'dpg-db81kuom7kps73cmh9dg-a';
+// The quiet-luxury design (owner GO for preview/development only, 2026-10-21): UI_QUIET=1 marks the page and adds
+// public/quiet.css, whose rules all sit under html[data-ui="quiet"]. Unset, the page is byte for byte what it was.
+// Never on the production database, whatever the environment says.
+const quietUI = () => process.env.UI_QUIET === '1' && !String(process.env.DATABASE_URL || '').includes(PROD_DB_HOST);
+const quietPage = buf => Buffer.from(String(buf).replace('<html lang="en">', '<html lang="en" data-ui="quiet">').replace('</head>', '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">\n<link rel="stylesheet" href="/quiet.css">\n</head>'));
+if(process.env.UI_QUIET === '1') console.log(quietUI() ? 'UI_QUIET: the quiet design is on (preview)' : 'UI_QUIET ignored: this is the production database');
 if(process.env.STAGING === '1' && String(process.env.DATABASE_URL || '').includes(PROD_DB_HOST)){
   console.error('STAGING=1 but DATABASE_URL points at the production database. Refusing to start.');
   process.exit(1);

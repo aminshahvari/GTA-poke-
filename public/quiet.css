@@ -1,0 +1,163 @@
+/* Blindrise, quiet luxury (owner GO for preview/development only, 2026-10-21).
+   Loaded only when the server runs with UI_QUIET=1, and every rule sits under html[data-ui="quiet"], so without the
+   switch nothing here applies. Layout geometry (seat positions, felt shape, dock) is left to style.css: this layer
+   changes type, colour, surfaces and motion only. */
+
+/* ---------- tokens ---------- */
+[data-ui="quiet"]{
+  /* surfaces: midnight navy, three steps */
+  --q-bg:#05080f; --q-bg2:#090e1a; --q-surface:#0e1525; --q-surface2:#141d31; --q-fill:rgba(255,255,255,.07); --q-fill2:rgba(255,255,255,.11);
+  /* text: one ivory, two quieter steps */
+  --q-text:#f4f0e7; --q-text2:rgba(236,232,222,.64); --q-text3:rgba(236,232,222,.40);
+  /* champagne, used for one thing per screen */
+  --q-gold:#d4b26c; --q-gold-hi:#ead6a4; --q-gold-fill:rgba(212,178,108,.14);
+  --q-hair:rgba(255,255,255,.08); --q-hair-gold:rgba(212,178,108,.24);
+  --q-good:#5ccf98; --q-alert:#ef7a7f;
+  /* felt */
+  --q-felt:#0c3324; --q-felt-hi:#16523b; --q-rail:#0b111f;
+  /* type: the device's own face first (San Francisco on Apple devices), Inter elsewhere */
+  --q-font:-apple-system,BlinkMacSystemFont,"Inter","IBM Plex Sans",system-ui,sans-serif;
+  --q-t-cap:11px; --q-t-foot:13px; --q-t-sub:15px; --q-t-body:17px; --q-t-title:20px; --q-t-large:28px;
+  /* shape, rhythm, depth, motion */
+  --q-r-sm:10px; --q-r-md:14px; --q-r-lg:20px; --q-r-xl:28px;
+  --q-blur:saturate(160%) blur(18px);
+  --q-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 12px 32px rgba(0,0,0,.35);
+  --q-ease:cubic-bezier(.32,.72,0,1); --q-fast:160ms; --q-slow:340ms;
+
+  /* the older tokens, pointed at the quiet ones */
+  --display:var(--q-font); --body:var(--q-font); --cond:var(--q-font); --lx-serif:var(--q-font);
+  --lx-ink:var(--q-bg); --lx-navy:var(--q-surface); --lx-navy2:var(--q-surface2); --lx-ivory:var(--q-text); --lx-mute:var(--q-text2); --lx-mute2:var(--q-text3);
+  --lx-gold:var(--q-gold); --lx-gold-hi:var(--q-gold-hi); --lx-hair:var(--q-hair); --lx-hair2:rgba(255,255,255,.12);
+  --lx-glass:linear-gradient(var(--q-fill),var(--q-fill)); --lx-shadow:var(--q-shadow);
+  --lx-gold-grad:linear-gradient(var(--q-gold),var(--q-gold));
+}
+[data-ui="quiet"] body{font-family:var(--q-font);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-feature-settings:"ss01","cv11"}
+[data-ui="quiet"] .num,[data-ui="quiet"] .st,[data-ui="quiet"] .pot,[data-ui="quiet"] #cTime,[data-ui="quiet"] #cBlinds{font-variant-numeric:tabular-nums}
+
+/* labels: sentence case, no tracking (the shouting caps go) */
+[data-ui="quiet"] :is(.stats small,.lvl small,.time small,.menu-btn,.act-btn b,.eyebrow,.status-pill,.br-badge,.tabs button span,.lv-label){text-transform:none!important;letter-spacing:0!important}
+
+/* ---------- table: header ---------- */
+[data-ui="quiet"] #game{background:radial-gradient(120% 70% at 50% 40%,#0d1830 0%,var(--q-bg2) 55%,var(--q-bg) 100%)}
+[data-ui="quiet"] #game .clock{background:transparent;border-bottom:0}
+[data-ui="quiet"] #game .lvl{background:var(--q-fill);border:0;border-radius:var(--q-r-md);color:var(--q-text)}
+[data-ui="quiet"] #game .lvl small{font-size:var(--q-t-cap);font-weight:500;color:var(--q-text2)}
+[data-ui="quiet"] #game .lvl b{font-family:var(--q-font);font-weight:600;letter-spacing:-.02em;color:var(--q-text)}
+[data-ui="quiet"] #game .blinds b{font-weight:600;letter-spacing:-.01em;color:var(--q-text)}
+[data-ui="quiet"] #game .blinds small{color:var(--q-text2)}
+[data-ui="quiet"] #game .time b{font-family:var(--q-font);font-weight:500;letter-spacing:-.02em;color:var(--q-text)}
+[data-ui="quiet"] #game .time small{color:var(--q-text3);font-size:var(--q-t-foot)}
+[data-ui="quiet"] #game .stats{background:transparent;border-bottom:1px solid var(--q-hair);grid-template-columns:minmax(0,.85fr) minmax(0,.85fr) minmax(0,1.3fr) auto}
+[data-ui="quiet"] #game .stats small{color:var(--q-text3);font-weight:500}
+[data-ui="quiet"] #game .stats b{font-weight:600;letter-spacing:-.015em;color:var(--q-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+[data-ui="quiet"] #game .menu-btn{background:var(--q-fill);border:0;color:var(--q-text);font-family:var(--q-font);font-size:var(--q-t-sub);font-weight:500;
+  transition:background var(--q-fast) var(--q-ease),transform var(--q-fast) var(--q-ease)}
+[data-ui="quiet"] #game .menu-btn:active{background:var(--q-fill2);transform:scale(.96)}
+/* the chat button: a drawn bubble instead of the emoji (the emoji stays in the markup, moved off screen; the button keeps its label) */
+[data-ui="quiet"] #game .chat-btn{text-indent:-9999px;white-space:nowrap;background:var(--q-fill) center/20px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f4f0e7' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 6.8c0-1.3 1-2.3 2.3-2.3h10.4c1.3 0 2.3 1 2.3 2.3v7.4c0 1.3-1 2.3-2.3 2.3H11l-4.2 3.3v-3.3c-1.3 0-2.3-1-2.3-2.3z'/%3E%3C/svg%3E")}
+
+/* ---------- table: felt and rail ---------- */
+[data-ui="quiet"] #game .felt{background:linear-gradient(180deg,#121b2e,var(--q-rail) 50%,#080d18);
+  box-shadow:0 0 0 1px var(--q-hair-gold),0 24px 60px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07)}
+[data-ui="quiet"] #game .felt::before{background:radial-gradient(ellipse 72% 62% at 50% 40%,var(--q-felt-hi),var(--q-felt) 80%);
+  box-shadow:0 0 0 1px rgba(212,178,108,.32),inset 0 10px 30px rgba(0,0,0,.40),inset 0 0 80px rgba(0,0,0,.30)}
+[data-ui="quiet"] #game .felt::after{color:rgba(244,240,231,.045);font-weight:500;letter-spacing:.42em}
+[data-ui="quiet"] #game .pot{background:rgba(5,8,15,.42);box-shadow:none;font-weight:600;color:var(--q-text);backdrop-filter:var(--q-blur);-webkit-backdrop-filter:var(--q-blur)}
+
+/* ---------- table: seats (Issue #21: bigger names, stacks at least 13px) ---------- */
+[data-ui="quiet"] #game .plate{background:rgba(12,19,34,.86);border:1px solid var(--q-hair);border-radius:12px;
+  box-shadow:0 6px 16px rgba(0,0,0,.45);backdrop-filter:var(--q-blur);-webkit-backdrop-filter:var(--q-blur)}
+[data-ui="quiet"] #game .nm{font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--q-text)}
+[data-ui="quiet"] #game .st{font-size:13.5px;font-weight:600;color:var(--q-gold-hi)}
+[data-ui="quiet"] #game .seat.hero .plate{border-color:var(--q-hair-gold)}
+[data-ui="quiet"] #game .av{box-shadow:0 0 0 1px rgba(255,255,255,.14),0 4px 10px rgba(0,0,0,.5);font-weight:600}
+[data-ui="quiet"] #game .seat.acting .av{box-shadow:0 0 0 2px var(--q-gold),0 0 0 6px rgba(212,178,108,.18)}
+[data-ui="quiet"] #game .seat.acting .plate{border-color:rgba(212,178,108,.55)}
+[data-ui="quiet"] #game .seat.win .plate{border-color:var(--q-good);box-shadow:0 0 0 1px var(--q-good),0 0 24px rgba(92,207,152,.35)}
+[data-ui="quiet"] #game .badge{text-transform:none;border-radius:999px;font-weight:600;letter-spacing:.02em;background:var(--q-surface2);color:var(--q-text2);box-shadow:0 0 0 1px var(--q-hair)}
+[data-ui="quiet"] #game .badge.act-raise,[data-ui="quiet"] #game .badge.act-bet,[data-ui="quiet"] #game .badge.act-all-in{background:var(--q-gold);color:#1a1408;box-shadow:none}
+[data-ui="quiet"] #game .card.back{background:repeating-linear-gradient(45deg,#18233c 0 2px,#101929 2px 4px);border-color:rgba(212,178,108,.5);box-shadow:inset 0 0 0 2px rgba(212,178,108,.16)}
+
+/* ---------- table: the dock (helper, timer, actions) ---------- */
+[data-ui="quiet"] #game .controls{background:linear-gradient(transparent,rgba(5,8,15,.92) 22%)}
+[data-ui="quiet"] #game .helper,[data-ui="quiet"] #game .sizing{background:rgba(14,21,37,.82);border:1px solid var(--q-hair);border-radius:var(--q-r-lg);
+  backdrop-filter:var(--q-blur);-webkit-backdrop-filter:var(--q-blur);box-shadow:var(--q-shadow)}
+[data-ui="quiet"] #game .playline{color:var(--q-text3);letter-spacing:0}
+[data-ui="quiet"] #game .turnbar{height:4px;background:var(--q-fill)}
+[data-ui="quiet"] #game .turnbar i{background:var(--q-gold)}
+[data-ui="quiet"] #game .turnbar i.low{background:var(--q-alert)}
+[data-ui="quiet"] #game .turnbar span{color:var(--q-text2)}
+[data-ui="quiet"] #game .xtime{background:var(--q-fill);border:0;color:var(--q-text)}
+[data-ui="quiet"] #game .act-btn{border:0;border-radius:var(--q-r-lg);box-shadow:none;transition:transform var(--q-fast) var(--q-ease),filter var(--q-fast) var(--q-ease)}
+[data-ui="quiet"] #game .act-btn:active{transform:scale(.97);filter:brightness(1.08)}
+[data-ui="quiet"] #game .act-btn b{font-family:var(--q-font);font-size:var(--q-t-body);font-weight:600}
+[data-ui="quiet"] #game .act-btn span{font-weight:500}
+[data-ui="quiet"] #game .act-btn.raise span:not(.num){font-size:12px}
+/* three different fills, so the three never blur together at a glance: glass, champagne, ivory */
+[data-ui="quiet"] #game .act-btn.fold{background:var(--q-fill);color:var(--q-text)}
+[data-ui="quiet"] #game .act-btn.call{background:var(--q-gold);color:#17120a}
+[data-ui="quiet"] #game .act-btn.call span{color:rgba(23,18,10,.72)}
+[data-ui="quiet"] #game .act-btn.raise{background:var(--q-text);color:#0b1222;box-shadow:none}
+[data-ui="quiet"] #game .act-btn.raise span{color:rgba(11,18,34,.62)}
+[data-ui="quiet"] #game .act-btn.raise.allin{background:#c4434b;color:#fff5f5}
+[data-ui="quiet"] #game .act-btn.raise.allin span{color:rgba(255,245,245,.82)}
+[data-ui="quiet"] #game .act-btn.back{background:var(--q-fill);border:0;color:var(--q-text)}
+[data-ui="quiet"] #game .sz-presets button{background:var(--q-fill);border:0}
+[data-ui="quiet"] #game .sz-presets button[aria-pressed=true]{background:var(--q-gold-fill);color:var(--q-gold-hi);box-shadow:inset 0 0 0 1px rgba(212,178,108,.5)}
+[data-ui="quiet"] #game .sz-slider input{background:linear-gradient(90deg,rgba(212,178,108,.45),var(--q-gold))}
+[data-ui="quiet"] #game .preacts button{background:var(--q-fill);border-color:transparent}
+[data-ui="quiet"] #game .chat-sheet,[data-ui="quiet"] #game .banner,[data-ui="quiet"] #game .coachtip{background:rgba(14,21,37,.94);border-color:var(--q-hair);backdrop-filter:var(--q-blur);-webkit-backdrop-filter:var(--q-blur)}
+[data-ui="quiet"] #game .brk{border-radius:var(--q-r-lg)}
+
+/* ---------- lobby ---------- */
+[data-ui="quiet"] #lobby{background:radial-gradient(120% 45% at 50% -8%,#0f1a33 0%,var(--q-bg2) 50%,var(--q-bg) 100%)}
+[data-ui="quiet"] #lobby::before{display:none}
+[data-ui="quiet"] #lobby .topbar{background:rgba(5,8,15,.72);border-bottom:1px solid var(--q-hair);backdrop-filter:var(--q-blur);-webkit-backdrop-filter:var(--q-blur)}
+[data-ui="quiet"] #lobby .tabs{background:rgba(9,14,26,.78);border-top:1px solid var(--q-hair);backdrop-filter:var(--q-blur);-webkit-backdrop-filter:var(--q-blur)}
+[data-ui="quiet"] #lobby .tabs button{font-size:11px;font-weight:500;color:var(--q-text3)}
+[data-ui="quiet"] #lobby .tabs button[aria-selected="true"],[data-ui="quiet"] #lobby .tabs .biz-tab[aria-selected="true"]{color:var(--q-gold-hi)}
+[data-ui="quiet"] #lobby .tabs button[aria-selected="true"] svg{filter:none}
+[data-ui="quiet"] #lobby .tabs button[aria-selected="true"]::before{display:none}
+[data-ui="quiet"] #lobby .card-box{background:var(--q-surface);border:1px solid var(--q-hair);border-radius:var(--q-r-lg);box-shadow:none}
+[data-ui="quiet"] #lobby .card-box.poker-hero{background:radial-gradient(90% 70% at 100% 0%,rgba(212,178,108,.10),transparent 60%),var(--q-surface2);border-color:var(--q-hair-gold)}
+[data-ui="quiet"] #lobby .card-box h3{font-family:var(--q-font);font-weight:600;font-size:var(--q-t-title);letter-spacing:-.015em;line-height:1.2}
+[data-ui="quiet"] #lobby .card-box p{color:var(--q-text2)}
+[data-ui="quiet"] :is(#lobby,#modalRoot) h1,[data-ui="quiet"] :is(#lobby,#modalRoot) h2{font-family:var(--q-font);letter-spacing:-.02em}
+[data-ui="quiet"] :is(#lobby,#modalRoot,#game) .btn{border-radius:var(--q-r-md);transition:transform var(--q-fast) var(--q-ease),background var(--q-fast) var(--q-ease)}
+[data-ui="quiet"] :is(#lobby,#modalRoot,#game) .btn:active{transform:scale(.97)}
+
+/* ---------- sheets and modals: slide up like a native sheet ---------- */
+[data-ui="quiet"] #modalRoot .modal{border-radius:var(--q-r-xl) var(--q-r-xl) 0 0;animation:qSheet var(--q-slow) var(--q-ease)}
+@keyframes qSheet{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+
+/* ---------- accessibility ---------- */
+[data-ui="quiet"] :is(button,a,input,select,[tabindex]):focus-visible{outline:2px solid var(--q-gold-hi);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  [data-ui="quiet"] *{animation-duration:1ms!important;transition-duration:1ms!important}
+}
+/* phones that struggle with blur get solid surfaces */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  [data-ui="quiet"] #game .plate,[data-ui="quiet"] #game .helper,[data-ui="quiet"] #lobby .tabs,[data-ui="quiet"] #lobby .topbar{background:var(--q-surface)}
+}
+
+/* ---------- the Lounge: a large title, quieter doors, no faux italics ---------- */
+[data-ui="quiet"] :is(#lobby,#modalRoot) :is(.lx-greet,.lx-lounge,.lx-motto b,.empty,.dm-v,.op-note){font-style:normal}
+[data-ui="quiet"] #lobby .lx-brandline .eyebrow{font-size:var(--q-t-foot);font-weight:500;color:var(--q-text3)}
+[data-ui="quiet"] #lobby .lx-lounge{font-size:var(--q-t-sub);font-weight:600;color:var(--q-gold-hi)}
+[data-ui="quiet"] #lobby .lx-greet{font-size:var(--q-t-sub);font-weight:500;color:var(--q-text2)}
+[data-ui="quiet"] #lobby .lx-id-t h2{font-weight:700;letter-spacing:-.03em}
+[data-ui="quiet"] #lobby .lx-role{text-transform:none;letter-spacing:0;font-size:var(--q-t-foot);font-weight:600;color:var(--q-gold)}
+[data-ui="quiet"] #lobby .lx-door{background:var(--q-surface);border:1px solid var(--q-hair);box-shadow:none;transition:transform var(--q-fast) var(--q-ease),background var(--q-fast) var(--q-ease)}
+[data-ui="quiet"] #lobby .lx-door::after{display:none}
+[data-ui="quiet"] #lobby button.lx-door:active{transform:scale(.98);background:var(--q-surface2);border-color:var(--q-hair)}
+[data-ui="quiet"] #lobby .lx-door.lx-poker{background:radial-gradient(90% 120% at 100% 0%,rgba(212,178,108,.12),transparent 60%),var(--q-surface2);border-color:var(--q-hair-gold)}
+[data-ui="quiet"] #lobby .lx-door-ic{border:0;background:var(--q-gold-fill);border-radius:12px}
+[data-ui="quiet"] #lobby .lx-poker .lx-door-ic{background:var(--q-gold);box-shadow:none}
+[data-ui="quiet"] #lobby .lx-door-t b{font-weight:600;font-size:var(--q-t-body);letter-spacing:-.015em;line-height:1.2}
+[data-ui="quiet"] #lobby .lx-poker .lx-door-t b{font-size:var(--q-t-title)}
+[data-ui="quiet"] #lobby .lx-door-t small{font-size:var(--q-t-foot);color:var(--q-text2)}
+[data-ui="quiet"] #lobby .lx-poker .lx-door-t small{color:var(--q-gold-hi)}
+[data-ui="quiet"] #lobby .lx-door.soon em{text-transform:none;letter-spacing:0;font-family:var(--q-font)}
+[data-ui="quiet"] #lobby .lx-motto b{font-weight:600;font-size:var(--q-t-title);letter-spacing:-.015em}
+[data-ui="quiet"] #lobby .lx-motto{color:var(--q-text2);letter-spacing:0}
+[data-ui="quiet"] #lobby .lx-pagehead h2{font-weight:700;letter-spacing:-.03em}
