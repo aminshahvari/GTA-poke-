@@ -176,7 +176,7 @@ function connect(){
   if(!token){ return post('/api/status', {}).then(s => s.hasOwner ? welcomeScreen() : authScreen('setup')).catch(() => welcomeScreen()); }
   if(ws) try{ ws.close(); }catch(e){}
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-  ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined })); };
+  ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined, spectate: watching() || undefined })); };
   ws.onmessage = ev => {
     const m = JSON.parse(ev.data);
     if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
@@ -206,10 +206,13 @@ function onClub(c){
   club = c; clockSkew = c.now - Date.now();
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   if(c.clubSwitching) clubSwitching(c);
-  $('meChip').innerHTML = `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
-  $('meBtn').onclick = () => openProfile(c.me.id);
-  if($('clubBtn')) $('clubBtn').onclick = pickClub;
-  $('outBtn').onclick = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
+  $('chatBtn').hidden = !!c.spectate; // watchers from another club never see a table's chat
+  $('meChip').innerHTML = c.spectate ? `<button class="club-btn" data-live="home" aria-label="Back to ${esc(c.home.name)}">← ${esc(c.home.name)}</button>` : `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
+  if(!c.spectate){
+    $('meBtn').onclick = () => openProfile(c.me.id);
+    if($('clubBtn')) $('clubBtn').onclick = pickClub;
+    $('outBtn').onclick = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
+  }
   $('dirTab').hidden = !c.me.owner;
   const st = c.tourney && c.tourney.status;
   if(st === 'finished' && lastStatus === 'running'){ view = 'lobby'; watchTid = null; showScreen('lobby'); tab = 'event'; celebrate(); }
@@ -228,6 +231,7 @@ function onClub(c){
 // club switching: remember which club this is; a signed-in member who opens another club's invite link joins it
 let joinTried = false;
 function clubSwitching(c){
+  if(c.spectate) return; // watching a Blindrise game: the app still belongs to the member's own club
   local.set('club', c.club.id);
   if(joinTried || !location.pathname.startsWith('/join/')) return;
   joinTried = true;
@@ -257,6 +261,8 @@ function renderLobby(){
   const body = $('lobbyBody');
   $('tabs').hidden = !!club.suspended;
   if(club.suspended){ document.querySelector('.app').classList.remove('wide'); body.innerHTML = suspendedHTML(); wireLobby(); return; }
+  $('tabs').hidden = !!club.spectate;
+  if(club.spectate){ document.querySelector('.app').classList.remove('wide'); body.innerHTML = watchHTML(); boardOnArrival(); return; }
   // Business Club and Opportunity Club stay hidden from members until the owner opens them (Director tab); the owner can always preview
   const clubsOn = !!(club.features && club.features.clubs), clubsVisible = !club.events && (clubsOn || club.me.owner);
   const bizTab = document.querySelector('#tabs [data-tab="biz"]');
@@ -299,7 +305,7 @@ function renderHome(body, clubsOn, showClubs){
   // members get the practice table on Home too (the owner has it in Director); not while seated in a running tournament
   const seated = !!(club.myTable && club.tourney && club.tourney.status === 'running');
   const extra = document.createElement('div'); extra.innerHTML = (clubsOn || club.events ? '' : comingHTML()) + (club.me.owner || seated ? '' : demoCard()) + picNudgeHTML();
-  body.innerHTML = memberHomeHTML(clubsOn || club.me.owner) + beventHTML() + blindriseHTML() + window.Domino.homeHTML() + openClubHTML() + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
+  body.innerHTML = liveHTML() + memberHomeHTML(clubsOn || club.me.owner) + (club.live ? '' : beventHTML()) + blindriseHTML() + window.Domino.homeHTML() + openClubHTML() + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
   body.append(...cards.slice(0, n), ...[...extra.children]);
   if(showClubs){
     const biz = document.createElement('section'); biz.className = 'hsec hsec-biz'; biz.setAttribute('aria-labelledby', 'hs-biz');
@@ -686,6 +692,70 @@ async function postBroadcast(){
   try{ await post('/api/platformPost', body); toast('Posted to every club.'); $('bcTitle').value = ''; $('bcBody').value = ''; $('bcWhen').value = ''; }
   catch(e){ modal(`<h2>That didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
 }
+// ---------- Live at Blindrise (Issue #25): the top of every member club's home ----------
+// The platform's games, always at the top, never dismissed: the Blindrise club's tournament, the Blindrise Open and
+// dominoes. What is live, what is open, when the next one starts; Watch for anyone, the seat or registration for
+// whoever can play. Built only from club.live and club.bevent: public state and this member's own place, no names.
+const watching = () => { try{ return sessionStorage.getItem('watch'); }catch(e){ return null; } };
+function spectate(ctx, board){ try{ sessionStorage.setItem('watch', ctx); if(board) sessionStorage.setItem('watchBoard', '1'); else sessionStorage.removeItem('watchBoard'); }catch(e){} location.replace('/'); }
+function stopWatching(){ try{ sessionStorage.removeItem('watch'); sessionStorage.removeItem('watchBoard'); }catch(e){} location.replace('/'); }
+const goMain = () => { local.set('club', 'main'); location.replace('/'); };
+function liveHTML(){
+  const L = club.live; if(!L) return '';
+  const p = L.poker, d = L.domino, row = (ic, eye, name, sub, acts, note) => `<div class="lv-row"><span class="hsec-ic ${ic}">${Icons.svg(ic === 'poker' ? 'spade' : 'spark')}</span><div class="lv-t"><span class="eyebrow">${eye}</span><b>${esc(name)}</b><small>${sub}</small>${note ? `<small class="lv-note">${note}</small>` : ''}</div>${acts ? `<div class="lv-acts">${acts}</div>` : ''}</div>`;
+  let rows = '';
+  if(p){
+    const live = p.status === 'running';
+    const sub = live ? `<span class="lv-live">Live</span> · ${p.paused ? 'Paused' : 'Level ' + (p.level + 1)} · ${p.remaining} of ${p.count} left` : `Registration open · ${p.count} registered${p.startAt ? ' · ' + esc(when(p.startAt)) : ''}`;
+    const acts = (p.playing ? '<button class="btn red" data-live="seat-main">Go to your seat</button>' : '')
+      + (live ? `<button class="btn${p.playing ? '' : ' red'}" data-live="watch-main">Watch</button>` : '')
+      + (!p.playing && p.registered && !live ? '<button class="btn" data-live="go-main">Open</button>' : '')
+      + (!p.registered && p.open && L.member ? `<button class="btn${live ? '' : ' red'}" data-live="go-main">Register</button>` : '');
+    const note = p.registered && !p.playing ? (live ? '' : "You're registered.") : !L.member ? (live ? 'Played by Blindrise club members. Watch any table.' : 'Played by Blindrise club members. You can watch every table once it starts.') : '';
+    rows += row('poker', 'Blindrise · Poker', p.name, sub, acts, note);
+  }
+  if(club.bevent) rows += beventHTML();
+  if(d){
+    const live = d.status === 'running', R = { allfives: 'All Fives', block: 'Block', draw: 'Draw' }[d.rules.preset] || 'Dominoes';
+    const sub = live ? `<span class="lv-live">Live</span> · ${d.playing} ${d.playing === 1 ? 'match' : 'matches'} on the tables · ${d.count} players` : `Registration open · ${d.count} registered · ${R}`;
+    const acts = (live ? '<button class="btn red" data-live="board">Watch the board</button>' : '')
+      + (!live && L.member ? `<button class="btn${d.registered ? '' : ' red'}" data-live="go-main">${d.registered ? 'Open' : 'Register'}</button>` : '');
+    rows += row('opp', 'Blindrise · Dominoes', d.name, sub, acts, !live ? (d.registered ? "You're in." : !L.member ? 'Played by Blindrise club members. You can watch the board once it starts.' : '') : '');
+  }
+  const on = (p && p.status === 'running') || (d && d.status === 'running') || (club.bevent && club.bevent.status === 'running');
+  return `<section class="card-box lv-head" aria-label="Live at Blindrise"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">Live at Blindrise</span>${on ? '<span class="status-pill live">LIVE</span>' : ''}</div>
+    ${rows || '<p class="note lv-none">No Blindrise game right now. Tournaments and dominoes show here the moment registration opens, and you can watch every one live.</p>'}</section>`;
+}
+// what a member watching a Blindrise game sees instead of the lobby: the tournament, its tables, the domino board
+function watchHTML(){
+  const t = club.tourney, live = t && t.status === 'running', dm = window.Domino.state(), dt = dm && dm.t && dm.t.status === 'running' ? dm.t : null;
+  const tables = live ? club.tables.map(x => `<button class="btn lv-table" data-wt="${esc(x.tid)}">Table ${x.n}<small>${x.players} ${x.players === 1 ? 'player' : 'players'}</small></button>`).join('') : '';
+  const sub = !t ? 'No tournament is playing right now.' : live ? `${t.paused ? 'Paused' : 'Level ' + (t.level + 1)} · ${t.remaining} of ${t.entrants} players left` : t.status === 'registering' ? `Starts ${t.startAt ? esc(when(t.startAt)) : 'when the director is ready'} · ${t.regCount} registered` : 'This tournament has finished.';
+  return `<section class="card-box lv-watch" aria-label="Watching"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">Watching · ${esc(club.club.name)}</span>${live ? '<span class="status-pill live">LIVE</span>' : ''}</div>
+    <h2>${esc(t ? t.name : 'Live at Blindrise')}</h2><p class="br-when">${sub}</p>
+    ${tables ? `<p class="note">Pick a table to watch. Cards show only when players show them.</p><div class="lv-tables">${tables}</div>` : ''}
+    ${dt ? `<div class="lv-row"><span class="hsec-ic opp">${Icons.svg('spark')}</span><div class="lv-t"><span class="eyebrow">Dominoes</span><b>${esc(dt.name)}</b></div><div class="lv-acts"><button class="btn red" data-live="tv">Watch the board</button></div></div>` : ''}
+    <p class="note">You're watching from ${esc(club.home.name)}. Nothing about you or your club is shown here, and there is no chat while you watch.</p>
+    <div class="btn-row"><button class="btn" data-live="home">Back to ${esc(club.home.name)}</button></div></section>`;
+}
+// Watch the board: open the domino TV board as soon as its state is here
+function boardOnArrival(){
+  let want = false; try{ want = sessionStorage.getItem('watchBoard') === '1'; }catch(e){}
+  const dm = window.Domino.state(); if(!want || !dm) return;
+  try{ sessionStorage.removeItem('watchBoard'); }catch(e){}
+  if(dm.t) window.Domino.openTV();
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-wt]'); if(t && club && club.spectate) return openTable(t.dataset.wt);
+  const b = e.target.closest('[data-live]'); if(!b || !club) return;
+  const k = b.dataset.live;
+  if(k === 'seat-main' || k === 'go-main') return goMain();
+  if(k === 'watch-main') return spectate('main');
+  if(k === 'watch-events') return spectate('events');
+  if(k === 'board') return spectate('main', true);
+  if(k === 'tv') return window.Domino.openTV();
+  if(k === 'home') return stopWatching();
+});
 // ---------- the Blindrise Open (club switching only) ----------
 // Blindrise tournaments for members of every club. Each club shows this card: what it is, when, and how many have
 // registered (never who). Registering takes you into the Blindrise Open, where you play under your table name.
@@ -693,9 +763,9 @@ function beventHTML(){
   const e = club.bevent; if(!e) return '';
   const live = e.status === 'running';
   const sub = live ? `Live now · ${e.remaining} of ${e.count} players left` : e.startAt ? esc(when(e.startAt)) : 'Starts when the director is ready';
-  const acts = e.playing ? '<button class="btn red" data-bev="go">Go to your table</button>'
+  const acts = (e.playing ? '<button class="btn red" data-bev="go">Go to your table</button>'
     : e.registered ? `<button class="btn red" data-bev="go">Open</button>${live ? '' : '<button class="btn" data-bev="leave">Unregister</button>'}`
-    : e.open ? '<button class="btn red" data-bev="join">Register</button>' : '';
+    : e.open ? '<button class="btn red" data-bev="join">Register</button>' : '') + (live && !e.playing ? '<button class="btn" data-live="watch-events">Watch</button>' : '');
   return `<article class="card-box br-post bo-card" aria-label="Blindrise Open"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">Blindrise Open · every club</span>${live ? '<span class="status-pill live">LIVE</span>' : ''}</div>
     <h3>${esc(e.name)}</h3><p class="br-when">${sub}</p>
     <p class="bo-meta"><span><b class="num">${e.count}</b> registered</span><span><b class="num">${fmt(e.stack)}</b> chips</span><span><b class="num">${e.levelMin}</b>-min levels</span></p>

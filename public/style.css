@@ -2227,3 +2227,22 @@ body{background:var(--lx-ink)}
 .dm-tv aside{display:grid;gap:var(--lx-s4);align-content:start;min-width:0}
 .dm-tv aside p{margin:var(--lx-s1) 0 0;display:grid;font-size:clamp(14px,1.3vw,20px);overflow-wrap:anywhere}
 .dm-tv aside small{color:var(--lx-mute)}
+/* Live at Blindrise (Issue #25): the platform's games at the top of every member club's home, and the watch screen */
+#lobby .lv-head,#lobby .lv-watch{border-color:var(--lx-hair2);background:linear-gradient(160deg,rgba(216,180,106,.12),rgba(255,255,255,.02)),var(--lx-navy)}
+.lv-head .br-head .status-pill,.lv-watch .br-head .status-pill{margin-left:auto}
+.lv-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding-top:12px;border-top:1px solid var(--lx-hair)}
+.lv-t{flex:1 1 180px;min-width:0;display:grid;gap:2px}
+.lv-t b{color:var(--lx-ivory);font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lv-t small{color:var(--lx-mute);font-size:13px;line-height:1.4}
+.lv-t .lv-note{color:var(--lx-gold-hi)}
+.lv-live{color:#ff6b6b;font-weight:700}
+.lv-acts{display:flex;flex-wrap:wrap;gap:8px;flex:1 1 100%;justify-content:flex-end}
+.lv-acts .btn{min-height:44px}
+#lobby .lv-head .bo-card{margin:0;padding:12px 0 0;border:0;border-top:1px solid var(--lx-hair);border-radius:0;background:none;box-shadow:none}
+.lv-head .bo-card .br-badge{display:none}
+.lv-head .lv-none{margin:0}
+.lv-watch h2{margin:0;font-size:22px;color:var(--lx-ivory);overflow-wrap:anywhere}
+.lv-tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.lv-table{display:grid;gap:2px;min-height:56px;text-align:left}
+.lv-table small{color:var(--lx-mute);font-weight:500}
+@media (min-width:600px){ .lv-acts{flex:0 0 auto} }

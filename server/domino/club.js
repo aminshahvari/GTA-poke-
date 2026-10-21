@@ -279,10 +279,18 @@ module.exports = function makeDomino(store, hooks = {}){
       champion: t.status === 'finished' ? team(champion(t)) : null,
       mine: mine ? mine.id : null, stats: u ? store.get('dom:stats:' + u.id) || null : null, ranking: ranking(u) };
   }
+  // what the other clubs' Live at Blindrise headline shows of this club's tournament (Issue #25): what it is, its state
+  // and counts, and whether this account is in it. No names: those are only on the read-only board a member chooses to watch.
+  function card(uid){
+    const t = current(); if(!active(t)) return null;
+    const playing = t.status === 'running' ? t.matches.filter(p => { const m = Mget(t.id + '-' + p.id); return m && ['live', 'review', 'disputed'].includes(m.status); }).length : 0;
+    return { id: t.id, name: t.name, rules: t.rules, status: t.status, count: t.entrants.length, playing, registered: !!uid && t.entrants.some(e => e.uid === uid) };
+  }
+  const entrants = () => { const t = current(); return active(t) ? t.entrants.map(e => e.uid) : null; };
   // the director's log for this club
   const auditLog = u => { director(u); return store.values('dom:log:').sort((a, b) => a.at - b.at).slice(-100); };
 
   const api = { dominoState: (d, u) => { member(u); return view(u); }, dominoCreate: create, dominoJoin: join, dominoLeave: leave, dominoTeams: teams,
     dominoStart: start, dominoCancel: cancel, dominoOp: op, dominoLog: (d, u) => auditLog(u) };
-  return { api, view, sweep, setHooks: x => Object.assign(h, x) };
+  return { api, view, card, entrants, sweep, setHooks: x => Object.assign(h, x) };
 };
