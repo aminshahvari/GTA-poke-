@@ -182,7 +182,7 @@ function connect(){
     if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
     if(m.t === 'club'){ onClub(m.club); return; }
     if(m.t === 'domino'){ window.Domino.onState(m.v); return; }
-    if(m.t === 'table'){ tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
+    if(m.t === 'table'){ if(m.field) field = m.field; tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
     if(m.t === 'invite'){ showInvite(m.code, m.group, m.max); return; }
     if(m.t === 'skillq'){ askSkill(m.rid, m.q); return; }
@@ -243,6 +243,20 @@ function clubSwitching(c){
 async function pickClub(){
   const id = await modal(`<h2>Your clubs</h2><p>Same name and PIN everywhere. Each club has its own members and Exchange.</p><div class="club-list">${club.clubs.map(x => `<button class="club-pick${x.id === club.club.id ? ' on' : ''}" data-v="${esc(x.id)}">${esc(x.name)}${x.suspended ? ' <small class="cs-tag">Suspended</small>' : ''}</button>`).join('')}</div>`, [{ label: 'Close', value: null }]);
   if(id && id !== club.club.id){ local.set('club', id); location.replace('/'); }
+}
+// The whole tournament, like a TV broadcast (players' feedback, 2026-10-21): how many are still playing and at how many
+// tables, the chip leader of every table, and how many are watching. From the server with every table update ('field').
+let field = null;
+function fieldUI(){
+  const el = $('fieldBar'), T = club && club.tourney;
+  el.hidden = !field || !T || T.status !== 'running';
+  if(el.hidden) return;
+  const L = field.leader, meLead = L && field.rank === 1 && L.name === club.me.name;
+  el.innerHTML = `<span class="fb-n" title="Players still in the tournament">${Icons.svg('users')}<b>${field.players}</b> left${field.tables > 1 ? `<i> · ${field.tables} tables</i>` : ''}</span>`
+    + (L ? `<span class="fb-lead${meLead ? ' me' : ''}" title="Chip leader of every table">${Icons.svg('crown')}<small>Leader</small><b>${meLead ? 'You' : esc(L.name)}</b><span>${fmt(L.stack)}</span></span>` : '')
+    // the one-row header of short screens has no "Your rank" box: your place goes here instead
+    + (field.rank && $('game').classList.contains('row1') ? `<span class="fb-me">You<b>${ord(field.rank)}</b></span>` : '')
+    + `<span class="fb-watch" title="Watching now">${Icons.svg('eye')}<b>${field.watchers}</b><i> watching</i></span>`;
 }
 function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)) renderTable(); }
 
@@ -1924,6 +1938,7 @@ function renderTable(){
   if(res) try{ potToWinners(d, handKey, LY); }catch(e){}
   $('tName').textContent = `Table ${d.n}`;
   $('sPlayers').textContent = `${d.seats.filter(Boolean).length} seated`;
+  fieldUI();
   renderControls(d, mySeat, mine);
   renderHelper(d, mySeat >= 0 ? d.seats[mySeat] : null, mine);
   // last hand's coach tip floats over the table; it gets out of the way when it's your turn to act
@@ -2194,7 +2209,7 @@ function tickClock(){
   const d = tables.get(watchTid || club.myTable);
   const all = [...tables.values()].flatMap(t => t.seats.filter(Boolean));
   const me = all.find(p => p.uid === club.me.id);
-  $('sPos').textContent = me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching';
+  $('sPos').textContent = field && field.rank ? `${ord(field.rank)} of ${field.players}` : me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching';
   const bar = document.querySelector('.shotBar');
   if(bar && d && d.deadline){ const left = Math.max(0, d.deadline - now); bar.style.transform = `scaleX(${Math.min(1, left / d.bank)})`; }
   const tbar = $('turnBar');
