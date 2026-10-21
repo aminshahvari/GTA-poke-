@@ -523,17 +523,25 @@ function pokerCard(uid){
   const tid = uid ? m.club.tableOf(uid) : null, live = t.status === 'running';
   return { id: t.id, name: t.name, status: t.status, startAt: t.startAt || null, stack: t.stack, levelMin: t.levelMin, level: live ? t.level : null, paused: !!t.paused,
     count: live ? t.entrants || 0 : t.regs.length, remaining: live ? t.remaining || 0 : null, tables: live ? m.club.tablesSummary().length : 0,
-    registered: !!uid && (t.regs.includes(uid) || !!tid), playing: !!tid, open: t.status === 'registering' || (live && m.club.lateOpen()) };
+    registered: !!uid && (t.regs.includes(uid) || !!tid), playing: !!tid, open: t.status === 'registering' || (live && m.club.lateOpen()),
+    // while it plays, what a broadcast shows (owner's design brief, 2026-10-21): the chip leader of the whole field and of
+    // each table (the table names their seats already show anyone watching), the seats taken, and how many are watching
+    ...(live ? (f => ({ leader: f.shown.leader, watchers: f.shown.watchers, size: t.tableSize || 9, tableList: f.tableList })) (fieldOf(m)) : {}) };
 }
 const liveCard = uid => ({ member: clubs.memberships(rootStore.get('user:' + uid)).includes(clubs.MAIN), poker: pokerCard(uid), domino: DOMINO() ? clubs.get(clubs.MAIN).domino.card(uid) : null });
 // the Blindrise club's games changed: member clubs get a new view only when what their headline shows changed (status,
 // counts, level, who is seated), not on every hand
-let liveSig = '';
+let liveSig = '', liveAt = 0, liveTimer = null;
+const LIVE_MS = process.env.FAST === '1' ? 300 : 3000; // the live card follows the play, at most every few seconds
 function liveChanged(){
-  if(!clubs.ON()) return;
+  if(!clubs.ON() || liveTimer) return;
+  liveTimer = setTimeout(liveCheck, Math.max(0, liveAt + LIVE_MS - Date.now()));
+}
+function liveCheck(){
+  liveTimer = null;
   const m = clubs.get(clubs.MAIN), seated = [...m.club.tables.values()].filter(x => !x.broken).flatMap(x => x.g.seats.filter(Boolean).map(p => p.uid)).sort().join();
   const sig = JSON.stringify([pokerCard(null), m.club.T() && m.club.T().regs, seated, DOMINO() ? m.domino.card(null) : null, DOMINO() ? m.domino.entrants() : null]);
-  if(sig !== liveSig){ liveSig = sig; for(const x of clubs.all()) if(x.id !== clubs.MAIN && x.id !== clubs.EVENTS) broadcastClub(x); }
+  if(sig !== liveSig){ liveSig = sig; liveAt = Date.now(); for(const x of clubs.all()) if(x.id !== clubs.MAIN && x.id !== clubs.EVENTS) broadcastClub(x); }
 }
 // Watching a platform game from any club (Issue #25): a spectator's socket is in the Blindrise club or the Blindrise
 // Open without being a member of it. It gets the tournament, the list of tables and the table it watches, read-only,
@@ -616,27 +624,31 @@ function pushTable(c, tid){
     const mine = ws.spectator ? null : field.chips.get(ws.user.id);
     sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null, field: { ...field.shown, rank: mine == null ? null : 1 + field.stacks.filter(x => x > mine).length } });
   }
+  if(c.id === clubs.MAIN) liveChanged(); // the chip leaders on the other clubs' live card
 }
 // the whole tournament as every table shows it (players' feedback, 2026-10-21): how many are still playing and at how
 // many tables, each player's place among all of them, the chip leader of all tables (the same name and chip count their seat shows), and how many people are watching: everyone looking at a table who is not seated in the tournament, and
 // everyone watching from another club. A count only, never who.
 function fieldOf(c){
   let players = 0, tables = 0, leader = null;
-  const chips = new Map();
+  const chips = new Map(), tableList = [];
   for(const tb of c.club.tables.values()){
     if(tb.broken) continue;
     tables++;
+    let seated = 0, top = null;
     for(const p of tb.g.seats){
       if(!p) continue;
-      players++;
+      players++; seated++;
       const n = p.stack;
       chips.set(p.uid, n);
       if(!leader || n > leader.stack) leader = { name: p.name, stack: n, table: tb.n };
+      if(!top || n > top.stack) top = { name: p.name, stack: n };
     }
+    tableList.push({ n: tb.n, seated, leader: top });
   }
   const watching = new Set();
   for(const ws of sockets) if(ws.user && ws.ctx === c && (ws.spectator || (ws.watch && !c.club.tableOf(ws.user.id)))) watching.add(ws.user.id);
-  return { shown: { players, tables, leader, watchers: watching.size }, chips, stacks: [...chips.values()] };
+  return { shown: { players, tables, leader, watchers: watching.size }, chips, stacks: [...chips.values()], tableList: tableList.sort((a, b) => a.n - b.n) };
 }
 const clock = ms => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: process.env.CLUB_TZ || 'America/Toronto' });
 const dayOf = ms => { const tz = process.env.CLUB_TZ || 'America/Toronto', f = d => new Date(d).toLocaleDateString('en-CA', { timeZone: tz });

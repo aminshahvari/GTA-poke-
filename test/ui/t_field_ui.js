@@ -52,6 +52,28 @@ const firstInHome = pg => pg.evaluate(() => { const b = document.getElementById(
   for(const s of socks.slice(1)) s.close();          // the others are away: their hands play on by themselves
   await sleep(9000);                                   // a few hands, so stacks differ
   // a watcher from another club
+  for(const sz of [[390, 844], [1280, 800]]){
+    const hp = await page(Pia, sz, H), tag = 'home ' + sz.join('x'); await sleep(800);
+    const card = hp.locator('.lv-bc');
+    check(await card.isVisible(), `${tag}: the live tournament card heads the club home`);
+    const ct = (await card.textContent()).replace(/\s+/g, ' ');
+    check(/Live tournament/i.test(ct) && /Level \d+/.test(ct) && /Remaining/i.test(ct) && /Active tables/i.test(ct) && /Overall leader/i.test(ct), `${tag}: badge, level and blinds, remaining, tables and overall leader: ${ct.slice(0, 160)}`);
+    const tcs = await hp.locator('.lv-tc').count();
+    check(tcs === 2, `${tag}: one card per table: ${tcs}`);
+    check(await hp.evaluate(() => [...document.querySelectorAll('.lv-tc')].every(b => { const lit = b.querySelectorAll('.mini-table circle.on').length, n = +b.querySelector('.lv-tc-cnt b').textContent; return lit === n && b.querySelectorAll('.mini-table circle').length === 6; })), `${tag}: each mini table lights a seat for every player at it`);
+    check(!/\p{Extended_Pictographic}/u.test(ct), `${tag}: no emoji on the card`);
+    check(await hp.evaluate(() => { let e = document.getElementById('hudGold'); for(; e; e = e.parentElement) if(getComputedStyle(e).display === 'none') return false; return document.querySelectorAll('.lv-bc svg.ic').length >= 4; }), `${tag}: the gold the icons are drawn in is on this screen too`);
+    check(await noSideScroll(hp), `${tag}: no sideways scroll`);
+    await shot(hp, `live-card-${sz.join('x')}.png`);
+    if(sz[0] >= 800){
+      await hp.hover('.lv-tele-lead .vip'); await sleep(300);
+      const tip = await hp.evaluate(() => { const t = document.querySelector('.lv-tele-lead .vip-tip').getBoundingClientRect(); const tipEl = document.querySelector('.lv-tele-lead .vip-tip'); if(getComputedStyle(tipEl).opacity !== '1') return 'hidden'; for(let a = tipEl.parentElement; a; a = a.parentElement){ const r = a.getBoundingClientRect(), o = getComputedStyle(a).overflow; if(o !== 'visible' && (t.top < r.top - 1 || t.left < r.left - 1 || t.right > r.right + 1)) return 'clipped by ' + a.className; } return true; });
+      check(tip === true && /BB · Table \d/.test(await hp.locator('.lv-tele-lead .vip-tip').textContent()), `${tag}: hovering the leader shows their card with big blinds and table ${tip === true ? '' : tip}`);
+      await shot(hp, 'live-card-1280-tooltip.png');
+      await hp.mouse.move(5, 5);
+    }
+    await hp.context().close();
+  }
   const watcher = await page(Pia, [390, 844], H);
   await watcher.click('.lv-head [data-live=watch-main]'); await watcher.waitForLoadState('load'); await sleep(1200);
   await watcher.click('.lv-tables [data-wt]'); await sleep(1500);
@@ -61,16 +83,36 @@ const firstInHome = pg => pg.evaluate(() => { const b = document.getElementById(
     const bar = pg.locator('#fieldBar');
     check(await bar.isVisible(), `${tag}: the tournament bar shows under the table header`);
     const txt = await bar.textContent();
-    check(/\d+ left/.test(txt), `${tag}: players and tables: ${txt.replace(/\s+/g, ' ').trim()}`);
-    check(/Leader/.test(txt) && /\d/.test(txt), `${tag}: chip leader and watchers`);
-    const row1 = await pg.evaluate(() => document.getElementById('game').classList.contains('row1'));
-    check(row1 ? /You\s*\d+(st|nd|rd|th)/.test(txt) : /of \d+/.test(await pg.locator('#sPos').textContent()), `${tag}: your place among everyone${row1 ? ' (in the bar, the short header has no rank box)' : ''}`);
+    check(/Players\s*\d+\s*\/\s*\d+/.test(txt), `${tag}: players left of the field: ${txt.replace(/\s+/g, ' ').trim()}`);
+    check(await pg.locator('#fieldBar [aria-label$=" tables"]').count() === 1 && await pg.locator('#fieldBar [aria-label$=" watching"]').count() === 1, `${tag}: tables and watchers as icon badges`);
+    check(/Chip leader/i.test(txt) && /Chip leader.*[\d,]{3,}/.test(txt.replace(/\s+/g, ' ')), `${tag}: the chip leader with their chips`);
+    check(/Your rank\s*\d+(st|nd|rd|th)\s*\/\s*\d+/.test(txt), `${tag}: your rank among everyone, as a pill`);
+    check(await pg.evaluate(() => { const v = document.querySelector('#fieldBar .hud-rank .hud-vs'), r = document.querySelector('#fieldBar .hud-rank'); return !v || (v.classList.contains('up') ? !r.classList.contains('down') : !r.classList.contains('up')); }), `${tag}: the arrow, when there is one, agrees with the pill's colour`);
+    check(await pg.locator('#fieldBar .hud-avg').isVisible() === (sz[0] >= 480), `${tag}: the average stack ${sz[0] >= 480 ? 'shows' : 'stays off on a narrow phone'}`);
+    check(await pg.evaluate(() => { const n = document.querySelector('#fieldBar .hud-val'), l = document.querySelector('#fieldBar .hud-lbl');
+      return /JetBrains Mono/.test(getComputedStyle(n).fontFamily) && /Plus Jakarta Sans/.test(getComputedStyle(l).fontFamily) && getComputedStyle(n).fontVariantNumeric.includes('tabular-nums'); }), `${tag}: numbers in a mono face with even digits, labels in the sans`);
+    check(await pg.evaluate(() => [...document.querySelectorAll('#fieldBar svg.ic:not(.hud-vs svg)')].every(s => /url\(.*hudGold/.test(getComputedStyle(s).stroke) && getComputedStyle(s).strokeWidth === '1.5px')), `${tag}: icons are gold line drawings, no emoji`);
+    check(!/\p{Extended_Pictographic}/u.test(txt), `${tag}: no emoji anywhere in the bar`);
+    if(tag === '390x844'){
+      await pg.click('#fieldBar .hud-lead'); await sleep(300);
+      const bbTxt = (await bar.textContent()).replace(/\s+/g, ' ');
+      check(/[\d.,]+\s*BB/.test(bbTxt) && await pg.locator('#fieldBar .bb-pill').count() >= 1, `${tag}: a tap on the leader shows stacks in big blinds: ${bbTxt.trim()}`);
+      await shot(pg, `field-${tag}-bb.png`);
+      await pg.click('#fieldBar .hud-lead'); await sleep(300);
+      check(await pg.locator('#fieldBar .bb-pill').count() === 0, `${tag}: and a second tap goes back to chips`);
+    }
+    check(await pg.evaluate(() => [...document.querySelectorAll('#fieldBar .hud-val, #fieldBar .hud-name, #fieldBar .hud-badge b')].every(e => parseFloat(getComputedStyle(e).fontSize) >= 14)), `${tag}: every value is at least 14px`);
+    { const spill = await pg.evaluate(() => { const b = document.getElementById('fieldBar').getBoundingClientRect();
+      return [...document.querySelectorAll('#fieldBar .hud-mod, #fieldBar .hud-lt')].filter(m => { const r = m.getBoundingClientRect(); return !(r.left >= b.left - 1 && r.right <= b.right + 1 && m.scrollWidth <= m.clientWidth + 1); })
+        .map(m => `${m.className} ${m.scrollWidth}>${m.clientWidth}`); });
+      check(!spill.length, `${tag}: every module fits, nothing spills over ${spill.join('; ')}`); }
+    check(await pg.evaluate(() => [...document.querySelectorAll('#fieldBar .hud-lbl, #fieldBar .hud-val')].every(e => e.getClientRects().length <= 1 && e.offsetHeight < 40)), `${tag}: no label or number wraps`);
     check(await noSideScroll(pg), `${tag}: no sideways scroll`);
     await shot(pg, `field-${tag}.png`);
     await pg.context().close();
   }
   await shot(watcher, 'field-watcher-390.png');
-  check(await watcher.locator('#fieldBar').isVisible() && /Leader/.test(await watcher.locator('#fieldBar').textContent()), 'a watcher from another club sees the bar too');
+  check(await watcher.locator('#fieldBar').isVisible() && /leader/i.test(await watcher.locator('#fieldBar').textContent()) && !/Your rank/.test(await watcher.locator('#fieldBar').textContent()) && /Chip leader/i.test(await watcher.locator('#fieldBar').textContent()), 'a watcher from another club sees the bar too');
   check(/Watching/.test(await watcher.locator('#sPos').textContent()), 'and no place of their own');
   await watcher.context().close();
   so.close(); socks[0].close();

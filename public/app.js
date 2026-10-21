@@ -251,12 +251,31 @@ function fieldUI(){
   const el = $('fieldBar'), T = club && club.tourney;
   el.hidden = !field || !T || T.status !== 'running';
   if(el.hidden) return;
-  const L = field.leader, meLead = L && field.rank === 1 && L.name === club.me.name;
-  el.innerHTML = `<span class="fb-n" title="Players still in the tournament">${Icons.svg('users')}<b>${field.players}</b> left${field.tables > 1 ? `<i> · ${field.tables} tables</i>` : ''}</span>`
-    + (L ? `<span class="fb-lead${meLead ? ' me' : ''}" title="Chip leader of every table">${Icons.svg('crown')}<small>Leader</small><b>${meLead ? 'You' : esc(L.name)}</b><span>${fmt(L.stack)}</span></span>` : '')
-    // the one-row header of short screens has no "Your rank" box: your place goes here instead
-    + (field.rank && $('game').classList.contains('row1') ? `<span class="fb-me">You<b>${ord(field.rank)}</b></span>` : '')
-    + `<span class="fb-watch" title="Watching now">${Icons.svg('eye')}<b>${field.watchers}</b><i> watching</i></span>`;
+  // laid out like a broadcast HUD (owner's design brief, 2026-10-21): the field, tables and watchers, the average stack,
+  // the chip leader in gold, and your rank as a pill coloured by your stack against the average. Tap a chip count to see
+  // it in big blinds (and back).
+  const L = field.leader, meLead = L && field.rank === 1 && L.name === club.me.name, total = T.entrants || field.players;
+  const bb = E.levelFor(T.level, T.anteMode)[1], out = Math.max(0, Math.min(100, (1 - field.players / Math.max(1, total)) * 100));
+  const mine = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id), avg = T.entrants * T.stack / Math.max(1, T.remaining);
+  const tone = !mine ? '' : mine.stack >= avg * 1.25 ? ' up' : mine.stack >= avg * .75 ? '' : ' down';
+  const vs = mine && Math.abs(mine.stack - avg) > avg * .05 ? (mine.stack > avg ? `<span class="hud-vs up" title="Above the average stack">${Icons.svg('up')}</span>` : `<span class="hud-vs down" title="Below the average stack">${Icons.svg('down')}</span>`) : '';
+  el.innerHTML = `<div class="hud-mod hud-field"><span class="hud-lbl"><i class="hud-dot" aria-hidden="true"></i>Players</span><b class="hud-val">${odo('players', field.players)}<small>/${total}</small></b><span class="hud-prog" aria-hidden="true"><i style="width:${out.toFixed(1)}%"></i></span></div>`
+    + `<div class="hud-mod hud-badges"><span class="hud-badge" title="Tables in play" aria-label="${field.tables} tables">${Icons.svg('table')}<b>${odo('tables', field.tables)}</b></span><span class="hud-badge" title="Watching now" aria-label="${field.watchers} watching">${Icons.svg('eye')}<b>${odo('watch', field.watchers)}</b></span></div>`
+    + `<button type="button" class="hud-mod hud-avg" data-bbtoggle aria-label="Average stack. Tap to switch chips and big blinds"><span class="hud-lbl">Avg stack</span><b class="hud-val">${stackHTML('avg', avg, bb)}</b></button>`
+    + (L ? `<button type="button" class="hud-mod hud-lead${meLead ? ' me' : ''}" data-bbtoggle aria-label="Chip leader ${esc(L.name)}. Tap to switch chips and big blinds">${Icons.svg('crown')}<span class="hud-lt"><span class="hud-lbl">Chip leader</span><b class="hud-name">${meLead ? 'You' : esc(L.name)}</b></span><span class="hud-chips"><b>${stackHTML('lead', L.stack, bb)}</b></span></button>` : '')
+    + (field.rank ? `<div class="hud-mod hud-rank${tone}" title="Your place among everyone still playing"><span class="hud-lbl">Your rank</span><b class="hud-val">${vs}${odo('rank', ord(field.rank))}<small>/${field.players}</small></b></div>` : '');
+  odoPlay(el);
+}
+// chips or big blinds, everywhere a stack is shown in the HUD and on the live card (a tap switches; kept on this phone)
+let bbMode = !!local.get('bbMode', false);
+const bbText = x => (x >= 100 ? Math.round(x) : Math.round(x * 10) / 10).toLocaleString('en-US');
+const stackHTML = (k, n, bb) => bbMode ? `${odo(k, bbText(n / bb))}<i class="bb-pill">BB</i>` : odo(k, fmt(n));
+document.addEventListener('click', e => { if(!e.target.closest('[data-bbtoggle]')) return; bbMode = !bbMode; local.set('bbMode', bbMode); fieldUI(); if(view === 'lobby' && club && club.live) renderLobby(); });
+// numbers that change slide in, like a live feed: each number has a key, and a new value for that key animates
+const odoLast = new Map();
+const odo = (k, v) => `<span class="odo" data-odo="${k}">${v}</span>`;
+function odoPlay(root){
+  root.querySelectorAll('[data-odo]').forEach(x => { const k = x.dataset.odo, v = x.textContent, was = odoLast.get(k); odoLast.set(k, v); if(was != null && was !== v && !reducedMotion()) x.classList.add('odo-in'); });
 }
 function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)) renderTable(); }
 
@@ -276,7 +295,7 @@ function renderLobby(){
   $('tabs').hidden = !!club.suspended;
   if(club.suspended){ document.querySelector('.app').classList.remove('wide'); body.innerHTML = suspendedHTML(); wireLobby(); return; }
   $('tabs').hidden = !!club.spectate;
-  if(club.spectate){ document.querySelector('.app').classList.remove('wide'); body.innerHTML = watchHTML(); boardOnArrival(); return; }
+  if(club.spectate){ document.querySelector('.app').classList.remove('wide'); body.innerHTML = watchHTML(); boardOnArrival(); tableOnArrival(); return; }
   // Business Club and Opportunity Club stay hidden from members until the owner opens them (Director tab); the owner can always preview
   const clubsOn = !!(club.features && club.features.clubs), clubsVisible = !club.events && (clubsOn || club.me.owner);
   const bizTab = document.querySelector('#tabs [data-tab="biz"]');
@@ -330,6 +349,7 @@ function renderHome(body, clubsOn, showClubs){
   }
   body.append(...cards.slice(n));
   body.insertAdjacentHTML('beforeend', friendsHTML());
+  odoPlay(body);
   if(showClubs) requestAnimationFrame(navSync);
 }
 // Member Home: a personal welcome and the club's four doors (Poker, Business, Opportunity, card Scanner). Built only from
@@ -726,7 +746,7 @@ function liveHTML(){
       + (!p.playing && p.registered && !live ? '<button class="btn" data-live="go-main">Open</button>' : '')
       + (!p.registered && p.open && L.member ? `<button class="btn${live ? '' : ' red'}" data-live="go-main">Register</button>` : '');
     const note = p.registered && !p.playing ? (live ? '' : "You're registered.") : !L.member ? (live ? 'Played by Blindrise club members. Watch any table.' : 'Played by Blindrise club members. You can watch every table once it starts.') : '';
-    rows += row('poker', 'Blindrise · Poker', p.name, sub, acts, note);
+    rows += live && p.tableList ? broadcastHTML(p, acts, note) : row('poker', 'Blindrise · Poker', p.name, sub, acts, note);
   }
   if(club.bevent) rows += beventHTML();
   if(d){
@@ -739,6 +759,43 @@ function liveHTML(){
   const on = (p && p.status === 'running') || (d && d.status === 'running') || (club.bevent && club.bevent.status === 'running');
   return `<section class="card-box lv-head" aria-label="Live at Blindrise"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">Live at Blindrise</span>${on ? '<span class="status-pill live">LIVE</span>' : ''}</div>
     ${rows || '<p class="note lv-none">No Blindrise game right now. Tournaments and dominoes show here the moment registration opens, and you can watch every one live.</p>'}</section>`;
+}
+// The live tournament as a broadcast card (owner's design brief, 2026-10-21, after PokerGO / WPT): a pulsing LIVE badge,
+// the level and blinds, the watchers; then the field, the tables and the overall leader; then a card per table with its
+// seats and its chip leader. Tap a table to watch it. Names here are the table names every watcher already sees.
+function broadcastHTML(p, acts, note){
+  const [sb, bb] = E.levelFor(p.level), out = Math.max(0, Math.min(100, (1 - p.remaining / Math.max(1, p.count)) * 100));
+  const L = p.leader, ini = n => (String(n).match(/[\p{L}\p{N}]+/gu) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  // a leader's name: hover or focus shows a small card with their initials, stack in big blinds and table
+  const vip = (x, table, focus = true) => `<span class="vip"${focus ? ' tabindex="0"' : ''}><span class="vip-n">${esc(x.name)}</span><span class="vip-tip" role="tooltip"><span class="vip-av">${esc(ini(x.name))}</span><span class="vip-t"><b>${esc(x.name)}</b><small>${bbText(x.stack / bb)} BB · Table ${table}</small></span></span></span>`;
+  return `<article class="lv-bc" aria-label="${esc(p.name)}, live">
+    <header class="lv-bc-h"><span class="lv-badge"><i aria-hidden="true"></i>Live tournament</span>
+      <div class="lv-bc-t"><b>${esc(p.name)}</b><small>${p.paused ? 'Paused' : `Level ${p.level + 1} · <span class="mono">${fmt(sb)}/${fmt(bb)}</span>`}</small></div>
+      <span class="lv-bc-w" aria-label="${p.watchers} watching">${Icons.svg('eye')}<b>${odo('lw', p.watchers)}</b><small>Watching</small></span></header>
+    <div class="lv-tele">
+      <div><span class="hud-lbl">Remaining</span><b>${odo('lr', p.remaining)}<small>/${p.count}</small></b><small>Players</small><span class="hud-prog" aria-hidden="true"><i style="width:${out.toFixed(1)}%"></i></span></div>
+      <div><span class="hud-lbl">Active tables</span><b>${odo('lt', p.tables)}</b><small>${p.tables === 1 ? 'Table' : 'Tables'}</small></div>
+      ${L ? `<div class="lv-tele-lead"><span class="hud-lbl">Overall leader</span><b>${Icons.svg('crown')}${vip(L, L.table)}</b><button type="button" class="lv-stack" data-bbtoggle aria-label="Switch chips and big blinds">${stackHTML('ll', L.stack, bb)}</button></div>` : ''}
+    </div>
+    <div class="lv-tcs">${p.tableList.map(t => `<button type="button" class="lv-tc" data-live="watch-table" data-tn="${t.n}" aria-label="Watch table ${t.n}">
+      <span class="lv-tc-top"><span class="lv-tc-n">Table ${t.n}</span>${miniTable(t.seated, p.size)}<span class="lv-tc-cnt"><b>${t.seated}</b>/${p.size}</span></span>
+      ${t.leader ? `<span class="lv-tc-lead">${Icons.svg('chip')}${vip(t.leader, t.n, false)}<span class="lv-tc-st">${stackHTML('t' + t.n, t.leader.stack, bb)}</span></span>` : ''}</button>`).join('')}</div>
+    ${note ? `<p class="lv-note">${note}</p>` : ''}
+    ${acts ? `<div class="lv-acts">${acts}</div>` : ''}</article>`;
+}
+// a miniature oval table with its seats around it: lit gold where someone sits, dim where a seat is open
+function miniTable(seated, size){
+  const nodes = Array.from({ length: size }, (_, i) => { const a = Math.PI / 2 + (i / size) * Math.PI * 2, x = 32 + Math.cos(a) * 27, y = 20 + Math.sin(a) * 15;
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.1" class="${i < seated ? 'on' : ''}"/>`; }).join('');
+  return `<svg class="mini-table" viewBox="0 0 64 40" aria-hidden="true" focusable="false"><ellipse cx="32" cy="20" rx="19" ry="9.5" class="mt-felt"/><ellipse cx="32" cy="20" rx="19" ry="9.5" class="mt-rail"/>${nodes}</svg>`;
+}
+function spectateTable(n){ try{ sessionStorage.setItem('watchTable', String(n)); }catch(e){} spectate('main'); }
+// Watch a table straight from the live card: open it as soon as the tables are here
+function tableOnArrival(){
+  let n = null; try{ n = sessionStorage.getItem('watchTable'); }catch(e){}
+  const t = n && club.tables.find(x => String(x.n) === n); if(!n) return;
+  try{ sessionStorage.removeItem('watchTable'); }catch(e){}
+  if(t) openTable(t.tid);
 }
 // what a member watching a Blindrise game sees instead of the lobby: the tournament, its tables, the domino board
 function watchHTML(){
@@ -765,6 +822,7 @@ document.addEventListener('click', e => {
   const k = b.dataset.live;
   if(k === 'seat-main' || k === 'go-main') return goMain();
   if(k === 'watch-main') return spectate('main');
+  if(k === 'watch-table') return spectateTable(b.dataset.tn);
   if(k === 'watch-events') return spectate('events');
   if(k === 'board') return spectate('main', true);
   if(k === 'tv') return window.Domino.openTV();
@@ -2209,7 +2267,10 @@ function tickClock(){
   const d = tables.get(watchTid || club.myTable);
   const all = [...tables.values()].flatMap(t => t.seats.filter(Boolean));
   const me = all.find(p => p.uid === club.me.id);
-  $('sPos').textContent = field && field.rank ? `${ord(field.rank)} of ${field.players}` : me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching';
+  // with the tournament HUD on, your rank is in it: the header shows your own stack instead (no number twice)
+  const hud = !!(field && field.rank && me);
+  $('sPosL').textContent = hud ? 'Your stack' : 'Your rank';
+  $('sPos').textContent = hud ? fmt(me.stack) : me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching';
   const bar = document.querySelector('.shotBar');
   if(bar && d && d.deadline){ const left = Math.max(0, d.deadline - now); bar.style.transform = `scaleX(${Math.min(1, left / d.bank)})`; }
   const tbar = $('turnBar');
