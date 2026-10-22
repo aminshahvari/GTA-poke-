@@ -17,7 +17,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const LIMITS = {   // provisional (owner, 2026-10-21): final only after the device measurements and the owner's approval
-  photo: { max: 400 * 1024, type: 'image/jpeg', ext: 'jpg' },     // 1080 px on the long side
+  photo: { max: 600 * 1024, type: 'image/jpeg', ext: 'jpg' },     // 1080 px wide (1080x1440 portrait)
   thumb: { max: 80 * 1024, type: 'image/jpeg', ext: 'jpg' },      // 400 px, for the feed
   poster: { max: 150 * 1024, type: 'image/jpeg', ext: 'jpg' },    // a video's first look, 720 px
   video: { max: 10 * 1024 * 1024, type: 'video/mp4', ext: 'mp4', seconds: 15.5 }
