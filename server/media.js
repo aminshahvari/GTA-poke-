@@ -65,7 +65,9 @@ function create({ prodHost, dir = process.env.MEDIA_DIR || path.join(os.tmpdir()
       }else{
         if(buf.toString('latin1', 4, 8) !== 'ftyp') fail('Not an MP4 file.');
         seconds = mp4Seconds(buf);
-        if(seconds != null && seconds > L.seconds) fail(`Too long: ${seconds.toFixed(1)} s (at most ${L.seconds - 0.5} s).`);
+        if(MP4META.scan(buf).meta.length) fail('The video still carries metadata (maybe where it was filmed). It must be cleaned on the phone.');
+        if(seconds == null) fail('The video\'s length could not be read.');
+        if(seconds > L.seconds) fail(`Too long: ${seconds.toFixed(1)} s (at most ${L.seconds - 0.5} s).`);
       }
       pending.delete(key);
       const it = { key, club: p.club, by: u.id, kind: p.kind, bytes: buf.length, w: Math.round(+w) || null, h: Math.round(+h) || null, seconds, at: now(), group: p.group };
@@ -144,22 +146,45 @@ function hasExif(buf){
   }
   return false;
 }
-// an MP4's length from its header: mvhd (or, in a fragmented file, mehd); null when the file does not say
+// an MP4's length: the movie header (mvhd), else mehd, else, in a fragmented file such as Safari's MediaRecorder writes
+// (its header says 0), the sum of every fragment's sample durations per track over that track's timescale. null when
+// nothing says
 function mp4Seconds(buf){
-  let scale = 0, dur = 0, frag = 0;
+  let scale = 0, dur = 0, frag = 0, curTrack = 0, curTraf = 0, trafDefault = 0;
+  const tracks = new Map(), T = id => { if(!tracks.has(id)) tracks.set(id, { scale: 0, mdhd: 0, def: 0, ticks: 0 }); return tracks.get(id); };
   const walk = (a, b) => {
     for(let i = a; i + 8 <= b;){
       let size = buf.readUInt32BE(i); const t = buf.toString('latin1', i + 4, i + 8); let h = 8;
       if(size === 1){ size = Number(buf.readBigUInt64BE(i + 8)); h = 16; } else if(size === 0) size = b - i;
       if(size < h || i + size > b) break;
-      if(t === 'moov' || t === 'mvex') walk(i + h, i + size);
-      else if(t === 'mvhd'){ const v = buf[i + h]; scale = v ? buf.readUInt32BE(i + h + 20) : buf.readUInt32BE(i + h + 12); dur = v ? Number(buf.readBigUInt64BE(i + h + 24)) : buf.readUInt32BE(i + h + 16); }
-      else if(t === 'mehd'){ const v = buf[i + h]; frag = v ? Number(buf.readBigUInt64BE(i + h + 4)) : buf.readUInt32BE(i + h + 4); }
+      const p = i + h, v = buf[p];
+      if(['moov', 'mvex', 'trak', 'mdia', 'moof', 'traf'].includes(t)) walk(p, i + size);
+      else if(t === 'mvhd'){ scale = v ? buf.readUInt32BE(p + 20) : buf.readUInt32BE(p + 12); dur = v ? Number(buf.readBigUInt64BE(p + 24)) : buf.readUInt32BE(p + 16); }
+      else if(t === 'mehd') frag = v ? Number(buf.readBigUInt64BE(p + 4)) : buf.readUInt32BE(p + 4);
+      else if(t === 'tkhd') curTrack = buf.readUInt32BE(p + (v ? 20 : 12));
+      else if(t === 'mdhd'){ const x = T(curTrack); x.scale = buf.readUInt32BE(p + (v ? 20 : 12)); x.mdhd = v ? Number(buf.readBigUInt64BE(p + 24)) : buf.readUInt32BE(p + 16); }
+      else if(t === 'trex') T(buf.readUInt32BE(p + 4)).def = buf.readUInt32BE(p + 12);
+      else if(t === 'tfhd'){
+        const f = buf.readUIntBE(p + 1, 3); curTraf = buf.readUInt32BE(p + 4); let o = p + 8;
+        if(f & 1) o += 8; if(f & 2) o += 4; trafDefault = f & 8 ? buf.readUInt32BE(o) : T(curTraf).def;
+      }
+      else if(t === 'trun'){
+        const f = buf.readUIntBE(p + 1, 3), n = buf.readUInt32BE(p + 4); let o = p + 8;
+        if(f & 1) o += 4; if(f & 4) o += 4;
+        const per = ((f & 0x100) ? 4 : 0) + ((f & 0x200) ? 4 : 0) + ((f & 0x400) ? 4 : 0) + ((f & 0x800) ? 4 : 0);
+        let ticks = 0;
+        if(f & 0x100) for(let k = 0; k < n && o + 4 <= i + size; k++, o += per) ticks += buf.readUInt32BE(o);
+        else ticks = n * trafDefault;
+        T(curTraf).ticks += ticks;
+      }
       i += size;
     }
   };
-  walk(0, buf.length);
-  const d = dur || frag; return scale && d ? d / scale : null;
+  try{ walk(0, buf.length); }catch(e){}
+  if(scale && (dur || frag)) return (dur || frag) / scale;
+  let best = null;
+  for(const x of tracks.values()) if(x.scale && (x.ticks || x.mdhd)){ const sec = (x.ticks || x.mdhd) / x.scale; best = Math.max(best || 0, sec); }
+  return best;
 }
 
 // R2 (or any S3 store): a presigned URL, AWS Signature Version 4 in the query string. Written for the production
@@ -178,4 +203,5 @@ function presign({ method = 'GET', host, key, region = 'auto', accessKey, secret
   return `https://${host}${pathPart}?${qs}&X-Amz-Signature=${crypto.createHmac('sha256', kSign).update(toSign).digest('hex')}`;
 }
 
+const MP4META = require('../public/lab/mp4meta');
 module.exports = { create, hasExif, mp4Seconds, presign, LIMITS };
