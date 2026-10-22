@@ -281,7 +281,7 @@ let field = null;
 function fieldUI(){
   const el = $('fieldBar'), T = club && club.tourney;
   el.hidden = !field || !T || T.status !== 'running';
-  sideUI();
+  hudPlace(); sideUI();
   if(el.hidden) return;
   // laid out like a broadcast HUD (owner's design brief, 2026-10-21): the field, tables and watchers, the average stack,
   // the chip leader in gold, and your rank as a pill coloured by your stack against the average. Tap a chip count to see
@@ -291,13 +291,38 @@ function fieldUI(){
   const mine = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id), avg = T.entrants * T.stack / Math.max(1, T.remaining);
   const tone = !mine ? '' : mine.stack >= avg * 1.25 ? ' up' : mine.stack >= avg * .75 ? '' : ' down';
   const vs = mine && Math.abs(mine.stack - avg) > avg * .05 ? (mine.stack > avg ? `<span class="hud-vs up" title="Above the average stack">${Icons.svg('up')}</span>` : `<span class="hud-vs down" title="Below the average stack">${Icons.svg('down')}</span>`) : '';
-  el.innerHTML = `<div class="hud-mod hud-field"><span class="hud-lbl"><i class="hud-dot" aria-hidden="true"></i>Players</span><b class="hud-val">${odo('players', field.players)}<small>/${total}</small></b><span class="hud-prog" aria-hidden="true"><i style="width:${out.toFixed(1)}%"></i></span></div>`
+  el.innerHTML = `<div class="hud-mod hud-field"><span class="hud-ico" aria-hidden="true">${Icons.svg('users')}</span><span class="hud-lbl"><i class="hud-dot" aria-hidden="true"></i>Players</span><b class="hud-val">${odo('players', field.players)}<small>/${total}</small></b><span class="hud-prog" aria-hidden="true"><i style="width:${out.toFixed(1)}%"></i></span></div>`
     + `<div class="hud-mod hud-badges"><span class="hud-badge" title="Tables in play" aria-label="${field.tables} tables">${Icons.svg('table')}<b>${odo('tables', field.tables)}</b></span><span class="hud-badge" title="Watching now" aria-label="${field.watchers} watching">${Icons.svg('eye')}<b>${odo('watch', field.watchers)}</b></span></div>`
     + `<button type="button" class="hud-mod hud-avg" data-bbtoggle aria-label="Average stack. Tap to switch chips and big blinds"><span class="hud-lbl">Avg stack</span><b class="hud-val">${stackHTML('avg', avg, bb)}</b></button>`
     + (L ? `<button type="button" class="hud-mod hud-lead${meLead ? ' me' : ''}" data-bbtoggle aria-label="Chip leader ${esc(L.name)}. Tap to switch chips and big blinds">${Icons.svg('crown')}<span class="hud-lt"><span class="hud-lbl">Chip leader</span><b class="hud-name">${meLead ? 'You' : esc(L.name)}</b></span><span class="hud-chips"><b>${stackHTML('lead', L.stack, bb)}</b></span></button>` : '')
     + (field.rank ? `<div class="hud-mod hud-rank${tone}" title="Your place among everyone still playing"><span class="hud-lbl">Your rank</span><b class="hud-val">${vs}${odo('rank', ord(field.rank))}<small>/${field.players}</small></b></div>` : '');
   odoPlay(el);
 }
+// Upright on a phone (under 480 px wide) the HUD takes no room from the table (owner's ruling, 2026-10-22: the table
+// keeps production's size and place to the pixel, at every table size; the added elements stay at the top and the room
+// comes from the chrome, never from the felt). It stands in the header's own boxes, which keep their production heights:
+// - two header rows (taller phones): the chat and Lobby buttons move up beside the clock, as on the one-row header,
+//   and the HUD is one row over the stats row (Table, Avg stack, Your rank), whose cells stay in the flow unseen, so
+//   the row keeps its height to the pixel;
+// - the one-row header (shorter phones): the header keeps its height (measured as production lays it out, then held)
+//   and holds two slim lines: the clock and the buttons, and under them the HUD as one line.
+// Sideways (the column beside the table) and on wider screens the HUD stays where it was (its own row).
+function hudPlace(){
+  const g = $('game'), el = $('fieldBar'), T = club && club.tourney, ck = g.querySelector('.clock'), st = g.querySelector('.stats');
+  const on = !!field && !!T && T.status === 'running' && !g.classList.contains('land') && window.innerWidth < 480;
+  const one = g.classList.contains('row1'), home = on && one ? ck : g;
+  if(el.parentNode !== home){ if(home === ck) ck.appendChild(el); else g.insertBefore(el, $('sidePanel')); }
+  ck.style.height = ''; el.style.top = el.style.height = '';
+  // (the one-row header's height as production draws it: the HUD is out of the flow while it is measured)
+  if(on && one){ g.classList.remove('hud-in'); const h = ck.getBoundingClientRect().height; ck.style.height = h + 'px'; }
+  g.classList.toggle('hud-in', on);
+  const hb = g.querySelector('.hdr-btns'), bh = on || one ? ck : st;
+  if(hb && hb.parentNode !== bh) bh.appendChild(hb);
+  // (over the stats row: placed on its box, and again whenever that box changes, the web fonts arriving)
+  if(on && !one){ el.style.top = st.offsetTop + 'px'; el.style.height = st.offsetHeight + 'px'; }
+  if(!hudRO && window.ResizeObserver){ hudRO = new ResizeObserver(() => { const g = $('game'); if(g.classList.contains('hud-in') && !g.classList.contains('row1')) hudPlace(); }); hudRO.observe(st); }
+}
+let hudRO = null;
 // Sideways (#game.land) the column beside the table holds the tournament HUD (#fieldBar, placed there by style.css)
 // and under it the sponsor: logo, name, category, the prize and See their page (as on the break card). With no sponsor,
 // a prize alone; with neither, just the HUD. The status box and the action buttons stay at the bottom of the column.
@@ -1948,6 +1973,7 @@ function newLock(d){
   g.style.setProperty('--dock-w', Math.min(184, Math.round(window.innerWidth * .47)) + 'px');
   const hb = g.querySelector('.hdr-btns'), home = g.querySelector(row1 ? '.clock' : '.stats');
   if(hb && hb.parentNode !== home) home.appendChild(hb);
+  hudPlace();
   LOCK = { w: g.clientWidth, hand, h: 0, iw: window.innerWidth, ih: H };
   return true;
 }
@@ -2387,7 +2413,8 @@ function tickClock(){
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;
   // in the one-row header of the shortest screens the ante takes the second line, in place of the next level
-  const one = $('game').classList.contains('row1');
+  // (and wherever the chat and Lobby buttons stand beside the clock: the tournament HUD upright on a phone)
+  const one = $('game').classList.contains('row1') || $('game').classList.contains('hud-in');
   $('cBlinds').textContent = `${fmt(sb)}/${fmt(bb)}${an && !one ? ' · ante ' + fmt(an) : ''}`;
   $('cNext').textContent = one && an ? `Ante ${fmt(an)}` : `Next: ${fmt(nsb)}/${fmt(nbb)}${nan ? ' · ante ' + fmt(nan) : ''}`;
   const brk = !T.paused && T.breakUntil ? Math.max(0, T.breakUntil - now) : 0;
