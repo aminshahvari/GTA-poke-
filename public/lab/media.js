@@ -179,6 +179,7 @@ async function doVideo(file, i){
     const input = new M.Input({ source: new M.BlobSource(file), formats: M.ALL_FORMATS });
     const vt = await input.getPrimaryVideoTrack(), at = await input.getPrimaryAudioTrack();
     r.vcodec = vt && vt.codec; r.acodec = at ? at.codec : 'none';
+    r.tracks = (await input.getTracks()).map(t => t.type + ':' + (t.codec || 'unknown')).join(' ');
     r.hdr = vt ? await vt.hasHighDynamicRange() : null; r.color = vt ? JSON.stringify(await vt.getColorSpace()) : null;
     const pass = r.vcodec === 'avc' && dur <= 15.5 && file.size <= 10 * 1048576 && r.srcKbps <= 5000 && !r.hdr && (!at || r.acodec === 'aac');
     r.ladder = (await ladder(w, h)).join(' ') || 'none';
@@ -187,7 +188,9 @@ async function doVideo(file, i){
       const output = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new M.BufferTarget() });
       const hdrToSdr = r.hdr ? (() => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
         return { process: smp => { smp.draw(x, 0, 0, w, h); return c; }, processedWidth: w, processedHeight: h }; })() : {};
-      const conv = await M.Conversion.init({ input, output, tags: {}, showWarnings: false, trim: dur > 15 ? { start: 0, end: 15 } : undefined,
+      // 'primary': only the main picture and sound. An iPhone 16 clip also carries a Spatial Audio track (APAC) that
+      // nothing can copy; with every track, that one track sent the whole clip to the slow fallback
+      const conv = await M.Conversion.init({ input, output, tracks: 'primary', tags: {}, showWarnings: false, trim: dur > 15 ? { start: 0, end: 15 } : undefined,
         video: pass ? {} : { width: w, height: h, fit: 'contain', codec: 'avc', bitrate: 3e6, forceTranscode: true, hardwareAcceleration: 'prefer-hardware', ...hdrToSdr },
         audio: { codec: 'aac' } });
       if(!conv.isValid || conv.discardedTracks.length){
