@@ -8,6 +8,7 @@ const rand = () => crypto.randomInt(0x100000000) / 0x100000000;
 const store = require('./store');
 const coach = require('./coach');
 const players = require('./players');
+const content = require('./content');
 
 const FAST = process.env.FAST === '1';
 const SPEED = FAST ? 0.02 : 1;
@@ -52,6 +53,19 @@ const onBreak = (t = T()) => !!t && !!t.breakUntil && !t.paused && Date.now() < 
 const SPONSOR_SECS = [5, 8, 10];
 const sponsorOf = (v, keep) => v === undefined ? keep || null : typeof v === 'string' && /^u[0-9a-f]{12}$/.test(v) ? v : null;
 const sponsorSecOf = (v, keep) => SPONSOR_SECS.includes(+v) ? +v : SPONSOR_SECS.includes(+keep) ? +keep : 8;
+// Prize: what the winner gets, in the director's words ("Dinner for two at Aurora"), shown as plain text in the lobby and
+// at the tables. Free social play: never cash or money, and no web addresses, emails, handles or phone numbers (content.js).
+const PRIZE_MAX = 80;
+const PRIZE_BAD = { link: 'web address', email: 'email address', phone: 'phone number', social: 'social media handle' };
+function prizeOf(v, keep){
+  if(v === undefined) return keep || '';
+  const s = String(v == null ? '' : v).normalize('NFC').replace(/\s+/g, ' ').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '').trim();
+  if(s.length > PRIZE_MAX) throw new Error(`The prize is too long (${PRIZE_MAX} characters at most).`);
+  if(/[$€£¥₹]|\b(?:cash|money|dollars?|bucks|usd|cad|eur|euros?)\b/i.test(s)) throw new Error('The prize cannot be cash or money: Blindrise is free social play. Try something like dinner for two or a free class.');
+  const k = content.find(s);
+  if(k) throw new Error(`Please take the ${PRIZE_BAD[k]} out of the prize. Members find the sponsor through their Exchange page.`);
+  return s;
+}
 
 // Disconnect protection (Issue #9): when the player to act has no live connection, their decision gets 30 more seconds by
 // itself, once per hand, without using an extra-time card or marking them away. Tests (FAST=1 only) can set DC_PROTECT_MS.
@@ -110,7 +124,7 @@ function create(o){
     startAt: startAt ? +startAt : null, repeat: ['daily', 'weekly'].includes(repeat) ? repeat : 'none', regs: [], createdAt: Date.now(),
     anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : 20,
     tableSize: SIZES.includes(+tableSize) ? +tableSize : 9, lateLevels: LATE.includes(+lateLevels) ? +lateLevels : 0, helper: helper !== false && helper !== 'off', ...gpOpts(o),
-    breakMin: breakMinOf(o.breakMin), sponsor: sponsorOf(o.sponsor), sponsorSec: sponsorSecOf(o.sponsorSec) });
+    breakMin: breakMinOf(o.breakMin), sponsor: sponsorOf(o.sponsor), sponsorSec: sponsorSecOf(o.sponsorSec), prize: prizeOf(o.prize) });
   hooks.onClub();
   hooks.onNotice('open', T());
 }
@@ -125,7 +139,7 @@ function edit(o){
     anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : t.actSec, tableSize: 9,
     lateLevels: LATE.includes(+lateLevels) ? +lateLevels : t.lateLevels, helper: helper !== false && helper !== 'off',
     reminded: at === t.startAt ? t.reminded : false, ...gpOpts(o, t),
-    breakMin: breakMinOf(o.breakMin, t.breakMin), sponsor: sponsorOf(o.sponsor, t.sponsor), sponsorSec: sponsorSecOf(o.sponsorSec, t.sponsorSec) });
+    breakMin: breakMinOf(o.breakMin, t.breakMin), sponsor: sponsorOf(o.sponsor, t.sponsor), sponsorSec: sponsorSecOf(o.sponsorSec, t.sponsorSec), prize: prizeOf(o.prize, t.prize) });
   hooks.onClub();
 }
 function join(uid){
@@ -607,8 +621,10 @@ function scheduleNext(t){
   let next = t.startAt + step; while(next < Date.now()) next += step;
   setTimeout(() => {
     const cur = T(); if(cur && (cur.status === 'running' || cur.status === 'registering') || !hooks.hosts()) return;
-    create({ name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat, anteMode: t.anteMode, actSec: t.actSec, tableSize: t.tableSize, lateLevels: t.lateLevels, helper: t.helper, showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0,
-      breakMin: t.breakMin, sponsor: t.sponsor, sponsorSec: t.sponsorSec });
+    const o = { name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat, anteMode: t.anteMode, actSec: t.actSec, tableSize: t.tableSize, lateLevels: t.lateLevels, helper: t.helper, showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0,
+      breakMin: t.breakMin, sponsor: t.sponsor, sponsorSec: t.sponsorSec, prize: t.prize || '' };
+    // (a prize the rules no longer allow is left off the next one rather than stopping it)
+    try{ create(o); }catch(e){ create({ ...o, prize: '' }); }
   }, FAST ? 50 : 15000);
 }
 // Starts a scheduled tournament on time.
