@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { WebSocketServer } = require('ws');
 const store = require('./store');
 const E = require('./engine');
@@ -321,6 +322,40 @@ function send(res, code, body, type = 'application/json', extra){
   res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY, ...extra });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
+// App files (not /vendor/) go out brotli- or gzip-compressed when the browser accepts it: about 670 KB of
+// script and style becomes about 150 KB, which is most of a first visit's wait on a phone.
+// Each file is compressed once per version (ETag) in the background and kept in memory, so a request costs no compression.
+// JSON API answers stay uncompressed: they are small, made per request, and can carry tokens next to text the caller sent.
+const PACK = new Set(['.js', '.css', '.html', '.svg', '.json', '.webmanifest']);
+const packed = new Map(); // file path -> { tag, br: Promise<Buffer|null>, gzip: Promise<Buffer|null> }
+function packedFor(full, buf, tag){
+  let p = packed.get(full);
+  if(!p || p.tag !== tag){
+    const z = (fn, opt) => new Promise(ok => fn(buf, opt, (e, out) => ok(e || out.length >= buf.length ? null : out)));
+    const C = zlib.constants;
+    p = { tag, br: z(zlib.brotliCompress, { params: { [C.BROTLI_PARAM_QUALITY]: 11, [C.BROTLI_PARAM_MODE]: C.BROTLI_MODE_TEXT, [C.BROTLI_PARAM_SIZE_HINT]: buf.length } }), gzip: z(zlib.gzip, { level: 9 }) };
+    packed.set(full, p);
+  }
+  return p;
+}
+// the encodings the browser takes, best first ("br", then "gzip"); q=0 refuses one
+function encodingsFor(req){
+  const ok = new Set();
+  for(const part of String(req.headers['accept-encoding'] || '').toLowerCase().split(',')){
+    const [name, ...params] = part.trim().split(';');
+    const q = params.map(x => /^\s*q=([\d.]+)\s*$/.exec(x)).find(Boolean);
+    if(name && (!q || Number(q[1]) > 0)) ok.add(name.trim());
+  }
+  return ['br', 'gzip'].filter(e => ok.has(e) || ok.has('*'));
+}
+const tagFor = (tag, enc) => enc ? tag.slice(0, -1) + '-' + (enc === 'gzip' ? 'gz' : enc) + '"' : tag;
+// compress the app files ahead of the first visitor (in the background; requests that come first wait for it)
+function warmPack(){
+  const files = [path.join(__dirname, 'engine.js')];
+  try{ for(const f of fs.readdirSync(PUBLIC)) if(PACK.has(path.extname(f))) files.push(path.join(PUBLIC, f)); }catch(e){}
+  for(const full of files) fs.readFile(full, (err, buf) => { if(!err) packedFor(full, buf, '"' + crypto.createHash('sha1').update(buf).digest('base64url').slice(0, 20) + '"'); });
+}
+warmPack();
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   // 503 until the lease is held and state is loaded, and again while shutting down (Render routes only to 200s)
@@ -374,9 +409,9 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400', Vary: 'Authorization, X-Club', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
   let file = url.pathname === '/' || url.pathname === '/login' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
-  if(file === 'engine.js') return fs.readFile(path.join(__dirname, 'engine.js'), (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES['.js']));
-  const full = path.join(PUBLIC, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
-  if(!full.startsWith(PUBLIC)) return send(res, 404, 'Not found', 'text/plain');
+  // /engine.js is the shared rules file in server/; it is served like any app file
+  const full = file === 'engine.js' ? path.join(__dirname, 'engine.js') : path.join(PUBLIC, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
+  if(file !== 'engine.js' && !full.startsWith(PUBLIC)) return send(res, 404, 'Not found', 'text/plain');
   // pinned third-party files (public/vendor/<name>-<version>/): never change at a given path, so phones may keep them for a year.
   // eng.traineddata.gz goes out as plain bytes with no Content-Encoding; the card reader unzips it itself.
   const cache = url.pathname.startsWith('/vendor/') ? { 'Cache-Control': 'public, max-age=31536000, immutable' } : undefined;
@@ -384,9 +419,20 @@ const server = http.createServer((req, res) => {
     if(err) return send(res, 404, 'Not found', 'text/plain');
     // app files: the phone keeps a copy but asks every time ("no-cache"); an unchanged file costs a 304 instead of the whole file
     const tag = '"' + crypto.createHash('sha1').update(buf).digest('base64url').slice(0, 20) + '"';
-    const fresh = cache || { 'Cache-Control': 'no-cache', ETag: tag };
-    if(!cache && req.headers['if-none-match'] === tag){ res.writeHead(304, { ...SECURITY, ...fresh }); return res.end(); }
-    send(res, 200, buf, TYPES[path.extname(full)] || 'application/octet-stream', fresh);
+    const type = TYPES[path.extname(full)] || 'application/octet-stream';
+    if(cache) return send(res, 200, buf, type, cache);
+    // app files: brotli or gzip when the browser takes it; each encoding has its own ETag ("<tag>-br", "<tag>-gz")
+    const p = PACK.has(path.extname(full)) && buf.length > 1024 ? packedFor(full, buf, tag) : null;
+    const encs = p ? encodingsFor(req) : [];
+    (async () => {
+      let enc = null, body = buf;
+      for(const e of encs){ const out = await p[e]; if(out){ enc = e; body = out; break; } }
+      const fresh = { 'Cache-Control': 'no-cache', ETag: tagFor(tag, enc), ...(p ? { Vary: 'Accept-Encoding' } : {}) };
+      // an unchanged file answers 304, whichever encoding the browser's copy came in
+      const seen = String(req.headers['if-none-match'] || '').split(',').map(t => t.trim().replace(/^W\//, ''));
+      if(seen.some(t => t === tag || t === tagFor(tag, 'br') || t === tagFor(tag, 'gzip'))){ res.writeHead(304, { ...SECURITY, ...fresh }); return res.end(); }
+      send(res, 200, body, type, enc ? { ...fresh, 'Content-Encoding': enc } : fresh);
+    })().catch(() => { if(!res.headersSent) send(res, 500, 'Server error', 'text/plain'); });
   });
 });
 
