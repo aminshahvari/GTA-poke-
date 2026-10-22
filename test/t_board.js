@@ -114,12 +114,12 @@ const mid = (a, b) => a.map((x, i) => (x + b[i]) / 2);
   const block = src.match(/\[data-ui="board"\]\{([^{}]*)\}/)[1], tok = {};
   block.replace(/(--[\w-]+)\s*:\s*([^;]+);/g, (m, k, v) => { tok[k] = v.trim(); return m; });
   const SPEC = {
-    '--b-bg': '#03070d', '--b-surface': '#0a1420', '--b-surface-2': '#101c2b', '--b-hair': 'rgba(255,255,255,.08)', '--b-hair-gold': 'rgba(212,178,108,.30)',
-    '--b-felt': '#05472a', '--b-felt-edge': '#01261a', '--b-rail': '#07111a', '--b-rail-hi': 'rgba(212,178,108,.18)',
-    '--b-text': '#f4f0e7', '--b-text-2': 'rgba(244,240,231,.64)', '--b-text-3': 'rgba(244,240,231,.49)' /* spec .42, raised to pass AA (below) */,
-    '--b-gold': '#d4b26c', '--b-gold-text': '#f1d48c', '--b-live': '#e5484d', '--b-online': '#3fcf6e', '--b-away': '#8a93a3', '--b-warn': '#f0a24a',
-    '--b-fold-top': '#bc2c34', '--b-fold-bot': '#83121b', '--b-fold-label': '#fff', '--b-call-top': '#226eba', '--b-call-bot': '#0b3061', '--b-call-label': '#fff',
-    '--b-raise-top': '#d8ad5f', '--b-raise-bot': '#9c7238', '--b-raise-label': '#1a1206',
+    '--b-bg': '#00050c', '--b-surface': '#0b1620', '--b-surface-2': '#111f2b', '--b-hair': 'rgba(255,255,255,.08)', '--b-hair-gold': 'rgba(217,166,81,.30)',
+    '--b-felt': '#074c2a', '--b-felt-edge': '#01180c', '--b-rail': '#0d1214', '--b-rail-hi': 'rgba(217,166,81,.18)',
+    '--b-text': '#f5f6f3', '--b-text-2': 'rgba(245,246,243,.64)', '--b-text-3': 'rgba(245,246,243,.48)' /* spec .42, raised to pass AA (below) */,
+    '--b-gold': '#d9a651', '--b-gold-text': '#ebe1b9', '--b-live': '#e5484d', '--b-online': '#3fcf6e', '--b-away': '#8a93a3', '--b-warn': '#f0a24a',
+    '--b-fold-top': '#bc2c34', '--b-fold-bot': '#85131b', '--b-fold-label': '#fff', '--b-call-top': '#206ab6', '--b-call-bot': '#0b3063', '--b-call-label': '#fff',
+    '--b-raise-top': '#ca9a4d', '--b-raise-bot': '#855c2f', '--b-raise-label': '#1a1206',
     '--b-fold': 'linear-gradient(180deg,var(--b-fold-top),var(--b-fold-bot))', '--b-call': 'linear-gradient(180deg,var(--b-call-top),var(--b-call-bot))', '--b-raise': 'linear-gradient(180deg,var(--b-raise-top),var(--b-raise-bot))',
     '--b-more': 'var(--b-surface)', '--b-more-line': 'var(--b-hair)', '--b-more-icon': 'var(--b-text-2)',
     '--b-font': '-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"IBM Plex Sans",sans-serif',
@@ -127,8 +127,13 @@ const mid = (a, b) => a.map((x, i) => (x + b[i]) / 2);
     '--b-r-chip': '8px', '--b-r-plate': '12px', '--b-r-btn': '12px', '--b-r-card': '16px', '--b-r-sheet': '16px', '--b-r-hero': '24px', '--b-r-pill': '999px',
     '--b-s1': '4px', '--b-s2': '8px', '--b-s3': '12px', '--b-s4': '16px', '--b-s5': '20px', '--b-s6': '28px', '--b-tap': '44px', '--b-act-h': '60px',
     '--b-press-scale': '.97', '--b-press-dur': '120ms', '--b-sheet-dur': '340ms', '--b-sheet-ease': 'cubic-bezier(.32,.72,0,1)', '--b-seat-dur': '220ms', '--b-glow-dur': '400ms' };
+  // where the board (the owner's exact visual standard) and the spec's §2.1 table differ: the spec's value, for the record
+  const SPEC_WAS = { '--b-bg': '#03070d', '--b-surface': '#0a1420', '--b-surface-2': '#101c2b', '--b-hair-gold': 'rgba(212,178,108,.30)', '--b-felt': '#05472a', '--b-felt-edge': '#01261a',
+    '--b-rail': '#07111a', '--b-rail-hi': 'rgba(212,178,108,.18)', '--b-text': '#f4f0e7', '--b-text-2': 'rgba(244,240,231,.64)', '--b-text-3': 'rgba(244,240,231,.42)', '--b-gold': '#d4b26c', '--b-gold-text': '#f1d48c',
+    '--b-fold-bot': '#83121b', '--b-call-top': '#226eba', '--b-call-bot': '#0b3061', '--b-raise-top': '#d8ad5f', '--b-raise-bot': '#9c7238' };
+  console.log('     tokens from the board where it differs from the spec:'); for(const [k, v] of Object.entries(SPEC_WAS)) console.log(`       ${k.padEnd(14)} board ${SPEC[k].padEnd(22)} spec ${v}`);
   const wrong = Object.entries(SPEC).filter(([k, v]) => tok[k] !== v).map(([k, v]) => `${k} is ${tok[k]}, spec ${v}`);
-  check(!wrong.length, `all ${Object.keys(SPEC).length} §2 tokens present with the spec's values${wrong.length ? ': ' + wrong.join('; ') : ''}`);
+  check(!wrong.length, `all ${Object.keys(SPEC).length} §2 tokens present with their values (the board's sampled colour where it differs from the spec)${wrong.length ? ': ' + wrong.join('; ') : ''}`);
   const MAP = { '--lx-ink': 'var(--b-bg)', '--lx-navy': 'var(--b-surface)', '--lx-navy2': 'var(--b-surface-2)', '--lx-gold': 'var(--b-gold)', '--lx-gold-hi': 'var(--b-gold-text)', '--lx-ivory': 'var(--b-text)', '--lx-mute': 'var(--b-text-2)', '--lx-mute2': 'var(--b-text-3)', '--lx-hair': 'var(--b-hair)', '--lx-hair2': 'var(--b-hair-gold)', '--lx-gold-grad': 'var(--b-raise)',
     '--q-bg': 'var(--b-bg)', '--q-surface': 'var(--b-surface)', '--q-surface2': 'var(--b-surface-2)', '--q-text': 'var(--b-text)', '--q-text2': 'var(--b-text-2)', '--q-text3': 'var(--b-text-3)', '--q-gold': 'var(--b-gold)', '--q-hair': 'var(--b-hair)', '--q-hair-gold': 'var(--b-hair-gold)', '--q-font': 'var(--b-font)',
     '--display': 'var(--b-font)', '--body': 'var(--b-font)', '--cond': 'var(--b-font)' };
@@ -164,9 +169,9 @@ const mid = (a, b) => a.map((x, i) => (x + b[i]) / 2);
   for(const [name, fg, bg] of PAIRS) check(ratio(fg, bg) >= 4.5, `contrast ${ratio(fg, bg).toFixed(2)}:1 >= 4.5 — ${name}`);
   // for the record (not the spec's rule): the labels at the darkest stop of their gradients, and the spec's own text-3
   const NOTE = [['Fold label at its bottom stop', C('--b-fold-label'), C('--b-fold-bot')], ['Call label at its bottom stop', C('--b-call-label'), C('--b-call-bot')], ['Raise label at its bottom stop', C('--b-raise-label'), C('--b-raise-bot')],
-    ['spec --b-text-3 (.42) on --b-surface-2', parse('rgba(244,240,231,.42)'), C('--b-surface-2')]];
+    ['spec --b-text-3 (.42) on --b-surface-2', parse('rgba(245,246,243,.42)'), C('--b-surface-2')]];
   console.log('     for the record:'); for(const [name, fg, bg] of NOTE) console.log(`       ${ratio(fg, bg).toFixed(2).padStart(5)}:1  ${name}`);
-  check(ratio(parse('rgba(244,240,231,.42)'), C('--b-surface-2')) < 4.5 && ratio(parse('rgba(244,240,231,.48)'), C('--b-surface-2')) < 4.5, '--b-text-3 at .49 is the nearest step that passes (the spec\'s .42, and .48, do not)');
+  check(ratio(parse('rgba(245,246,243,.42)'), C('--b-surface-2')) < 4.5 && ratio(parse('rgba(245,246,243,.47)'), C('--b-surface-2')) < 4.5, '--b-text-3 at .48 is the nearest step that passes (the spec\'s .42, and .47, do not)');
 
   console.log(`\n${n} checks passed`);
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

@@ -7,23 +7,35 @@
 
 /* ---------- tokens (§2) ---------- */
 [data-ui="board"]{
+  /* Values sampled from the owner's board (board-master.jpg, owner ruling: the board is the exact visual standard;
+     the spec's §2.1 value follows where the board differs, and t_board checks both). The board is a rendering:
+     each value is the median (fills) or the brightest eighth (text) of a patch, within the image's JPEG noise. */
   /* §2.1 surfaces */
-  --b-bg:#03070d; --b-surface:#0a1420; --b-surface-2:#101c2b;
-  --b-hair:rgba(255,255,255,.08); --b-hair-gold:rgba(212,178,108,.30);
-  --b-felt:#05472a; --b-felt-edge:#01261a; --b-rail:#07111a; --b-rail-hi:rgba(212,178,108,.18);
-  /* §2.1 text and accents (--b-text-3 is .49, not the spec's .42: .42 measures 3.7:1, under AA; .49 is the nearest that passes; see t_board) */
-  --b-text:#f4f0e7; --b-text-2:rgba(244,240,231,.64); --b-text-3:rgba(244,240,231,.49);
-  --b-gold:#d4b26c; --b-gold-text:#f1d48c;
-  --b-live:#e5484d; --b-online:#3fcf6e; --b-away:#8a93a3; --b-warn:#f0a24a;
-  /* §2.1 action buttons, gradients top to bottom, and their labels */
-  --b-fold-top:#bc2c34; --b-fold-bot:#83121b; --b-fold-label:#fff;
-  --b-call-top:#226eba; --b-call-bot:#0b3061; --b-call-label:#fff;
-  --b-raise-top:#d8ad5f; --b-raise-bot:#9c7238; --b-raise-label:#1a1206;
+  --b-bg:#00050c;        /* spec #03070d; board ground beside the rail and under the dock */
+  --b-surface:#0b1620;   /* spec #0a1420; board header card, ⋯ button */
+  --b-surface-2:#111f2b; /* spec #101c2b; board Lobby pill */
+  --b-hair:rgba(255,255,255,.08); --b-hair-gold:rgba(217,166,81,.30); /* spec rgba(212,178,108,.30): the board's gold, same alpha */
+  --b-felt:#074c2a;      /* spec #05472a; board felt centre */
+  --b-felt-edge:#01180c; /* spec #01261a; board felt just inside the rail */
+  --b-rail:#0d1214;      /* spec #07111a; board rail band (graphite) */
+  --b-rail-hi:rgba(217,166,81,.18);
+  /* §2.1 text and accents. --b-text is the board's neutral white (spec #f4f0e7, warmer); --b-text-3 is .48, not the
+     spec's .42: .42 measures 3.8:1, under AA, and .48 is the nearest that passes (t_board) */
+  --b-text:#f5f6f3; --b-text-2:rgba(245,246,243,.64); --b-text-3:rgba(245,246,243,.48);
+  --b-gold:#d9a651;      /* spec #d4b26c; board Join Now / Send Connection Request / active segment */
+  --b-gold-text:#ebe1b9; /* spec #f1d48c; board stacks (#e6dfbd) and prize line (#f0e9b6): pale champagne */
+  --b-live:#e5484d; --b-online:#3fcf6e; --b-away:#8a93a3; --b-warn:#f0a24a; /* spec (the board's dots are too small to sample) */
+  /* §2.1 action buttons, gradients top to bottom, and their labels (board: Fold #bc2c34 to #85131b, Call #206ab6 to
+     #0b3063, Raise #ca9a4d to #855c2f; spec Raise #d8ad5f to #9c7238). The Raise label stays dark (#1a1206), as Muse
+     ruled: the board draws it white, which fails AA on gold. */
+  --b-fold-top:#bc2c34; --b-fold-bot:#85131b; --b-fold-label:#fff;
+  --b-call-top:#206ab6; --b-call-bot:#0b3063; --b-call-label:#fff;
+  --b-raise-top:#ca9a4d; --b-raise-bot:#855c2f; --b-raise-label:#1a1206;
   --b-fold:linear-gradient(180deg,var(--b-fold-top),var(--b-fold-bot));
   --b-call:linear-gradient(180deg,var(--b-call-top),var(--b-call-bot));
   --b-raise:linear-gradient(180deg,var(--b-raise-top),var(--b-raise-bot));
   --b-more:var(--b-surface); --b-more-line:var(--b-hair); --b-more-icon:var(--b-text-2);
-  --b-gold-fill:rgba(212,178,108,.14);
+  --b-gold-fill:rgba(217,166,81,.14);
   /* §2.2 type: the device's own face (San Francisco on Apple devices), no hosted font */
   --b-font:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"IBM Plex Sans",sans-serif;
   --b-t-11:11px; --b-t-13:13px; --b-t-14:14px; --b-t-15:15px; --b-t-17:17px; --b-t-20:20px; --b-t-22:22px; --b-t-28:28px;

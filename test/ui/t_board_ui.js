@@ -25,11 +25,11 @@ const api = async (p, body) => { const j = await (await fetch(BASE + '/api/' + p
 const fails = [];
 let oks = 0;
 const check = (cond, msg) => { if(cond) oks++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); if(!cond) fails.push(msg); };
-// the tokens as the spec gives them, as the browser reports a custom property's computed value
-const TOKENS = { '--b-bg': '#03070d', '--b-surface': '#0a1420', '--b-surface-2': '#101c2b', '--b-felt': '#05472a', '--b-text': '#f4f0e7', '--b-gold': '#d4b26c', '--b-gold-text': '#f1d48c',
-  '--b-live': '#e5484d', '--b-online': '#3fcf6e', '--b-away': '#8a93a3', '--b-warn': '#f0a24a', '--b-fold-top': '#bc2c34', '--b-call-top': '#226eba', '--b-raise-top': '#d8ad5f', '--b-raise-label': '#1a1206',
+// the tokens (the board's sampled values, t_board.js), as the browser reports a custom property's computed value
+const TOKENS = { '--b-bg': '#00050c', '--b-surface': '#0b1620', '--b-surface-2': '#111f2b', '--b-felt': '#074c2a', '--b-text': '#f5f6f3', '--b-gold': '#d9a651', '--b-gold-text': '#ebe1b9',
+  '--b-live': '#e5484d', '--b-online': '#3fcf6e', '--b-away': '#8a93a3', '--b-warn': '#f0a24a', '--b-fold-top': '#bc2c34', '--b-call-top': '#206ab6', '--b-raise-top': '#ca9a4d', '--b-raise-label': '#1a1206',
   '--b-r-btn': '12px', '--b-r-sheet': '16px', '--b-tap': '44px', '--b-act-h': '60px', '--b-sheet-ease': 'cubic-bezier(.32,.72,0,1)' }; // (--b-press-scale: checked with reduced motion below)
-const MAPPED = { '--lx-ink': '#03070d', '--lx-navy': '#0a1420', '--lx-gold': '#d4b26c', '--lx-ivory': '#f4f0e7', '--q-gold': '#d4b26c', '--q-surface': '#0a1420' };
+const MAPPED = { '--lx-ink': '#00050c', '--lx-navy': '#0b1620', '--lx-gold': '#d9a651', '--lx-ivory': '#f5f6f3', '--q-gold': '#d9a651', '--q-surface': '#0b1620' };
 
 function tableFor(me){
   const n = 9, seats = Array.from({ length: n }, (_, s) => ({ uid: s ? 'p' + s : me.id, name: s ? 'Player ' + s : me.name, stack: 30000 - s * 1100, inHand: true, bet: s === 1 ? 200 : 0, folded: false, allIn: false, act: '', lastAmt: 0, won: 0, shown: null, cat: '', away: false }));
@@ -76,7 +76,7 @@ const look = pg => pg.evaluate(([TOKENS, MAPPED]) => {
       let L = await look(pg);
       check(L.ui === 'board' && L.board && !L.quiet, `${tag} welcome: html[data-ui="board"], board.css applied, no quiet.css`);
       check(!L.bad.length, `${tag} welcome: the §2 tokens and the mapped --lx-* / --q-* names are live in the computed styles${L.bad.length ? ' — ' + L.bad.join('; ') : ''}`);
-      check(L.bg === 'rgb(3, 7, 13)' && /^-apple-system/.test(L.font), `${tag} welcome: --b-bg behind the page and the system face (${L.bg}; ${L.font.slice(0, 40)})`);
+      check(L.bg === 'rgb(0, 5, 12)' && /^-apple-system/.test(L.font), `${tag} welcome: --b-bg behind the page and the system face (${L.bg}; ${L.font.slice(0, 40)})`);
       check(L.boot === 'hidden', `${tag} welcome: the Blindrise mark has given way to the screen`);
       check(motion === 'reduce' ? L.press === '1' && L.slide === '0' : L.press === '.97' && L.slide === '1', `${tag}: press scale ${L.press}, slide ${L.slide}${motion === 'reduce' ? ' (no scale, no slide)' : ''}`);
       check(L.scroll <= 0, `${tag} welcome: nothing scrolls sideways (${L.scroll})`);

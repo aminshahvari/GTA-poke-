@@ -98,8 +98,10 @@ const hit = (a, b, pad = 0) => a.l < b.r - pad && b.l < a.r - pad && a.t < b.b -
     const [w, h, ins, tagv] = vp, upright = h > w;
     const pg = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     if(ins.l || ins.r || ins.b) await pg.addInitScript(i => { const put = () => { const st = document.createElement('style');
-      st.textContent = `:root{--sa-l:${i.l}px;--sa-r:${i.r}px;--sa-b:${i.b}px;--test-sa-l:${i.l}px;--test-sa-r:${i.r}px;--test-sa-b:${i.b}px}`; document.head.appendChild(st); };
-      if(document.head) put(); else document.addEventListener('DOMContentLoaded', put); }, ins);
+      st.textContent = `:root{--sa-l:${i.l}px;--sa-r:${i.r}px;--sa-b:${i.b}px;--test-sa-l:${i.l}px;--test-sa-r:${i.r}px;--test-sa-b:${i.b}px}`; document.body.appendChild(st); };
+      // (at the end of the body, after every stylesheet: with UI_BOARD or UI_QUIET the page's stylesheets sit at the top
+      // of the body, server/shell.js, and this override must still come last)
+      if(document.readyState !== 'loading') put(); else document.addEventListener('DOMContentLoaded', put); }, ins);
     if(ins.t) await pg.route(u => { const x = new URL(u); return x.origin === BASE && (x.pathname === '/' || x.pathname.endsWith('.css')); }, async r => {
       const res = await r.fetch(); r.fulfill({ response: res, body: (await res.text()).replace(/env\(safe-area-inset-top(,\s*0px)?\)/g, ins.t + 'px').replace(/env\(safe-area-inset-bottom(,\s*0px)?\)/g, ins.b + 'px') }); });
     if(process.env.FONTS_DIR){
