@@ -239,4 +239,5 @@
 [data-ui="quiet"] #game.land .helper{min-height:72px;align-content:center}
 
 /* the field-bar HUD (branch field-bar) is shown by the quiet one-line field instead */
-[data-ui="quiet"] #fieldBar{display:none!important}
+/* upright the one-line field (#qline) holds the tournament; sideways the column beside the table has the room for the HUD (owner, 2026-10-22) */
+[data-ui="quiet"] #game:not(.land) #fieldBar{display:none!important}
