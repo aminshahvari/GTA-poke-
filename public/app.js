@@ -1510,6 +1510,44 @@ function chipStacks(won, bb){
   return Array.from({ length: cols }, (_, c) => { const h = Math.max(2, Math.min(6, Math.round(2 + (won / Math.max(1, bb)) / (4 * cols)) - c));
     return `<span class="wcol">${'<i></i>'.repeat(h)}</span>`; }).join('');
 }
+// Another seat's shown cards stand over its avatar (under it at the top of the oval), where on a crowded oval (7 to 9
+// seats, a short screen) the seat above or below (its plate, badge or cards) or a winner's chips can lie over them. Move
+// them the least that clears every other seat, the pot, a winner's chips, the board, the result line and the screen's
+// edge: sideways (toward the middle first) or further over their own avatar; else the place with the least overlap.
+// (Run on every render: a reused seat starts from its own place.)
+function clearShown(){
+  const seats = [...$('seats').querySelectorAll('.seat')], holes = seats.map(s => s.querySelector(':scope[data-side]>.hole.shown')).filter(Boolean);
+  if(!holes.length) return;
+  holes.forEach(h => h.style.translate = '');
+  // (a badge at its full size: Winner grows in after the chips glide over)
+  const R = e => { const b = e.getBoundingClientRect(); if(!e.classList.contains('badge')) return b; const x = (b.left + b.right) / 2, y = (b.top + b.bottom) / 2, w = e.offsetWidth / 2, h = e.offsetHeight / 2; return { left: x - w, right: x + w, top: y - h, bottom: y + h }; };
+  const over = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left) - 1.5) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) - 1.5); // (a touch is no overlap)
+  const text = e => { const r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect(); };
+  const mid = [...$('board').children, $('pot'), ...document.querySelectorAll('#fx .winpile:not(.gone)')].map(R).concat([...$('msg').children].map(text)).filter(b => b.width && b.height);
+  const W = document.documentElement.clientWidth, area = R($('tableArea')), cx = (area.left + area.right) / 2;
+  const moves = [];
+  for(let dy = 0; dy <= 14; dy += 2) for(let k = 0; k <= 24; k++) moves.push([(k % 2 ? 1 : -1) * Math.ceil(k / 2) * 4, dy]);
+  moves.sort((p, q) => Math.abs(p[0]) + p[1] * 3 - Math.abs(q[0]) - q[1] * 3);
+  // (each in turn, then again with the others where they went, until none moves)
+  const base = holes.map(h => { const own = [...h.children].map(R), av = R(h.parentNode.querySelector('.av') || h), hc = (own[0].top + own[0].bottom) / 2;
+    return { h, own, inward: (av.left + av.right) / 2 < cx ? 1 : -1, down: hc < (av.top + av.bottom) / 2 ? 1 : -1, at: '' }; });
+  for(let pass = 0, moved = true; pass < 3 && moved; pass++){
+    moved = false;
+    for(const o of base){
+      const rest = seats.filter(s => s !== o.h.parentNode).flatMap(s => [...s.querySelectorAll('.av, .plate, .badge, .hole .card')]).map(R).concat(mid);
+      let best = null;
+      for(const [mx, my] of moves){
+        const dx = mx * o.inward, dy = my * o.down, at = o.own.map(b => ({ left: b.left + dx, right: b.right + dx, top: b.top + dy, bottom: b.bottom + dy }));
+        if(at.some(b => b.left < 2 || b.right > W - 2)) continue;
+        const cost = at.reduce((t, b) => t + rest.reduce((u, q) => u + over(b, q), 0), 0);
+        if(!best || cost < best.cost) best = { dx, dy, cost };
+        if(!cost) break;
+      }
+      const t = best && (best.dx || best.dy) ? `${best.dx}px ${best.dy}px` : '';
+      if(t !== o.at){ o.h.style.translate = o.at = t; moved = true; }
+    }
+  }
+}
 function potToWinners(d, handKey, LY){
   const key = 'win' + handKey; if(seen.has(key)) return; seen.add(key);
   const fx = $('fx'); if(!fx) return;
@@ -2003,9 +2041,12 @@ function renderTable(){
     const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
     const av = avHTML(p.uid, p.name);
     const shot = acting ? `<div class="shot"><i class="shotBar${d.dcProtect ? ' dc' : ''}"></i></div>` : '';
+    // a side seat showing its cards wears its badge (its hand, Winner) along their foot: under its plate it sat on the
+    // corner of the cards of the seat below (owner, 9 seats at 430x932)
+    const shown = / show\b/.test(hole), onCards = shown && (oq.side === 'l' || oq.side === 'r');
     parts.push(isMe || foot
       ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
-      : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`);
+      : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${shown ? ' shown' : ''}">${hole}${onCards ? badge : ''}</div>${av}<div class="plate"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${onCards ? '' : badge}${shot}</div></div>`);
     if(p.inHand && p.bet > 0){
       const [bx, by] = LY.betOf(s), bp = pxToPct([bx, by]), [sx, sy] = pctToPx(pos);
       const key = `b${handKey}-${d.street}-${s}-${p.bet}`, isNew = !seen.has(key); seen.add(key);
@@ -2014,7 +2055,7 @@ function renderTable(){
   }
   if(d.btn >= 0 && d.phase === 'hand'){
     const dd = pxToPct(LY.dealerOf(d.btn));
-    parts.push(`<div class="dealer" style="left:${dd[0]}%;top:${dd[1]}%">D</div>`);
+    parts.push(`<div class="dealer${res ? ' under' : ''}" style="left:${dd[0]}%;top:${dd[1]}%">D</div>`); // (after the hand, under the shown cards)
   }
   patchKids($('seats'), parts);
   // (where the screen is too small for a clean layout, the smallest phones sideways, the result line can still touch
@@ -2023,6 +2064,7 @@ function renderTable(){
   if(res && G.cost){ const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom, mr = ml.getBoundingClientRect();
     if([...$('seats').querySelectorAll('.av, .plate, .hole .card')].some(e => hit(e.getBoundingClientRect(), mr))) ml.classList.add('up'); }
   if(res) try{ potToWinners(d, handKey, LY); }catch(e){}
+  clearShown();
   $('tName').textContent = `Table ${d.n}`;
   $('sPlayers').textContent = `${d.seats.filter(Boolean).length} seated`;
   fieldUI();

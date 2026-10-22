@@ -156,6 +156,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .chips i:nth-child(2){top:-3px;--cc:#1f5fbf}
 .chips i:nth-child(3){top:-6px;--cc:#222}
 .dealer{position:absolute;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;background:#f5f1e6;box-shadow:0 2px 4px rgba(0,0,0,.5);display:grid;place-items:center;font-size:10px;font-weight:800;color:#222;z-index:6;transition:left .5s,top .5s}
+.dealer.under{z-index:4}
 .card{--w:var(--cw);position:relative;width:var(--w);height:calc(var(--w)*1.4);border-radius:calc(var(--w)*.12);background:#fbfaf6;color:#1b1b1b;box-shadow:0 2px 5px rgba(0,0,0,.45);font-weight:700;line-height:1;flex:none}
 .card .r{position:absolute;left:calc(var(--w)*.09);top:calc(var(--w)*.07);font-size:calc(var(--w)*.4);letter-spacing:-.04em}
 .card .s1{position:absolute;left:calc(var(--w)*.1);top:calc(var(--w)*.48);font-size:calc(var(--w)*.3)}
@@ -2022,6 +2023,8 @@ body{background:var(--lx-ink)}
 #game .table-area.micro .seat[data-side=t] .card.mini{--w:14px}
 #game .seat[data-side]>.hole.shown{bottom:88%;z-index:3}
 #game .seat[data-side^=t]>.hole.shown{bottom:auto;top:88%}
+/* (a side seat's badge at the foot of its shown cards, over the big suit, clear of both corner indexes; see app.js) */
+#game .seat[data-side]>.hole.shown>.badge{left:50%;right:auto;top:auto;bottom:-6px;transform:translateX(-50%);z-index:5}
 
 /* (the oval's dock: the raise panel takes the timer's row and the helper's line, the timer a thin line along its top
    edge and its amount on the Raise button, so the dock is no taller with it open and the table keeps the room) */
