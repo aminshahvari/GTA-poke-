@@ -65,6 +65,7 @@ function create({ prodHost, dir = process.env.MEDIA_DIR || path.join(os.tmpdir()
       }else{
         if(buf.toString('latin1', 4, 8) !== 'ftyp') fail('Not an MP4 file.');
         seconds = mp4Seconds(buf);
+        if(MP4META.scan(buf).meta.length) fail('The video still carries metadata (maybe where it was filmed). It must be cleaned on the phone.');
         if(seconds != null && seconds > L.seconds) fail(`Too long: ${seconds.toFixed(1)} s (at most ${L.seconds - 0.5} s).`);
       }
       pending.delete(key);
@@ -178,4 +179,5 @@ function presign({ method = 'GET', host, key, region = 'auto', accessKey, secret
   return `https://${host}${pathPart}?${qs}&X-Amz-Signature=${crypto.createHmac('sha256', kSign).update(toSign).digest('hex')}`;
 }
 
+const MP4META = require('../public/lab/mp4meta');
 module.exports = { create, hasExif, mp4Seconds, presign, LIMITS };

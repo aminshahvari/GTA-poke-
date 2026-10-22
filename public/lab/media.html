@@ -55,7 +55,7 @@ th{color:var(--text3);font-weight:500}
     <div class="row"><label class="pick primary">Choose photos<input id="photos" type="file" accept="image/*" multiple></label></div>
   </div>
   <div class="card gold">
-    <p><b style="color:var(--text)">2. Videos</b>: pick clips. Each is made 720p and at most 15 s, on this phone, in real time: keep the screen on while it works.</p>
+    <p><b style="color:var(--text)">2. Videos</b>: pick clips. An H.264 clip of at most 15 s and 10 MB goes as it is, with its location and device details removed. Any other clip is made 720p on this phone, in real time.</p>
     <div class="row"><label class="pick primary">Choose videos<input id="videos" type="file" accept="video/*" multiple></label><button id="nextVideo" hidden>Prepare next video</button></div>
     <div id="vstatus" class="vstat" aria-live="polite"></div>
     <div id="vprev" class="vprev" hidden></div>
@@ -74,6 +74,7 @@ th{color:var(--text3);font-weight:500}
   <p class="note" id="loadstats"></p>
 </div>
 <div id="viewer" hidden></div>
+<script src="/lab/mp4meta.js"></script>
 <script src="/lab/media.js"></script>
 </body>
 </html>

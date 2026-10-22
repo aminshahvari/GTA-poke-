@@ -144,6 +144,22 @@ async function doVideo(file, i){
   const W0 = v.videoWidth, H0 = v.videoHeight, dur = v.duration, k = Math.min(1, 1280 / Math.max(W0, H0));
   const w = Math.round(W0 * k / 2) * 2, h = Math.round(H0 * k / 2) * 2, limit = Math.min(dur, 15);
   const r = { i, kind: 'video', origBytes: file.size, origW: W0, origH: H0, origSeconds: +dur.toFixed(2), outW: w, outH: h, exifBefore: null, gpsBefore: null };
+  // a clip that is already H.264, short and small goes as it is: only its metadata boxes are blanked (no re-encoding,
+  // so no quality loss and no waiting). Anything else (HEVC from the camera, longer, bigger) is re-made below.
+  const t00 = performance.now(), orig = MP4META.clean(new Uint8Array(await file.arrayBuffer()));
+  r.codecs = orig.codecs.join(','); r.metaBefore = orig.removed;
+  if(orig.codecs.includes('avc1') && dur <= 15.5 && file.size <= 10 * 1048576){
+    r.path = 'original'; r.ms = Math.round(performance.now() - t00);
+    const out = new Blob([orig.out], { type: 'video/mp4' });
+    r.outBytes = out.size; r.outW = W0; r.outH = H0; r.outSeconds = +dur.toFixed(2); r.kbps = Math.round(out.size * 8 / dur / 1000);
+    v.pause(); v.currentTime = Math.min(.5, dur / 2); await once(v, 'seeked');
+    const poster = await jpeg(drawAt(v, W0, H0, 720), .8); r.thumbBytes = poster.size;
+    const group = 'v' + Date.now().toString(36) + i;
+    try{ const done = await upload('video', out, group, W0, H0); r.serverSeconds = done.seconds; await upload('poster', poster, group, W0, H0); r.server = 'accepted'; }catch(e){ r.server = 'refused: ' + e.message; }
+    URL.revokeObjectURL(v.src); v.remove(); $('vprev').hidden = true;
+    return r;
+  }
+  r.path = 'reencoded';
   const mime = window.MediaRecorder && MIMES.find(m => MediaRecorder.isTypeSupported(m));
   if(!mime || !HTMLCanvasElement.prototype.captureStream){ r.server = 'not supported on this browser (no MP4 recording)'; v.remove(); return r; }
   r.mime = mime;
@@ -172,7 +188,8 @@ async function doVideo(file, i){
     step();
   }).catch(e => { v.pause(); try{ rec.stop(); }catch(_){} $('vprev').hidden = true; v.remove(); throw e; });
   v.pause(); const stopped = once(rec, 'stop'); rec.stop(); await stopped;
-  const out = new Blob(chunks, { type: mime.split(';')[0] });
+  const rec8 = MP4META.clean(new Uint8Array(await new Blob(chunks).arrayBuffer())); r.metaAfter = rec8.removed;
+  const out = new Blob([rec8.out], { type: mime.split(';')[0] });
   r.ms = Math.round(performance.now() - t0); r.outBytes = out.size; r.outSeconds = +limit.toFixed(2); r.kbps = Math.round(out.size * 8 / limit / 1000);
   // the poster: a frame from half a second in, 720 px on its long side
   v.currentTime = Math.min(.5, dur / 2); await once(v, 'seeked');
@@ -190,7 +207,7 @@ async function doVideo(file, i){
 function row(r){
   const tr = document.createElement('tr'), yes = b => b == null ? '—' : b ? 'yes' : 'no';
   const cells = [r.i, r.kind, `${size(r.origBytes)}<br><span class="note">${r.origW}×${r.origH}${r.origSeconds ? ' · ' + r.origSeconds + ' s' : ''}</span>`,
-    r.outBytes ? `${size(r.outBytes)}<br><span class="note">${r.outW}×${r.outH}${r.kbps ? ' · ' + r.kbps + ' kbps' : ''}${r.q ? ' · q' + r.q : ''}</span>` : '—',
+    r.outBytes ? `${size(r.outBytes)}<br><span class="note">${r.outW}×${r.outH}${r.kbps ? ' · ' + r.kbps + ' kbps' : ''}${r.path ? ' · ' + (r.path === 'original' ? 'sent as is' : 're-made') : ''}${r.q ? ' · q' + r.q : ''}</span>` : '—',
     r.thumbBytes ? size(r.thumbBytes) : '—', r.outBytes ? Math.round(100 * (1 - (r.outBytes + (r.thumbBytes || 0)) / r.origBytes)) + '% smaller' : '—',
     r.ms != null ? (r.ms / 1000).toFixed(1) + ' s' : '—', r.ssim ? 'SSIM ' + r.ssim : r.outSeconds ? r.outSeconds + ' s' : '—',
     r.kind === 'photo' ? `${yes(r.exifBefore)} / ${yes(r.gpsBefore)}` : '—', r.kind === 'photo' ? (r.exifAfter ? '<span class="no">EXIF left</span>' : '<span class="ok">clean</span>') : '—',
@@ -251,10 +268,18 @@ setInterval(() => {
   if(e.length) $('loadstats').textContent = `Feed downloads so far: ${e.length} files, ${size(e.reduce((s, x) => s + (x.transferSize || x.encodedBodySize || 0), 0))}.`;
 }, 2000);
 
+// which formats this phone's canvas can actually write (Safari answers an unknown type with a PNG)
+let encoders = null;
+async function probe(){
+  const c = document.createElement('canvas'); c.width = c.height = 16; const x = {};
+  for(const t of ['image/webp', 'image/avif']) x[t.slice(6)] = await new Promise(ok => c.toBlob(b => ok(!!b && b.type === t), t, .7));
+  encoders = x;
+}
+probe();
 function report(){
-  return { at: new Date().toISOString(), ua: navigator.userAgent, screen: `${screen.width}x${screen.height}@${devicePixelRatio}`, limits: LIMITS, summary: summary(),
-    files: results.map(({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, encoderExif, encoderGps, metaRemoved, mime, kbps, outSeconds, serverSeconds, server, audio }) =>
-      ({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, encoderExif, encoderGps, metaRemoved, mime, kbps, outSeconds, serverSeconds, server, audio })) };
+  return { at: new Date().toISOString(), encoders, ua: navigator.userAgent, screen: `${screen.width}x${screen.height}@${devicePixelRatio}`, limits: LIMITS, summary: summary(),
+    files: results.map(({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, encoderExif, encoderGps, metaRemoved, mime, kbps, outSeconds, serverSeconds, server, audio, path, codecs, metaBefore, metaAfter }) =>
+      ({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, encoderExif, encoderGps, metaRemoved, mime, kbps, outSeconds, serverSeconds, server, audio, path, codecs, metaBefore, metaAfter })) };
 }
 $('send').onclick = async () => {
   const b = $('send'), n = results.length; b.disabled = true; b.textContent = 'Sending…'; $('sendstate').textContent = '';
@@ -268,25 +293,28 @@ $('copy').onclick = async () => { const t = JSON.stringify(report(), null, 1); t
 $('clear').onclick = async () => { try{ const r = await call('clear'); status(`Removed ${r.removed} files.`); feed(); }catch(e){ status(e.message); } };
 
 $('photos').onchange = async e => {
-  const files = [...e.target.files].slice(0, 20); e.target.value = '';
+  const files = [...e.target.files].slice(0, 20); e.target.value = ''; awake(true);
   for(const [k, f] of files.entries()){
     const i = results.length + 1; status(`Photo ${k + 1} of ${files.length}…`);
     try{ const r = await doPhoto(f, i); results.push(r); row(r); }catch(x){ const r = { i, kind: 'photo', origBytes: f.size, server: x.message }; results.push(r); row(r); }
     summary();
   }
-  status(`${files.length} photos done.`); feed();
+  status(`${files.length} photos done.`); awake(false); feed();
 };
 // one video per tap: Safari lets a page play sound (needed to record it) only right after a tap
 let queue = [];
+// keep the screen on while the phone works (iOS 16.4+); a refusal changes nothing else
+let wake = null;
+async function awake(on){ try{ if(on && !wake && navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); else if(!on && wake){ await wake.release(); wake = null; } }catch(e){} }
 async function nextVideo(){
   const f = queue.shift(); $('nextVideo').disabled = true; if(!f) return;
-  const i = results.length + 1; vstatus(`Video ${i}: opening…`);
+  const i = results.length + 1; vstatus(`Video ${i}: opening…`); awake(true);
   let r;
   try{ r = await doVideo(f, i); }catch(x){ r = { i, kind: 'video', origBytes: f.size, server: x.message }; }
   results.push(r); row(r); summary();
   const ok = /^accepted/.test(r.server || '');
   vstatus(`Video ${i}: ${ok ? `ready, ${size(r.outBytes)} in ${(r.ms / 1000).toFixed(1)} s` : 'not prepared: ' + r.server}. ${queue.length ? `${queue.length} more: tap "Prepare next video".` : 'All videos done.'}`);
-  $('nextVideo').disabled = false; $('nextVideo').hidden = !queue.length; feed();
+  $('nextVideo').disabled = false; $('nextVideo').hidden = !queue.length; if(!queue.length) awake(false); feed();
 }
 $('videos').onchange = e => { queue = [...e.target.files].slice(0, 20); e.target.value = ''; $('nextVideo').hidden = !queue.length; vstatus(`${queue.length} videos chosen: tap "Prepare next video" for each, and keep this screen on.`); };
 $('nextVideo').onclick = nextVideo;

@@ -18,10 +18,13 @@ let n = 0; const check = (c, msg) => { assert.ok(c, msg); n++; console.log('ok  
 const SOF = Buffer.from([0xff, 0xdb, 0x00, 0x04, 0x00, 0x00, 0xff, 0xda, 0x00, 0x02, 0x11, 0x22, 0xff, 0xd9]);
 const jpeg = (exif, pad = 2000) => Buffer.concat([Buffer.from([0xff, 0xd8]), exif ? Buffer.concat([Buffer.from([0xff, 0xe1, 0x00, 0x10]), Buffer.from('Exif\0\0'), Buffer.alloc(8)]) : Buffer.alloc(0), SOF, Buffer.alloc(pad)]);
 const box = (t, body) => { const b = Buffer.alloc(8); b.writeUInt32BE(8 + body.length); b.write(t, 4, 'latin1'); return Buffer.concat([b, body]); };
-function mp4(seconds, pad = 5000){
+function mp4(seconds, pad = 5000, where){
   const mvhd = Buffer.alloc(100); mvhd.writeUInt32BE(1000, 12); mvhd.writeUInt32BE(Math.round(seconds * 1000), 16);
-  return Buffer.concat([box('ftyp', Buffer.from('isom\0\0\0\0isomavc1')), box('moov', box('mvhd', mvhd)), box('mdat', Buffer.alloc(pad))]);
+  // where: a location box as an iPhone writes it (udta/©xyz in the movie, and a keys/ilst meta inside a track)
+  const loc = where ? [box('udta', box('\xa9xyz', Buffer.from('+43.6532-079.3832/', 'latin1'))), box('trak', box('meta', Buffer.from('com.apple.quicktime.location.ISO6709')))] : [];
+  return Buffer.concat([box('ftyp', Buffer.from('isom\0\0\0\0isomavc1')), box('moov', Buffer.concat([box('mvhd', mvhd), ...loc])), box('mdat', Buffer.alloc(pad, 7))]);
 }
+const MP4META = require('../public/lab/mp4meta');
 
 (async () => {
   // ---------- in process ----------
@@ -92,13 +95,20 @@ function mp4(seconds, pad = 5000){
   check((await j('/media/api/commit', { key: sl2.key }, tok)).status === 400, 'and nothing of it can be committed');
   const long = await up('video', mp4(20));
   check(long.commit.status === 400 && /Too long/.test((await long.commit.json()).error), 'a 20 s video is refused (at most 15 s)');
+  const placed = await up('video', mp4(10, 3000, true));
+  check(placed.commit.status === 400 && /metadata/.test((await placed.commit.json()).error), 'a video that still says where it was filmed is refused');
+  const raw = mp4(10, 3000, true), cl = MP4META.clean(new Uint8Array(raw)), clb = Buffer.from(cl.out);
+  check(cl.removed === 2 && clb.length === raw.length && !clb.includes(Buffer.from('+43.6532')) && !clb.includes(Buffer.from('ISO6709')) && clb.subarray(-3000).equals(raw.subarray(-3000)) && M.mp4Seconds(clb) === 10,
+    'the phone blanks a clip\'s location boxes in place: same size, video bytes and length untouched');
+  const sent = await up('video', clb);
+  check(sent.commit.status === 200, 'and the cleaned clip is accepted as it is');
   const vid = await up('video', mp4(12, 40000)), vc = await vid.commit.json();
   check(vid.commit.status === 200 && vc.seconds === 12, 'a 12 s video is accepted, its length read by the server');
   const rg = await fetch(B0 + vc.url, { headers: { range: 'bytes=0-99' } });
   check(rg.status === 206 && rg.headers.get('content-range') === `bytes 0-99/${vc.bytes}` && (await rg.arrayBuffer()).byteLength === 100, 'a video is served in byte ranges, as Safari asks for it');
   const list = await (await j('/media/api/list', {}, tok)).json();
-  check(list.items.length === 2 && list.items.every(x => x.url.startsWith('/media/f/')), 'the list holds the two accepted files, with signed links');
-  check((await (await j('/media/api/clear', {}, tok)).json()).removed === 2 && (await fetch(B0 + vc.url)).status === 404, 'clearing removes my files and their links stop working');
+  check(list.items.length === 3 && list.items.every(x => x.url.startsWith('/media/f/')), 'the list holds the three accepted files, with signed links');
+  check((await (await j('/media/api/clear', {}, tok)).json()).removed === 3 && (await fetch(B0 + vc.url)).status === 404, 'clearing removes my files and their links stop working');
   await S.stop();
   console.log(`\n${n} checks passed`);
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });
