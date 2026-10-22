@@ -62,6 +62,8 @@
   --b-plate:color-mix(in srgb,var(--b-bg) 86%,transparent);         /* a name plate (§3.3) */
   --b-av-hi:color-mix(in srgb,var(--b-text) 12%,transparent);       /* the initials disc's soft light */
   --b-gold-glow:color-mix(in srgb,var(--b-gold) 45%,transparent);   /* the glow round the player to act and the winner */
+  /* B3: an avatar's ring at rest, the board's champagne gold (the board's resting rings sample a light champagne; --b-hair-gold at 30% read as no ring) */
+  --b-ring:color-mix(in srgb,color-mix(in oklab,var(--b-gold),var(--b-text) 30%) 60%,transparent);
   --b-btn-hi:color-mix(in srgb,var(--b-text) 18%,transparent);      /* an action button's top edge */
   --b-act-call:color-mix(in oklab,var(--b-online),var(--b-text) 45%); /* "Call" / "Check" in a name line (spec #9fe3c2) */
   --b-good:var(--b-online); --b-bad:color-mix(in oklab,var(--b-live),var(--b-text) 22%); /* the helper's chance to win */
@@ -148,11 +150,11 @@
 /* ---------- a seat (§3.3): drawn round its avatar's centre ---------- */
 [data-ui="board"] #game #seats .seat.b-seat{width:0;height:0;display:block;transform:none;transition:opacity var(--b-seat-dur) ease}
 [data-ui="board"] #game #seats .seat.b-seat:not(.hero) .av{position:absolute;left:calc(var(--av) / -2);top:calc(var(--av) / -2);width:var(--av);height:var(--av);z-index:3}
-[data-ui="board"] #game #seats .seat .av.b-av{border:2px solid var(--b-hair-gold);background:radial-gradient(circle at 34% 28%,var(--b-av-hi),transparent 60%),var(--b-surface-2);color:var(--b-text);
+[data-ui="board"] #game #seats .seat .av.b-av{border:2px solid var(--b-ring);background:radial-gradient(circle at 34% 28%,var(--b-av-hi),transparent 60%),var(--b-surface-2);color:var(--b-text);
   font-weight:600;font-size:calc(var(--av) * .34);letter-spacing:.02em;box-shadow:0 4px 10px var(--b-shadow);box-sizing:border-box}
 [data-ui="board"] #game #seats .seat .av.b-av .emo{font-size:calc(var(--av) * .5)}
 /* the player to act: a bright gold ring with a glow; the ring's sweep is their time running out (--f, app.js tickClock) */
-[data-ui="board"] #game #seats .seat.acting .av.b-av{border-color:var(--b-gold);box-shadow:0 0 0 2px var(--b-gold-glow),0 0 18px var(--b-gold-glow)}
+[data-ui="board"] #game #seats .seat.acting .av.b-av{border:3px solid var(--b-gold);box-shadow:0 0 0 2px var(--b-gold-glow),0 0 18px var(--b-gold-glow)}
 [data-ui="board"] #game #seats .seat.b-seat:not(.hero) .shot{position:absolute;left:calc(var(--av) / -2 - 4px);top:calc(var(--av) / -2 - 4px);right:auto;bottom:auto;width:calc(var(--av) + 8px);height:calc(var(--av) + 8px);
   border-radius:50%;background:conic-gradient(var(--b-gold) calc(var(--f,1) * 360deg),transparent 0);-webkit-mask:radial-gradient(closest-side,transparent calc(100% - 3px),var(--b-bg) calc(100% - 3px));mask:radial-gradient(closest-side,transparent calc(100% - 3px),var(--b-bg) calc(100% - 3px));z-index:4;overflow:visible}
 [data-ui="board"] #game #seats .seat.b-seat:not(.hero) .shot i{display:none}
