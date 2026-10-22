@@ -1,5 +1,5 @@
 // The tournament prize (owner's request, 2026-10-22): an optional line in the director's words, set on create and edit,
-// kept as plain text (trimmed, at most 80 characters), never cash or money, and no web addresses, emails, handles or phone
+// kept as plain text (trimmed, at most 80 characters), amounts allowed in the app (owner ruling), and no web addresses, emails, handles or phone
 // numbers (server/content.js). Sent with the tournament to members; a spectator from another club gets none.
 const { spawn } = require('child_process');
 const path = require('path'), fs = require('fs'), os = require('os'), net = require('net');
@@ -34,8 +34,11 @@ let srv; process.on('exit', () => { try{ srv.kill('SIGKILL'); }catch(e){} });
   ok(T(o).prize === 'Dinner for two & dessert', 'the prize is trimmed and its spaces folded: ' + JSON.stringify(T(o).prize));
   ok(T(m).prize === 'Dinner for two & dessert', 'members get the prize with the tournament');
   ok(!await tryIt({ t: 'edit', name: 'Prize Night', stack: 30000, levelMin: 20 }) && T(o).prize === 'Dinner for two & dessert', 'an edit without the field keeps the prize');
-  for(const [bad, why] of [['$100 gift card', 'a currency sign'], ['Cash for the winner', 'cash'], ['Prize money', 'money'], ['50 dollars', 'dollars'],
-    ['Visit aurora.com for details', 'a web address'], ['Call 416-555-0199', 'a phone number'], ['DM @auroracoffee', 'a handle'], ['x'.repeat(81), 'too long']]){
+  for(const good of ['$100 Prize', '$50 Prize', '$100 gift card']){
+    ok(!await tryIt({ t: 'edit', name: 'Prize Night', stack: 30000, levelMin: 20, prize: good }) && T(o).prize === good, `allowed in the app's lobby: ${good}`);
+  }
+  ok(!await tryIt({ t: 'edit', name: 'Prize Night', stack: 30000, levelMin: 20, prize: 'Dinner for two & dessert' }), 'back to the dinner');
+  for(const [bad, why] of [['Visit aurora.com for details', 'a web address'], ['Call 416-555-0199', 'a phone number'], ['DM @auroracoffee', 'a handle'], ['x'.repeat(81), 'too long']]){
     const e = await tryIt({ t: 'edit', name: 'Prize Night', stack: 30000, levelMin: 20, prize: bad });
     ok(e && T(o).prize === 'Dinner for two & dessert', `refused: ${why} (${e})`);
   }
