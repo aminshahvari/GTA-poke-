@@ -25,11 +25,24 @@ function mp4(seconds, pad = 5000, where){
   return Buffer.concat([box('ftyp', Buffer.from('isom\0\0\0\0isomavc1')), box('moov', Buffer.concat([box('mvhd', mvhd), ...loc])), box('mdat', Buffer.alloc(pad, 7))]);
 }
 const MP4META = require('../public/lab/mp4meta');
+// a fragmented MP4 as Safari's MediaRecorder writes it: the header says 0 s; the fragments carry the sample durations
+function fmp4(seconds, perSample){
+  const full = (t, vf, body) => box(t, Buffer.concat([Buffer.from([0, (vf >> 16) & 255, (vf >> 8) & 255, vf & 255]), body]));
+  const u = (...n) => { const b = Buffer.alloc(4 * n.length); n.forEach((x, k) => b.writeUInt32BE(x, 4 * k)); return b; };
+  const mvhd = Buffer.alloc(100); mvhd.writeUInt32BE(1000, 12);
+  const tkhd = full('tkhd', 0, Buffer.concat([u(0, 0, 1), Buffer.alloc(72)])), mdhd = full('mdhd', 0, u(0, 0, 600, 0, 0));
+  const frames = Math.round(seconds * 30), half = Math.floor(frames / 2);
+  const trun = (n) => perSample ? full('trun', 0x100, Buffer.concat([u(n), ...Array.from({ length: n }, () => u(20))])) : full('trun', 0, u(n));
+  const moof = n => box('moof', box('traf', Buffer.concat([full('tfhd', 8, u(1, 20)), trun(n)])));
+  return Buffer.concat([box('ftyp', Buffer.from('mp42\0\0\0\0mp42isom')), box('moov', Buffer.concat([box('mvhd', mvhd), box('trak', Buffer.concat([tkhd, box('mdia', mdhd)])), box('mvex', full('trex', 0, u(1, 1, 0, 0, 0)))])),
+    moof(half), box('mdat', Buffer.alloc(1000)), moof(frames - half), box('mdat', Buffer.alloc(1000))]);
+}
 
 (async () => {
   // ---------- in process ----------
   check(M.hasExif(jpeg(true)) && !M.hasExif(jpeg(false)), 'EXIF is found in a JPEG that has it, and not in one that does not');
   check(M.mp4Seconds(mp4(12)) === 12 && M.mp4Seconds(mp4(20.5)) === 20.5, 'a video\'s length is read from its MP4 header');
+  check(Math.abs(M.mp4Seconds(fmp4(10, true)) - 10) < .01 && Math.abs(M.mp4Seconds(fmp4(20, false)) - 20) < .01, 'and from the fragments of a fragmented MP4 (Safari\'s recordings), with or without per-sample durations');
   const url = M.presign({ host: 'examplebucket.s3.amazonaws.com', key: 'test.txt', region: 'us-east-1', accessKey: 'AKIAIOSFODNN7EXAMPLE', secretKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', expires: 86400, date: new Date('2013-05-24T00:00:00Z') });
   check(url.endsWith('X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404'), 'R2/S3 presigned links match AWS\'s published Signature V4 example');
   // the phone's own cleaning (public/lab/media.js): every metadata block goes, the image and its colour profile stay
@@ -95,6 +108,10 @@ const MP4META = require('../public/lab/mp4meta');
   check((await j('/media/api/commit', { key: sl2.key }, tok)).status === 400, 'and nothing of it can be committed');
   const long = await up('video', mp4(20));
   check(long.commit.status === 400 && /Too long/.test((await long.commit.json()).error), 'a 20 s video is refused (at most 15 s)');
+  const fl = await up('video', fmp4(20, true));
+  check(fl.commit.status === 400 && /Too long/.test((await fl.commit.json()).error), 'a 20 s fragmented recording is refused too');
+  const nolen = await up('video', Buffer.concat([box('ftyp', Buffer.from('isom\0\0\0\0isom')), box('mdat', Buffer.alloc(500))]));
+  check(nolen.commit.status === 400 && /length/.test((await nolen.commit.json()).error), 'a video whose length cannot be read is refused');
   const placed = await up('video', mp4(10, 3000, true));
   check(placed.commit.status === 400 && /metadata/.test((await placed.commit.json()).error), 'a video that still says where it was filmed is refused');
   const raw = mp4(10, 3000, true), cl = MP4META.clean(new Uint8Array(raw)), clb = Buffer.from(cl.out);
