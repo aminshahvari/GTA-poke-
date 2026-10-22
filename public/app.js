@@ -11,15 +11,44 @@ const local = {
   del(k){ try{ localStorage.removeItem('stacked:' + k); }catch(e){} }
 };
 const showScreen = id => { ['auth','lobby','game'].forEach(s => $(s).hidden = s !== id); keepAwake(id === 'game'); if(id !== 'lobby') document.querySelector('.app').classList.remove('wide'); };
-// keep the phone screen on while a table is open, so it doesn't lock and sit you out between hands
-let wakeLock = null, wantAwake = false;
+// keep the phone screen on while a table is open, so it doesn't lock and sit you out between hands.
+// The Wake Lock API first; where it is missing or refused (Instagram's in-app browser, older iOS, Low Power Mode)
+// a muted, invisible, looping 16x16 video does the same job (the NoSleep.js trick). iOS often grants either only
+// from a tap, so any tap at the table retries while nothing holds the screen on.
+let wakeLock = null, wantAwake = false, asking = false, nosleep = null;
+const NOSLEEP_MP4 = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMHbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAB9AAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAlZ0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAB9AAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAfQAAAAAAABAAAAAAHObWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAgABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABeW1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAATlzdGJsAAAAuXN0c2QAAAAAAAAAAQAAAKlhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAABAAEABIAAAASAAAAAAAAAABDExhdmMgbGlieDI2NAAAAAAAAAAAAAAAAAAAAAAAAAAAGP//AAAAL2F2Y0MBQsAe/+EAFmdCwB7ZHsBEAAADAAQAAAMACDxYuSABAAZoy4BlLIAAAAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAAAAZAAAAGQAAAAYc3R0cwAAAAAAAAABAAAAAgAAQAAAAAAUc3RzcwAAAAAAAAABAAAAAQAAABxzdHNjAAAAAAAAAAEAAAABAAAAAgAAAAEAAAAcc3RzegAAAAAAAAAAAAAAAgAAAA8AAAAKAAAAFHN0Y28AAAAAAAAAAQAAAzcAAAA9dWR0YQAAADVtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAAAhpbHN0AAAACGZyZWUAAAAhbWRhdAAAAAtliIQFvJigACFPgAAAAAZBmjgK+oA=';
+const NOSLEEP_WEBM = 'data:video/webm;base64,GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAG/EU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHGTbuMU6uEElTDZ1OsggEMTbuMU6uEHFO7a1OsggGp7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmoCrXsYMPQkBNgIRMYXZmV0GETGF2ZkSJiECfQAAAAAAAFlSua8GuAQAAAAAAADjXgQFzxYgAAAAAAAAAAZyBACK1nIN1bmSIgQCGhVZfVlA4g4EBI+ODhDuaygDgibCBELqBEJqBAhJUw2fQc3PNY8CLY8WIAAAAAAAAAAFnyJhFo4dFTkNPREVSRIeLTGF2YyBsaWJ2cHhnyKFFo4hEVVJBVElPTkSHkzAwOjAwOjAyLjAwMDAwMDAwMAAfQ7Z1w+eBAKOjgQAAgBACAJ0BKhAAEAAARwiFhYiZhIgCAgAMDWAA/v+rUICjmYED6ACxAQABEBAAGAAwP/QMAAAA/v+rUIAcU7trkbuPs4EAt4r3gQHxggFh8IED';
+function noSleep(on){
+  if(!on){ if(nosleep && !nosleep.paused) nosleep.pause(); return; }
+  if(!nosleep){
+    const v = nosleep = document.createElement('video');
+    v.muted = v.loop = v.playsInline = true; v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
+    v.className = 'nosleep'; v.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1';
+    v.innerHTML = `<source src="${NOSLEEP_MP4}" type="video/mp4"><source src="${NOSLEEP_WEBM}" type="video/webm">`;
+    document.body.appendChild(v);
+  }
+  if(nosleep.paused) nosleep.play().catch(() => {});
+}
 async function keepAwake(on){
   wantAwake = on;
-  try{
-    if(on && !wakeLock && 'wakeLock' in navigator && document.visibilityState === 'visible'){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
-    if(!on && wakeLock){ const w = wakeLock; wakeLock = null; await w.release(); }
-  }catch(e){ wakeLock = null; }
+  if(!on){ noSleep(false); if(wakeLock){ const w = wakeLock; wakeLock = null; try{ await w.release(); }catch(e){} } return; }
+  if(wakeLock || asking || document.visibilityState !== 'visible') return;
+  if('wakeLock' in navigator){
+    asking = true;
+    try{
+      const w = await navigator.wakeLock.request('screen');
+      w.addEventListener('release', () => { if(wakeLock === w) wakeLock = null; });
+      if(!wantAwake){ w.release().catch(() => {}); return; }
+      wakeLock = w; noSleep(false); return;
+    }catch(e){ wakeLock = null; }
+    finally{ asking = false; }
+  }
+  if(wantAwake) noSleep(true);
 }
+// touchend and click are what iOS counts as a tap; start the video inside the tap itself (iOS may refuse play() later)
+const awakeTap = () => { if(wantAwake && !wakeLock){ noSleep(true); keepAwake(true); } };
+document.addEventListener('touchend', awakeTap, { capture: true, passive: true });
+document.addEventListener('click', awakeTap, true);
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState !== 'visible') return;
   if(wantAwake) keepAwake(true);
