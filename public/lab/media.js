@@ -182,7 +182,8 @@ async function doVideo(file, i){
     r.hdr = vt ? await vt.hasHighDynamicRange() : null; r.color = vt ? JSON.stringify(await vt.getColorSpace()) : null;
     const pass = r.vcodec === 'avc' && dur <= 15.5 && file.size <= 10 * 1048576 && r.srcKbps <= 5000 && !r.hdr && (!at || r.acodec === 'aac');
     r.ladder = (await ladder(w, h)).join(' ') || 'none';
-    if(pass || r.ladder !== 'none'){
+    // the sound is only ever copied: a clip whose sound is not AAC skips this path (Safari 26 could re-encode it; we do not)
+    if(pass || (r.ladder !== 'none' && (!at || r.acodec === 'aac'))){
       const output = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new M.BufferTarget() });
       const hdrToSdr = r.hdr ? (() => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
         return { process: smp => { smp.draw(x, 0, 0, w, h); return c; }, processedWidth: w, processedHeight: h }; })() : {};
