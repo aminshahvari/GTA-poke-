@@ -69,7 +69,10 @@ const base = (over = {}) => ({ name: 'Rivera Plumbing', category: 'trades', desc
   assert.ok(!('fullName' in b) && !('jobTitle' in b), 'full name hidden unless switched on');
   const listTxt = JSON.stringify(await ok('bizList', {}, B)) + JSON.stringify(await ok('bizFeed', {}, B));
   for(const secret of ['416-555-0100', 'rivera_pl', '1 Main St', 'Alex Rivera', '"pin"', '"salt"', '"seen"', '"household"']) assert.ok(!listTxt.includes(secret), 'never sent to others: ' + secret);
-  assert.strictEqual((await logo(B)(idA)).status, 200, 'published logo visible to members');
+  { const r = await logo(B)(idA); assert.strictEqual(r.status, 200, 'published logo visible to members');
+    assert.strictEqual(r.headers.get('cache-control'), 'private, max-age=86400', 'logo kept by the browser for a day (URL carries logoV)');
+    assert.ok(/authorization/i.test(r.headers.get('vary') || ''), 'logo cache keyed by token');
+    assert.strictEqual((await fetch(BASE + '/bizlogo/' + idA + '?v=x')).status, 401, 'versioned URL still needs a token'); }
   const ig = await ok('bizSave', base({ show: { instagram: true, phone: true, fullName: true } }), A);
   const b2 = (await ok('bizGet', { uid: idA }, B)).business;
   assert.deepStrictEqual(b2.contacts.instagram, { handle: 'rivera_pl', url: 'https://instagram.com/rivera_pl' });

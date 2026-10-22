@@ -369,7 +369,8 @@ const server = http.createServer((req, res) => {
     const lu = clubs.ON() && lr && c ? c.store.get('user:' + lr.id) || null : lr;
     const r = !c || c.id === clubs.EVENTS || clubs.suspended(c.id) || clubsClosedFor(c, lu) ? { status: 404 } : c.business.logoFor(bl[1], lu);
     if(r.status !== 200) return send(res, r.status, 'Not found', 'text/plain', NOINDEX);
-    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
+    // the app asks for /bizlogo/<uid>?v=<logoV>: a new logo is a new URL, so the browser may keep this one for a day
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400', Vary: 'Authorization, X-Club', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
   let file = url.pathname === '/' || url.pathname === '/login' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
   if(file === 'engine.js') return fs.readFile(path.join(__dirname, 'engine.js'), (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES['.js']));

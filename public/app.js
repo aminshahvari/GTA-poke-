@@ -206,6 +206,8 @@ function onClub(c){
   club = c; clockSkew = c.now - Date.now();
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   if(c.clubSwitching) clubSwitching(c);
+  // the Lounge's Exchange cards: start the feed now, not only when Home renders
+  if(!c.suspended && !c.spectate && !c.events && (c.features && c.features.clubs || c.me.owner)) window.BizClub.prefetch();
   $('chatBtn').hidden = !!c.spectate; // watchers from another club never see a table's chat
   $('meChip').innerHTML = c.spectate ? `<button class="club-btn" data-live="home" aria-label="Back to ${esc(c.home.name)}">← ${esc(c.home.name)}</button>` : `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
   if(!c.spectate){
