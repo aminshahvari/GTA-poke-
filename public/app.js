@@ -973,7 +973,7 @@ function sponsorFields(P, opt){
   const S = club.sponsors;
   // the prize, in the director's words: plain text, never cash (server/club.js prizeOf)
   const prize = `<label>Prize (optional)<input id="nPrize" maxlength="80" autocomplete="off" placeholder="For example: Dinner for two at Aurora" value="${esc(P ? P.prize || '' : '')}"></label>
-        <p class="note">Shown in the lobby and on the tables. Free social play: a gift or an experience, never cash. No links or phone numbers.</p>`;
+        <p class="note">Shown in the lobby and on the tables, for example $100 Prize or Dinner for two. No links or phone numbers.</p>`;
   if(!S || !S.list.length) return `<p class="note">Tournament sponsor: when a member publishes their business in the Exchange, you can pick it here to show on the tables at the start and during breaks.</p>${prize}`;
   const cur = P ? (P.sponsor ? P.sponsor.uid : '') : S.spotlight || '';
   return `<div class="two"><label>Tournament sponsor<select id="nSponsor">${opt('', 'None', cur)}${S.list.map(b => opt(b.uid, esc(b.name) + (b.uid === S.spotlight ? ' (Spotlight)' : ''), cur)).join('')}</select></label>
