@@ -54,7 +54,29 @@ function drawAt(src, sw, sh, long){
   const x = c.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, w, h);
   return c;
 }
-const jpeg = (c, q) => new Promise(ok => c.toBlob(ok, 'image/jpeg', q));
+// Safari's own JPEG encoder writes a small EXIF block (colour space, size) into every photo it saves. Before upload the
+// phone drops every metadata segment (APP1 EXIF/XMP, APP3-15, comments) and keeps only the image, JFIF (APP0) and the
+// colour profile (APP2), so the server's no-EXIF check holds for any phone. Returns the bytes and what was removed.
+function stripMeta(u8){
+  if(!(u8[0] === 0xff && u8[1] === 0xd8)) return { out: u8, removed: 0 };
+  const keep = [u8.subarray(0, 2)]; let i = 2, removed = 0;
+  while(i + 4 <= u8.length && u8[i] === 0xff){
+    const mk = u8[i + 1];
+    if(mk === 0xda) break;                                     // start of scan: the image itself follows
+    const len = (u8[i + 2] << 8) | u8[i + 3], seg = u8.subarray(i, i + 2 + len);
+    if((mk >= 0xe1 && mk <= 0xef && mk !== 0xe2) || mk === 0xfe) removed += seg.length; else keep.push(seg);
+    i += 2 + len;
+  }
+  keep.push(u8.subarray(i));
+  const out = new Uint8Array(keep.reduce((n, s) => n + s.length, 0)); let o = 0; for(const s of keep){ out.set(s, o); o += s.length; }
+  return { out, removed };
+}
+let encoderExif = null, encoderGps = null, metaRemoved = 0;   // what Safari's encoder wrote, for the report
+const jpeg = (c, q) => new Promise(ok => c.toBlob(ok, 'image/jpeg', q)).then(async b => {
+  const u8 = new Uint8Array(await b.arrayBuffer()), e = exifOf(u8), s = stripMeta(u8);
+  encoderExif = encoderExif || e.exif; encoderGps = encoderGps || e.gps; metaRemoved += s.removed;
+  return new Blob([s.out], { type: 'image/jpeg' });
+});
 // structural similarity of the saved photo against the same pixels before saving (luma, 8x8 windows): 1 is identical
 async function ssim(ref, blob){
   const im = await createImageBitmap(blob), c = document.createElement('canvas'); c.width = ref.width; c.height = ref.height;
@@ -71,6 +93,7 @@ async function ssim(ref, blob){
   return n ? sum / n : 1;
 }
 async function doPhoto(file, i){
+  encoderExif = encoderGps = null; metaRemoved = 0;
   const t0 = performance.now(), u8 = new Uint8Array(await file.arrayBuffer()), before = exifOf(u8);
   const im = await loadImg(file), big = drawAt(im, im.naturalWidth, im.naturalHeight, 1080);
   let q = .82, photo = await jpeg(big, q);
@@ -78,7 +101,8 @@ async function doPhoto(file, i){
   const thumb = await jpeg(drawAt(big, big.width, big.height, 400), .78);
   const ms = performance.now() - t0;
   const after = exifOf(new Uint8Array(await photo.arrayBuffer())), quality = await ssim(big, photo);
-  const r = { i, kind: 'photo', origBytes: file.size, origW: im.naturalWidth, origH: im.naturalHeight, outBytes: photo.size, outW: big.width, outH: big.height, q: +q.toFixed(2), thumbBytes: thumb.size, ms: Math.round(ms), ssim: +quality.toFixed(4), exifBefore: before.exif, gpsBefore: before.gps, exifAfter: after.exif };
+  const r = { i, kind: 'photo', origBytes: file.size, origW: im.naturalWidth, origH: im.naturalHeight, outBytes: photo.size, outW: big.width, outH: big.height, q: +q.toFixed(2), thumbBytes: thumb.size, ms: Math.round(ms), ssim: +quality.toFixed(4), exifBefore: before.exif, gpsBefore: before.gps, exifAfter: after.exif, encoderExif, encoderGps, metaRemoved };
+  encoderExif = encoderGps = null; metaRemoved = 0;
   const group = 'p' + Date.now().toString(36) + i;
   try{ await upload('photo', photo, group, big.width, big.height); await upload('thumb', thumb, group); r.server = 'accepted'; }catch(e){ r.server = 'refused: ' + e.message; }
   URL.revokeObjectURL(im.src);
@@ -162,7 +186,7 @@ function summary(){
     videoMsPerSec: +avg(V, r => r.ms / 1000 / r.outSeconds).toFixed(2), kbpsAvg: Math.round(avg(V, r => r.kbps)),
     refused: results.filter(r => !/^accepted/.test(r.server || '')).length
   };
-  $('summary').innerHTML = `<p><b style="color:var(--text)">Photos ${s.photos}</b>: average ${size(s.photoAvg)} (largest ${size(s.photoMax)}), thumbnail ${size(s.thumbAvg)}, ${(s.photoMs / 1000).toFixed(1)} s each, quality SSIM ${s.ssimAvg || '—'} (lowest ${s.ssimMin ?? '—'}). GPS in ${s.gpsBefore} originals, EXIF left in ${s.exifAfter} results.</p>
+  $('summary').innerHTML = `<p><b style="color:var(--text)">Photos ${s.photos}</b>: average ${size(s.photoAvg)} (largest ${size(s.photoMax)}), thumbnail ${size(s.thumbAvg)}, ${s.photoMs} ms each, quality SSIM ${s.ssimAvg || '—'} (lowest ${s.ssimMin ?? '—'}). GPS in ${s.gpsBefore} originals, EXIF left in ${s.exifAfter} results.</p>
     <p><b style="color:var(--text)">Videos ${s.videos}</b>: average ${size(s.videoAvg)} (largest ${size(s.videoMax)}), ${s.kbpsAvg || '—'} kbps, poster ${size(s.posterAvg)}, ${s.videoMsPerSec || '—'} s of work per second of video.</p>
     <p class="note">Refused by the server: ${s.refused}.</p>`;
   $('costs').innerHTML = costTable(s); $('send').disabled = $('copy').disabled = false;
@@ -207,8 +231,8 @@ setInterval(() => {
 
 function report(){
   return { at: new Date().toISOString(), ua: navigator.userAgent, screen: `${screen.width}x${screen.height}@${devicePixelRatio}`, limits: LIMITS, summary: summary(),
-    files: results.map(({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, mime, kbps, outSeconds, serverSeconds, server, audio }) =>
-      ({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, mime, kbps, outSeconds, serverSeconds, server, audio })) };
+    files: results.map(({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, encoderExif, encoderGps, metaRemoved, mime, kbps, outSeconds, serverSeconds, server, audio }) =>
+      ({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, encoderExif, encoderGps, metaRemoved, mime, kbps, outSeconds, serverSeconds, server, audio })) };
 }
 $('send').onclick = async () => { try{ await call('report', { report: report() }); status('Sent. Claude reads it from the preview server\'s log.'); }catch(e){ status('Not sent: ' + e.message); } };
 $('copy').onclick = async () => { const t = JSON.stringify(report(), null, 1); try{ await navigator.clipboard.writeText(t); status('Copied.'); }catch(e){ status('Copy did not work here.'); } };

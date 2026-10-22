@@ -29,6 +29,12 @@ function mp4(seconds, pad = 5000){
   check(M.mp4Seconds(mp4(12)) === 12 && M.mp4Seconds(mp4(20.5)) === 20.5, 'a video\'s length is read from its MP4 header');
   const url = M.presign({ host: 'examplebucket.s3.amazonaws.com', key: 'test.txt', region: 'us-east-1', accessKey: 'AKIAIOSFODNN7EXAMPLE', secretKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', expires: 86400, date: new Date('2013-05-24T00:00:00Z') });
   check(url.endsWith('X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404'), 'R2/S3 presigned links match AWS\'s published Signature V4 example');
+  // the phone's own cleaning (public/lab/media.js): every metadata block goes, the image and its colour profile stay
+  const src = fs.readFileSync(path.join(ROOT, 'public/lab/media.js'), 'utf8'), fn = src.slice(src.indexOf('function stripMeta'), src.indexOf('let encoderExif'));
+  const stripMeta = new Function(fn + 'return stripMeta;')();
+  const icc = Buffer.from([0xff, 0xe2, 0x00, 0x06, 0x49, 0x43, 0x43, 0x5f]), com = Buffer.from([0xff, 0xfe, 0x00, 0x04, 0x68, 0x69]);
+  const dirty = jpeg(true), withIcc = Buffer.concat([dirty.subarray(0, 2), icc, com, dirty.subarray(2)]), cleaned = stripMeta(new Uint8Array(withIcc));
+  check(!M.hasExif(Buffer.from(cleaned.out)) && cleaned.removed === 18 + com.length && Buffer.from(cleaned.out).includes(icc) && Buffer.from(cleaned.out).subarray(-SOF.length - 2000).equals(dirty.subarray(-SOF.length - 2000)), 'the phone strips EXIF and comments before upload, keeping the colour profile and the image bytes');
   const env = { ...process.env };
   process.env.MEDIA_LAB = '1'; process.env.DATABASE_URL = 'postgres://u:p@dpg-prod-host-a/db';
   check(!M.create({ prodHost: 'dpg-prod-host-a' }).ON(), 'on the production database the lab stays off, even with MEDIA_LAB=1');
