@@ -8,6 +8,8 @@
 //  - the felt (with its rail) and every seat (the seat, its avatar, plate and cards) are where production draws them,
 //    within 1 px (getBoundingClientRect)
 //  - in this tree the HUD (#fieldBar) shows, on one row, and covers neither the felt nor any seat
+//  - the one-time "Free social play" notice, while it shows, covers neither the hand helper nor a button nor a seat
+//    (also sideways at 844x390)
 // Usage: PLAYWRIGHT=/path/to/playwright-core CHROMIUM=/path/to/chromium [PROD_ROOT=dir] [SHOTS=dir] node test/ui/t_table_same.js
 const path = require('path'), net = require('net'), fs = require('fs'), os = require('os');
 const { spawn } = require('child_process');
@@ -123,6 +125,7 @@ const measure = pg => pg.evaluate(() => {
     hudRows: vis('fieldBar') ? (ms => Math.max(...ms) - Math.min(...ms) <= 3 ? 1 : 2)([...document.querySelectorAll('#fieldBar > *')].filter(e => e.getClientRects().length).map(e => { const b = e.getBoundingClientRect(); return (b.top + b.bottom) / 2; })) : 0,
     hudTxt: ((document.getElementById('fieldBar') || {}).textContent || '').replace(/\s+/g, ' ').trim(),
     note: vis('playNote') ? r(document.getElementById('playNote')) : null, helper: vis('helper') ? r(document.getElementById('helper')) : null,
+    noteTxt: vis('playNote') ? document.getElementById('playNote').innerText.replace(/\s+/g, ' ').trim() : '',
     helperTxt: vis('helper') ? document.getElementById('helper').textContent.replace(/\s+/g, ' ').trim() : '',
     btns: [...document.querySelectorAll('#controls button')].filter(b => b.getClientRects().length).map(r),
     side: document.documentElement.scrollWidth > innerWidth };
@@ -139,12 +142,19 @@ const fmtR = a => a ? `${Math.round(a.l)},${Math.round(a.t)} ${Math.round(a.r - 
   for(const sz of SIZES){
     const tag = sz.join('x');
     const pp = await open(browser, P, sz), fp = await open(browser, F, sz);
-    let hand = 10;
+    let hand = 10, first = true;
     for(const seated of [true, false]) for(const n of NS){
       hand++;
       const t = `${tag} ${n} players ${seated ? 'seated' : 'watching'}`;
       await Promise.all([show(pp, n, seated, hand), show(fp, n, seated, hand)]);
       const [a, b] = await Promise.all([measure(pp), measure(fp)]);
+      // the one-time notice shows on the first table of each page: it covers neither the helper nor a button
+      if(first){ first = false;
+        check(!!b.note, `${t}: the free-play notice shows`);
+        check(b.note && b.helper && !hit(b.note, b.helper, 0) && !b.btns.some(x => hit(b.note, x, 0)) && !b.seats.some(q => [q.av, q.plate, ...q.cards].some(x => hit(b.note, x, 0))),
+          `${t}: the notice (${fmtR(b.note)}, "${b.noteTxt}") covers neither the helper (${fmtR(b.helper)} "${b.helperTxt}") nor a button nor a seat`);
+        if(SHOTS){ await pp.screenshot({ path: path.join(SHOTS, `prod-${tag}-note.png`) }); await fp.screenshot({ path: path.join(SHOTS, `fixed-${tag}-note.png`) }); }
+      }
       const diff = [];
       const d = (x, y) => (!x && !y) ? 0 : (!x || !y) ? 1e9 : Math.max(...['l', 't', 'r', 'b'].map(k => Math.abs(x[k] - y[k])));
       let m = d(a.felt, b.felt); if(m > 1) diff.push(`felt ${fmtR(a.felt)} vs ${fmtR(b.felt)}`);
@@ -162,6 +172,14 @@ const fmtR = a => a ? `${Math.round(a.l)},${Math.round(a.t)} ${Math.round(a.r - 
     }
     await pp.context().close(); await fp.context().close();
   }
+  // sideways: the notice over the board's empty slots, clear of the helper and the buttons
+  { const fp = await open(browser, F, [844, 390]);
+    await show(fp, 6, true, 50); const b = await measure(fp);
+    check(!!b.note, '844x390: the free-play notice shows');
+    check(b.note && b.helper && !hit(b.note, b.helper, 0) && !b.btns.some(x => hit(b.note, x, 0)) && !b.seats.some(q => [q.av, q.plate, ...q.cards].some(x => hit(b.note, x, 0))),
+      `844x390: the notice (${fmtR(b.note)}) covers neither the helper (${fmtR(b.helper)} "${b.helperTxt}") nor a button nor a seat`);
+    if(SHOTS) await fp.screenshot({ path: path.join(SHOTS, 'fixed-844x390-note.png') });
+    await fp.context().close(); }
   console.log(`\nworst seat/felt difference ${worst.toFixed(2)} px`);
   await browser.close();
   console.log(`t_table_same: ${oks} ok, ${fails} failed`);

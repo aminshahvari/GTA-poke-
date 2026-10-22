@@ -1954,6 +1954,12 @@ body{background:var(--lx-ink)}
 .playnote.wrap span{white-space:normal}
 .playnote i{position:absolute;top:1px;right:5px;font-style:normal;font-size:12px;line-height:1;color:var(--lx-mute,#a3abbb)}
 @media (prefers-reduced-motion:reduce){.playnote{animation:none}}
+/* on the oval: one line on the free-play line, between the hand helper and the buttons (app.js placePlayNote) */
+/* (its ring is drawn inside, not a border, so an 11 px line fits the line's 13 px) */
+.playnote.line{flex-direction:row;gap:.45em;padding:0 22px 0 12px;line-height:1;border:0;border-radius:999px;white-space:nowrap;background:#0a101e;
+  box-shadow:inset 0 0 0 1px var(--lx-hair2,rgba(241,223,176,.26)),0 0 0 1px rgba(0,0,0,.35),0 4px 12px rgba(0,0,0,.45)}
+.playnote.line b{letter-spacing:.02em}
+.playnote.line i{top:0;bottom:0;right:8px;display:flex;align-items:center;font-size:1em}
 /* in the WPT column the free-play line takes two short lines above the buttons (counted in the column's height) */
 #game.wpt .playline,#game.wpt:not(.seated) .playline{position:static;height:auto;margin:6px 0 0;padding:0 4px;white-space:normal;line-height:13px}
 #game.wpt .dock .controls{flex:1 1 auto;align-content:end}

@@ -1918,7 +1918,9 @@ function renderPlayNote(d){
 }
 // over the board's five empty slots (and, when no message is showing, the message line under them: the layout keeps
 // both clear of seats and chips), the text as large as fits there, on two lines or, if need be, three
-// (on the oval nothing but the game lies on the felt: there the notice stands in the dock, over the helper's line)
+// (on the oval nothing but the game lies on the felt: there the notice stands in the dock on the free-play line, the
+// same words, as one line in the gap between the hand helper and the buttons; it covered the helper's line, the hand
+// and its chance to win, before: owner, 2026-10-22)
 function placePlayNote(el){
   let area = $('tableArea').getBoundingClientRect(); const slots = [...$('board').children].map(c => c.getBoundingClientRect());
   if(!slots.length) return hidePlayNote();
@@ -1927,14 +1929,18 @@ function placePlayNote(el){
   const msg = $('msg'), hp = $('helper');
   const oval = $('tableArea').classList.contains('oval'), home = oval ? $('dock') : $('tableArea');
   if(el.parentNode !== home) home.appendChild(el);
-  if(oval){ const d = $('dock').getBoundingClientRect(), h = !hp.hidden && hp.parentNode === $('dock') ? hp.getBoundingClientRect() : null;
-    area = d; l = h ? h.left : d.left + 8; r = h ? h.right : d.right - 8; t = h ? h.top : d.top; b = h ? Math.max(h.bottom, t + 36) : t + 36; }
+  el.classList.toggle('line', oval);
+  if(oval){ const d = $('dock').getBoundingClientRect(), pl = $('playLine').getBoundingClientRect(), h = !hp.hidden && hp.parentNode === $('dock') ? hp.getBoundingClientRect() : null;
+    // (from the helper's foot, or 3 px above the line, to the top of the first thing in the bar under it)
+    const under = [...$('controls').querySelectorAll('*')].filter(e => e.getClientRects().length && e.offsetHeight).map(e => e.getBoundingClientRect().top).filter(y => y >= pl.top);
+    area = d; l = h ? h.left : d.left + 8; r = h ? h.right : d.right - 8;
+    t = Math.max(pl.top - 3, h ? h.bottom : d.top); b = Math.max(pl.bottom, Math.min(pl.bottom + 3, ...under)); }
   else if(!msg.textContent.trim()){ const ms = getComputedStyle(msg), lh = parseFloat(ms.lineHeight) || parseFloat(ms.fontSize) * 1.3; b = Math.max(b, msg.getBoundingClientRect().top + lh); }
   el.style.cssText = `left:${l - area.left}px;top:${t - area.top}px;width:${r - l}px;height:${b - t}px`;
   const fits = () => el.scrollHeight <= el.clientHeight + .5 && el.scrollWidth <= el.clientWidth + .5;
-  for(const wrap of [false, true]){
+  for(const wrap of oval ? [false] : [false, true]){
     el.classList.toggle('wrap', wrap);
-    for(let f = 13; f >= 11; f -= .5){ el.style.fontSize = f + 'px'; if(fits()) return; }
+    for(let f = 13; f >= (oval ? 9.5 : 11); f -= .5){ el.style.fontSize = f + 'px'; if(fits()) return; }
   }
 }
 $('playNote').onclick = hidePlayNote;
