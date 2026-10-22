@@ -8,12 +8,15 @@
   const str = (b, i) => String.fromCharCode(b[i], b[i + 1], b[i + 2], b[i + 3]);
   const INSIDE = new Set(['moov', 'trak', 'mdia', 'minf', 'stbl', 'edts', 'mvex']);
   function scan(b){
-    const out = { meta: [], codecs: [] };
+    const out = { meta: [], codecs: [], moovFirst: false };
+    let seenMdat = false;
     (function walk(a, e){
       for(let i = a; i + 8 <= e;){
         let size = u32(b, i), h = 8; const t = str(b, i + 4);
         if(size === 1){ size = u32(b, i + 8) * 4294967296 + u32(b, i + 12); h = 16; } else if(size === 0) size = e - i;
         if(size < h || i + size > e) break;
+        if(a === 0 && t === 'mdat') seenMdat = true;
+        if(a === 0 && t === 'moov' && !seenMdat) out.moovFirst = true;
         if(t === 'udta' || t === 'meta') out.meta.push({ at: i, size, head: h, type: t });
         else if(t === 'stsd'){ if(i + h + 16 <= i + size) out.codecs.push(str(b, i + h + 12)); }
         else if(INSIDE.has(t)) walk(i + h, i + size);

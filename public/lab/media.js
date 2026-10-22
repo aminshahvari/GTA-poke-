@@ -21,11 +21,16 @@ async function call(name, body){
   const r = await fetch('/media/api/' + name, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token, ...(club ? { 'x-club': club } : {}) }, body: JSON.stringify(body || {}) });
   const j = await r.json().catch(() => ({})); if(r.status === 401) signedOut(); if(!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j;
 }
-async function upload(kind, blob, group, w, h){
+// the picture's average colour, shown in the feed while the thumbnail or poster loads
+function tint(src){
+  try{ const c = document.createElement('canvas'); c.width = c.height = 1; const x = c.getContext('2d'); x.drawImage(src, 0, 0, 1, 1);
+    const d = x.getImageData(0, 0, 1, 1).data; return '#' + [d[0], d[1], d[2]].map(n => n.toString(16).padStart(2, '0')).join(''); }catch(e){ return null; }
+}
+async function upload(kind, blob, group, w, h, c){
   const s = await call('slot', { kind, bytes: blob.size, group });
   const r = await fetch(s.put, { method: 'PUT', headers: { 'content-type': s.type }, body: blob });
   if(!r.ok) throw new Error('upload ' + r.status);
-  return call('commit', { key: s.key, w, h });
+  return call('commit', { key: s.key, w, h, c });
 }
 const status = t => { $('status').textContent = t; };
 const vstatus = t => { $('vstatus').textContent = t; };
@@ -116,7 +121,11 @@ async function doPhoto(file, i){
   const r = { i, kind: 'photo', origBytes: file.size, origW: im.naturalWidth, origH: im.naturalHeight, outBytes: photo.size, outW: big.width, outH: big.height, q: +q.toFixed(2), thumbBytes: thumb.size, ms: Math.round(ms), ssim: +quality.toFixed(4), exifBefore: before.exif, gpsBefore: before.gps, exifAfter: after.exif, encoderExif, encoderGps, metaRemoved };
   encoderExif = encoderGps = null; metaRemoved = 0;
   const group = 'p' + Date.now().toString(36) + i;
-  try{ await upload('photo', photo, group, big.width, big.height); await upload('thumb', thumb, group); r.server = 'accepted'; }catch(e){ r.server = 'refused: ' + e.message; }
+  // candidates to measure (not uploaded): JPEG 0.78 and WebP 0.75, with the type the canvas really returned
+  const c78 = await jpeg(big, .78), webp = await new Promise(ok => big.toBlob(ok, 'image/webp', .75));
+  r.jpeg78 = { bytes: c78.size, ssim: +(await ssim(big, c78)).toFixed(4) };
+  r.webp75 = webp ? { type: webp.type, bytes: webp.size, ssim: +(await ssim(big, webp)).toFixed(4) } : null;
+  try{ await upload('photo', photo, group, big.width, big.height, tint(big)); await upload('thumb', thumb, group); r.server = 'accepted'; }catch(e){ r.server = 'refused: ' + e.message; }
   URL.revokeObjectURL(im.src);
   return r;
 }
@@ -125,6 +134,16 @@ async function doPhoto(file, i){
 const once = (el, ev) => new Promise(ok => el.addEventListener(ev, ok, { once: true }));
 const MIMES = ['video/mp4;codecs=avc1.42E01F,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a', 'video/mp4'];
 let actx = null;
+let MBP = null; const mb = () => MBP || (MBP = import('/vendor/mediabunny-1.61.1/mediabunny.min.js'));
+// which H.264 encoder settings this phone's WebCodecs accepts at this size (High, Main, Baseline), for the report
+async function ladder(w, h){
+  if(!window.VideoEncoder) return [];
+  const ok = [];
+  for(const codec of ['avc1.640028', 'avc1.4d0028', 'avc1.42e01f']){
+    try{ if((await VideoEncoder.isConfigSupported({ codec, width: w, height: h, bitrate: 3e6, framerate: 30 })).supported) ok.push(codec); }catch(e){}
+  }
+  return ok;
+}
 async function doVideo(file, i){
   const v = document.createElement('video'); v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(file);
   v.setAttribute('playsinline', ''); v.muted = false;
@@ -144,22 +163,58 @@ async function doVideo(file, i){
   const W0 = v.videoWidth, H0 = v.videoHeight, dur = v.duration, k = Math.min(1, 1280 / Math.max(W0, H0));
   const w = Math.round(W0 * k / 2) * 2, h = Math.round(H0 * k / 2) * 2, limit = Math.min(dur, 15);
   const r = { i, kind: 'video', origBytes: file.size, origW: W0, origH: H0, origSeconds: +dur.toFixed(2), outW: w, outH: h, exifBefore: null, gpsBefore: null };
-  // a clip that is already H.264, short and small goes as it is: only its metadata boxes are blanked (no re-encoding,
-  // so no quality loss and no waiting). Anything else (HEVC from the camera, longer, bigger) is re-made below.
-  const t00 = performance.now(), orig = MP4META.clean(new Uint8Array(await file.arrayBuffer()));
-  r.codecs = orig.codecs.join(','); r.metaBefore = orig.removed;
-  if(orig.codecs.includes('avc1') && dur <= 15.5 && file.size <= 10 * 1048576){
-    r.path = 'original'; r.ms = Math.round(performance.now() - t00);
-    const out = new Blob([orig.out], { type: 'video/mp4' });
-    r.outBytes = out.size; r.outW = W0; r.outH = H0; r.outSeconds = +dur.toFixed(2); r.kbps = Math.round(out.size * 8 / dur / 1000);
+  // Video, in order (Muse's rulings on #27, Oct 21):
+  //  1. passthrough: already H.264, at most 15 s, 10 MB and 5 Mbit/s, SDR, AAC or no sound: remuxed as it is by
+  //     Mediabunny with the index (moov) first and no metadata tags; nothing is re-encoded, so it is near-instant
+  //  2. WebCodecs: the picture re-encoded by the phone's hardware H.264 encoder (faster than real time where it works);
+  //     the sound is copied as it is, never re-encoded (Safari before 26 has no AudioEncoder). HDR is drawn to an
+  //     8-bit canvas on the way, so it comes out SDR (BT.709)
+  //  3. MediaRecorder, real time, as before: the fallback for a phone or clip where 1 and 2 cannot run
+  // Every result is cleaned of metadata boxes again and checked by the server (length, metadata, moov first).
+  const t00 = performance.now(), group = 'v' + Date.now().toString(36) + i;
+  r.srcKbps = Math.round(file.size * 8 / dur / 1000);
+  let out = null, M = null;
+  try{ M = await mb(); }catch(e){ r.mbError = 'Mediabunny did not load: ' + e.message; }
+  if(M) try{
+    const input = new M.Input({ source: new M.BlobSource(file), formats: M.ALL_FORMATS });
+    const vt = await input.getPrimaryVideoTrack(), at = await input.getPrimaryAudioTrack();
+    r.vcodec = vt && vt.codec; r.acodec = at ? at.codec : 'none';
+    r.hdr = vt ? await vt.hasHighDynamicRange() : null; r.color = vt ? JSON.stringify(await vt.getColorSpace()) : null;
+    const pass = r.vcodec === 'avc' && dur <= 15.5 && file.size <= 10 * 1048576 && r.srcKbps <= 5000 && !r.hdr && (!at || r.acodec === 'aac');
+    r.ladder = (await ladder(w, h)).join(' ') || 'none';
+    if(pass || r.ladder !== 'none'){
+      const output = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new M.BufferTarget() });
+      const hdrToSdr = r.hdr ? (() => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
+        return { process: smp => { smp.draw(x, 0, 0, w, h); return c; }, processedWidth: w, processedHeight: h }; })() : {};
+      const conv = await M.Conversion.init({ input, output, tags: {}, showWarnings: false, trim: dur > 15 ? { start: 0, end: 15 } : undefined,
+        video: pass ? {} : { width: w, height: h, fit: 'contain', codec: 'avc', bitrate: 3e6, forceTranscode: true, hardwareAcceleration: 'prefer-hardware', ...hdrToSdr },
+        audio: { codec: 'aac' } });
+      if(!conv.isValid || conv.discardedTracks.length){
+        r.mbDiscarded = conv.discardedTracks.map(d => d.track.type + ': ' + d.reason).join(', ') || 'not valid';
+      }else{
+        conv.onProgress = q => vstatus(`Video ${i}: ${pass ? 'packing' : 'encoding'} ${Math.round(q * 100)}%`);
+        await conv.execute();
+        out = new Uint8Array(output.target.buffer); r.path = pass ? 'original' : 'webcodecs';
+      }
+    }
+  }catch(e){ r.mbError = e.message; }
+  if(!out && !M){
+    // no Mediabunny at all: the earlier passthrough (metadata boxes blanked in place), only when the index is first
+    const raw = new Uint8Array(await file.arrayBuffer()), sc = MP4META.scan(raw);
+    if(sc.codecs.includes('avc1') && sc.moovFirst && dur <= 15.5 && file.size <= 10 * 1048576 && r.srcKbps <= 5000){ out = raw; r.path = 'original-inplace'; }
+  }
+  if(out){
+    const cl = MP4META.clean(out); r.metaAfter = cl.removed; r.moovFirst = MP4META.scan(cl.out).moovFirst;
+    const blob = new Blob([cl.out], { type: 'video/mp4' });
+    r.ms = Math.round(performance.now() - t00); r.outBytes = blob.size; r.outSeconds = +Math.min(dur, 15).toFixed(2); r.kbps = Math.round(blob.size * 8 / r.outSeconds / 1000);
+    if(r.path === 'original' || r.path === 'original-inplace'){ r.outW = W0; r.outH = H0; }
     v.pause(); v.currentTime = Math.min(.5, dur / 2); await once(v, 'seeked');
     const poster = await jpeg(drawAt(v, W0, H0, 720), .8); r.thumbBytes = poster.size;
-    const group = 'v' + Date.now().toString(36) + i;
-    try{ const done = await upload('video', out, group, W0, H0); r.serverSeconds = done.seconds; await upload('poster', poster, group, W0, H0); r.server = 'accepted'; }catch(e){ r.server = 'refused: ' + e.message; }
+    try{ const done = await upload('video', blob, group, r.outW, r.outH, tint(v)); r.serverSeconds = done.seconds; await upload('poster', poster, group, r.outW, r.outH); r.server = 'accepted'; }catch(e){ r.server = 'refused: ' + e.message; }
     URL.revokeObjectURL(v.src); v.remove(); $('vprev').hidden = true;
     return r;
   }
-  r.path = 'reencoded';
+  r.path = 'mediarecorder';
   const mime = window.MediaRecorder && MIMES.find(m => MediaRecorder.isTypeSupported(m));
   if(!mime || !HTMLCanvasElement.prototype.captureStream){ r.server = 'not supported on this browser (no MP4 recording)'; v.remove(); return r; }
   r.mime = mime;
@@ -189,14 +244,13 @@ async function doVideo(file, i){
   }).catch(e => { v.pause(); try{ rec.stop(); }catch(_){} $('vprev').hidden = true; v.remove(); throw e; });
   v.pause(); const stopped = once(rec, 'stop'); rec.stop(); await stopped;
   const rec8 = MP4META.clean(new Uint8Array(await new Blob(chunks).arrayBuffer())); r.metaAfter = rec8.removed;
-  const out = new Blob([rec8.out], { type: mime.split(';')[0] });
-  r.ms = Math.round(performance.now() - t0); r.outBytes = out.size; r.outSeconds = +limit.toFixed(2); r.kbps = Math.round(out.size * 8 / limit / 1000);
+  const recOut = new Blob([rec8.out], { type: mime.split(';')[0] });
+  r.ms = Math.round(performance.now() - t0); r.outBytes = recOut.size; r.outSeconds = +limit.toFixed(2); r.kbps = Math.round(recOut.size * 8 / limit / 1000);
   // the poster: a frame from half a second in, 720 px on its long side
   v.currentTime = Math.min(.5, dur / 2); await once(v, 'seeked');
   const poster = await jpeg(drawAt(v, W0, H0, 720), .8); r.thumbBytes = poster.size;
-  const group = 'v' + Date.now().toString(36) + i;
   try{
-    const done = await upload('video', out, group, w, h); r.serverSeconds = done.seconds;
+    const done = await upload('video', recOut, group, w, h, tint(v)); r.serverSeconds = done.seconds;
     await upload('poster', poster, group, w, h); r.server = 'accepted';
   }catch(e){ r.server = 'refused: ' + e.message; }
   URL.revokeObjectURL(v.src); v.remove(); $('vprev').hidden = true;
@@ -207,7 +261,7 @@ async function doVideo(file, i){
 function row(r){
   const tr = document.createElement('tr'), yes = b => b == null ? '—' : b ? 'yes' : 'no';
   const cells = [r.i, r.kind, `${size(r.origBytes)}<br><span class="note">${r.origW}×${r.origH}${r.origSeconds ? ' · ' + r.origSeconds + ' s' : ''}</span>`,
-    r.outBytes ? `${size(r.outBytes)}<br><span class="note">${r.outW}×${r.outH}${r.kbps ? ' · ' + r.kbps + ' kbps' : ''}${r.path ? ' · ' + (r.path === 'original' ? 'sent as is' : 're-made') : ''}${r.q ? ' · q' + r.q : ''}</span>` : '—',
+    r.outBytes ? `${size(r.outBytes)}<br><span class="note">${r.outW}×${r.outH}${r.kbps ? ' · ' + r.kbps + ' kbps' : ''}${r.path ? ' · ' + ({ original: 'sent as is', 'original-inplace': 'sent as is', webcodecs: 're-made (WebCodecs)', mediarecorder: 're-made (real time)' }[r.path] || r.path) : ''}${r.q ? ' · q' + r.q : ''}</span>` : '—',
     r.thumbBytes ? size(r.thumbBytes) : '—', r.outBytes ? Math.round(100 * (1 - (r.outBytes + (r.thumbBytes || 0)) / r.origBytes)) + '% smaller' : '—',
     r.ms != null ? (r.ms / 1000).toFixed(1) + ' s' : '—', r.ssim ? 'SSIM ' + r.ssim : r.outSeconds ? r.outSeconds + ' s' : '—',
     r.kind === 'photo' ? `${yes(r.exifBefore)} / ${yes(r.gpsBefore)}` : '—', r.kind === 'photo' ? (r.exifAfter ? '<span class="no">EXIF left</span>' : '<span class="ok">clean</span>') : '—',
@@ -257,8 +311,8 @@ async function feed(){
   const { items } = await call('list'), groups = new Map();
   for(const it of items){ if(!it.group) continue; const g = groups.get(it.group) || {}; g[it.kind] = it; groups.set(it.group, g); }
   $('feed').innerHTML = [...groups.values()].map(g => g.thumb && g.photo
-    ? `<div class="post"><img src="${g.thumb.url}" srcset="${g.thumb.url} 400w, ${g.photo.url} ${g.photo.w || 1080}w" sizes="(max-width: 760px) 100vw, 728px" data-full="${g.photo.url}" loading="lazy" decoding="async" width="${g.photo.w || 400}" height="${g.photo.h || 300}" alt="Test photo"><div class="meta">Thumbnail ${size(g.thumb.bytes)} · full photo ${size(g.photo.bytes)} (tap)</div></div>`
-    : g.video && g.poster ? `<div class="post"><div class="vid"><video preload="none" playsinline controls poster="${g.poster.url}" width="${g.video.w}" height="${g.video.h}" src="${g.video.url}"></video></div><div class="meta">Poster ${size(g.poster.bytes)} · video ${size(g.video.bytes)}${g.video.seconds ? ' · ' + g.video.seconds.toFixed(1) + ' s' : ''} (loads only when played)</div></div>` : '').join('');
+    ? `<div class="post"><img style="background:${g.photo.c || '#0a1420'};aspect-ratio:${g.photo.w || 3}/${g.photo.h || 4}" src="${g.thumb.url}" srcset="${g.thumb.url} 400w, ${g.photo.url} ${g.photo.w || 1080}w" sizes="(max-width: 760px) 100vw, 728px" data-full="${g.photo.url}" loading="lazy" decoding="async" width="${g.photo.w || 400}" height="${g.photo.h || 300}" alt="Test photo"><div class="meta">Thumbnail ${size(g.thumb.bytes)} · full photo ${size(g.photo.bytes)} (tap)</div></div>`
+    : g.video && g.poster ? `<div class="post"><div class="vid"><video style="background:${g.video.c || '#000'};aspect-ratio:${g.video.w || 9}/${g.video.h || 16}" preload="none" playsinline controls poster="${g.poster.url}" width="${g.video.w}" height="${g.video.h}" src="${g.video.url}"></video></div><div class="meta">Poster ${size(g.poster.bytes)} · video ${size(g.video.bytes)}${g.video.seconds ? ' · ' + g.video.seconds.toFixed(1) + ' s' : ''} (loads only when played)</div></div>` : '').join('');
   $('feed').querySelectorAll('img[data-full]').forEach(im => im.onclick = () => { $('viewer').innerHTML = `<img src="${im.dataset.full}" alt="Test photo, full size">`; $('viewer').hidden = false; });
 }
 $('viewer').onclick = () => { $('viewer').hidden = true; $('viewer').innerHTML = ''; };
@@ -278,8 +332,7 @@ async function probe(){
 probe();
 function report(){
   return { at: new Date().toISOString(), encoders, ua: navigator.userAgent, screen: `${screen.width}x${screen.height}@${devicePixelRatio}`, limits: LIMITS, summary: summary(),
-    files: results.map(({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, encoderExif, encoderGps, metaRemoved, mime, kbps, outSeconds, serverSeconds, server, audio, path, codecs, metaBefore, metaAfter }) =>
-      ({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, encoderExif, encoderGps, metaRemoved, mime, kbps, outSeconds, serverSeconds, server, audio, path, codecs, metaBefore, metaAfter })) };
+    files: results.map(r => ({ ...r })) };   // measurements only: a result never holds a file name or picture data
 }
 $('send').onclick = async () => {
   const b = $('send'), n = results.length; b.disabled = true; b.textContent = 'Sending…'; $('sendstate').textContent = '';
@@ -305,7 +358,9 @@ $('photos').onchange = async e => {
 let queue = [];
 // keep the screen on while the phone works (iOS 16.4+); a refusal changes nothing else
 let wake = null;
-async function awake(on){ try{ if(on && !wake && navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); else if(!on && wake){ await wake.release(); wake = null; } }catch(e){} }
+document.addEventListener('visibilitychange', () => { if(document.hidden) wake = null; else if(busy) awake(true); });
+let busy = false;
+async function awake(on){ busy = on; try{ if(on && !wake && navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); else if(!on && wake){ await wake.release(); wake = null; } }catch(e){} }
 async function nextVideo(){
   const f = queue.shift(); $('nextVideo').disabled = true; if(!f) return;
   const i = results.length + 1; vstatus(`Video ${i}: opening…`); awake(true);

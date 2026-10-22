@@ -90,7 +90,7 @@ function fmp4(seconds, perSample){
   check(!/media-src/.test((await fetch(B0 + '/')).headers.get('content-security-policy')), 'the app\'s own pages keep their policy unchanged');
   check((await j('/media/api/list')).status === 401, 'the lab API needs a signed-in member');
   const tok = (await (await j('/api/setup', { code: 'secret', name: 'Lab Tester', pin: '246810', agree: true })).json()).token;
-  const up = async (kind, buf) => { const sl = await (await j('/media/api/slot', { kind, bytes: buf.length, group: 'g' }, tok)).json(); const put = await fetch(B0 + sl.put, { method: 'PUT', body: buf }); return { sl, put, commit: await j('/media/api/commit', { key: sl.key }, tok) }; };
+  const up = async (kind, buf) => { const sl = await (await j('/media/api/slot', { kind, bytes: buf.length, group: 'g' }, tok)).json(); const put = await fetch(B0 + sl.put, { method: 'PUT', body: buf }); return { sl, put, commit: await j('/media/api/commit', { key: sl.key, c: kind === 'photo' ? '#a1b2c3' : 'red;}' }, tok) }; };
   const ph = await up('photo', jpeg(false));
   const pc = await ph.commit.json();
   check(ph.put.status === 200 && ph.commit.status === 200 && pc.ok, 'a photo goes to its signed upload link and is accepted on commit');
@@ -110,7 +110,11 @@ function fmp4(seconds, perSample){
   check(long.commit.status === 400 && /Too long/.test((await long.commit.json()).error), 'a 20 s video is refused (at most 15 s)');
   const fl = await up('video', fmp4(20, true));
   check(fl.commit.status === 400 && /Too long/.test((await fl.commit.json()).error), 'a 20 s fragmented recording is refused too');
-  const nolen = await up('video', Buffer.concat([box('ftyp', Buffer.from('isom\0\0\0\0isom')), box('mdat', Buffer.alloc(500))]));
+  const late = mp4(10, 3000), mo = late.indexOf(Buffer.from('moov')) - 4, md = late.indexOf(Buffer.from('mdat')) - 4;
+  const moovLast = Buffer.concat([late.subarray(0, mo), late.subarray(md), late.subarray(mo, md)]);
+  const lt = await up('video', moovLast);
+  check(lt.commit.status === 400 && /moov/.test((await lt.commit.json()).error), 'a video whose index (moov) comes after its data is refused: the feed would wait for the whole file');
+  const nolen = await up('video', Buffer.concat([box('ftyp', Buffer.from('isom\0\0\0\0isom')), box('moov', box('free', Buffer.alloc(8))), box('mdat', Buffer.alloc(500))]));
   check(nolen.commit.status === 400 && /length/.test((await nolen.commit.json()).error), 'a video whose length cannot be read is refused');
   const placed = await up('video', mp4(10, 3000, true));
   check(placed.commit.status === 400 && /metadata/.test((await placed.commit.json()).error), 'a video that still says where it was filmed is refused');
@@ -124,6 +128,7 @@ function fmp4(seconds, perSample){
   const rg = await fetch(B0 + vc.url, { headers: { range: 'bytes=0-99' } });
   check(rg.status === 206 && rg.headers.get('content-range') === `bytes 0-99/${vc.bytes}` && (await rg.arrayBuffer()).byteLength === 100, 'a video is served in byte ranges, as Safari asks for it');
   const list = await (await j('/media/api/list', {}, tok)).json();
+  check(list.items.some(x => x.kind === 'photo' && x.c === '#a1b2c3') && list.items.filter(x => x.kind === 'video').every(x => x.c === null), 'a file\'s placeholder colour is kept when it is a plain #rrggbb, and dropped otherwise');
   check(list.items.length === 3 && list.items.every(x => x.url.startsWith('/media/f/')), 'the list holds the three accepted files, with signed links');
   check((await (await j('/media/api/clear', {}, tok)).json()).removed === 3 && (await fetch(B0 + vc.url)).status === 404, 'clearing removes my files and their links stop working');
   await S.stop();
