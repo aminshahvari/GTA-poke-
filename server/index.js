@@ -390,7 +390,7 @@ const server = http.createServer((req, res) => {
     const tag = '"' + crypto.createHash('sha1').update(buf).digest('base64url').slice(0, 20) + '"';
     const fresh = cache || { 'Cache-Control': 'no-cache', ETag: tag };
     // the media lab plays the chosen clip from the phone's memory (a blob: link) before preparing it; only that page may
-    if(file === 'lab/media.html') fresh['Content-Security-Policy'] = SECURITY['Content-Security-Policy'] + "; media-src 'self' blob:";
+    if(file === 'lab/media.html') fresh['Content-Security-Policy'] = SECURITY['Content-Security-Policy'].replace("media-src 'self' data:", "media-src 'self' data: blob:");
     if(!cache && req.headers['if-none-match'] === tag){ res.writeHead(304, { ...SECURITY, ...fresh }); return res.end(); }
     send(res, 200, buf, TYPES[path.extname(full)] || 'application/octet-stream', fresh);
   });

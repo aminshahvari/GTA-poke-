@@ -86,8 +86,8 @@ function fmp4(seconds, perSample){
   S = await serve({ MEDIA_LAB: '1' });
   const B0 = S.base, j = (p, body, tok) => fetch(B0 + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body || {}) });
   const page = await fetch(B0 + '/lab/media');
-  check(page.status === 200 && /Media lab/.test(await page.text()) && /script-src 'self'/.test(page.headers.get('content-security-policy')) && /media-src 'self' blob:/.test(page.headers.get('content-security-policy')), 'switch on: the lab page is served, under the app\'s security policy plus playing the chosen clip (blob:)');
-  check(!/media-src/.test((await fetch(B0 + '/')).headers.get('content-security-policy')), 'the app\'s own pages keep their policy unchanged');
+  check(page.status === 200 && /Media lab/.test(await page.text()) && /script-src 'self'/.test(page.headers.get('content-security-policy')) && /media-src 'self' data: blob:/.test(page.headers.get('content-security-policy')) && (page.headers.get('content-security-policy').match(/media-src/g) || []).length === 1, 'switch on: the lab page is served, under the app\'s security policy plus playing the chosen clip (blob:)');
+  check(!/blob:;|blob:$/.test(((await fetch(B0 + '/')).headers.get('content-security-policy').match(/media-src[^;]*/) || [''])[0]), 'the app\'s own pages keep their policy unchanged (no blob: media)');
   check((await j('/media/api/list')).status === 401, 'the lab API needs a signed-in member');
   const tok = (await (await j('/api/setup', { code: 'secret', name: 'Lab Tester', pin: '246810', agree: true })).json()).token;
   const up = async (kind, buf) => { const sl = await (await j('/media/api/slot', { kind, bytes: buf.length, group: 'g' }, tok)).json(); const put = await fetch(B0 + sl.put, { method: 'PUT', body: buf }); return { sl, put, commit: await j('/media/api/commit', { key: sl.key, c: kind === 'photo' ? '#a1b2c3' : 'red;}' }, tok) }; };
