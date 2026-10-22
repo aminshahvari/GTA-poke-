@@ -285,8 +285,10 @@ let field = null;
 function fieldUI(){
   const el = $('fieldBar'), T = club && club.tourney;
   el.hidden = !field || !T || T.status !== 'running';
+  if(BOARD) boardCol();
   hudPlace(); sideUI();
   if(el.hidden) return;
+  if(BOARD){ boardField(el, T); return; }
   // laid out like a broadcast HUD (owner's design brief, 2026-10-21): the field, tables and watchers, the average stack,
   // the chip leader in gold, and your rank as a pill coloured by your stack against the average. Tap a chip count to see
   // it in big blinds (and back).
@@ -313,6 +315,7 @@ function fieldUI(){
 // Sideways (the column beside the table) and on wider screens the HUD stays where it was (its own row).
 function hudPlace(){
   if(QUIET) return;   // (the quiet design has its own one-line field, #qline, and hides this HUD upright)
+  if(BOARD) return;   // (the board: its header card carries players and rank; the HUD is the sheet, and sideways the column)
   const g = $('game'), el = $('fieldBar'), T = club && club.tourney, ck = g.querySelector('.clock'), st = g.querySelector('.stats');
   const on = !!field && !!T && T.status === 'running' && !g.classList.contains('land') && window.innerWidth < 480;
   const one = g.classList.contains('row1'), home = on && one ? ck : g;
@@ -334,7 +337,7 @@ let hudRO = null;
 let sideKey = '';
 function sideUI(){
   const el = $('sidePanel'), T = club && club.tourney, run = T && T.status === 'running', sp = run && T.sponsor, prize = run && T.prize;
-  el.hidden = !$('game').classList.contains('land') || !(sp || prize);
+  el.hidden = !$('game').classList.contains('land') || (BOARD && !$('game').classList.contains('b-col')) || !(sp || prize);
   if(el.hidden){ if(sideKey){ sideKey = ''; el.innerHTML = ''; } return; }
   const key = [T.id, sp && sp.uid, sp && sp.name, sp && sp.logoV, prize, sponsorTap()].join('|');
   if(key !== sideKey){
@@ -2269,6 +2272,7 @@ function newLock(d){
   // a phone held sideways: the table takes the full width on the left and the action bar stands beside it
   const land = window.innerWidth > H && H <= 600 && window.innerWidth >= 560;
   if(g.classList.contains('land') !== land){ g.classList.toggle('land', land); LOCK = null; }
+  if(BOARD) boardCol();
   // the smallest phones sideways (iPhone SE): your cards go back above your plate, smaller, so the bottom row of
   // a full table has the width it needs
   g.classList.toggle('land-s', land && window.innerWidth < 700);
@@ -2737,6 +2741,99 @@ function boardMenu(){
 function closeMenu(){ const sh = $('bSheet'); if(sh && !sh.hidden){ sh.hidden = true; $('game').classList.remove('b-menu'); const m = document.querySelector('[data-bmore]'); if(m) m.focus(); } }
 document.addEventListener('click', e => { if(e.target.closest('[data-bmore]')) boardMenu(); });
 document.addEventListener('keydown', e => { if(e.key === 'Escape') closeMenu(); });
+// ---------- the board's header and tournament sheet (UI_BOARD, Step-0 spec §4, phase B3) ----------
+// Upright: one card (Level, the blinds with the ante under them, your rank, the clock with "32/48 players" under it)
+// and the Lobby pill beside it. Sideways: one centred pill (Level · blinds · players · rank · clock in gold), Chat at
+// the top left, Lobby at the top right. The card (or the pill) is one button: it opens the tournament sheet (the
+// board's four tiles: Avg stack, Chip leader, Active tables, Spectators, then "Your place", then the sponsor). The
+// collapsed bar carries players left and your rank only (owner's GO for B3; Muse's ruling on §9.6 keeps the rank).
+// The sponsor intro (the start of the tournament, the end of a break) shows over the card for its seconds, as today.
+// Sideways on a phone 740 px wide or more, while a tournament runs, the column beside the table stays (owner): the
+// board's four tiles, the sponsor and prize under them, the info line and the action row at its foot.
+if(BOARD){
+  const g = $('game'), top = document.createElement('div');
+  top.className = 'b-top'; top.id = 'bTop';
+  top.innerHTML = `<div class="b-top-l"></div><div class="b-hudw"><button type="button" class="b-hud" id="bHud" data-bhud aria-haspopup="dialog">
+    <span class="bh-lvl"><small>Level</small><b class="num" id="bhLvl"></b></span><span class="bh-bl"><b class="num" id="bhBl"></b><small class="num" id="bhAnte"></small></span>
+    <span class="bh-rk" id="bhRk"><small><span class="bh-yr">Your rank</span><span class="bh-r">Rank</span></small><b class="num" id="bhRank"></b></span><span class="bh-tm"><b class="num" id="bhTime"></b><small class="num" id="bhPl"></small></span>
+    <span class="bh-idle" id="bhIdle"></span></button></div><div class="b-top-r"></div>`;
+  g.prepend(top);
+  top.querySelector('.b-top-l').appendChild($('chatBtn'));
+  top.querySelector('.b-top-r').appendChild($('lobbyBtn'));
+  top.querySelector('.b-hudw').appendChild($('spn'));
+  $('bHud').onclick = () => boardSheet();
+}
+// sideways, wide enough, a tournament running with its field: the column beside the table (owner's sponsor panel)
+function boardCol(){
+  const g = $('game'), T = club && club.tourney;
+  const on = g.classList.contains('land') && window.innerWidth >= 740 && !!field && !!T && T.status === 'running';
+  if(g.classList.contains('b-col') !== on){
+    g.classList.toggle('b-col', on); LOCK = null; GEO = null;
+    // (decided after the table was laid out: lay it out again for the room it has now)
+    requestAnimationFrame(() => { if(view === 'table') renderTable(); });
+  }
+  return on;
+}
+const bSet = (id, v) => { const e = $(id); if(e && e.textContent !== String(v)) e.textContent = v; };
+let bTopKey = '';
+function boardTop(T, d, me, brk){
+  const top = $('bTop'); if(!top) return;
+  if(!T){ top.classList.add('idle'); const t = tables.get(curTid()); bSet('bhIdle', t ? `Table ${t.n}` : 'Table'); $('bHud').setAttribute('aria-label', 'Table'); return; }
+  top.classList.remove('idle');
+  const [sb, bb, an] = E.levelFor(T.level, T.anteMode), f = qFacts(T, d, me), rank = f.rank && (me || field) ? f.rank : null;
+  // (before the first whole-tournament update: the players left as the club card counts them, not this table's seats)
+  if(!field && T.remaining) f.players = T.remaining;
+  bSet('bhLvl', T.level + 1); bSet('bhBl', `${fmt(sb)}/${fmt(bb)}`); bSet('bhAnte', an ? `Ante ${fmt(an)}` : '');
+  bSet('bhTime', $('cTime').textContent);
+  const pl = brk ? `Break · ${f.players}/${f.total}` : `${f.players}/${f.total}<span class="bh-plw"> players</span>`;
+  if($('bhPl').innerHTML !== pl) $('bhPl').innerHTML = pl;
+  bSet('bhRank', rank ? ord(rank) : '');
+  $('bhRk').hidden = !rank; top.classList.toggle('b-brk', !!brk);
+  const key = [T.level, sb, bb, an, f.players, f.total, rank, brk ? 1 : 0, $('cTime').textContent.length, $('bHud').clientWidth, $('game').dataset.bcls, $('game').classList.contains('land')].join('|');
+  if(key === bTopKey) return;
+  bTopKey = key;
+  $('bHud').setAttribute('aria-label', `Level ${T.level + 1}, blinds ${fmt(sb)}/${fmt(bb)}${an ? ', ante ' + fmt(an) : ''}. ${f.players} of ${f.total} players left.${rank ? ' Your rank ' + ord(rank) + '.' : ''} ${brk ? 'On a break' : 'Time left'} ${$('cTime').textContent}. Tap for the tournament.`);
+  // (long blinds on a narrow phone: the values a size smaller, then the ante and the caption go)
+  const card = $('bHud'); card.classList.remove('tight', 'tighter');
+  if(card.scrollWidth > card.clientWidth + 1) card.classList.add('tight');
+  if(card.scrollWidth > card.clientWidth + 1) card.classList.add('tighter');
+}
+// the board's four tiles (the sheet; sideways, the column)
+function boardTiles(f){
+  const tile = (k, lbl, v, sub = '', aria = '') => `<div class="b-tile bt-${k}"${aria ? ` aria-label="${aria}"` : ''}><small>${lbl}</small><b class="num">${v}</b>${sub}</div>`;
+  return `<div class="b-tiles">${tile('avg', 'Avg stack', fmt(Math.round(f.avg)))}`
+    + tile('lead', 'Chip leader', f.leader ? (f.meLead ? 'You' : esc(f.leader.name)) : '–', f.leader ? `<span class="num">${fmt(f.leader.stack)}</span>` : '')
+    + tile('tables', 'Active tables', f.tables, '', `${f.tables} tables`)
+    // (the owner's word for it, tonight: "watching"; the board calls the tile Spectators)
+    + tile('watch', 'Spectators', f.watchers == null ? '–' : f.watchers, ' <span>watching</span>', f.watchers == null ? '' : `${f.watchers} watching`) + '</div>';
+}
+function boardField(el, T){
+  const d = tables.get(curTid()), me = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id);
+  const html = boardTiles(qFacts(T, d, me));
+  if(el.dataset.bh !== html){ el.dataset.bh = html; el.innerHTML = html; }
+}
+// the tournament sheet (§4's expanded HUD): a tap on the card or the pill
+function boardSheet(){
+  const T = demo ? demo.T : club && club.tourney; if(!T || T.status !== 'running' && !demo) return;
+  const g = $('game'), d = tables.get(curTid()), me = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id), f = qFacts(T, d, me);
+  const [sb, bb, an] = E.levelFor(T.level, T.anteMode), inBB = n => (n / bb >= 100 ? Math.round(n / bb) : Math.round(n / bb * 10) / 10).toLocaleString('en-US') + ' BB';
+  const vsAvg = !me ? '' : me.stack > f.avg * 1.05 ? 'above average' : me.stack < f.avg * .95 ? 'below average' : 'about average';
+  let sh = $('bHudSheet');
+  if(!sh){ sh = document.createElement('div'); sh.id = 'bHudSheet'; sh.className = 'b-sheet b-hsheet'; sh.hidden = true; g.appendChild(sh);
+    sh.addEventListener('click', e => { if(e.target === sh || e.target.closest('[data-bhclose]')) closeSheet(); }); }
+  const sp = !demo && T.sponsor;
+  sh.innerHTML = `<div class="b-sheet-in" role="dialog" aria-modal="true" aria-label="Tournament"><div class="bs-head"><b class="b-sheet-t">${esc(T.name || 'Demo table')}</b>
+    <small class="num">Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''} · ${f.players}/${f.total} players</small></div>
+    ${boardTiles(f)}
+    ${f.rank && me ? `<div class="b-place"><span>Your place</span><b class="num">${ord(f.rank)} of ${f.players}</b><small class="num">${fmt(me.stack)} · ${inBB(me.stack)} · ${vsAvg}</small></div>` : ''}
+    ${sp ? `<div class="b-pres">${sponsorHTML(sp, true, T.prize)}</div>` : T.prize && !demo ? `<div class="b-pres"><div class="side-prize"><small>Tonight's prize</small><b>${esc(T.prize)}</b></div></div>` : ''}
+    <button type="button" class="b-row b-close" data-bhclose><span>Done</span></button></div>`;
+  if(sp){ fillLogo(sh, sp); wireSponsor(sh, T); const b = sh.querySelector('[data-spbiz]'); if(b){ const go = b.onclick, key = b.onkeydown; b.onclick = () => { closeSheet(); go(); }; b.onkeydown = e => { if(e.key === 'Enter' || e.key === ' ') closeSheet(); key(e); }; } }
+  sh.hidden = false; g.classList.add('b-menu');
+  sh.querySelector('[data-bhclose]').focus();
+}
+function closeSheet(){ const sh = $('bHudSheet'); if(sh && !sh.hidden){ sh.hidden = true; $('game').classList.remove('b-menu'); const c = $('bHud'); if(c) c.focus(); } }
+if(BOARD) document.addEventListener('keydown', e => { if(e.key === 'Escape') closeSheet(); });
 const mmss = ms => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 // The tournament break card (every 10 levels, server/club.js): over the middle of the felt once this table's hand is over,
 // with the time left and the sponsor if there is one. A hand still being played is never covered.
@@ -2881,7 +2978,7 @@ function qSheet(){
 function tickClock(){
   const T = demo ? demo.T : club && club.tourney;
   const now = Date.now() + clockSkew;
-  if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(T, now, false); if(QUIET) $('qline').hidden = true; return; }
+  if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(T, now, false); if(QUIET) $('qline').hidden = true; if(BOARD) boardTop(null); return; }
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;
   // in the one-row header of the shortest screens the ante takes the second line, in place of the next level
@@ -2905,6 +3002,7 @@ function tickClock(){
   $('sPosL').textContent = hud ? 'Your stack' : 'Your rank';
   $('sPos').textContent = hud ? fmt(me.stack) : me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching';
   if(QUIET) qLine(T, d, me);
+  if(BOARD) boardTop(T, d, me, brk);
   const bar = document.querySelector('.shotBar');
   if(bar && d && d.deadline){ const left = Math.max(0, d.deadline - now); bar.style.transform = `scaleX(${Math.min(1, left / d.bank)})`;
     // (the board: the gold ring round the avatar of the player to act empties clockwise as their time runs, §3.3)

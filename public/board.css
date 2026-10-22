@@ -369,8 +369,180 @@
   [data-ui="board"] #game.land .dock #helper.b-info{font-size:11px;line-height:13px}
   [data-ui="board"] #game.land .dock #helper.b-info:has(.h-line) .h-name{display:none}
 }
+/* ======================================================================================================================
+   B3: the header and the tournament sheet (spec §4). Upright: the header card (Level, blinds and ante, your rank, the
+   clock over "32/48 players") and the Lobby pill. Sideways: one centred pill, Chat top left, Lobby top right. The card
+   opens the sheet: the board's four tiles, "Your place", the sponsor. Today's clock row, stats row and HUD bar are not
+   drawn (their cells stay in the page, written as before). Sideways on a wide phone during a tournament, the column
+   beside the table (owner): the four tiles, the sponsor, then the info line and the action row at its foot.
+   ====================================================================================================================== */
+[data-ui="board"] #game>.clock,[data-ui="board"] #game>.stats{display:none}
+[data-ui="board"] #game:not(.b-col)>#fieldBar{display:none}
+[data-ui="board"] #game .b-top{flex:none;position:relative;z-index:30;display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top,0px)) 12px 8px}
+[data-ui="board"] #game:not(.land) .b-top-l{display:none}
+[data-ui="board"] #game .b-top-l,[data-ui="board"] #game .b-top-r{flex:none;display:flex;align-items:center}
+[data-ui="board"] #game .b-hudw{position:relative;flex:1;min-width:0;display:flex}
+/* the card: one button */
+[data-ui="board"] #game .b-hud{flex:1;min-width:0;height:56px;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:0 12px;margin:0;
+  background:var(--b-surface);border:1px solid var(--b-hair-gold);border-radius:var(--b-r-card);color:var(--b-text);font:inherit;text-align:left;overflow:hidden;cursor:pointer;
+  box-shadow:0 6px 16px var(--b-shadow);-webkit-tap-highlight-color:transparent;transition:transform var(--b-press-dur) ease-out}
+[data-ui="board"] #game .b-hud:active{transform:scale(var(--b-press-scale))}
+[data-ui="board"] #game .b-hud:focus-visible{outline:2px solid var(--b-gold);outline-offset:2px}
+[data-ui="board"] #game .b-hud>span{flex:none;display:flex;flex-direction:column;justify-content:center;white-space:nowrap}
+[data-ui="board"] #game .b-hud>span[hidden]{display:none}
+[data-ui="board"] #game .b-hud small{font-size:var(--b-t-11);font-weight:500;line-height:1.3;color:var(--b-text-2);font-variant-numeric:tabular-nums}
+[data-ui="board"] #game .b-hud small:empty{display:none}
+[data-ui="board"] #game .b-hud b{font-size:var(--b-t-20);font-weight:600;line-height:1.15;color:var(--b-text);font-variant-numeric:tabular-nums}
+[data-ui="board"] #game .b-hud .bh-rk b{color:var(--b-gold-text)}
+[data-ui="board"] #game .b-hud .bh-tm{margin-left:auto;align-items:flex-end}
+[data-ui="board"] #game .b-hud .bh-tm b{font-size:var(--b-t-22)}
+[data-ui="board"] #game .b-top.b-brk .b-hud .bh-tm b{color:var(--b-gold-text)}
+[data-ui="board"] #game .b-hud .bh-idle{display:none;font-size:var(--b-t-15);font-weight:600}
+[data-ui="board"] #game .b-top.idle .b-hud>span{display:none}
+[data-ui="board"] #game .b-top.idle .b-hud>.bh-idle{display:flex}
+/* the smallest phones: a lower card (the table keeps its room) */
+[data-ui="board"] #game[data-bcls="P-S"] .b-top{padding-top:calc(4px + env(safe-area-inset-top,0px));padding-bottom:2px}
+[data-ui="board"] #game[data-bcls="P-S"] .b-hud{height:44px;gap:10px;padding:0 10px}
+[data-ui="board"] #game[data-bcls="P-S"] .b-hud b{font-size:var(--b-t-17)}
+[data-ui="board"] #game[data-bcls="P-S"] .b-hud .bh-tm b{font-size:var(--b-t-20)}
+[data-ui="board"] #game[data-bcls="P-S"] .b-top #lobbyBtn{padding:0 10px;font-size:var(--b-t-14)}
+/* (long blinds on a narrow phone) */
+[data-ui="board"] #game .b-hud.tight{gap:8px;padding:0 12px}
+[data-ui="board"] #game .b-hud.tight b{font-size:var(--b-t-17)}
+[data-ui="board"] #game .b-hud.tight .bh-tm b{font-size:var(--b-t-20)}
+[data-ui="board"] #game .b-hud.tighter{gap:8px;padding:0 10px}
+[data-ui="board"] #game .b-hud.tighter b{font-size:var(--b-t-15)}
+[data-ui="board"] #game .b-hud.tighter .bh-tm b{font-size:var(--b-t-17)}
+[data-ui="board"] #game .b-hud .bh-r,[data-ui="board"] #game .b-hud.tighter .bh-yr,[data-ui="board"] #game .b-hud.tighter .bh-plw{display:none}
+[data-ui="board"] #game .b-hud.tighter .bh-r{display:inline}
+/* Lobby: a pill; Chat (sideways): a round button */
+[data-ui="board"] #game .b-top #lobbyBtn{min-height:44px;min-width:44px;padding:0 16px;border-radius:var(--b-r-pill);background:var(--b-surface-2);border:1px solid var(--b-hair);color:var(--b-text);
+  font-family:var(--b-font);font-size:var(--b-t-15);font-weight:600;letter-spacing:0;text-transform:none;box-shadow:none}
+[data-ui="board"] #game .b-top #chatBtn{min-height:44px;width:44px;min-width:44px;padding:0;border-radius:var(--b-r-pill);background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);font-size:17px;box-shadow:none}
+[data-ui="board"] #game .b-top #chatBtn[hidden]{display:none}
+/* the sponsor intro (the start, the end of a break): over the card for its seconds, as today */
+[data-ui="board"] #game .b-hudw .spn{inset:0;border-radius:var(--b-r-card);border:1px solid var(--b-gold);background:var(--b-surface);box-shadow:0 6px 16px var(--b-shadow);padding:0 12px;gap:10px;justify-content:flex-start}
+[data-ui="board"] #game .b-hudw .spn::after{border-radius:inherit}
+[data-ui="board"] #game .b-hudw .spn .sp-card{display:flex;align-items:center;gap:10px;min-width:0}
+[data-ui="board"] #game .b-hudw .spn .sp-txt{display:flex;flex-direction:column;min-width:0}
+[data-ui="board"] #game .b-hudw .spn .sp-txt small{font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--b-gold-text)}
+[data-ui="board"] #game .b-hudw .spn .sp-txt b{font-family:var(--b-font);font-size:var(--b-t-15);font-weight:600;color:var(--b-text)}
+[data-ui="board"] #game .b-hudw .spn .sp-prize{display:none}
+[data-ui="board"] #game .b-hudw .spn .sp-logo .bz-logo.sp{width:36px;height:36px}
+
+/* ---------- sideways: one centred pill, Chat top left, Lobby top right ---------- */
+[data-ui="board"] #game.land .b-top{padding:calc(4px + env(safe-area-inset-top,0px)) 12px 4px}
+[data-ui="board"] #game.land .b-top-l,[data-ui="board"] #game.land .b-top-r{flex:1 1 0;min-width:44px}
+[data-ui="board"] #game.land .b-top-r{justify-content:flex-end}
+[data-ui="board"] #game.land .b-hudw{flex:0 1 auto}
+[data-ui="board"] #game.land .b-hud{height:36px;border-radius:var(--b-r-pill);gap:0;padding:0 16px;box-shadow:none}
+[data-ui="board"] #game.land .b-hud>span{flex-direction:row;align-items:baseline;gap:5px}
+[data-ui="board"] #game.land .b-hud .bh-tm{display:contents}
+[data-ui="board"] #game.land .b-hud b,[data-ui="board"] #game.land .b-hud .bh-tm b{font-size:var(--b-t-15)}
+[data-ui="board"] #game.land .b-hud small{font-size:var(--b-t-13);color:var(--b-text-2)}
+[data-ui="board"] #game.land .b-hud #bhAnte{display:none}
+[data-ui="board"] #game.land .b-hud .bh-lvl{order:1}
+[data-ui="board"] #game.land .b-hud .bh-bl{order:2}
+[data-ui="board"] #game.land .b-hud #bhPl{order:3;color:var(--b-text)}
+[data-ui="board"] #game.land .b-hud .bh-rk{order:4}
+[data-ui="board"] #game.land .b-hud #bhTime{order:5;color:var(--b-gold)}
+[data-ui="board"] #game.land .b-hud :is(.bh-bl,#bhPl,.bh-rk,#bhTime)::before{content:'·';margin:0 8px;color:var(--b-text-3);font-weight:400}
+[data-ui="board"] #game.land .b-hud.tight .bh-rk small,[data-ui="board"] #game.land .b-hud.tighter .bh-lvl small{display:none}
+[data-ui="board"] #game.land .b-hud.tight b{font-size:var(--b-t-14)}
+[data-ui="board"] #game.land .b-hud.tight small{font-size:12px}
+[data-ui="board"] #game.land .b-top #lobbyBtn{min-height:36px;padding:0 14px;font-size:var(--b-t-14)}
+[data-ui="board"] #game.land .b-top #chatBtn{min-height:36px;width:44px;height:36px}
+
+/* ---------- the tiles (the sheet; sideways, the column) ---------- */
+[data-ui="board"] #game .b-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+[data-ui="board"] #game .b-tile{min-width:0;display:flex;flex-direction:column;gap:1px;padding:8px 12px;border-radius:var(--b-r-plate);background:var(--b-surface-2);border:1px solid var(--b-hair)}
+[data-ui="board"] #game .b-tile small{font-size:var(--b-t-11);font-weight:500;line-height:1.3;color:var(--b-text-2)}
+[data-ui="board"] #game .b-tile b{font-size:var(--b-t-17);font-weight:600;line-height:1.2;color:var(--b-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+[data-ui="board"] #game .b-tile span{font-size:var(--b-t-13);font-weight:600;line-height:1.25;color:var(--b-gold-text);font-variant-numeric:tabular-nums}
+[data-ui="board"] #game .b-tile.bt-watch{display:grid;grid-template-columns:auto 1fr;column-gap:5px;align-items:baseline}
+[data-ui="board"] #game .b-tile.bt-watch small{grid-column:1/-1}
+[data-ui="board"] #game .b-tile.bt-watch span{color:var(--b-text-2);font-weight:500}
+/* the sheet: the four tiles, two by two upright, four across sideways */
+[data-ui="board"] #game .b-hsheet .b-sheet-in{gap:10px;padding-top:14px}
+[data-ui="board"] #game .b-hsheet .bs-head{display:flex;flex-direction:column;gap:2px;padding:0 4px}
+[data-ui="board"] #game .b-hsheet .bs-head .b-sheet-t{font-size:var(--b-t-17);color:var(--b-text);padding:0;letter-spacing:0}
+[data-ui="board"] #game .b-hsheet .bs-head small{font-size:var(--b-t-13);color:var(--b-text-2);font-variant-numeric:tabular-nums}
+[data-ui="board"] #game.land .b-hsheet .b-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+[data-ui="board"] #game .b-place{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px;row-gap:0;padding:10px 12px;border-radius:var(--b-r-plate);border:1px solid var(--b-hair-gold);background:var(--b-gold-fill)}
+[data-ui="board"] #game .b-place span{font-size:var(--b-t-13);font-weight:500;color:var(--b-text-2)}
+[data-ui="board"] #game .b-place b{font-size:var(--b-t-17);font-weight:600;color:var(--b-gold-text)}
+[data-ui="board"] #game .b-place small{font-size:var(--b-t-13);color:var(--b-text-2);font-variant-numeric:tabular-nums}
+[data-ui="board"] #game .b-pres .sp-card{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--b-r-plate);background:var(--b-surface-2);border:1px solid var(--b-hair);min-width:0}
+[data-ui="board"] #game .b-pres .sp-txt{display:flex;flex-direction:column;min-width:0;gap:1px}
+[data-ui="board"] #game .b-pres .sp-txt small{font-size:var(--b-t-11);font-weight:600;letter-spacing:.06em;color:var(--b-gold-text)}
+[data-ui="board"] #game .b-pres .sp-txt b{font-family:var(--b-font);font-size:var(--b-t-15);font-weight:600;color:var(--b-text)}
+[data-ui="board"] #game .b-pres .sp-txt small.sp-cat{letter-spacing:0;font-weight:500;color:var(--b-text-2)}
+[data-ui="board"] #game .b-pres .sp-txt small.sp-prize,[data-ui="board"] #game .b-pres .sp-txt small.sp-more{text-transform:none;letter-spacing:0;font-size:var(--b-t-13);font-weight:500;color:var(--b-gold-text)}
+[data-ui="board"] #game .b-pres [data-spbiz]{cursor:pointer}
+[data-ui="board"] #game .b-pres .side-prize{display:grid;gap:2px;padding:10px 12px;border-radius:var(--b-r-plate);border:1px solid var(--b-hair-gold);background:var(--b-gold-fill)}
+[data-ui="board"] #game .b-pres .side-prize small{font-size:var(--b-t-11);color:var(--b-text-2)}
+[data-ui="board"] #game .b-pres .side-prize b{font-size:var(--b-t-15);color:var(--b-gold-text)}
+
+/* ---------- the break card (§3.4, restyled): the sponsor's spotlight on the felt ---------- */
+[data-ui="board"] #game .brk-card{background:var(--b-surface);border:1px solid var(--b-hair-gold);border-radius:var(--b-r-card);box-shadow:0 18px 40px var(--b-shadow)}
+[data-ui="board"] #game .brk-eye{font-size:var(--b-t-11);font-weight:600;color:var(--b-gold-text)}
+[data-ui="board"] #game .brk-time{font-family:var(--b-font);font-weight:600;color:var(--b-text);font-variant-numeric:tabular-nums}
+[data-ui="board"] #game .brk-sub{font-size:12px;color:var(--b-text-2)}
+[data-ui="board"] #game .brk .sp-card{border-top-color:var(--b-hair)}
+[data-ui="board"] #game .brk .sp-txt small{color:var(--b-gold-text)}
+[data-ui="board"] #game .brk .sp-txt small.sp-cat{color:var(--b-text-2)}
+[data-ui="board"] #game .brk .sp-txt b{font-family:var(--b-font);color:var(--b-text)}
+[data-ui="board"] #game .brk .sp-txt small.sp-prize,[data-ui="board"] #game .brk-prize{color:var(--b-gold-text)}
+/* (sideways the felt is low: the card is compact, so it stands between the top seats and yours) */
+[data-ui="board"] #game.land .brk-card{padding:8px 14px 8px;gap:2px}
+[data-ui="board"] #game.land .brk-time{font-size:26px}
+[data-ui="board"] #game.land .brk .sp-card{margin-top:4px;padding-top:6px}
+[data-ui="board"] #game.land .brk .sp-txt small.sp-cat,[data-ui="board"] #game.land .brk-sub{display:none}
+
+/* ---------- sideways with the column (a tournament on a phone 740 px wide or more) ---------- */
+[data-ui="board"] #game.land.b-col{display:grid;--b-colw:clamp(250px,33vw,320px);grid-template-columns:minmax(0,1fr) var(--b-colw);grid-template-rows:auto auto minmax(0,1fr) auto;
+  --bd-pad:6px;--bd-band:44px;--bd-gap:6px;--bd-row:var(--bd-land-row)}
+[data-ui="board"] #game.land.b-col>.b-top{grid-column:1/-1;grid-row:1}
+[data-ui="board"] #game.land.b-col>.table-area{grid-column:1;grid-row:2/5;min-height:0}
+[data-ui="board"] #game.land.b-col>#fieldBar{grid-column:2;grid-row:2;display:block;margin:2px 8px 0 4px;padding:0;border:0;border-radius:0;background:none!important;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+[data-ui="board"] #game.land.b-col .b-tiles{gap:6px}
+[data-ui="board"] #game.land.b-col .b-tile{padding:5px 10px}
+[data-ui="board"] #game.land.b-col .b-tile b{font-size:var(--b-t-15)}
+[data-ui="board"] #game.land.b-col .b-tile.bt-lead{display:grid;grid-template-columns:minmax(0,auto) auto;column-gap:6px;align-items:baseline;justify-content:start}
+[data-ui="board"] #game.land.b-col .b-tile.bt-lead small{grid-column:1/-1}
+[data-ui="board"] #game.land.b-col .dock #helper.b-info{font-size:12px;line-height:14px}
+[data-ui="board"] #game.land.b-col .dock #helper.b-info:has(.h-line) .h-name{display:none}
+[data-ui="board"] #game.land.b-col>.side:not([hidden]){grid-column:2;grid-row:3;margin:8px 8px 0 4px}
+[data-ui="board"] #game.land.b-col .side .sp-card{background:var(--b-surface);border:1px solid var(--b-hair-gold);border-radius:var(--b-r-plate);box-shadow:none}
+[data-ui="board"] #game.land.b-col .side .sp-txt small{color:var(--b-gold-text)}
+[data-ui="board"] #game.land.b-col .side .sp-txt small.sp-cat{color:var(--b-text-2)}
+[data-ui="board"] #game.land.b-col .side .sp-txt b{font-family:var(--b-font);font-size:var(--b-t-17);color:var(--b-text)}
+[data-ui="board"] #game.land.b-col .side .sp-txt small.sp-prize{color:var(--b-gold-text);border-top-color:var(--b-hair)}
+[data-ui="board"] #game.land.b-col .side .sp-more{color:var(--b-gold-text)}
+[data-ui="board"] #game.land.b-col .side-prize{border:1px solid var(--b-hair-gold);background:var(--b-gold-fill);border-radius:var(--b-r-plate)}
+[data-ui="board"] #game.land.b-col .side-prize small{color:var(--b-text-2)}
+[data-ui="board"] #game.land.b-col .side-prize b{color:var(--b-gold-text)}
+/* (the dock at the column's foot: the info line over the action row, as upright, the row reaching the screen's bottom) */
+[data-ui="board"] #game.land.b-col>.dock{grid-column:2;grid-row:4;align-self:end;padding:0;margin:0 8px 0 4px;height:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap) + var(--bd-row) + var(--bd-pad) + var(--sa-b))}
+[data-ui="board"] #game.land.b-col .dock .controls{margin:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap)) 0 0;width:auto;padding:0 0 calc(var(--bd-pad) + var(--sa-b))}
+[data-ui="board"] #game.land.b-col .dock :is(#helper,.info-line,#playLine),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) #helper.b-info,[data-ui="board"] #game.land.b-col .dock .sizing.b-sizing{left:0;right:0;width:auto;top:var(--bd-pad)}
+[data-ui="board"] #game.land.b-col .dock #helper.b-info{height:var(--bd-band);justify-content:center;text-align:center}
+[data-ui="board"] #game.land.b-col .dock .info-line{height:calc(var(--bd-band) - 15px);text-align:center}
+[data-ui="board"] #game.land.b-col .dock #playLine{top:calc(var(--bd-pad) + var(--bd-band) - 15px);text-align:center}
+[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) #helper.b-info{right:64px}
+[data-ui="board"] #game.land.b-col .dock .turnrow{display:block;position:absolute;left:0;right:0;top:var(--bd-pad);height:var(--bd-band);margin:0;pointer-events:none;z-index:2}
+[data-ui="board"] #game.land.b-col .dock .turnrow .xtime{top:0;right:0;width:58px;height:var(--bd-band);min-height:44px;padding:0 2px}
+[data-ui="board"] #game.land.b-col .dock .turnrow .turnbar{left:0;right:0;width:auto;top:calc(var(--bd-band) + var(--bd-gap) / 2 - 1px)}
+[data-ui="board"] #game.land.b-col .dock .b-acts:not(.b-sz):not(.b-idle),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz):not(.b-idle){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px;gap:6px}
+[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz) .b-more{grid-column:auto}
+[data-ui="board"] #game.land.b-col .dock .b-acts.b-sz{grid-template-columns:44px minmax(0,1fr) minmax(84px,.9fr);gap:6px}
+[data-ui="board"] #game.land.b-col .dock .act-btn{flex-direction:column;gap:0;padding:0 2px}
+[data-ui="board"] #game.land.b-col .dock .act-btn b,[data-ui="board"] #game.land.b-col .dock .act-btn span{font-size:var(--b-t-14)}
+[data-ui="board"] #game.land.b-col .dock .preacts.b-acts button:not(.b-more){font-size:12px}
+[data-ui="board"] #game.land.b-col .dock #controls>.info-line:only-child{height:var(--bd-row)}
 @media (prefers-reduced-motion:reduce){
   [data-ui="board"] #game #seats .seat.b-seat{transition:none}
   [data-ui="board"] #game .dock .act-btn{transition:none}
   [data-ui="board"] #game .dock .act-btn:active{transform:none}
+  [data-ui="board"] #game .b-hud,[data-ui="board"] #game .b-hud:active{transition:none;transform:none}
 }
