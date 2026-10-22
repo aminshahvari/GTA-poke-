@@ -15,9 +15,11 @@ const size = n => n >= 1048576 ? MB(n) : KB(n);
 const results = [];
 let LIMITS = null;
 
+// the preview's accounts are wiped on every deploy, so a saved sign-in can stop working: say so plainly, before any work
+function signedOut(){ $('lab').hidden = true; $('signin').hidden = false; window.scrollTo(0, 0); }
 async function call(name, body){
   const r = await fetch('/media/api/' + name, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token, ...(club ? { 'x-club': club } : {}) }, body: JSON.stringify(body || {}) });
-  const j = await r.json().catch(() => ({})); if(!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j;
+  const j = await r.json().catch(() => ({})); if(r.status === 401) signedOut(); if(!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j;
 }
 async function upload(kind, blob, group, w, h){
   const s = await call('slot', { kind, bytes: blob.size, group });
@@ -292,5 +294,5 @@ $('nextVideo').onclick = nextVideo;
 (async () => {
   if(!token){ $('signin').hidden = false; return; }
   $('lab').hidden = false;
-  try{ LIMITS = (await call('list')).limits; feed(); }catch(e){ status(e.message); }
+  try{ LIMITS = (await call('list')).limits; feed(); }catch(e){ if(/Sign in/.test(e.message)) signedOut(); else status(e.message); }
 })();
