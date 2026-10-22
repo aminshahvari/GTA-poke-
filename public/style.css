@@ -2415,6 +2415,18 @@ body{background:var(--lx-ink)}
   .hud-lead .hud-chips{padding:2px 6px}
   .hud-badges{gap:8px}
 }
+/* one row (480px and wider): the modules shrink to make room, but never below their own content (they shrank together,
+   so the leader pill spilled over by 2px at 1280x800); the leader's name is what gives way, with an ellipsis */
+@media (min-width:480px){
+  #game:not(.land) .field-bar{padding-left:8px;padding-right:8px}
+  #game:not(.land) .field-bar>.hud-mod{min-width:min-content}
+  #game:not(.land) .field-bar>.hud-mod:not(.hud-lead,.hud-rank){padding-left:6px;padding-right:6px}
+  #game:not(.land) .field-bar .hud-lbl{letter-spacing:.1em}
+  #game:not(.land) .hud-rank{padding-left:9px;padding-right:9px}
+  #game:not(.land) .hud-lead{margin:0 3px;gap:6px}
+  #game:not(.land) .hud-lt{min-width:76px}
+  #game:not(.land) .hud-lead .hud-chips{padding:2px 5px}
+}
 /* ---------- sideways: the column beside the table (owner's request, 2026-10-22) ----------
    A TV side panel: the tournament HUD (#fieldBar) at the top of the column, the sponsor under it (logo, name, category,
    the prize, See their page), the status box and the action buttons at the bottom as before. The table gets the full
