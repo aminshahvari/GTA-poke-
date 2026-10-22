@@ -2567,3 +2567,9 @@ body{background:var(--lx-ink)}
 #game.row1.hud-in .clock{column-gap:5px}
 #game.row1.hud-in .clock .hdr-btns{gap:5px}
 #game.row1.hud-in .clock .menu-btn{min-width:36px;padding:0 7px}
+/* the watchers count says what it is (owner, 2026-10-22: the eye alone was not understood) */
+.hud-badge .hud-wl{font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--hud-lbl);margin-left:1px}
+#game.hud-in .hud-badge .hud-wl{font-size:10px}
+/* (room for the word: the tables count gives way in the bar; it stays in the lobby's live card) */
+#fieldBar .hud-badge.hud-tb{display:none}
+#game.land .hud-badges{gap:6px} #game.land .hud-badge .hud-wl{font-size:10px} #game.land .hud-avg .hud-lbl{letter-spacing:.04em}
