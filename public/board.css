@@ -50,6 +50,27 @@
   --b-seat-dur:220ms; --b-glow-dur:400ms;
   --b-slide:1;
 
+  /* B2, the table: tones mixed from the tokens above (no new colour: each is a token, a share of one, or two mixed) */
+  --b-shadow:color-mix(in srgb,var(--b-bg) 60%,transparent);       /* drop shadows under the rail, plates, cards and buttons */
+  --b-scrim:color-mix(in srgb,var(--b-bg) 55%,transparent);        /* behind the table menu */
+  --b-ground-hi:color-mix(in oklab,var(--b-surface-2) 70%,var(--b-bg)); /* the navy lift at the top of the table screen */
+  --b-rail-top:color-mix(in oklab,var(--b-rail),var(--b-text) 7%); --b-rail-foot:color-mix(in oklab,var(--b-rail),var(--b-bg) 40%);
+  --b-felt-hi:color-mix(in oklab,var(--b-felt),var(--b-text) 9%);   /* the felt's lit middle (radial: lit middle, --b-felt, --b-felt-edge at the rail) */
+  --b-watermark:color-mix(in srgb,var(--b-text) 7%,transparent);
+  --b-pill:color-mix(in srgb,var(--b-surface) 80%,transparent);     /* the pot and the chips: --b-surface at 80% (§3.4) */
+  --b-slot:color-mix(in srgb,var(--b-bg) 25%,transparent);          /* an undealt board card (§3.4) */
+  --b-plate:color-mix(in srgb,var(--b-bg) 86%,transparent);         /* a name plate (§3.3) */
+  --b-av-hi:color-mix(in srgb,var(--b-text) 12%,transparent);       /* the initials disc's soft light */
+  --b-gold-glow:color-mix(in srgb,var(--b-gold) 45%,transparent);   /* the glow round the player to act and the winner */
+  --b-btn-hi:color-mix(in srgb,var(--b-text) 18%,transparent);      /* an action button's top edge */
+  --b-act-call:color-mix(in oklab,var(--b-online),var(--b-text) 45%); /* "Call" / "Check" in a name line (spec #9fe3c2) */
+  --b-good:var(--b-online); --b-bad:color-mix(in oklab,var(--b-live),var(--b-text) 22%); /* the helper's chance to win */
+  --b-on-warn:var(--b-raise-label);                                 /* "Disconnected" on the warning orange */
+  --b-dealer:var(--b-text); --b-on-dealer:var(--b-bg);              /* the dealer button */
+
+  /* B2, the dock (§3.5): its padding, the info line's height, the gap, the action row (upright), the row sideways */
+  --bd-pad:8px; --bd-band:48px; --bd-gap:8px; --bd-row:var(--b-act-h); --bd-land-row:48px;
+
   /* the older names, pointed at the board's (palette and type only: radii and spacing stay as they are until B2) */
   --display:var(--b-font); --body:var(--b-font); --cond:var(--b-font); --lx-serif:var(--b-font);
   --ink:var(--b-bg); --panel:var(--b-surface); --panel2:var(--b-surface-2); --text:var(--b-text); --muted:var(--b-text-2);
@@ -98,4 +119,258 @@
 @media (prefers-reduced-motion:reduce){
   [data-ui="board"]{--b-press-scale:1; --b-slide:0; --b-sheet-dur:0ms}
   [data-ui="board"] .b-press,[data-ui="board"] .b-press:active{transform:none;transition:none}
+}
+
+/* ======================================================================================================================
+   B2: the table (spec §3). Upright and sideways, the table is laid out in public/app.js (boardGeo): the rail box per
+   size class, the seats on the middle of the rail, the pot, the board and the chips. Here: how each piece looks.
+   The size class is on the table area (data-bcls: P-L, P-M, P-S, L); the seat sizes come from it as custom properties
+   (--av avatar, --pw/--ph name plate, --cwb card back, --hw your cards, --hph/--hpw your plate).
+   ====================================================================================================================== */
+[data-ui="board"] #game{background:radial-gradient(120% 70% at 50% 0%,var(--b-ground-hi) 0%,var(--b-bg) 62%);color:var(--b-text)}
+[data-ui="board"] #game .table-area{margin:0 4px}
+
+/* ---------- the rail and the felt (§3.1): a racetrack, the dark rail with its gold hairline, the felt lit in the middle ---------- */
+[data-ui="board"] #game .felt{border-radius:999px;background:linear-gradient(180deg,var(--b-rail-top),var(--b-rail) 40%,var(--b-rail) 70%,var(--b-rail-foot));
+  box-shadow:0 0 0 1px var(--b-hair-gold),0 18px 40px var(--b-shadow),0 4px 10px var(--b-shadow),inset 0 1px 0 var(--b-hair)}
+[data-ui="board"] #game .felt::before{inset:var(--rw);border-radius:999px;background:radial-gradient(ellipse 72% 58% at 50% 42%,var(--b-felt-hi) 0%,var(--b-felt) 46%,var(--b-felt-edge) 100%);
+  box-shadow:0 0 0 1px var(--b-rail-hi),inset 0 0 0 1px var(--b-rail-hi),inset 0 0 44px var(--b-shadow)}
+[data-ui="board"] #game .felt::after{content:"BLINDRISE";top:60%;font-family:var(--b-font);font-weight:600;font-size:13px;letter-spacing:.5em;color:var(--b-watermark)}
+[data-ui="board"] #game .table-area.msg-on .felt::after{opacity:0}
+
+/* ---------- the middle (§3.4): the pot pill with its chip, the board, the winner line ---------- */
+[data-ui="board"] #game .pot{background:var(--b-pill);box-shadow:inset 0 0 0 1px var(--b-hair);color:var(--b-text);font-size:var(--b-t-14);font-weight:600;padding:3px 12px 3px 6px;min-height:26px;gap:6px}
+[data-ui="board"] #game .board{gap:6px}
+[data-ui="board"] #game .slot{border-radius:6px;border:1px solid var(--b-hair);background:var(--b-slot)}
+[data-ui="board"] #game .card.board{border-radius:6px}
+[data-ui="board"] #game .center .msg{color:var(--b-text);font-size:var(--b-t-13);font-weight:600;line-height:1.3;text-shadow:0 1px 2px var(--b-shadow)}
+
+/* ---------- a seat (§3.3): drawn round its avatar's centre ---------- */
+[data-ui="board"] #game #seats .seat.b-seat{width:0;height:0;display:block;transform:none;transition:opacity var(--b-seat-dur) ease}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero) .av{position:absolute;left:calc(var(--av) / -2);top:calc(var(--av) / -2);width:var(--av);height:var(--av);z-index:3}
+[data-ui="board"] #game #seats .seat .av.b-av{border:2px solid var(--b-hair-gold);background:radial-gradient(circle at 34% 28%,var(--b-av-hi),transparent 60%),var(--b-surface-2);color:var(--b-text);
+  font-weight:600;font-size:calc(var(--av) * .34);letter-spacing:.02em;box-shadow:0 4px 10px var(--b-shadow);box-sizing:border-box}
+[data-ui="board"] #game #seats .seat .av.b-av .emo{font-size:calc(var(--av) * .5)}
+/* the player to act: a bright gold ring with a glow; the ring's sweep is their time running out (--f, app.js tickClock) */
+[data-ui="board"] #game #seats .seat.acting .av.b-av{border-color:var(--b-gold);box-shadow:0 0 0 2px var(--b-gold-glow),0 0 18px var(--b-gold-glow)}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero) .shot{position:absolute;left:calc(var(--av) / -2 - 4px);top:calc(var(--av) / -2 - 4px);right:auto;bottom:auto;width:calc(var(--av) + 8px);height:calc(var(--av) + 8px);
+  border-radius:50%;background:conic-gradient(var(--b-gold) calc(var(--f,1) * 360deg),transparent 0);-webkit-mask:radial-gradient(closest-side,transparent calc(100% - 3px),var(--b-bg) calc(100% - 3px));mask:radial-gradient(closest-side,transparent calc(100% - 3px),var(--b-bg) calc(100% - 3px));z-index:4;overflow:visible}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero) .shot i{display:none}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero) .shot:has(.dc){background:conic-gradient(var(--b-warn) calc(var(--f,1) * 360deg),transparent 0)}
+/* the presence dot, at about seven o'clock: online, away, disconnected (the word is under the plate too) */
+[data-ui="board"] #game #seats .b-dot{position:absolute;left:calc(var(--av) * -.42);top:calc(var(--av) * .22);width:8px;height:8px;border-radius:50%;background:var(--b-online);box-shadow:0 0 0 2px var(--b-bg);z-index:5}
+[data-ui="board"] #game #seats .b-dot.away{background:var(--b-away)}
+[data-ui="board"] #game #seats .b-dot.dc{background:var(--b-warn)}
+/* the name plate under the avatar: the name, the stack in gold; moved in from the screen's edge by --sx */
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero) .plate{position:absolute;left:0;top:calc(var(--av) / 2 - 6px);margin:0;transform:translateX(calc(-50% + var(--sx,0px)));
+  min-width:64px;max-width:var(--pw);height:var(--ph);box-sizing:border-box;padding:6px 7px 1px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;z-index:2;
+  background:var(--b-plate);border:1px solid var(--b-hair);border-radius:var(--b-r-plate);box-shadow:0 4px 10px var(--b-shadow);text-align:center}
+[data-ui="board"] #game #seats .seat.b-seat.pl-l:not(.hero) .plate{top:calc(var(--ph) / -2);padding:3px 7px;transform:translateX(calc(-100% - var(--av) / 2 - 4px))}
+[data-ui="board"] #game #seats .seat.b-seat.pl-r:not(.hero) .plate{top:calc(var(--ph) / -2);padding:3px 7px;transform:translateX(calc(var(--av) / 2 + 4px))}
+[data-ui="board"] #game #seats .seat.b-seat .nm{font-size:var(--b-t-14);font-weight:600;line-height:1.12;color:var(--b-text);max-width:calc(var(--pw) - 14px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:0}
+[data-ui="board"] #game #seats .seat.b-seat .st{font-size:var(--b-t-13);font-weight:600;line-height:1.12;color:var(--b-gold-text);font-variant-numeric:tabular-nums}
+[data-ui="board"] #game .table-area[data-bcls="P-S"] #seats .seat.b-seat .nm{font-size:var(--b-t-13)}
+[data-ui="board"] #game .table-area[data-bcls="P-S"] #seats .seat.b-seat .st,[data-ui="board"] #game .table-area[data-bcls="L"] #seats .seat.b-seat .st{font-size:12px}
+[data-ui="board"] #game .table-area[data-bcls="L"] #seats .seat.b-seat .nm{font-size:var(--b-t-13)}
+/* the last action, "Winner" or a showdown hand, in the name line, in its colour */
+[data-ui="board"] #game #seats .seat.b-seat .nm.nm-act{color:var(--b-text)}
+[data-ui="board"] #game #seats .seat.b-seat .nm.nm-act:is(.act-raise,.act-bet,.act-all-in,.won,.hand){color:var(--b-gold-text)}
+[data-ui="board"] #game #seats .seat.b-seat .nm.nm-act:is(.act-call,.act-check){color:var(--b-act-call)}
+[data-ui="board"] #game #seats .seat.b-seat .nm.nm-act.act-fold{color:var(--b-text-3)}
+[data-ui="board"] #game #seats .seat.b-seat .st.allin{color:var(--b-gold-text)}
+/* a folded seat: its avatar, dot and cards at half; its plate stays readable, the name and stack in --b-text-2 */
+[data-ui="board"] #game #seats .seat.b-seat.folded:not(.hero){opacity:1}
+[data-ui="board"] #game #seats .seat.b-seat.folded:not(.hero) :is(.av,.b-dot,.hole){opacity:.5;filter:none}
+[data-ui="board"] #game #seats .seat.b-seat.folded:not(.hero) .plate{opacity:1;filter:none}
+[data-ui="board"] #game #seats .seat.b-seat.folded:not(.hero) .plate :is(.nm,.nm.nm-act.act-fold,.st){color:var(--b-text-2)}
+[data-ui="board"] #game #seats .seat.b-seat.win .plate{border-color:var(--b-gold);box-shadow:0 0 0 1px var(--b-gold),0 0 18px var(--b-gold-glow)}
+/* the status in words under the plate (Muse's amendment 1): Away, Disconnected */
+[data-ui="board"] #game #seats .seat.b-seat .badge.b-st{position:absolute;left:0;bottom:auto;top:calc(var(--av) / 2 - 6px + var(--ph) + 2px);transform:translateX(calc(-50% + var(--sx,0px)));
+  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:14px;padding:1px 6px;border-radius:var(--b-r-chip);white-space:nowrap;z-index:2;
+  background:var(--b-surface-2);color:var(--b-text);box-shadow:inset 0 0 0 1px var(--b-hair)}
+[data-ui="board"] #game #seats .seat.b-seat .badge.b-st.dc{background:var(--b-warn);color:var(--b-on-warn);box-shadow:none}
+[data-ui="board"] #game #seats .seat.b-seat.pl-l .badge.b-st{top:calc(var(--ph) / 2 + 2px);transform:translateX(calc(-50% - var(--av) / 2 - 4px - var(--pw) / 2))}
+[data-ui="board"] #game #seats .seat.b-seat.pl-r .badge.b-st{top:calc(var(--ph) / 2 + 2px);transform:translateX(calc(-50% + var(--av) / 2 + 4px + var(--pw) / 2))}
+/* the two cards, tucked behind the avatar at its top, on the outer side (--hx); face up at a showdown */
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole{position:absolute;left:calc(var(--hx,0px) - var(--cwb) * 1.15);top:calc(var(--av) / -2 + 8px - var(--cwb) * 1.4 + var(--hy,0px));bottom:auto;right:auto;
+  transform:none;margin:0;width:auto;min-height:0;display:flex;z-index:1}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole .card.mini{--w:var(--cwb);border-width:1.5px;box-shadow:0 2px 4px var(--b-shadow)}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole .card.mini:first-child{transform:rotate(-8deg)}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole .card.mini+.card.mini{margin-left:calc(var(--cwb) * -.45);transform:rotate(8deg)}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole.shown{left:calc(var(--cwb) * -1.45);top:calc(var(--av) / -2 - var(--cwb) * 1.75 + var(--hy,0px));z-index:4}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole.shown .card.show{--w:calc(var(--cwb) * 1.45)}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole.shown .card.show:first-child{transform:rotate(-5deg)}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole.shown .card.show+.card.show{margin-left:-4px;transform:rotate(5deg)}
+
+/* ---------- your seat (§3.4): your cards over the bottom rail, "You" and your stack on the plate under it ---------- */
+[data-ui="board"] #game #seats .seat.b-seat.hero{z-index:6}
+[data-ui="board"] #game #seats .seat.b-seat.hero .plate{position:absolute;left:0;top:calc(var(--hph) / -2);margin:0;transform:translateX(-50%);width:var(--hpw);min-width:0;height:var(--hph);box-sizing:border-box;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:2px 10px;background:var(--b-plate);border:1px solid var(--b-hair-gold);border-radius:var(--b-r-plate);box-shadow:0 6px 16px var(--b-shadow);overflow:hidden}
+[data-ui="board"] #game #seats .seat.b-seat.hero .plate .av{display:none}
+[data-ui="board"] #game #seats .seat.b-seat.hero .pl-txt{text-align:center;min-width:0;max-width:100%}
+[data-ui="board"] #game #seats .seat.b-seat.hero.acting .plate{border-color:var(--b-gold);box-shadow:0 0 0 1px var(--b-gold),0 0 18px var(--b-gold-glow)}
+[data-ui="board"] #game #seats .seat.b-seat.hero .shot{left:8px;right:8px;bottom:2px;height:2px;background:var(--b-hair)}
+[data-ui="board"] #game #seats .seat.b-seat.hero .shot i{background:var(--b-gold)}
+[data-ui="board"] #game #seats .seat.b-seat.hero>.hole{position:absolute;left:0;bottom:calc(var(--hph) / 2 + 1px);top:auto;transform:translateX(-50%);margin:0;display:flex;gap:0;width:max-content;min-height:0}
+[data-ui="board"] #game #seats .seat.b-seat.hero.hside>.hole{left:calc(var(--hpw) / 2 + var(--hw) * .16 + 4px);transform:none;bottom:calc(var(--hph) / -2)}
+[data-ui="board"] #game #seats .seat.b-seat.hero .card.hero{--w:var(--hw);box-shadow:0 6px 14px var(--b-shadow)}
+/* (fanned on their outer bottom corners, so no corner dips onto your plate) */
+[data-ui="board"] #game #seats .seat.b-seat.hero .card.hero:first-child{transform:rotate(-6deg);transform-origin:0 100%;margin-right:-4px}
+[data-ui="board"] #game #seats .seat.b-seat.hero .card.hero+.card.hero{transform:rotate(6deg);transform-origin:100% 100%}
+[data-ui="board"] #game #seats .seat.b-seat.hero .badge.b-st{position:absolute;left:calc(var(--hpw) / 2 + 6px);top:-9px;bottom:auto;transform:none}
+
+/* ---------- an empty seat: "+" (not tappable, hidden from screen readers: tournament seats are assigned, §9.4) ---------- */
+[data-ui="board"] #game .empty-seat.b-plus{width:var(--av);height:var(--av);border:1px solid var(--b-hair);border-style:solid;background:var(--b-surface);color:var(--b-text-3);font-size:20px;font-weight:300;letter-spacing:0;pointer-events:none;box-sizing:border-box}
+
+/* ---------- chips and the dealer button ---------- */
+[data-ui="board"] #game .bet{background:var(--b-pill);box-shadow:inset 0 0 0 1px var(--b-hair);color:var(--b-text);font-size:var(--b-t-13);font-weight:600;padding:2px 8px 2px 3px;gap:5px}
+[data-ui="board"] #game .dealer{width:22px;height:22px;background:var(--b-dealer);color:var(--b-on-dealer);font-size:11px;font-weight:800;box-shadow:0 2px 5px var(--b-shadow)}
+
+/* ---------- the dock (§3.5): the info line, then the action row; one height in every state ---------- */
+[data-ui="board"] #game .dock{position:relative;flex:none;display:block;margin:0;padding:0 12px;min-height:0;z-index:25;background:none;
+  height:calc(var(--bd-pad) * 2 + var(--bd-band) + var(--bd-gap) + var(--bd-row) + var(--sa-b))}
+[data-ui="board"] #game .dock .controls{position:static;display:block;min-height:0;height:auto;padding:0;margin:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap)) 0 0;background:none}
+/* the smallest phones (P-S): a tighter dock, so the table keeps 0.90 of the width at h/w 1.25 or more */
+[data-ui="board"] #game[data-bcls="P-S"]{--bd-pad:6px; --bd-band:44px; --bd-gap:6px; --bd-row:52px}
+[data-ui="board"] #game[data-bcls="P-S"] .dock #helper.b-info{font-size:12px;line-height:14px}
+/* the info line's place: the hand helper; else the table's news (whose turn, the result) over the free-play line */
+[data-ui="board"] #game .dock :is(#helper,.info-line,#playLine){position:absolute;left:12px;right:12px;top:var(--bd-pad);margin:0;box-sizing:border-box;text-align:center;background:none;border:0;border-radius:0;box-shadow:none}
+[data-ui="board"] #game .dock #helper.b-info{height:var(--bd-band);display:flex;align-items:center;justify-content:center;flex-wrap:wrap;align-content:center;column-gap:5px;padding:0 4px;
+  font-size:var(--b-t-13);font-weight:500;line-height:15px;color:var(--b-text-2);cursor:default;overflow:hidden}
+[data-ui="board"] #game .dock #helper.b-info[hidden]{display:none}
+[data-ui="board"] #game .dock #helper.b-info .h-top{display:inline;height:auto}
+/* (the chance to win a little larger, on the line's own height: three lines fit the band) */
+[data-ui="board"] #game .dock #helper.b-info :is(.h-top,.h-top *){line-height:inherit}
+[data-ui="board"] #game .dock #helper.b-info .h-eq{font-size:1.15em;line-height:0}
+[data-ui="board"] #game .dock #helper.b-info .h-eq *{line-height:0}
+[data-ui="board"] #game .dock #helper.b-info .h-name{display:inline;font-size:inherit;color:var(--b-text);font-weight:600;white-space:normal;overflow:visible}
+[data-ui="board"] #game .dock #helper.b-info .h-eq{font-weight:600;color:var(--b-text)}
+[data-ui="board"] #game .dock #helper.b-info .h-eq small{display:inline;font-size:inherit;font-weight:500;color:var(--b-text-2)}
+[data-ui="board"] #game .dock #helper.b-info .h-eq.good{color:var(--b-good)}
+[data-ui="board"] #game .dock #helper.b-info .h-eq.mid{color:var(--b-gold-text)}
+[data-ui="board"] #game .dock #helper.b-info .h-eq.bad{color:var(--b-bad)}
+[data-ui="board"] #game .dock #helper.b-info .h-line{display:inline;white-space:normal;line-height:inherit;color:var(--b-text-2);-webkit-line-clamp:unset;overflow:visible}
+[data-ui="board"] #game .dock #helper.b-info .h-line::before{content:'· '}
+[data-ui="board"] #game .dock #helper.b-info :is(.h-have,.h-odds,.h-w,.h-bar,.h-more){display:none}
+[data-ui="board"] #game .dock #helper.b-info .h-odds-s{display:inline}
+/* (a block, centred by align-content, not a flex box: a flex box would split "Winning hand: <b>…</b>" into items and drop the space) */
+[data-ui="board"] #game .dock .info-line{height:calc(var(--bd-band) - 15px);display:block;align-content:center;padding:0 4px;font-size:var(--b-t-13);font-weight:500;line-height:1.3;color:var(--b-text-2);overflow:hidden}
+[data-ui="board"] #game .dock .info-line b{color:var(--b-text);font-weight:600}
+[data-ui="board"] #game .dock .info-line .btn{min-height:40px}
+[data-ui="board"] #game .dock #playLine{top:calc(var(--bd-pad) + var(--bd-band) - 15px);height:15px;padding:0;font-size:11px;line-height:15px;color:var(--b-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:1}
+[data-ui="board"] #game .dock:has(#helper:not([hidden])) :is(.info-line:not(#controls>:only-child),#playLine),[data-ui="board"] #game .dock:has(.sizing) :is(#helper,.info-line,#playLine){display:none}
+/* (an action on its way: "Call · sending…" stands in the action row, in place of the buttons, the info line kept above it) */
+[data-ui="board"] #game .dock #controls>.info-line:only-child{position:static;width:auto;height:var(--bd-row);color:var(--b-text-2)}
+/* your turn: "+30s" at the right of the info line (44 px tall), the time bar over the action row for the last 10 s */
+[data-ui="board"] #game .dock .turnrow{position:absolute;left:12px;right:12px;top:var(--bd-pad);height:var(--bd-band);margin:0;display:block;pointer-events:none;z-index:2}
+[data-ui="board"] #game .dock .turnrow .xtime{position:absolute;right:0;top:calc((var(--bd-band) - 44px) / 2);height:44px;min-height:44px;min-width:60px;padding:0 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
+  pointer-events:auto;border-radius:var(--b-r-btn);background:var(--b-surface);border:1px solid var(--b-hair-gold);color:var(--b-gold-text);font-size:var(--b-t-13);font-weight:600;line-height:1.1}
+[data-ui="board"] #game .dock .turnrow .xtime small{font-size:10px;font-weight:500;color:var(--b-text-2)}
+[data-ui="board"] #game .dock .turnrow .xtime:disabled{display:none}
+[data-ui="board"] #game .dock .turnrow .xtime::after{display:none}
+[data-ui="board"] #game .dock:has(.xtime:not(:disabled)) #helper.b-info{right:80px}
+[data-ui="board"] #game .dock .turnrow .turnbar{position:absolute;left:0;right:0;top:calc(var(--bd-band) + var(--bd-gap) / 2 - 1px);height:2px;margin:0;border-radius:1px;background:none;opacity:0;transition:opacity .2s}
+[data-ui="board"] #game .dock .turnrow .turnbar.late{opacity:1}
+[data-ui="board"] #game .dock .turnrow .turnbar i,[data-ui="board"] #game .dock .turnrow .turnbar i.low,[data-ui="board"] #game .dock .turnrow .turnbar i.bank{background:var(--b-gold);border-radius:1px}
+[data-ui="board"] #game .dock .turnrow .turnbar span{display:none}
+[data-ui="board"] #game .dock:has(.sizing) .turnrow .xtime{display:none}
+/* the action row: Fold, Call and Raise a third each, "⋯" 44 wide; 60 tall */
+[data-ui="board"] #game .dock .b-acts{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px;gap:8px;height:var(--bd-row);align-items:stretch}
+[data-ui="board"] #game .dock .b-acts.b-idle{grid-template-columns:minmax(0,1fr) 44px}
+[data-ui="board"] #game .dock .b-acts.b-idle::before{content:''}
+[data-ui="board"] #game .dock .act-btn{min-height:0;height:100%;border-radius:var(--b-r-btn);border:0;gap:1px;padding:0 4px;box-shadow:inset 0 1px 0 var(--b-btn-hi),0 6px 14px var(--b-shadow);transition:transform var(--b-press-dur) ease-out}
+[data-ui="board"] #game .dock .act-btn:active{transform:scale(var(--b-press-scale));filter:none}
+[data-ui="board"] #game .dock .act-btn b{font-family:var(--b-font);font-size:var(--b-t-15);font-weight:600;letter-spacing:0;text-transform:none;line-height:1.15}
+[data-ui="board"] #game .dock .act-btn span{font-size:var(--b-t-17);font-weight:600;opacity:1;line-height:1.15}
+[data-ui="board"] #game .dock .act-btn.fold{background:var(--b-fold);color:var(--b-fold-label);border:0}
+[data-ui="board"] #game .dock .act-btn.fold b{font-size:var(--b-t-17)}
+[data-ui="board"] #game .dock .act-btn.call{background:var(--b-call);color:var(--b-call-label)}
+[data-ui="board"] #game .dock .act-btn.raise,[data-ui="board"] #game .dock .act-btn.raise.allin{background:var(--b-raise);color:var(--b-raise-label);box-shadow:inset 0 1px 0 var(--b-btn-hi),0 6px 14px var(--b-shadow)}
+[data-ui="board"] #game .dock .act-btn.raise span,[data-ui="board"] #game .dock .act-btn.raise.allin span{color:var(--b-raise-label)}
+[data-ui="board"] #game .dock .act-btn.back{background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);box-shadow:none}
+[data-ui="board"] #game .dock .act-btn.back b{font-size:24px;font-weight:400}
+[data-ui="board"] #game .dock .b-more{position:relative;height:100%;min-height:44px;border-radius:var(--b-r-btn);background:var(--b-more);border:1px solid var(--b-more-line);color:var(--b-more-icon);font-size:20px;font-weight:600;line-height:1;padding:0}
+[data-ui="board"] #game .dock .b-more .b-unread{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--b-live);display:none}
+[data-ui="board"] #game .dock .b-more.unread .b-unread{display:block}
+/* not your turn: the quick actions in the same row, neutral (§3.5) */
+[data-ui="board"] #game .dock .preacts.b-acts{grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px;gap:8px}
+[data-ui="board"] #game .dock .preacts.b-acts button:not(.b-more){min-height:0;height:100%;border-radius:var(--b-r-btn);background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);font-size:var(--b-t-13);font-weight:600;padding:0 4px;gap:6px;line-height:1.2;text-align:center}
+[data-ui="board"] #game .dock .preacts.b-acts button[aria-pressed=true]{background:var(--b-gold-fill);border-color:var(--b-gold);color:var(--b-text)}
+[data-ui="board"] #game .dock .preacts.b-acts button i{border-color:var(--b-text-3)}
+[data-ui="board"] #game .dock .preacts.b-acts button[aria-pressed=true] i{background:var(--b-gold);border-color:var(--b-gold)}
+/* the sizing: the presets in the info line's place, the slider in the action row, the gold button confirms */
+[data-ui="board"] #game .dock .sizing.b-sizing{position:absolute;left:12px;right:12px;top:var(--bd-pad);height:var(--bd-band);margin:0;padding:0;display:block;background:none;border:0;box-shadow:none;z-index:3}
+[data-ui="board"] #game .dock .sizing.b-sizing .amt{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+[data-ui="board"] #game .dock .sizing.b-sizing .sz-presets{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);grid-template-columns:none;gap:6px;height:100%}
+[data-ui="board"] #game .dock .sizing.b-sizing .sz-presets button{min-height:44px;height:100%;padding:0 2px;border-radius:var(--b-r-btn);background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);font-size:var(--b-t-13);font-weight:600;letter-spacing:0;white-space:nowrap}
+[data-ui="board"] #game .dock .sizing.b-sizing .sz-presets button[aria-pressed=true]{background:var(--b-gold-fill);border-color:var(--b-gold);color:var(--b-gold-text)}
+[data-ui="board"] #game .dock .sizing.b-sizing .sz-presets button::after{display:none}
+[data-ui="board"] #game .dock .b-acts.b-sz{grid-template-columns:44px minmax(0,1fr) minmax(96px,.9fr)}
+[data-ui="board"] #game .dock .b-sz .sz-slider{display:flex;align-items:center;gap:4px;min-width:0}
+[data-ui="board"] #game .dock .b-sz .sz-slider .step{width:44px;height:44px;flex:none;border-radius:50%;background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);font-size:20px}
+[data-ui="board"] #game .dock .b-sz .sz-slider .step::after{display:none}
+[data-ui="board"] #game .dock .b-sz .sz-slider input{flex:1;min-width:0;width:100%;height:44px;background:transparent;accent-color:var(--b-gold)}
+
+/* ---------- "⋯": the table menu, a sheet from the bottom ---------- */
+[data-ui="board"] #game .b-sheet{position:absolute;inset:0;z-index:60;display:flex;align-items:flex-end;background:var(--b-scrim)}
+[data-ui="board"] #game .b-sheet[hidden]{display:none}
+[data-ui="board"] #game .b-sheet-in{width:100%;box-sizing:border-box;padding:10px 12px calc(12px + var(--sa-b));background:var(--b-surface);border-top:1px solid var(--b-hair-gold);border-radius:var(--b-r-sheet) var(--b-r-sheet) 0 0;display:grid;gap:6px;
+  animation:b-up var(--b-sheet-dur) var(--b-sheet-ease) both}
+[data-ui="board"] #game .b-sheet-t{font-size:var(--b-t-13);font-weight:600;color:var(--b-text-2);padding:2px 4px 4px;letter-spacing:.02em}
+[data-ui="board"] #game .b-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:0 14px;border-radius:var(--b-r-btn);background:var(--b-surface-2);border:1px solid var(--b-hair);color:var(--b-text);font-size:var(--b-t-15);font-weight:600;text-align:left}
+[data-ui="board"] #game .b-row small{font-size:var(--b-t-13);font-weight:500;color:var(--b-text-2)}
+[data-ui="board"] #game .b-row[data-unread] small{color:var(--b-gold-text)}
+[data-ui="board"] #game .b-row:disabled{opacity:.5}
+[data-ui="board"] #game .b-row.b-close{justify-content:center;background:none}
+@keyframes b-up{from{transform:translateY(calc(100% * var(--b-slide)))}}
+
+/* ---------- the coach's tip floats just over the dock ---------- */
+[data-ui="board"] #game .dock>.coachtip{top:auto;bottom:calc(100% + 6px)}
+
+/* ---------- sideways (§3.1 L, §9.10): the table in the middle, the action row under it, the info line beside the buttons ---------- */
+[data-ui="board"] #game.land{display:flex;flex-direction:column;padding:0 var(--sa-r) var(--sa-b) var(--sa-l)}
+[data-ui="board"] #game.land .table-area{flex:1;min-height:0}
+[data-ui="board"] #game.land .dock{height:calc(6px * 2 + var(--bd-land-row));padding:0 12px;align-self:stretch}
+[data-ui="board"] #game.land .dock .controls{margin:6px 0 0 auto;width:min(520px,58%)}
+[data-ui="board"] #game.land .dock .b-acts{height:var(--bd-land-row)}
+[data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine){top:6px;right:auto;width:calc(42% - 24px);left:12px}
+[data-ui="board"] #game.land .dock #helper.b-info{height:var(--bd-land-row);justify-content:flex-start;text-align:left;font-size:12px;line-height:14px}
+[data-ui="board"] #game.land .dock .info-line{height:calc(var(--bd-land-row) - 15px);justify-content:flex-start;text-align:left;font-size:12px}
+[data-ui="board"] #game.land .dock #playLine{top:calc(6px + var(--bd-land-row) - 15px);text-align:left}
+[data-ui="board"] #game.land .dock .act-btn{flex-direction:row;gap:5px}
+[data-ui="board"] #game.land .dock .act-btn b,[data-ui="board"] #game.land .dock .act-btn span{font-size:var(--b-t-15)}
+/* (sideways the time row is the dock's own: "+30s" left of the buttons, the time bar over them; the buttons are
+   min(520px, 58%) of the dock's inside, which is the dock less its 12 px sides) */
+[data-ui="board"] #game.land .dock .turnrow{display:contents}
+[data-ui="board"] #game.land .dock .turnrow .xtime{top:6px;right:calc(12px + min(520px,(100% - 24px) * .58) + 8px);width:64px;min-width:0;height:var(--bd-land-row)}
+[data-ui="board"] #game.land .dock .turnrow .turnbar{left:auto;right:12px;width:min(520px,(100% - 24px) * .58);top:3px}
+[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) #helper.b-info{width:calc(42% - 100px)}
+[data-ui="board"] #game.land .dock .sizing.b-sizing{left:12px;right:auto;width:calc(42% - 24px);top:6px;height:var(--bd-land-row)}
+[data-ui="board"] #game.land .dock .sizing.b-sizing .sz-presets{gap:4px}
+[data-ui="board"] #game.land .dock .sizing.b-sizing .sz-presets button{font-size:12px}
+[data-ui="board"] #game.land .seat.b-seat.hero{margin:0}
+[data-ui="board"] #game.land .dock #controls>.info-line:only-child{height:var(--bd-land-row);justify-content:center;text-align:center}
+/* narrow sideways phones (under 760 wide): "+30s" joins the action row, before "⋯", so the info line keeps its width;
+   the buttons read on two lines, as upright */
+@media (max-width:759px){
+  [data-ui="board"] #game.land .dock .controls{width:62%}
+  [data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine),[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) #helper.b-info,[data-ui="board"] #game.land .dock .sizing.b-sizing{width:calc(38% - 24px)}
+  [data-ui="board"] #game.land .dock .turnrow .xtime{right:64px;width:56px;padding:0 2px}
+  [data-ui="board"] #game.land .dock .turnrow .turnbar{width:calc((100% - 24px) * .62)}
+  [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 56px 44px}
+  [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz) .b-more{grid-column:-2}
+  [data-ui="board"] #game.land .dock .act-btn{flex-direction:column;gap:0}
+  [data-ui="board"] #game.land .dock .act-btn b,[data-ui="board"] #game.land .dock .act-btn span{font-size:var(--b-t-14)}
+}
+@media (max-height:359px){
+  [data-ui="board"] #game.land{--bd-land-row:44px}
+}
+@media (max-width:639px),(max-height:359px){
+  [data-ui="board"] #game.land .dock #helper.b-info{font-size:11px;line-height:13px}
+  [data-ui="board"] #game.land .dock #helper.b-info:has(.h-line) .h-name{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  [data-ui="board"] #game #seats .seat.b-seat{transition:none}
+  [data-ui="board"] #game .dock .act-btn{transition:none}
+  [data-ui="board"] #game .dock .act-btn:active{transform:none}
 }
