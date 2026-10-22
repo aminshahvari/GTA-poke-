@@ -222,5 +222,5 @@ async function act(k, d){
   try{ onState(await C.post('/api/' + call, k === 'teams' ? { mode: 'random' } : {})); }catch(e){ C.toast(e.message); }
 }
 
-window.Domino = { init(ctx){ C = ctx; }, onState, homeHTML, directorHTML, wire, openPad, state: () => V };
+window.Domino = { init(ctx){ C = ctx; }, onState, homeHTML, directorHTML, wire, openPad, openTV, state: () => V };
 })();

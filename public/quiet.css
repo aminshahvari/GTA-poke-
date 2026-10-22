@@ -237,3 +237,6 @@
 /* (sideways the helper keeps the height of its fullest state, the hand, the odds and a two-line tip, so a tip
    appearing does not push the dock column up) */
 [data-ui="quiet"] #game.land .helper{min-height:72px;align-content:center}
+
+/* the field-bar HUD (branch field-bar) is shown by the quiet one-line field instead */
+[data-ui="quiet"] #fieldBar{display:none!important}

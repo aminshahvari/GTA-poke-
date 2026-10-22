@@ -28,10 +28,12 @@
 <title>Blindrise — Where Connections Rise</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
 <link rel="stylesheet" href="/style.css">
 <style>body{padding-top:env(safe-area-inset-top,0px)}</style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false"><defs><linearGradient id="hudGold" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#F3E5AB"/><stop offset="1" stop-color="#D8B46A"/></linearGradient></defs></svg>
 <div class="app">
 <!-- Sign in / invite -->
 <section id="auth" class="screen lux" hidden>
@@ -91,9 +93,10 @@
   <div class="stats num">
     <div><small id="tName">Table</small><b id="sPlayers">-</b></div>
     <div><small>Avg stack</small><b id="sAvg">-</b></div>
-    <div><small>Your rank</small><b id="sPos">-</b></div>
+    <div><small id="sPosL">Your rank</small><b id="sPos">-</b></div>
     <div class="hdr-btns"><button class="menu-btn chat-btn" id="chatBtn" aria-label="Table chat">💬<i id="chatDot" hidden></i></button><button class="menu-btn" id="lobbyBtn">Lobby</button></div>
   </div>
+  <div class="field-bar num" id="fieldBar" role="status" aria-label="The whole tournament" hidden></div>
   <div class="table-area" id="tableArea">
     <div class="felt"></div>
     <div class="center">

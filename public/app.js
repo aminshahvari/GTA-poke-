@@ -178,13 +178,13 @@ function connect(){
   if(!token){ return post('/api/status', {}).then(s => s.hasOwner ? welcomeScreen() : authScreen('setup')).catch(() => welcomeScreen()); }
   if(ws) try{ ws.close(); }catch(e){}
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-  ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined })); };
+  ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined, spectate: watching() || undefined })); };
   ws.onmessage = ev => {
     const m = JSON.parse(ev.data);
     if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
     if(m.t === 'club'){ onClub(m.club); return; }
     if(m.t === 'domino'){ window.Domino.onState(m.v); return; }
-    if(m.t === 'table'){ tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); if(m.field) field = m.field; onTable(m.table); return; }
+    if(m.t === 'table'){ if(m.field) field = m.field; tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
     if(m.t === 'invite'){ showInvite(m.code, m.group, m.max); return; }
     if(m.t === 'skillq'){ askSkill(m.rid, m.q); return; }
@@ -208,10 +208,13 @@ function onClub(c){
   club = c; clockSkew = c.now - Date.now();
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   if(c.clubSwitching) clubSwitching(c);
-  $('meChip').innerHTML = `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
-  $('meBtn').onclick = () => openProfile(c.me.id);
-  if($('clubBtn')) $('clubBtn').onclick = pickClub;
-  $('outBtn').onclick = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
+  $('chatBtn').hidden = !!c.spectate; // watchers from another club never see a table's chat
+  $('meChip').innerHTML = c.spectate ? `<button class="club-btn" data-live="home" aria-label="Back to ${esc(c.home.name)}">← ${esc(c.home.name)}</button>` : `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
+  if(!c.spectate){
+    $('meBtn').onclick = () => openProfile(c.me.id);
+    if($('clubBtn')) $('clubBtn').onclick = pickClub;
+    $('outBtn').onclick = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
+  }
   $('dirTab').hidden = !c.me.owner;
   const st = c.tourney && c.tourney.status;
   if(st === 'finished' && lastStatus === 'running'){ view = 'lobby'; watchTid = null; showScreen('lobby'); tab = 'event'; celebrate(); }
@@ -230,6 +233,7 @@ function onClub(c){
 // club switching: remember which club this is; a signed-in member who opens another club's invite link joins it
 let joinTried = false;
 function clubSwitching(c){
+  if(c.spectate) return; // watching a Blindrise game: the app still belongs to the member's own club
   local.set('club', c.club.id);
   if(joinTried || !location.pathname.startsWith('/join/')) return;
   joinTried = true;
@@ -241,6 +245,39 @@ function clubSwitching(c){
 async function pickClub(){
   const id = await modal(`<h2>Your clubs</h2><p>Same name and PIN everywhere. Each club has its own members and Exchange.</p><div class="club-list">${club.clubs.map(x => `<button class="club-pick${x.id === club.club.id ? ' on' : ''}" data-v="${esc(x.id)}">${esc(x.name)}${x.suspended ? ' <small class="cs-tag">Suspended</small>' : ''}</button>`).join('')}</div>`, [{ label: 'Close', value: null }]);
   if(id && id !== club.club.id){ local.set('club', id); location.replace('/'); }
+}
+// The whole tournament, like a TV broadcast (players' feedback, 2026-10-21): how many are still playing and at how many
+// tables, the chip leader of every table, and how many are watching. From the server with every table update ('field').
+let field = null;
+function fieldUI(){
+  const el = $('fieldBar'), T = club && club.tourney;
+  el.hidden = !field || !T || T.status !== 'running';
+  if(el.hidden) return;
+  // laid out like a broadcast HUD (owner's design brief, 2026-10-21): the field, tables and watchers, the average stack,
+  // the chip leader in gold, and your rank as a pill coloured by your stack against the average. Tap a chip count to see
+  // it in big blinds (and back).
+  const L = field.leader, meLead = L && field.rank === 1 && L.name === club.me.name, total = T.entrants || field.players;
+  const bb = E.levelFor(T.level, T.anteMode)[1], out = Math.max(0, Math.min(100, (1 - field.players / Math.max(1, total)) * 100));
+  const mine = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id), avg = T.entrants * T.stack / Math.max(1, T.remaining);
+  const tone = !mine ? '' : mine.stack >= avg * 1.25 ? ' up' : mine.stack >= avg * .75 ? '' : ' down';
+  const vs = mine && Math.abs(mine.stack - avg) > avg * .05 ? (mine.stack > avg ? `<span class="hud-vs up" title="Above the average stack">${Icons.svg('up')}</span>` : `<span class="hud-vs down" title="Below the average stack">${Icons.svg('down')}</span>`) : '';
+  el.innerHTML = `<div class="hud-mod hud-field"><span class="hud-lbl"><i class="hud-dot" aria-hidden="true"></i>Players</span><b class="hud-val">${odo('players', field.players)}<small>/${total}</small></b><span class="hud-prog" aria-hidden="true"><i style="width:${out.toFixed(1)}%"></i></span></div>`
+    + `<div class="hud-mod hud-badges"><span class="hud-badge" title="Tables in play" aria-label="${field.tables} tables">${Icons.svg('table')}<b>${odo('tables', field.tables)}</b></span><span class="hud-badge" title="Watching now" aria-label="${field.watchers} watching">${Icons.svg('eye')}<b>${odo('watch', field.watchers)}</b></span></div>`
+    + `<button type="button" class="hud-mod hud-avg" data-bbtoggle aria-label="Average stack. Tap to switch chips and big blinds"><span class="hud-lbl">Avg stack</span><b class="hud-val">${stackHTML('avg', avg, bb)}</b></button>`
+    + (L ? `<button type="button" class="hud-mod hud-lead${meLead ? ' me' : ''}" data-bbtoggle aria-label="Chip leader ${esc(L.name)}. Tap to switch chips and big blinds">${Icons.svg('crown')}<span class="hud-lt"><span class="hud-lbl">Chip leader</span><b class="hud-name">${meLead ? 'You' : esc(L.name)}</b></span><span class="hud-chips"><b>${stackHTML('lead', L.stack, bb)}</b></span></button>` : '')
+    + (field.rank ? `<div class="hud-mod hud-rank${tone}" title="Your place among everyone still playing"><span class="hud-lbl">Your rank</span><b class="hud-val">${vs}${odo('rank', ord(field.rank))}<small>/${field.players}</small></b></div>` : '');
+  odoPlay(el);
+}
+// chips or big blinds, everywhere a stack is shown in the HUD and on the live card (a tap switches; kept on this phone)
+let bbMode = !!local.get('bbMode', false);
+const bbText = x => (x >= 100 ? Math.round(x) : Math.round(x * 10) / 10).toLocaleString('en-US');
+const stackHTML = (k, n, bb) => bbMode ? `${odo(k, bbText(n / bb))}<i class="bb-pill">BB</i>` : odo(k, fmt(n));
+document.addEventListener('click', e => { if(!e.target.closest('[data-bbtoggle]')) return; bbMode = !bbMode; local.set('bbMode', bbMode); fieldUI(); if(view === 'lobby' && club && club.live) renderLobby(); });
+// numbers that change slide in, like a live feed: each number has a key, and a new value for that key animates
+const odoLast = new Map();
+const odo = (k, v) => `<span class="odo" data-odo="${k}">${v}</span>`;
+function odoPlay(root){
+  root.querySelectorAll('[data-odo]').forEach(x => { const k = x.dataset.odo, v = x.textContent, was = odoLast.get(k); odoLast.set(k, v); if(was != null && was !== v && !reducedMotion()) x.classList.add('odo-in'); });
 }
 function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)) renderTable(); }
 
@@ -259,6 +296,8 @@ function renderLobby(){
   const body = $('lobbyBody');
   $('tabs').hidden = !!club.suspended;
   if(club.suspended){ document.querySelector('.app').classList.remove('wide'); body.innerHTML = suspendedHTML(); wireLobby(); return; }
+  $('tabs').hidden = !!club.spectate;
+  if(club.spectate){ document.querySelector('.app').classList.remove('wide'); body.innerHTML = watchHTML(); boardOnArrival(); tableOnArrival(); return; }
   // Business Club and Opportunity Club stay hidden from members until the owner opens them (Director tab); the owner can always preview
   const clubsOn = !!(club.features && club.features.clubs), clubsVisible = !club.events && (clubsOn || club.me.owner);
   const bizTab = document.querySelector('#tabs [data-tab="biz"]');
@@ -301,7 +340,7 @@ function renderHome(body, clubsOn, showClubs){
   // members get the practice table on Home too (the owner has it in Director); not while seated in a running tournament
   const seated = !!(club.myTable && club.tourney && club.tourney.status === 'running');
   const extra = document.createElement('div'); extra.innerHTML = (clubsOn || club.events ? '' : comingHTML()) + (club.me.owner || seated ? '' : demoCard()) + picNudgeHTML();
-  body.innerHTML = memberHomeHTML(clubsOn || club.me.owner) + beventHTML() + blindriseHTML() + window.Domino.homeHTML() + openClubHTML() + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
+  body.innerHTML = liveHTML() + memberHomeHTML(clubsOn || club.me.owner) + (club.live ? '' : beventHTML()) + blindriseHTML() + window.Domino.homeHTML() + openClubHTML() + (showClubs ? homeNavHTML() : '') + pokerHeadHTML();
   body.append(...cards.slice(0, n), ...[...extra.children]);
   if(showClubs){
     const biz = document.createElement('section'); biz.className = 'hsec hsec-biz'; biz.setAttribute('aria-labelledby', 'hs-biz');
@@ -312,6 +351,7 @@ function renderHome(body, clubsOn, showClubs){
   }
   body.append(...cards.slice(n));
   body.insertAdjacentHTML('beforeend', friendsHTML());
+  odoPlay(body);
   if(showClubs) requestAnimationFrame(navSync);
 }
 // Member Home: a personal welcome and the club's four doors (Poker, Business, Opportunity, card Scanner). Built only from
@@ -688,6 +728,108 @@ async function postBroadcast(){
   try{ await post('/api/platformPost', body); toast('Posted to every club.'); $('bcTitle').value = ''; $('bcBody').value = ''; $('bcWhen').value = ''; }
   catch(e){ modal(`<h2>That didn't work</h2><p>${esc(e.message)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
 }
+// ---------- Live at Blindrise (Issue #25): the top of every member club's home ----------
+// The platform's games, always at the top, never dismissed: the Blindrise club's tournament, the Blindrise Open and
+// dominoes. What is live, what is open, when the next one starts; Watch for anyone, the seat or registration for
+// whoever can play. Built only from club.live and club.bevent: public state and this member's own place, no names.
+const watching = () => { try{ return sessionStorage.getItem('watch'); }catch(e){ return null; } };
+function spectate(ctx, board){ try{ sessionStorage.setItem('watch', ctx); if(board) sessionStorage.setItem('watchBoard', '1'); else sessionStorage.removeItem('watchBoard'); }catch(e){} location.replace('/'); }
+function stopWatching(){ try{ sessionStorage.removeItem('watch'); sessionStorage.removeItem('watchBoard'); }catch(e){} location.replace('/'); }
+const goMain = () => { local.set('club', 'main'); location.replace('/'); };
+function liveHTML(){
+  const L = club.live; if(!L) return '';
+  const p = L.poker, d = L.domino, row = (ic, eye, name, sub, acts, note) => `<div class="lv-row"><span class="hsec-ic ${ic}">${Icons.svg(ic === 'poker' ? 'spade' : 'spark')}</span><div class="lv-t"><span class="eyebrow">${eye}</span><b>${esc(name)}</b><small>${sub}</small>${note ? `<small class="lv-note">${note}</small>` : ''}</div>${acts ? `<div class="lv-acts">${acts}</div>` : ''}</div>`;
+  let rows = '';
+  if(p){
+    const live = p.status === 'running';
+    const sub = live ? `<span class="lv-live">Live</span> · ${p.paused ? 'Paused' : 'Level ' + (p.level + 1)} · ${p.remaining} of ${p.count} left` : `Registration open · ${p.count} registered${p.startAt ? ' · ' + esc(when(p.startAt)) : ''}`;
+    const acts = (p.playing ? '<button class="btn red" data-live="seat-main">Go to your seat</button>' : '')
+      + (live ? `<button class="btn${p.playing ? '' : ' red'}" data-live="watch-main">Watch</button>` : '')
+      + (!p.playing && p.registered && !live ? '<button class="btn" data-live="go-main">Open</button>' : '')
+      + (!p.registered && p.open && L.member ? `<button class="btn${live ? '' : ' red'}" data-live="go-main">Register</button>` : '');
+    const note = p.registered && !p.playing ? (live ? '' : "You're registered.") : !L.member ? (live ? 'Played by Blindrise club members. Watch any table.' : 'Played by Blindrise club members. You can watch every table once it starts.') : '';
+    rows += live && p.tableList ? broadcastHTML(p, acts, note) : row('poker', 'Blindrise · Poker', p.name, sub, acts, note);
+  }
+  if(club.bevent) rows += beventHTML();
+  if(d){
+    const live = d.status === 'running', R = { allfives: 'All Fives', block: 'Block', draw: 'Draw' }[d.rules.preset] || 'Dominoes';
+    const sub = live ? `<span class="lv-live">Live</span> · ${d.playing} ${d.playing === 1 ? 'match' : 'matches'} on the tables · ${d.count} players` : `Registration open · ${d.count} registered · ${R}`;
+    const acts = (live ? '<button class="btn red" data-live="board">Watch the board</button>' : '')
+      + (!live && L.member ? `<button class="btn${d.registered ? '' : ' red'}" data-live="go-main">${d.registered ? 'Open' : 'Register'}</button>` : '');
+    rows += row('opp', 'Blindrise · Dominoes', d.name, sub, acts, !live ? (d.registered ? "You're in." : !L.member ? 'Played by Blindrise club members. You can watch the board once it starts.' : '') : '');
+  }
+  const on = (p && p.status === 'running') || (d && d.status === 'running') || (club.bevent && club.bevent.status === 'running');
+  return `<section class="card-box lv-head" aria-label="Live at Blindrise"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">Live at Blindrise</span>${on ? '<span class="status-pill live">LIVE</span>' : ''}</div>
+    ${rows || '<p class="note lv-none">No Blindrise game right now. Tournaments and dominoes show here the moment registration opens, and you can watch every one live.</p>'}</section>`;
+}
+// The live tournament as a broadcast card (owner's design brief, 2026-10-21, after PokerGO / WPT): a pulsing LIVE badge,
+// the level and blinds, the watchers; then the field, the tables and the overall leader; then a card per table with its
+// seats and its chip leader. Tap a table to watch it. Names here are the table names every watcher already sees.
+function broadcastHTML(p, acts, note){
+  const [sb, bb] = E.levelFor(p.level), out = Math.max(0, Math.min(100, (1 - p.remaining / Math.max(1, p.count)) * 100));
+  const L = p.leader, ini = n => (String(n).match(/[\p{L}\p{N}]+/gu) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  // a leader's name: hover or focus shows a small card with their initials, stack in big blinds and table
+  const vip = (x, table, focus = true) => `<span class="vip"${focus ? ' tabindex="0"' : ''}><span class="vip-n">${esc(x.name)}</span><span class="vip-tip" role="tooltip"><span class="vip-av">${esc(ini(x.name))}</span><span class="vip-t"><b>${esc(x.name)}</b><small>${bbText(x.stack / bb)} BB · Table ${table}</small></span></span></span>`;
+  return `<article class="lv-bc" aria-label="${esc(p.name)}, live">
+    <header class="lv-bc-h"><span class="lv-badge"><i aria-hidden="true"></i>Live tournament</span>
+      <div class="lv-bc-t"><b>${esc(p.name)}</b><small>${p.paused ? 'Paused' : `Level ${p.level + 1} · <span class="mono">${fmt(sb)}/${fmt(bb)}</span>`}</small></div>
+      <span class="lv-bc-w" aria-label="${p.watchers} watching">${Icons.svg('eye')}<b>${odo('lw', p.watchers)}</b><small>Watching</small></span></header>
+    <div class="lv-tele">
+      <div><span class="hud-lbl">Remaining</span><b>${odo('lr', p.remaining)}<small>/${p.count}</small></b><small>Players</small><span class="hud-prog" aria-hidden="true"><i style="width:${out.toFixed(1)}%"></i></span></div>
+      <div><span class="hud-lbl">Active tables</span><b>${odo('lt', p.tables)}</b><small>${p.tables === 1 ? 'Table' : 'Tables'}</small></div>
+      ${L ? `<div class="lv-tele-lead"><span class="hud-lbl">Overall leader</span><b>${Icons.svg('crown')}${vip(L, L.table)}</b><button type="button" class="lv-stack" data-bbtoggle aria-label="Switch chips and big blinds">${stackHTML('ll', L.stack, bb)}</button></div>` : ''}
+    </div>
+    <div class="lv-tcs">${p.tableList.map(t => `<button type="button" class="lv-tc" data-live="watch-table" data-tn="${t.n}" aria-label="Watch table ${t.n}">
+      <span class="lv-tc-top"><span class="lv-tc-n">Table ${t.n}</span>${miniTable(t.seated, p.size)}<span class="lv-tc-cnt"><b>${t.seated}</b>/${p.size}</span></span>
+      ${t.leader ? `<span class="lv-tc-lead">${Icons.svg('chip')}${vip(t.leader, t.n, false)}<span class="lv-tc-st">${stackHTML('t' + t.n, t.leader.stack, bb)}</span></span>` : ''}</button>`).join('')}</div>
+    ${note ? `<p class="lv-note">${note}</p>` : ''}
+    ${acts ? `<div class="lv-acts">${acts}</div>` : ''}</article>`;
+}
+// a miniature oval table with its seats around it: lit gold where someone sits, dim where a seat is open
+function miniTable(seated, size){
+  const nodes = Array.from({ length: size }, (_, i) => { const a = Math.PI / 2 + (i / size) * Math.PI * 2, x = 32 + Math.cos(a) * 27, y = 20 + Math.sin(a) * 15;
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.1" class="${i < seated ? 'on' : ''}"/>`; }).join('');
+  return `<svg class="mini-table" viewBox="0 0 64 40" aria-hidden="true" focusable="false"><ellipse cx="32" cy="20" rx="19" ry="9.5" class="mt-felt"/><ellipse cx="32" cy="20" rx="19" ry="9.5" class="mt-rail"/>${nodes}</svg>`;
+}
+function spectateTable(n){ try{ sessionStorage.setItem('watchTable', String(n)); }catch(e){} spectate('main'); }
+// Watch a table straight from the live card: open it as soon as the tables are here
+function tableOnArrival(){
+  let n = null; try{ n = sessionStorage.getItem('watchTable'); }catch(e){}
+  const t = n && club.tables.find(x => String(x.n) === n); if(!n) return;
+  try{ sessionStorage.removeItem('watchTable'); }catch(e){}
+  if(t) openTable(t.tid);
+}
+// what a member watching a Blindrise game sees instead of the lobby: the tournament, its tables, the domino board
+function watchHTML(){
+  const t = club.tourney, live = t && t.status === 'running', dm = window.Domino.state(), dt = dm && dm.t && dm.t.status === 'running' ? dm.t : null;
+  const tables = live ? club.tables.map(x => `<button class="btn lv-table" data-wt="${esc(x.tid)}">Table ${x.n}<small>${x.players} ${x.players === 1 ? 'player' : 'players'}</small></button>`).join('') : '';
+  const sub = !t ? 'No tournament is playing right now.' : live ? `${t.paused ? 'Paused' : 'Level ' + (t.level + 1)} · ${t.remaining} of ${t.entrants} players left` : t.status === 'registering' ? `Starts ${t.startAt ? esc(when(t.startAt)) : 'when the director is ready'} · ${t.regCount} registered` : 'This tournament has finished.';
+  return `<section class="card-box lv-watch" aria-label="Watching"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">Watching · ${esc(club.club.name)}</span>${live ? '<span class="status-pill live">LIVE</span>' : ''}</div>
+    <h2>${esc(t ? t.name : 'Live at Blindrise')}</h2><p class="br-when">${sub}</p>
+    ${tables ? `<p class="note">Pick a table to watch. Cards show only when players show them.</p><div class="lv-tables">${tables}</div>` : ''}
+    ${dt ? `<div class="lv-row"><span class="hsec-ic opp">${Icons.svg('spark')}</span><div class="lv-t"><span class="eyebrow">Dominoes</span><b>${esc(dt.name)}</b></div><div class="lv-acts"><button class="btn red" data-live="tv">Watch the board</button></div></div>` : ''}
+    <p class="note">You're watching from ${esc(club.home.name)}. Nothing about you or your club is shown here, and there is no chat while you watch.</p>
+    <div class="btn-row"><button class="btn" data-live="home">Back to ${esc(club.home.name)}</button></div></section>`;
+}
+// Watch the board: open the domino TV board as soon as its state is here
+function boardOnArrival(){
+  let want = false; try{ want = sessionStorage.getItem('watchBoard') === '1'; }catch(e){}
+  const dm = window.Domino.state(); if(!want || !dm) return;
+  try{ sessionStorage.removeItem('watchBoard'); }catch(e){}
+  if(dm.t) window.Domino.openTV();
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-wt]'); if(t && club && club.spectate) return openTable(t.dataset.wt);
+  const b = e.target.closest('[data-live]'); if(!b || !club) return;
+  const k = b.dataset.live;
+  if(k === 'seat-main' || k === 'go-main') return goMain();
+  if(k === 'watch-main') return spectate('main');
+  if(k === 'watch-table') return spectateTable(b.dataset.tn);
+  if(k === 'watch-events') return spectate('events');
+  if(k === 'board') return spectate('main', true);
+  if(k === 'tv') return window.Domino.openTV();
+  if(k === 'home') return stopWatching();
+});
 // ---------- the Blindrise Open (club switching only) ----------
 // Blindrise tournaments for members of every club. Each club shows this card: what it is, when, and how many have
 // registered (never who). Registering takes you into the Blindrise Open, where you play under your table name.
@@ -695,9 +837,9 @@ function beventHTML(){
   const e = club.bevent; if(!e) return '';
   const live = e.status === 'running';
   const sub = live ? `Live now · ${e.remaining} of ${e.count} players left` : e.startAt ? esc(when(e.startAt)) : 'Starts when the director is ready';
-  const acts = e.playing ? '<button class="btn red" data-bev="go">Go to your table</button>'
+  const acts = (e.playing ? '<button class="btn red" data-bev="go">Go to your table</button>'
     : e.registered ? `<button class="btn red" data-bev="go">Open</button>${live ? '' : '<button class="btn" data-bev="leave">Unregister</button>'}`
-    : e.open ? '<button class="btn red" data-bev="join">Register</button>' : '';
+    : e.open ? '<button class="btn red" data-bev="join">Register</button>' : '') + (live && !e.playing ? '<button class="btn" data-live="watch-events">Watch</button>' : '');
   return `<article class="card-box br-post bo-card" aria-label="Blindrise Open"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">Blindrise Open · every club</span>${live ? '<span class="status-pill live">LIVE</span>' : ''}</div>
     <h3>${esc(e.name)}</h3><p class="br-when">${sub}</p>
     <p class="bo-meta"><span><b class="num">${e.count}</b> registered</span><span><b class="num">${fmt(e.stack)}</b> chips</span><span><b class="num">${e.levelMin}</b>-min levels</span></p>
@@ -1870,6 +2012,7 @@ function renderTable(){
   if(res) try{ potToWinners(d, handKey, LY); }catch(e){}
   $('tName').textContent = `Table ${d.n}`;
   $('sPlayers').textContent = `${d.seats.filter(Boolean).length} seated`;
+  fieldUI();
   renderControls(d, mySeat, mine);
   renderHelper(d, mySeat >= 0 ? d.seats[mySeat] : null, mine);
   // last hand's coach tip floats over the table; it gets out of the way when it's your turn to act
@@ -2127,7 +2270,6 @@ function sponsorUI(T, now){
 // ---------- quiet design: the whole tournament in one line, the details one tap away ----------
 // Players still playing, the chip leader of all tables and your place among everyone (players' feedback, 2026-10-21),
 // from the field every table update carries. Before the first update it shows this table only.
-let field = null;
 if(QUIET){
   const b = document.createElement('button');
   b.type = 'button'; b.id = 'qline'; b.className = 'qline'; b.hidden = true;
@@ -2191,7 +2333,10 @@ function tickClock(){
   const d = tables.get(watchTid || club.myTable);
   const all = [...tables.values()].flatMap(t => t.seats.filter(Boolean));
   const me = all.find(p => p.uid === club.me.id);
-  $('sPos').textContent = me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching';
+  // with the tournament HUD on, your rank is in it: the header shows your own stack instead (no number twice)
+  const hud = !!(field && field.rank && me);
+  $('sPosL').textContent = hud ? 'Your stack' : 'Your rank';
+  $('sPos').textContent = hud ? fmt(me.stack) : me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching';
   if(QUIET) qLine(T, d, me);
   const bar = document.querySelector('.shotBar');
   if(bar && d && d.deadline){ const left = Math.max(0, d.deadline - now); bar.style.transform = `scaleX(${Math.min(1, left / d.bank)})`; }

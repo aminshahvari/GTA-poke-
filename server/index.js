@@ -198,7 +198,7 @@ const api = {
     const id = data && data.club, c = typeof id === 'string' && id !== clubs.MAIN ? clubs.get(id) : null;
     const d = platform.moderate(data || {}, u);
     if(c){
-      if(data.action === 'suspend'){ c.club.pause(); for(const ws of sockets) if(ws.ctx === c && ws.user) sendWS(ws, { t: 'club', club: clubView(c, ws.user) }); }
+      if(data.action === 'suspend'){ c.club.pause(); for(const ws of sockets) if(ws.ctx === c && ws.user) sendWS(ws, { t: 'club', club: viewFor(c, ws) }); }
       if(data.action === 'cancel'){ c.club.cancel(); leaveClub(c); }
       c.memo = null;
     }
@@ -452,6 +452,13 @@ function suspendedView(c, u){
     clubs: clubList(u), blindrise: platform.feed(), members: [], history: [], tables: [], tourney: null, myTable: null, now: Date.now(), version: VERSION, features: { clubs: false } };
 }
 const clubList = u => clubs.memberships(rootStore.get('user:' + u.id)).map(id => ({ id, name: clubs.def(id).name, ...(clubs.suspended(id) ? { suspended: true } : {}) }));
+// the tournament as the club's screens show it (the club view, and a spectator's view of a platform club)
+const tourneyOf = (c, t) => { const club = c.club; return { id: t.id, status: t.status, name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: t.startAt, repeat: t.repeat, regs: t.regs,
+      level: t.level, levelEndsAt: t.levelEndsAt, paused: t.paused, pausedLeft: t.pausedLeft, entrants: t.entrants, remaining: t.remaining,
+      places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null,
+      ...(club.gp() ? { showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0 } : {}),
+      startedAt: t.startedAt || null, breaks: club.breaksOn(), breakEvery: club.BREAK_EVERY, breakMin: t.breakMin || 5, breakUntil: club.onBreak(t) ? t.breakUntil : null, breakPending: !!t.breakPending && !t.paused,
+      pausedBreakLeft: t.paused ? t.pausedBreakLeft || 0 : 0, sponsor: c.business.sponsorCard(t.sponsor), sponsorSec: t.sponsorSec || 8 }; };
 function clubView(c, u){
   if(clubs.ON() && clubs.suspended(c.id)) return suspendedView(c, u);
   const { store, club, rewards } = c;
@@ -459,12 +466,7 @@ function clubView(c, u){
   const { members, history } = membersView(c);
   const view = {
     me: { id: u.id, name: u.name, owner: isOwner(u) },
-    tourney: t ? { id: t.id, status: t.status, name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: t.startAt, repeat: t.repeat, regs: t.regs,
-      level: t.level, levelEndsAt: t.levelEndsAt, paused: t.paused, pausedLeft: t.pausedLeft, entrants: t.entrants, remaining: t.remaining,
-      places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null,
-      ...(club.gp() ? { showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0 } : {}),
-      startedAt: t.startedAt || null, breaks: club.breaksOn(), breakEvery: club.BREAK_EVERY, breakMin: t.breakMin || 5, breakUntil: club.onBreak(t) ? t.breakUntil : null, breakPending: !!t.breakPending && !t.paused,
-      pausedBreakLeft: t.paused ? t.pausedBreakLeft || 0 : 0, sponsor: c.business.sponsorCard(t.sponsor), sponsorSec: t.sponsorSec || 8 } : null,
+    tourney: t ? tourneyOf(c, t) : null,
     ...(isOwner(u) && hosts(c) ? { sponsors: c.business.sponsorOptions() } : {}), hosts: hosts(c),
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
     // who invited whom is for the owner only: a member's payload carries no inviter for anyone (Muse P10)
@@ -494,6 +496,8 @@ function clubView(c, u){
     // the Blindrise Open: inside it, say so; in every other club, its card for this member (counts only, no names)
     if(c.id === clubs.EVENTS) view.events = true;
     else { const ev = eventCard(u.id); if(ev) view.bevent = ev; }
+    // every member club: the Live at Blindrise headline (Issue #25)
+    if(c.id !== clubs.EVENTS && c.id !== clubs.MAIN) view.live = liveCard(u.id);
     if(c.id === clubs.MAIN && view.canCreateClub) view.canRunEvents = true;
     // the founder, in his own club's Director: the Club Rules new clubs accept, every club with counts only (no names or
     // emails), the moderation log and the posts
@@ -515,6 +519,51 @@ function eventCard(uid){
     count: t.status === 'running' ? t.entrants || 0 : t.regs.length, remaining: t.status === 'running' ? t.remaining || 0 : null,
     registered: t.regs.includes(uid) || !!tid, playing: !!tid, open: t.status === 'registering' || late };
 }
+// Live at Blindrise (Issue #25, owner directives of 2026-10-20): the top of every member club's home shows the platform's
+// games, the Blindrise club's tournament and its dominoes (the Blindrise Open has its own card, bevent, shown there too).
+// Only their public state (what, when, how many, which level) and this account's own place in them: never who
+// registered, and nothing of the Blindrise club's members, chat, Exchange or Bulletin.
+function pokerCard(uid){
+  const m = clubs.get(clubs.MAIN), t = m.club.T();
+  if(!t || (t.status !== 'registering' && t.status !== 'running')) return null;
+  const tid = uid ? m.club.tableOf(uid) : null, live = t.status === 'running';
+  return { id: t.id, name: t.name, status: t.status, startAt: t.startAt || null, stack: t.stack, levelMin: t.levelMin, level: live ? t.level : null, paused: !!t.paused,
+    count: live ? t.entrants || 0 : t.regs.length, remaining: live ? t.remaining || 0 : null, tables: live ? m.club.tablesSummary().length : 0,
+    registered: !!uid && (t.regs.includes(uid) || !!tid), playing: !!tid, open: t.status === 'registering' || (live && m.club.lateOpen()),
+    // while it plays, what a broadcast shows (owner's design brief, 2026-10-21): the chip leader of the whole field and of
+    // each table (the table names their seats already show anyone watching), the seats taken, and how many are watching
+    ...(live ? (f => ({ leader: f.shown.leader, watchers: f.shown.watchers, size: t.tableSize || 9, tableList: f.tableList })) (fieldOf(m)) : {}) };
+}
+const liveCard = uid => ({ member: clubs.memberships(rootStore.get('user:' + uid)).includes(clubs.MAIN), poker: pokerCard(uid), domino: DOMINO() ? clubs.get(clubs.MAIN).domino.card(uid) : null });
+// the Blindrise club's games changed: member clubs get a new view only when what their headline shows changed (status,
+// counts, level, who is seated), not on every hand
+let liveSig = '', liveAt = 0, liveTimer = null;
+const LIVE_MS = process.env.FAST === '1' ? 300 : 3000; // the live card follows the play, at most every few seconds
+function liveChanged(){
+  if(!clubs.ON() || liveTimer) return;
+  liveTimer = setTimeout(liveCheck, Math.max(0, liveAt + LIVE_MS - Date.now()));
+}
+function liveCheck(){
+  liveTimer = null;
+  const m = clubs.get(clubs.MAIN), seated = [...m.club.tables.values()].filter(x => !x.broken).flatMap(x => x.g.seats.filter(Boolean).map(p => p.uid)).sort().join();
+  const sig = JSON.stringify([pokerCard(null), m.club.T() && m.club.T().regs, seated, DOMINO() ? m.domino.card(null) : null, DOMINO() ? m.domino.entrants() : null]);
+  if(sig !== liveSig){ liveSig = sig; liveAt = Date.now(); for(const x of clubs.all()) if(x.id !== clubs.MAIN && x.id !== clubs.EVENTS) broadcastClub(x); }
+}
+// Watching a platform game from any club (Issue #25): a spectator's socket is in the Blindrise club or the Blindrise
+// Open without being a member of it. It gets the tournament, the list of tables and the table it watches, read-only,
+// exactly as a player who is not seated sees it, and the domino board. Nothing else: no members, results, chat, coach,
+// Exchange, sponsor or prizes, and every message except 'watch' is ignored.
+function spectatorView(c, u, home){
+  const t = c.club.T(), club = c.club;
+  return { spectate: true, me: { id: u.id, name: u.name, owner: false }, clubSwitching: true, club: { id: c.id, name: clubs.def(c.id).name }, home: { id: home, name: (clubs.def(home) || {}).name || 'your club' },
+    clubs: [], tourney: t ? { ...tourneyOf(c, t), regs: [], regCount: t.regs.length, note: null, sponsor: null } : null, hosts: false,
+    tables: club.tablesSummary(), myTable: null, members: [], history: [], now: Date.now(), shop: null,
+    features: { clubs: false, ...(club.gp() ? { tableExtras: true } : {}), ...(club.breaksOn() ? { breaks: true } : {}) }, chatOff: true, muted: true, version: VERSION,
+    ...(DOMINO() && c.id === clubs.MAIN ? { domino: true } : {}) };
+}
+const viewFor = (c, ws) => ws.spectator ? spectatorView(c, ws.user, ws.home) : clubView(c, ws.user);
+// the domino board a spectator sees: the tournament as members see it, without the club's rankings or anyone's stats
+const dominoBoard = c => ({ ...c.domino.view(null), ranking: null, stats: null });
 // the club an account is using: the one asked for if they belong to it, otherwise their first club (main first);
 // null when they asked for a club they do not belong to, or belong to none
 function ctxFor(ur, want){
@@ -531,7 +580,7 @@ const VERSION = (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null;
 const THROWS = ['tomato', 'rose', 'beer', 'egg', 'fish', 'clap', 'cake', 'fire'];
 const chatRate = new Map();
 function chatTo(c, tid, msg){
-  for(const ws of sockets) if(ws.user && ws.ctx === c && (ws.watch === tid || c.club.tableOf(ws.user.id) === tid)) sendWS(ws, msg);
+  for(const ws of sockets) if(ws.user && ws.ctx === c && !ws.spectator && (ws.watch === tid || c.club.tableOf(ws.user.id) === tid)) sendWS(ws, msg);
 }
 function chat(c, ws, u, m){
   const { store, club, players, chatLogs } = c;
@@ -563,7 +612,7 @@ const chatLogFor = (c, ws, tid) => { if(tid) sendWS(ws, { t: 'chatlog', tid, log
 function broadcastClub(c){
   c.memo = null;
   if(c.clubTimer) return;
-  c.clubTimer = setTimeout(() => { c.clubTimer = null; for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'club', club: clubView(c, ws.user) }); }, 60);
+  c.clubTimer = setTimeout(() => { c.clubTimer = null; for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'club', club: viewFor(c, ws) }); }, 60);
 }
 // a new email sign-up shows up in its club owner's QR card straight away
 joinqr.setOnJoin(j => { const c = clubs.get(j.id); if(c) broadcastClub(c); });
@@ -575,33 +624,37 @@ function pushTable(c, tid){
   const snap = club.snapshot(tb), uids = new Set(snap.seats.filter(Boolean).map(s => s.uid)), field = fieldOf(c);
   for(const ws of sockets){
     if(!ws.user || ws.ctx !== c) continue;
-    const seatedHere = uids.has(ws.user.id);
+    const seatedHere = !ws.spectator && uids.has(ws.user.id);
     if(!seatedHere && ws.watch !== tid) continue;
     // a seated player also gets their place among everyone still playing (1 = chip leader)
-    const mine = field.chips.get(ws.user.id);
+    const mine = ws.spectator ? null : field.chips.get(ws.user.id);
     sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null, field: { ...field.shown, rank: mine == null ? null : 1 + field.stacks.filter(x => x > mine).length } });
   }
+  if(c.id === clubs.MAIN) liveChanged(); // the chip leaders on the other clubs' live card
 }
-// the whole tournament as every table shows it (players' feedback, 2026-10-21; same as branch field-bar, 2becf2d): how
-// many are still playing and at how many tables, each player's place among all of them, the chip leader of all tables
-// (the same name and chip count their seat shows), and how many people are watching (a count only, never who).
-// Read-only: it reads the tables, it changes nothing in them.
+// the whole tournament as every table shows it (players' feedback, 2026-10-21): how many are still playing and at how
+// many tables, each player's place among all of them, the chip leader of all tables (the same name and chip count their seat shows), and how many people are watching: everyone looking at a table who is not seated in the tournament, and
+// everyone watching from another club. A count only, never who.
 function fieldOf(c){
   let players = 0, tables = 0, leader = null;
-  const chips = new Map();
+  const chips = new Map(), tableList = [];
   for(const tb of c.club.tables.values()){
     if(tb.broken) continue;
     tables++;
+    let seated = 0, top = null;
     for(const p of tb.g.seats){
       if(!p) continue;
-      players++;
-      chips.set(p.uid, p.stack);
-      if(!leader || p.stack > leader.stack) leader = { name: p.name, stack: p.stack, table: tb.n };
+      players++; seated++;
+      const n = p.stack;
+      chips.set(p.uid, n);
+      if(!leader || n > leader.stack) leader = { name: p.name, stack: n, table: tb.n };
+      if(!top || n > top.stack) top = { name: p.name, stack: n };
     }
+    tableList.push({ n: tb.n, seated, leader: top });
   }
   const watching = new Set();
-  for(const ws of sockets) if(ws.user && ws.ctx === c && ws.watch && !chips.has(ws.user.id)) watching.add(ws.user.id);
-  return { shown: { players, tables, leader, watchers: watching.size }, chips, stacks: [...chips.values()] };
+  for(const ws of sockets) if(ws.user && ws.ctx === c && (ws.spectator || (ws.watch && !c.club.tableOf(ws.user.id)))) watching.add(ws.user.id);
+  return { shown: { players, tables, leader, watchers: watching.size }, chips, stacks: [...chips.values()], tableList: tableList.sort((a, b) => a.n - b.n) };
 }
 const clock = ms => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: process.env.CLUB_TZ || 'America/Toronto' });
 const dayOf = ms => { const tz = process.env.CLUB_TZ || 'America/Toronto', f = d => new Date(d).toLocaleDateString('en-CA', { timeZone: tz });
@@ -616,6 +669,25 @@ function notice(c, kind, t){
     push.notify(members.filter(id => !t.regs.includes(id)), { title: `${t.name} starts in 15 minutes`, body: 'There is still time to join. Tap to register.', tag: 'soon-' + t.id, ttl: 900 }).catch(() => {});
   }
   if(kind === 'start') push.notify(t.regs, { title: `${t.name} is starting!`, body: 'Cards are in the air. Tap to take your seat.', tag: 'start-' + t.id, ttl: 600 }).catch(() => {});
+  // a Blindrise game (the Blindrise club's tournament or the Blindrise Open) also reaches the members of every other
+  // club (owner request of 2026-10-21): when it opens, and when it starts, so they can watch it live from their club
+  if(clubs.ON() && (c.id === clubs.MAIN || c.id === clubs.EVENTS) && (kind === 'open' || kind === 'start')){
+    const told = new Set(kind === 'open' ? members : t.regs), rest = everyone().filter(id => !told.has(id));
+    const open = c.id === clubs.EVENTS ? 'Registration is open to every club. Tap to register from your club.' : 'Watch it live from your club, on the Live at Blindrise card.';
+    if(kind === 'open') push.notify(rest, { title: t.startAt ? `${t.name} ${dayOf(t.startAt)} at ${clock(t.startAt)}` : `${t.name} is open`, body: open, tag: 'open-' + t.id, ttl: 6 * 3600 }).catch(() => {});
+    else push.notify(rest, { title: `${t.name} is live now`, body: 'Tap to watch it from your club.', tag: 'start-' + t.id, ttl: 1800 }).catch(() => {});
+  }
+}
+// every account that belongs to a club now
+const everyone = () => rootStore.values('user:').filter(x => x && clubs.memberships(x).length).map(x => x.id);
+// dominoes in the Blindrise club: everyone is told when a tournament opens and when it starts (once each; see boot)
+let domTold = '';
+function dominoNotice(m){
+  const d = m.domino.card(null), k = d ? d.id + ':' + d.status : '';
+  if(!d || k === domTold) return;
+  domTold = k;
+  if(d.status === 'registering') push.notify(everyone(), { title: `Dominoes: ${d.name}`, body: 'Registration is open. Tap to see it.', tag: 'dom-open-' + d.id, ttl: 6 * 3600 }).catch(() => {});
+  if(d.status === 'running') push.notify(everyone(), { title: `Dominoes: ${d.name} has started`, body: 'Tap to watch the board live.', tag: 'dom-start-' + d.id, ttl: 1800 }).catch(() => {});
 }
 // Is this player connected to this club right now (for disconnect protection, Issue #9)? A closed socket is caught at once
 // (see the close handler below). A dropped phone connection can leave its socket looking open for up to a minute, so a
@@ -625,7 +697,7 @@ const GONE_MS = process.env.FAST === '1' && +process.env.DC_GONE_MS || 5000, QUI
 function online(c, uid){
   const now = Date.now();
   for(const ws of sockets){
-    if(!ws.user || ws.ctx !== c || ws.user.id !== uid || ws.readyState !== 1) continue;
+    if(!ws.user || ws.ctx !== c || ws.spectator || ws.user.id !== uid || ws.readyState !== 1) continue;
     if(!(ws.probed > ws.heard) && now - ws.heard > QUIET_MS){ ws.probed = now; try{ ws.ping(); }catch(e){} }
     if(!(ws.probed > ws.heard) || now - ws.probed < GONE_MS) return true;
   }
@@ -641,7 +713,15 @@ function eventsChanged(e){
   if(sig !== eventsSig){ eventsSig = sig; for(const x of clubs.all()) if(x !== e) broadcastClub(x); }
 }
 // domino: every member of the club with the app open gets the new state (one small view each: it marks their own match)
-function dominoPush(c){ if(!DOMINO()) return; for(const ws of sockets) if(ws.ctx === c && ws.user && !clubs.suspended(c.id)){ const u = c.store.get('user:' + ws.user.id); if(u) sendWS(ws, { t: 'domino', v: c.domino.view(u) }); } }
+function dominoPush(c){
+  if(!DOMINO()) return;
+  let board = null;
+  for(const ws of sockets) if(ws.ctx === c && ws.user && !clubs.suspended(c.id)){
+    if(ws.spectator){ sendWS(ws, { t: 'domino', v: board || (board = dominoBoard(c)) }); continue; }
+    const u = c.store.get('user:' + ws.user.id); if(u) sendWS(ws, { t: 'domino', v: c.domino.view(u) });
+  }
+  if(c.id === clubs.MAIN){ if(clubs.ON()) dominoNotice(c); liveChanged(); }
+}
 // the match clocks: every few seconds, matches whose time ran out move on (server/domino/match.js tick)
 setInterval(() => { if(DOMINO()) for(const c of clubs.all()) if(!clubs.suspended(c.id)) c.domino.sweep(); }, process.env.FAST === '1' ? 300 : 5000).unref();
 // every club context (only 'main' with club switching off) gets its own live state and hooks
@@ -650,7 +730,7 @@ function wire(c){
   c.club.setLinker((a, b) => linkReason(c, a, b));
   c.domino.setHooks({ isOwner, canHost: () => hosts(c), changed: () => dominoPush(c) });
   const halted = () => { const d = clubs.ON() && c.id !== clubs.MAIN ? rootStore.get('clubdef:' + c.id) : null; return d && (d.removed || d.suspended) ? (d.removed ? 'This club was cancelled by Blindrise.' : 'This club is suspended by Blindrise.') : null; };
-  c.club.setHooks({ halted, hosts: () => hosts(c), isConnected: uid => online(c, uid), onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { if(halted()) return; const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => c.id === clubs.EVENTS ? eventsChanged(c) : broadcastClub(c), onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
+  c.club.setHooks({ halted, hosts: () => hosts(c), isConnected: uid => online(c, uid), onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { if(halted()) return; const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && !ws.spectator && ws.user.id === uid) sendWS(ws, msg); }, onClub: () => { if(c.id === clubs.EVENTS) return eventsChanged(c); broadcastClub(c); if(c.id === clubs.MAIN) liveChanged(); }, onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });
 }
 clubs.get(clubs.MAIN);
 
@@ -664,7 +744,7 @@ wss.on('connection', (ws, req) => {
   ws.isAlive = true; ws.heard = Date.now();
   ws.on('pong', () => { ws.isAlive = true; ws.heard = Date.now(); });
   // a closing socket of the player to act gives them their disconnect protection straight away (Issue #9)
-  ws.on('close', () => { sockets.delete(ws); if(ws.user && ws.ctx) ws.ctx.club.offline(ws.user.id); });
+  ws.on('close', () => { sockets.delete(ws); if(ws.user && ws.ctx && !ws.spectator) ws.ctx.club.offline(ws.user.id); });
   ws.on('message', raw => {
     ws.heard = Date.now();
     if(stopping) return; // shutting down: no more actions
@@ -673,6 +753,18 @@ wss.on('connection', (ws, req) => {
     if(m.t === 'hello'){
       const ur = userByToken(m.token);
       if(!ur) return sendWS(ws, { t: 'auth', ok: false });
+      // watching a platform game (Issue #25): any member of any club, in the Blindrise club or the Blindrise Open, read-only
+      if(clubs.ON() && (m.spectate === clubs.MAIN || m.spectate === clubs.EVENTS)){
+        const home = (typeof m.club === 'string' && ctxFor(ur, m.club)) || ctxFor(ur, null);
+        if(home){
+          const c = clubs.get(m.spectate);
+          ws.ctx = c; ws.spectator = true; ws.home = home.id; ws.user = { id: ur.id, name: ur.name, role: 'spectator' }; ws.sess = sha(m.token); ws.watch = null;
+          sendWS(ws, { t: 'auth', ok: true });
+          sendWS(ws, { t: 'club', club: spectatorView(c, ws.user, ws.home) });
+          if(DOMINO() && c.id === clubs.MAIN) sendWS(ws, { t: 'domino', v: dominoBoard(c) });
+          return;
+        }
+      }
       // club switching: the app says which club it shows; an unknown or foreign club falls back to the account's first club
       const c = clubs.ON() ? (typeof m.club === 'string' && ctxFor(ur, m.club)) || ctxFor(ur, null) : clubs.get(clubs.MAIN);
       const u = c && c.store.get('user:' + ur.id);
@@ -683,6 +775,13 @@ wss.on('connection', (ws, req) => {
       if(clubs.suspended(c.id)) return;
       const mine = c.club.tableOf(u.id); if(mine){ pushTable(c, mine); chatLogFor(c, ws, mine); }
       if(DOMINO()) sendWS(ws, { t: 'domino', v: c.domino.view(u) }); // a reconnect gets the whole scorepad state again
+      return;
+    }
+    if(ws.spectator){
+      // still signed in, and still a member of some club; then only 'watch', of a table that is playing
+      const x = ws.user && store.get('session:' + ws.sess) && store.get('user:' + ws.user.id);
+      if(!x || x.removed || !clubs.memberships(x).length){ ws.user = null; return sendWS(ws, { t: 'auth', ok: false }); }
+      if(m.t === 'watch'){ const tb = typeof m.tid === 'string' && ws.ctx.club.tables.get(m.tid); ws.watch = tb && !tb.broken ? m.tid : null; if(ws.watch) pushTable(ws.ctx, ws.watch); }
       return;
     }
     const c = ws.ctx, { club, rewards, players, fair, business, opportunity } = c || {};
@@ -818,6 +917,7 @@ process.on('SIGINT', () => onSignal('SIGINT'));
   // Staging only: a few fake demo businesses for the fake Test Player accounts (once; never in production)
   if(process.env.STAGING === '1'){ const { business, opportunity } = clubs.get(clubs.MAIN); const n = business.seedDemo(); if(n) console.log(`staging: seeded ${n} fake demo businesses`); const k = opportunity.seedDemo(); if(k) console.log(`staging: seeded ${k} fake demo opportunity listings`); }
   if(stopping) return;
+  { const d = DOMINO() && clubs.get(clubs.MAIN).domino.card(null); if(d) domTold = d.id + ':' + d.status; } // no second notice after a restart
   for(const c of clubs.all()) if(c.club.resume()) console.log(c.id === clubs.MAIN ? 'resumed running tournament' : `resumed running tournament in club ${c.id}`);
   server.listen(PORT, () => { ready = true; console.log(`Blindrise poker club on :${PORT}`); });
   if(!process.env.NO_BEACON) clubs.get(clubs.MAIN).fair.probe();
