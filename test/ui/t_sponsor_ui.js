@@ -100,6 +100,58 @@ const overlaps = (pg, sel) => pg.evaluate(sel => {
   check(!(await spnOn(late)), 'late: back at the table from the lobby, not again');
   await late.close();
 
+  // ---- Part 3: sideways, the free column beside the table ----
+  const geo = pg => pg.evaluate(() => {
+    const r = e => { if(!e || !e.offsetParent && getComputedStyle(e).position !== 'fixed') return null; const b = e.getBoundingClientRect(); return b.width && b.height ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
+    const side = document.getElementById('sidePanel'), shown = !side.hidden && getComputedStyle(side).visibility !== 'hidden';
+    const dockKids = [...document.getElementById('dock').children].filter(e => e.id !== 'coachTip').map(r).filter(Boolean);
+    return { side: shown ? r(side) : null, sideHidden: side.hidden, sideTxt: side.textContent.replace(/\s+/g, ' ').trim(), prizeShown: !!side.querySelector('.sp-prize') && !!r(side.querySelector('.sp-prize')),
+      tap: !!side.querySelector('[data-spbiz]'), hud: r(document.getElementById('fieldBar')), area: r(document.getElementById('tableArea')), dockKids,
+      ctl: r(document.getElementById('controls')), h: innerHeight, w: innerWidth, sideScroll: document.documentElement.scrollWidth > innerWidth,
+      land: document.getElementById('game').classList.contains('land') };
+  });
+  const hit = (a, b) => a && b && a.l < b.r - 1 && b.l < a.r - 1 && a.t < b.b - 1 && b.t < a.b - 1;
+  const panel = async (pg, tag, sponsor) => {
+    const land = tag !== '430x932';
+    // (on the smallest phones the sponsor makes way while the hand helper needs its longest lines: wait for a short one)
+    const g = await until(async () => { const x = await geo(pg); return !land || !sponsor || x.side ? x : null; }, 15000) || await geo(pg);
+    await sleep(300);
+    await shot(pg, `sp-${tag}${sponsor ? '' : '-nosponsor'}`);
+    check(!g.sideScroll, `${tag}: no sideways scroll`);
+    if(!land){ check(!g.land && g.sideHidden, `${tag}: upright, no side panel`); return; }
+    check(g.land && g.hud && g.hud.l >= g.area.r - 1, `${tag}: the tournament HUD stands in the column beside the table`);
+    check(g.ctl && Math.abs(g.ctl.b - g.h) <= 2 && g.ctl.l >= g.area.r - 1, `${tag}: the status box stays at the bottom of the column`);
+    if(!sponsor){ check(g.sideHidden, `${tag}: no sponsor and no prize, so just the tournament`); return; }
+    check(g.side && /Aurora Coffee Co\./.test(g.sideTxt) && g.sideTxt.includes('Prize: ' + PRIZE) && g.prizeShown, `${tag}: the side panel shows the sponsor and the prize: ${g.sideTxt}`);
+    check(g.side && g.side.l >= g.area.r - 1 && g.side.r <= g.w + 1, `${tag}: the panel is in the free column, not over the table`);
+    check(g.side && !hit(g.side, g.hud) && !g.dockKids.some(k => hit(g.side, k)), `${tag}: it overlaps neither the HUD nor the helper, the free-play line or the buttons`);
+    check(g.tap, `${tag}: tapping it opens their page`);
+  };
+  for(const sz of [[932, 430], [844, 390], [430, 932]]){
+    const pg = await page(p1.token, sz), tag = sz.join('x');
+    await until(() => pg.evaluate(() => !document.getElementById('game').hidden), 8000); await sleep(1500);
+    await panel(pg, tag, true);
+    if(tag === '932x430'){
+      // See their page: the sponsor's Exchange page (asked first when your hand is in play)
+      await pg.click('#sidePanel [data-spbiz]'); await sleep(400);
+      if(await pg.$('#modalRoot .btn.primary, #modalRoot button')) for(const b of await pg.$$('#modalRoot button')) if(/Open their page/.test(await b.textContent())){ await b.click(); break; }
+      check(await until(() => pg.evaluate(() => !document.getElementById('lobby').hidden && /Test business/.test(document.getElementById('lobbyBody').textContent)), 6000), `${tag}: a tap opens the sponsor's Exchange page`);
+    }
+    await pg.close();
+  }
+  // a tournament with no sponsor and no prize: the column holds just the tournament
+  d.send({ t: 'cancel' }); await until(() => d.club.tourney.status !== 'running', 5000);
+  d.send({ t: 'create', name: 'Plain Night', stack: 30000, levelMin: 20, lateLevels: 0, sponsor: null, prize: '' });
+  await until(() => d.club.tourney && d.club.tourney.status === 'registering', 5000);
+  bots.forEach(b => b.send({ t: 'join' })); await sleep(600);
+  d.send({ t: 'start' }); await until(() => d.club.tourney.status === 'running', 5000);
+  for(const sz of [[932, 430], [844, 390], [430, 932]]){
+    const pg = await page(p1.token, sz), tag = sz.join('x');
+    await until(() => pg.evaluate(() => !document.getElementById('game').hidden), 8000); await sleep(1500);
+    await panel(pg, tag, false);
+    await pg.close();
+  }
+
   console.log(`t_sponsor_ui: ${oks} ok, ${fails} failed`);
   await browser.close();
   process.exit(fails ? 1 : 0);

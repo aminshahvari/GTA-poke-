@@ -250,6 +250,7 @@ let field = null;
 function fieldUI(){
   const el = $('fieldBar'), T = club && club.tourney;
   el.hidden = !field || !T || T.status !== 'running';
+  sideUI();
   if(el.hidden) return;
   // laid out like a broadcast HUD (owner's design brief, 2026-10-21): the field, tables and watchers, the average stack,
   // the chip leader in gold, and your rank as a pill coloured by your stack against the average. Tap a chip count to see
@@ -265,6 +266,34 @@ function fieldUI(){
     + (L ? `<button type="button" class="hud-mod hud-lead${meLead ? ' me' : ''}" data-bbtoggle aria-label="Chip leader ${esc(L.name)}. Tap to switch chips and big blinds">${Icons.svg('crown')}<span class="hud-lt"><span class="hud-lbl">Chip leader</span><b class="hud-name">${meLead ? 'You' : esc(L.name)}</b></span><span class="hud-chips"><b>${stackHTML('lead', L.stack, bb)}</b></span></button>` : '')
     + (field.rank ? `<div class="hud-mod hud-rank${tone}" title="Your place among everyone still playing"><span class="hud-lbl">Your rank</span><b class="hud-val">${vs}${odo('rank', ord(field.rank))}<small>/${field.players}</small></b></div>` : '');
   odoPlay(el);
+}
+// Sideways (#game.land) the column beside the table holds the tournament HUD (#fieldBar, placed there by style.css)
+// and under it the sponsor: logo, name, category, the prize and See their page (as on the break card). With no sponsor,
+// a prize alone; with neither, just the HUD. The status box and the action buttons stay at the bottom of the column.
+let sideKey = '';
+function sideUI(){
+  const el = $('sidePanel'), T = club && club.tourney, run = T && T.status === 'running', sp = run && T.sponsor, prize = run && T.prize;
+  el.hidden = !$('game').classList.contains('land') || !(sp || prize);
+  if(el.hidden){ if(sideKey){ sideKey = ''; el.innerHTML = ''; } return; }
+  const key = [T.id, sp && sp.uid, sp && sp.name, sp && sp.logoV, prize, sponsorTap()].join('|');
+  if(key !== sideKey){
+    sideKey = key;
+    el.innerHTML = sp ? sponsorHTML(sp, true, prize) : `<div class="side-prize"><small>Tonight's prize</small><b>${esc(prize)}</b></div>`;
+    if(sp){ fillLogo(el, sp); wireSponsor(el, T); }
+  }
+  fitSide();
+}
+// the sponsor gets the room left between the HUD and what the dock shows (its top part is kept free for a longer helper
+// line, and the sponsor uses it until then): when that is short, its smaller lines give way first, then the whole card
+let sideFit = '';
+function fitSide(){
+  const el = $('sidePanel'); if(el.hidden) return;
+  const tops = [...$('dock').children].filter(e => e.offsetHeight).map(e => e.getBoundingClientRect().top);
+  const room = Math.max(0, Math.floor((tops.length ? Math.min(...tops) : innerHeight) - el.getBoundingClientRect().top - 6));
+  if(sideFit === room + sideKey) return;
+  sideFit = room + sideKey; el.style.maxHeight = room + 'px';
+  el.classList.remove('s1', 's2', 's3', 's4');
+  for(const c of ['s1', 's2', 's3', 's4']){ if(el.scrollHeight <= room + 1) break; el.classList.add(c); }
 }
 // chips or big blinds, everywhere a stack is shown in the HUD and on the live card (a tap switches; kept on this phone)
 let bbMode = !!local.get('bbMode', false);
@@ -2193,6 +2222,19 @@ const sponsorTap = () => !!(club && club.features && club.features.clubs);
 function sponsorHTML(sp, big, prize){
   return `<div class="sp-card${big ? ' big' : ''}"${big && sponsorTap() ? ` role="button" tabindex="0" data-spbiz="${esc(sp.uid)}" aria-label="See ${esc(sp.name)} in the Exchange"` : ''}><span class="sp-logo" data-splogo></span><span class="sp-txt"><small>${big ? 'Presented by' : 'Tonight\'s tournament is presented by'}</small><b>${esc(sp.name)}</b>${big ? `<small class="sp-cat">${esc(sp.categoryLabel)}${sp.area ? ' · ' + esc(sp.area) : ''}</small>` : ''}${prize ? `<small class="sp-prize">Prize: ${esc(prize)}</small>` : ''}${big && sponsorTap() ? '<small class="sp-more">See their page ›</small>' : ''}</span></div>`;
 }
+// a tap (or Enter) on a sponsor with See their page opens it in the Exchange. On a break the player is brought back to
+// their table when the break ends; in play (the side panel) they are asked first, since their hand plays on without them.
+function wireSponsor(el, T){
+  const b = el.querySelector('[data-spbiz]'); if(!b) return;
+  const go = async () => {
+    const t = club.tourney && club.tourney.id === T.id ? club.tourney : T, brk = t.paused || t.breakUntil && t.breakUntil > Date.now() + clockSkew, d = tables.get(club.myTable);
+    if(!brk && d && d.phase === 'hand' && d.seats.some(p => p && p.uid === club.me.id && p.inHand && !p.folded)
+      && !await modal(`<h2>Open ${esc(T.sponsor.name)}'s page?</h2><p>Your hand plays on while you look: when it is your turn you check or fold. Come back with Go to my table.</p>`, [{ label: 'Stay here', value: false }, { label: 'Open their page', value: true, primary: true }])) return;
+    if(brk) leftForSponsor = t.id;
+    view = 'lobby'; showScreen('lobby'); window.BizClub.openBiz(b.dataset.spbiz);
+  };
+  b.onclick = go; b.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } };
+}
 function fillLogo(el, sp){
   const slot = el.querySelector('[data-splogo]');
   if(slot && window.BizClub && window.BizClub.logo) slot.replaceChildren(window.BizClub.logo({ uid: sp.uid, name: sp.name, logoV: sp.logoV }, 'sp'));
@@ -2211,8 +2253,7 @@ function breakUI(T, d, now){
       <small class="brk-sub">Play resumes by itself · Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}</small>
       ${T.sponsor ? sponsorHTML(T.sponsor, true, T.prize) : T.prize ? `<small class="brk-prize">Prize: ${esc(T.prize)}</small>` : ''}</div>`;
     if(T.sponsor) fillLogo(el, T.sponsor);
-    const sb2 = el.querySelector('[data-spbiz]');
-    if(sb2){ const go = () => { leftForSponsor = T.id; view = 'lobby'; showScreen('lobby'); window.BizClub.openBiz(sb2.dataset.spbiz); }; sb2.onclick = go; sb2.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } }; }
+    wireSponsor(el, T);
     el.hidden = false; el.dataset.sig = '';
   }
   // placed again whenever the seats move (the table can arrive after the card, or players get moved)
@@ -2280,7 +2321,7 @@ function tickClock(){
   const ms = T.paused ? T.pausedLeft : brk || Math.max(0, T.levelEndsAt - now);
   $('cTime').textContent = T.paused ? 'Paused' : T.breakPending ? 'Break' : mmss(ms);
   $('cTimeLbl').textContent = brk ? 'Break' : T.breakPending ? 'After this hand' : !T.paused && ms <= 0 ? 'Blinds up next hand' : 'Time left';
-  breakUI(T, tables.get(watchTid || club.myTable), now); sponsorUI(T, now, true);
+  breakUI(T, tables.get(watchTid || club.myTable), now); sponsorUI(T, now, true); fitSide();
   $('sAvg').textContent = fmt(T.entrants * T.stack / Math.max(1, T.remaining));
   const d = tables.get(watchTid || club.myTable);
   const all = [...tables.values()].flatMap(t => t.seats.filter(Boolean));

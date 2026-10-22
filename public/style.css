@@ -2415,3 +2415,59 @@ body{background:var(--lx-ink)}
   .hud-lead .hud-chips{padding:2px 6px}
   .hud-badges{gap:8px}
 }
+/* ---------- sideways: the column beside the table (owner's request, 2026-10-22) ----------
+   A TV side panel: the tournament HUD (#fieldBar) at the top of the column, the sponsor under it (logo, name, category,
+   the prize, See their page), the status box and the action buttons at the bottom as before. The table gets the full
+   height under the header. Upright, nothing changes. When the column is short the sponsor's smaller lines give way
+   first (app.js fitSide: s1 to s4). */
+.side{display:none}
+#game.land{grid-template-rows:auto auto minmax(0,1fr) auto}
+#game.land .table-area{grid-row:2/5}
+#game.land .dock{grid-row:4}
+#game.land .field-bar{grid-column:2;grid-row:2;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"f r" "l l" "b a";gap:4px 6px;
+  margin:4px 8px 0 4px;padding:5px 7px 5px 8px;border-radius:14px}
+#game.land .field-bar .hud-mod{padding:0;border-left:0;min-width:0}
+#game.land .hud-field{grid-area:f;gap:1px}
+#game.land .hud-rank .hud-lbl{font-size:8.5px}
+#game.land .hud-prog{display:none}
+#game.land .field-bar .hud-val{font-size:16px;line-height:1.1}
+#game.land .hud-rank{grid-area:r;margin:0;padding:2px 11px;align-self:center;gap:0}
+#game.land .hud-lead{grid-area:l;margin:0;padding:2px 7px 2px 9px;gap:7px}
+#game.land .hud-lead>svg{width:17px;height:17px}
+#game.land .hud-lead .hud-lt{min-width:0}
+#game.land .hud-lead .hud-lbl{font-size:8.5px}
+#game.land .hud-name{font-size:14px;line-height:1.15}
+#game.land .hud-lead .hud-chips b{font-size:14px}
+#game.land .hud-badges{grid-area:b;flex-direction:row;align-items:center;justify-content:flex-start;gap:10px;padding-left:1px}
+#game.land .hud-badge svg{width:15px;height:15px}
+#game.land .hud-avg{grid-area:a;flex-direction:row;align-items:baseline;justify-content:flex-end;gap:6px}
+#game.land .field-bar .hud-avg .hud-val,#game.land .hud-badge b{font-size:14px}
+#game.land .field-bar:not(:has(.hud-rank)){grid-template-areas:"f f" "l l" "b a"}
+#game.land .side:not([hidden]){display:flex;flex-direction:column;grid-column:2;grid-row:3/5;align-self:start;min-height:0;overflow:hidden;margin:6px 8px 0 4px;position:relative;z-index:2;transition:opacity .3s,visibility .3s}
+#game.land .side>*{flex:none}
+#game.land .side .sp-card{position:relative;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;border:1px solid transparent;
+  background:radial-gradient(120% 90% at 0% 0%,rgba(216,180,106,.16),transparent 60%) padding-box,linear-gradient(180deg,rgba(19,26,44,.94),rgba(10,15,28,.96)) padding-box,
+  linear-gradient(160deg,rgba(243,229,171,.7),rgba(216,180,106,.18) 45%,rgba(255,255,255,.05)) border-box;box-shadow:0 10px 26px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05)}
+#game.land .side .sp-txt{gap:1px}
+#game.land .side .sp-txt b{font-size:18px;line-height:1.15}
+#game.land .side .sp-txt small.sp-prize{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;margin-top:3px;padding-top:4px;border-top:1px solid var(--lx-hair,rgba(241,223,176,.13));font-size:12.5px;line-height:1.3}
+#game.land .side .sp-more{color:var(--lx-gold,#d8b46a)}
+#game.land .side [data-spbiz]{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:opacity .2s}
+#game.land .side [data-spbiz]:active{opacity:.75}
+#game.land .side [data-spbiz]:focus-visible{outline:2px solid #f3e5ab;outline-offset:2px}
+#game.land .side-prize{display:grid;gap:2px;padding:9px 12px;border-radius:14px;border:1px solid rgba(216,180,106,.35);background:linear-gradient(135deg,rgba(216,180,106,.14),rgba(216,180,106,.04))}
+#game.land .side-prize small{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--lx-gold,#d8b46a)}
+#game.land .side-prize b{font-size:14px;color:var(--lx-ivory,#f4eee2);overflow-wrap:anywhere}
+#game.land .side.s1 .sp-cat{display:none}
+#game.land .side.s2 .sp-txt>small:first-child,#game.land .side.s2 .sp-more{display:none}
+#game.land .side.s2 .sp-card{padding:6px 10px}
+#game.land .side.s2 .sp-logo .bz-logo.sp{width:34px;height:34px;font-size:12px}
+#game.land .side.s3 .sp-card{padding:3px 8px;gap:8px;border-radius:11px}
+#game.land .side.s3 .sp-txt b{font-size:15px}
+#game.land .side.s3 .sp-logo .bz-logo.sp{width:28px;height:28px;border-radius:7px;font-size:11px}
+#game.land .side.s3 .sp-txt small.sp-prize{-webkit-line-clamp:1;margin-top:0;padding-top:0;border-top:0;font-size:11.5px;line-height:1.25}
+#game.land .side.s3 .side-prize{padding:4px 10px}
+#game.land .side.s4{visibility:hidden;opacity:0}
+/* the column's pre-action buttons share its width evenly (their labels wrap) instead of running past the screen's edge */
+#game.land .preacts{grid-template-columns:repeat(3,minmax(0,1fr))}
+#game.land .preacts button{min-width:0;gap:5px;padding:0 5px;font-size:13px;line-height:1.15}
