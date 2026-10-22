@@ -103,7 +103,7 @@ const firstInHome = pg => pg.evaluate(() => { const b = document.getElementById(
     }
     check(await pg.evaluate(() => [...document.querySelectorAll('#fieldBar .hud-val, #fieldBar .hud-name, #fieldBar .hud-badge b')].every(e => parseFloat(getComputedStyle(e).fontSize) >= 14)), `${tag}: every value is at least 14px`);
     { const spill = await pg.evaluate(() => { const b = document.getElementById('fieldBar').getBoundingClientRect();
-      return [...document.querySelectorAll('#fieldBar .hud-mod, #fieldBar .hud-lt')].filter(m => { const r = m.getBoundingClientRect(); return !(r.left >= b.left - 1 && r.right <= b.right + 1 && m.scrollWidth <= m.clientWidth + 1); })
+      return [...document.querySelectorAll('#fieldBar .hud-mod, #fieldBar .hud-lt')].filter(m => m.getClientRects().length).filter(m => { const r = m.getBoundingClientRect(); return !(r.left >= b.left - 1 && r.right <= b.right + 1 && m.scrollWidth <= m.clientWidth + 1); })
         .map(m => `${m.className} ${m.scrollWidth}>${m.clientWidth}`); });
       check(!spill.length, `${tag}: every module fits, nothing spills over ${spill.join('; ')}`); }
     check(await pg.evaluate(() => [...document.querySelectorAll('#fieldBar .hud-lbl, #fieldBar .hud-val')].every(e => e.getClientRects().length <= 1 && e.offsetHeight < 40)), `${tag}: no label or number wraps`);

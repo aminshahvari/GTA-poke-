@@ -53,15 +53,16 @@ const onBreak = (t = T()) => !!t && !!t.breakUntil && !t.paused && Date.now() < 
 const SPONSOR_SECS = [5, 8, 10];
 const sponsorOf = (v, keep) => v === undefined ? keep || null : typeof v === 'string' && /^u[0-9a-f]{12}$/.test(v) ? v : null;
 const sponsorSecOf = (v, keep) => SPONSOR_SECS.includes(+v) ? +v : SPONSOR_SECS.includes(+keep) ? +keep : 8;
-// Prize: what the winner gets, in the director's words ("Dinner for two at Aurora"), shown as plain text in the lobby and
-// at the tables. Free social play: never cash or money, and no web addresses, emails, handles or phone numbers (content.js).
+// Prize: what the winner gets, in the director's words ("$100 Prize", "Dinner for two at Aurora"), shown as plain text in the
+// lobby and at the tables, inside the app only. Amounts are allowed there (owner ruling, Oct 21, restated Oct 22); the
+// no-money-words rule belongs to public share surfaces (Issue #33), which never carry the prize. No web addresses, emails,
+// handles or phone numbers (content.js).
 const PRIZE_MAX = 80;
 const PRIZE_BAD = { link: 'web address', email: 'email address', phone: 'phone number', social: 'social media handle' };
 function prizeOf(v, keep){
   if(v === undefined) return keep || '';
   const s = String(v == null ? '' : v).normalize('NFC').replace(/\s+/g, ' ').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '').trim();
   if(s.length > PRIZE_MAX) throw new Error(`The prize is too long (${PRIZE_MAX} characters at most).`);
-  if(/[$€£¥₹]|\b(?:cash|money|dollars?|bucks|usd|cad|eur|euros?)\b/i.test(s)) throw new Error('The prize cannot be cash or money: Blindrise is free social play. Try something like dinner for two or a free class.');
   const k = content.find(s);
   if(k) throw new Error(`Please take the ${PRIZE_BAD[k]} out of the prize. Members find the sponsor through their Exchange page.`);
   return s;

@@ -283,7 +283,7 @@ let field = null;
 function fieldUI(){
   const el = $('fieldBar'), T = club && club.tourney;
   el.hidden = !field || !T || T.status !== 'running';
-  sideUI();
+  hudPlace(); sideUI();
   if(el.hidden) return;
   // laid out like a broadcast HUD (owner's design brief, 2026-10-21): the field, tables and watchers, the average stack,
   // the chip leader in gold, and your rank as a pill coloured by your stack against the average. Tap a chip count to see
@@ -293,13 +293,39 @@ function fieldUI(){
   const mine = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id), avg = T.entrants * T.stack / Math.max(1, T.remaining);
   const tone = !mine ? '' : mine.stack >= avg * 1.25 ? ' up' : mine.stack >= avg * .75 ? '' : ' down';
   const vs = mine && Math.abs(mine.stack - avg) > avg * .05 ? (mine.stack > avg ? `<span class="hud-vs up" title="Above the average stack">${Icons.svg('up')}</span>` : `<span class="hud-vs down" title="Below the average stack">${Icons.svg('down')}</span>`) : '';
-  el.innerHTML = `<div class="hud-mod hud-field"><span class="hud-lbl"><i class="hud-dot" aria-hidden="true"></i>Players</span><b class="hud-val">${odo('players', field.players)}<small>/${total}</small></b><span class="hud-prog" aria-hidden="true"><i style="width:${out.toFixed(1)}%"></i></span></div>`
+  el.innerHTML = `<div class="hud-mod hud-field"><span class="hud-ico" aria-hidden="true">${Icons.svg('users')}</span><span class="hud-lbl"><i class="hud-dot" aria-hidden="true"></i>Players</span><b class="hud-val">${odo('players', field.players)}<small>/${total}</small></b><span class="hud-prog" aria-hidden="true"><i style="width:${out.toFixed(1)}%"></i></span></div>`
     + `<div class="hud-mod hud-badges"><span class="hud-badge" title="Tables in play" aria-label="${field.tables} tables">${Icons.svg('table')}<b>${odo('tables', field.tables)}</b></span><span class="hud-badge" title="Watching now" aria-label="${field.watchers} watching">${Icons.svg('eye')}<b>${odo('watch', field.watchers)}</b></span></div>`
     + `<button type="button" class="hud-mod hud-avg" data-bbtoggle aria-label="Average stack. Tap to switch chips and big blinds"><span class="hud-lbl">Avg stack</span><b class="hud-val">${stackHTML('avg', avg, bb)}</b></button>`
     + (L ? `<button type="button" class="hud-mod hud-lead${meLead ? ' me' : ''}" data-bbtoggle aria-label="Chip leader ${esc(L.name)}. Tap to switch chips and big blinds">${Icons.svg('crown')}<span class="hud-lt"><span class="hud-lbl">Chip leader</span><b class="hud-name">${meLead ? 'You' : esc(L.name)}</b></span><span class="hud-chips"><b>${stackHTML('lead', L.stack, bb)}</b></span></button>` : '')
     + (field.rank ? `<div class="hud-mod hud-rank${tone}" title="Your place among everyone still playing"><span class="hud-lbl">Your rank</span><b class="hud-val">${vs}${odo('rank', ord(field.rank))}<small>/${field.players}</small></b></div>` : '');
   odoPlay(el);
 }
+// Upright on a phone (under 480 px wide) the HUD takes no room from the table (owner's ruling, 2026-10-22: the table
+// keeps production's size and place to the pixel, at every table size; the added elements stay at the top and the room
+// comes from the chrome, never from the felt). It stands in the header's own boxes, which keep their production heights:
+// - two header rows (taller phones): the chat and Lobby buttons move up beside the clock, as on the one-row header,
+//   and the HUD is one row over the stats row (Table, Avg stack, Your rank), whose cells stay in the flow unseen, so
+//   the row keeps its height to the pixel;
+// - the one-row header (shorter phones): the header keeps its height (measured as production lays it out, then held)
+//   and holds two slim lines: the clock and the buttons, and under them the HUD as one line.
+// Sideways (the column beside the table) and on wider screens the HUD stays where it was (its own row).
+function hudPlace(){
+  if(QUIET) return;   // (the quiet design has its own one-line field, #qline, and hides this HUD upright)
+  const g = $('game'), el = $('fieldBar'), T = club && club.tourney, ck = g.querySelector('.clock'), st = g.querySelector('.stats');
+  const on = !!field && !!T && T.status === 'running' && !g.classList.contains('land') && window.innerWidth < 480;
+  const one = g.classList.contains('row1'), home = on && one ? ck : g;
+  if(el.parentNode !== home){ if(home === ck) ck.appendChild(el); else g.insertBefore(el, $('sidePanel')); }
+  ck.style.height = ''; el.style.top = el.style.height = '';
+  // (the one-row header's height as production draws it: the HUD is out of the flow while it is measured)
+  if(on && one){ g.classList.remove('hud-in'); const h = ck.getBoundingClientRect().height; ck.style.height = h + 'px'; }
+  g.classList.toggle('hud-in', on);
+  const hb = g.querySelector('.hdr-btns'), bh = on || one ? ck : st;
+  if(hb && hb.parentNode !== bh) bh.appendChild(hb);
+  // (over the stats row: placed on its box, and again whenever that box changes, the web fonts arriving)
+  if(on && !one){ el.style.top = st.offsetTop + 'px'; el.style.height = st.offsetHeight + 'px'; }
+  if(!hudRO && window.ResizeObserver){ hudRO = new ResizeObserver(() => { const g = $('game'); if(g.classList.contains('hud-in') && !g.classList.contains('row1')) hudPlace(); }); hudRO.observe(st); }
+}
+let hudRO = null;
 // Sideways (#game.land) the column beside the table holds the tournament HUD (#fieldBar, placed there by style.css)
 // and under it the sponsor: logo, name, category, the prize and See their page (as on the break card). With no sponsor,
 // a prize alone; with neither, just the HUD. The status box and the action buttons stay at the bottom of the column.
@@ -975,7 +1001,7 @@ function sponsorFields(P, opt){
   const S = club.sponsors;
   // the prize, in the director's words: plain text, never cash (server/club.js prizeOf)
   const prize = `<label>Prize (optional)<input id="nPrize" maxlength="80" autocomplete="off" placeholder="For example: Dinner for two at Aurora" value="${esc(P ? P.prize || '' : '')}"></label>
-        <p class="note">Shown in the lobby and on the tables. Free social play: a gift or an experience, never cash. No links or phone numbers.</p>`;
+        <p class="note">Shown in the lobby and on the tables, for example $100 Prize or Dinner for two. No links or phone numbers.</p>`;
   if(!S || !S.list.length) return `<p class="note">Tournament sponsor: when a member publishes their business in the Exchange, you can pick it here to show on the tables at the start and during breaks.</p>${prize}`;
   const cur = P ? (P.sponsor ? P.sponsor.uid : '') : S.spotlight || '';
   return `<div class="two"><label>Tournament sponsor<select id="nSponsor">${opt('', 'None', cur)}${S.list.map(b => opt(b.uid, esc(b.name) + (b.uid === S.spotlight ? ' (Spotlight)' : ''), cur)).join('')}</select></label>
@@ -1898,7 +1924,9 @@ function renderPlayNote(d){
 }
 // over the board's five empty slots (and, when no message is showing, the message line under them: the layout keeps
 // both clear of seats and chips), the text as large as fits there, on two lines or, if need be, three
-// (on the oval nothing but the game lies on the felt: there the notice stands in the dock, over the helper's line)
+// (on the oval nothing but the game lies on the felt: there the notice stands in the dock on the free-play line, the
+// same words, as one line in the gap between the hand helper and the buttons; it covered the helper's line, the hand
+// and its chance to win, before: owner, 2026-10-22)
 function placePlayNote(el){
   let area = $('tableArea').getBoundingClientRect(); const slots = [...$('board').children].map(c => c.getBoundingClientRect());
   if(!slots.length) return hidePlayNote();
@@ -1907,14 +1935,18 @@ function placePlayNote(el){
   const msg = $('msg'), hp = $('helper');
   const oval = $('tableArea').classList.contains('oval'), home = oval ? $('dock') : $('tableArea');
   if(el.parentNode !== home) home.appendChild(el);
-  if(oval){ const d = $('dock').getBoundingClientRect(), h = !hp.hidden && hp.parentNode === $('dock') ? hp.getBoundingClientRect() : null;
-    area = d; l = h ? h.left : d.left + 8; r = h ? h.right : d.right - 8; t = h ? h.top : d.top; b = h ? Math.max(h.bottom, t + 36) : t + 36; }
+  el.classList.toggle('line', oval);
+  if(oval){ const d = $('dock').getBoundingClientRect(), pl = $('playLine').getBoundingClientRect(), h = !hp.hidden && hp.parentNode === $('dock') ? hp.getBoundingClientRect() : null;
+    // (from the helper's foot, or 3 px above the line, to the top of the first thing in the bar under it)
+    const under = [...$('controls').querySelectorAll('*')].filter(e => e.getClientRects().length && e.offsetHeight).map(e => e.getBoundingClientRect().top).filter(y => y >= pl.top);
+    area = d; l = h ? h.left : d.left + 8; r = h ? h.right : d.right - 8;
+    t = Math.max(pl.top - 3, h ? h.bottom : d.top); b = Math.max(pl.bottom, Math.min(pl.bottom + 3, ...under)); }
   else if(!msg.textContent.trim()){ const ms = getComputedStyle(msg), lh = parseFloat(ms.lineHeight) || parseFloat(ms.fontSize) * 1.3; b = Math.max(b, msg.getBoundingClientRect().top + lh); }
   el.style.cssText = `left:${l - area.left}px;top:${t - area.top}px;width:${r - l}px;height:${b - t}px`;
   const fits = () => el.scrollHeight <= el.clientHeight + .5 && el.scrollWidth <= el.clientWidth + .5;
-  for(const wrap of [false, true]){
+  for(const wrap of oval ? [false] : [false, true]){
     el.classList.toggle('wrap', wrap);
-    for(let f = 13; f >= 11; f -= .5){ el.style.fontSize = f + 'px'; if(fits()) return; }
+    for(let f = 13; f >= (oval ? 9.5 : 11); f -= .5){ el.style.fontSize = f + 'px'; if(fits()) return; }
   }
 }
 $('playNote').onclick = hidePlayNote;
@@ -1957,6 +1989,7 @@ function newLock(d){
   // the clock's second line carries), so the short screens keep every pixel of their table (Muse, Issue #31)
   const ql = QUIET && $('qline'), qhome = row1 ? g.querySelector('.clock') : g.querySelector('.stats');
   if(ql && (row1 ? ql.parentNode !== qhome : ql.previousElementSibling !== qhome)) row1 ? qhome.prepend(ql) : qhome.after(ql);
+  hudPlace();
   LOCK = { w: g.clientWidth, hand, h: 0, iw: window.innerWidth, ih: H };
   return true;
 }
@@ -2451,7 +2484,8 @@ function tickClock(){
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;
   // in the one-row header of the shortest screens the ante takes the second line, in place of the next level
-  const one = $('game').classList.contains('row1') || QUIET;   // the quiet design always keeps the clock row short
+  // (and wherever the chat and Lobby buttons stand beside the clock: the tournament HUD upright on a phone)
+  const one = $('game').classList.contains('row1') || QUIET || $('game').classList.contains('hud-in');   // the quiet design always keeps the clock row short
   $('cBlinds').textContent = `${fmt(sb)}/${fmt(bb)}${an && !one ? ' · ante ' + fmt(an) : ''}`;
   // (quiet, sideways: the clock has no second line, so the level the line's cell replaced is written here)
   const qLand = QUIET && $('game').classList.contains('row1') && $('game').classList.contains('land');
