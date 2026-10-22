@@ -67,7 +67,20 @@ const waiters = new Map();  // uid -> pending decision
 let running = false, clockTimer = null;
 let linker = () => null; // (uidA, uidB) -> reason they must not share a table, or null
 function setLinker(f){ linker = f; }
-const linkedAt = (tb, uid) => tb.g.seats.filter(q => q && q.uid !== uid && linker(uid, q.uid)).length;
+// Linked players form clusters (connected over any link): A–B same household and B–C same internet put A, B and C in one
+// cluster, and seating spreads the whole cluster, not only the linked pairs. uid -> cluster id
+function clustersOf(uids){
+  uids = [...new Set(uids)];
+  const up = new Map(uids.map(u => [u, u])), find = u => up.get(u) === u ? u : find(up.get(u));
+  for(let i = 0; i < uids.length; i++) for(let j = i + 1; j < uids.length; j++) if(linker(uids[i], uids[j])) up.set(find(uids[i]), find(uids[j]));
+  return new Map(uids.map(u => [u, find(u)]));
+}
+// cost of two players at one table: household (set by the director) far worst, then device, then internet, then same cluster only;
+// any other truthy reason counts as household. One household outweighs any number of weaker links.
+const LINK_W = { 'same household': 1e6, 'same device': 1e4, 'same internet': 1e2 };
+const pairW = (a, b, cl) => { if(a === b) return 0; const r = linker(a, b); return r ? LINK_W[r] || 1e6 : cl && cl.has(a) && cl.get(a) === cl.get(b) ? 1 : 0; };
+const linkScore = (tb, uid, cl) => tb.g.seats.reduce((n, q) => n + (q ? pairW(uid, q.uid, cl) : 0), 0);
+const everyone = extra => [...seated().map(p => p.uid), ...extra];
 
 const T = () => store.get('tourney') || null;
 function saveT(patch){ return store.set('tourney', { ...(T() || {}), ...patch }); }
@@ -156,15 +169,15 @@ function start(){
   if(regs.length < 2) throw new Error('At least 2 players need to join.');
   for(let i = regs.length - 1; i > 0; i--){ const j = crypto.randomInt(i + 1); [regs[i], regs[j]] = [regs[j], regs[i]]; }
   const nT = Math.ceil(regs.length / size()), groups = Array.from({ length: nT }, () => []), cap = Math.ceil(regs.length / nT);
-  // random seating, but players from the same household / internet / device go to different tables when possible
-  const conflicts = (grp, u) => grp.filter(v => linker(u, v)).length;
-  const order = regs.slice().sort((a, b) => regs.filter(v => linker(b, v)).length - regs.filter(v => linker(a, v)).length);
+  // random seating, but players from the same household / internet / device (and their whole cluster) go to different tables when possible
+  const cl = clustersOf(regs), conflicts = (grp, u) => grp.reduce((n, v) => n + pairW(u, v, cl), 0), heavy = new Map(regs.map(u => [u, conflicts(regs, u)]));
+  const order = regs.slice().sort((a, b) => heavy.get(b) - heavy.get(a));
   order.forEach(u => {
     const best = groups.filter(gp => gp.length < cap).sort((a, b) => conflicts(a, u) - conflicts(b, u) || a.length - b.length)[0];
     best.push(u);
   });
-  // repair pass: swap players between tables while that lowers the number of linked pairs sitting together
-  const cost = grp => grp.reduce((a, u, i) => a + grp.slice(i + 1).filter(v => linker(u, v)).length, 0);
+  // repair pass: swap players between tables while that lowers the weight of linked (and same-cluster) pairs sitting together
+  const cost = grp => grp.reduce((a, u, i) => a + conflicts(grp.slice(i + 1), u), 0);
   for(let pass = 0, improved = true; improved && pass < 50; pass++){
     improved = false;
     for(let a = 0; a < groups.length; a++) for(let b = a + 1; b < groups.length; b++){
@@ -510,10 +523,11 @@ function breakTable(x){
   x.broken = true;
   const movers = x.g.seats.filter(Boolean);
   x.g.seats = Array(9).fill(null);
+  const cl = clustersOf(everyone(movers.map(p => p.uid)));
   for(const p of movers){
     const open = active().filter(t => count(t) < size() && !t.toBreak), low = Math.min(...open.map(count));
-    // fewest players first; among those (and the next size up), avoid tables with a linked player
-    let dest = open.filter(t => count(t) <= low + 1).sort((a, b) => (linkedAt(a, p.uid) > 0) - (linkedAt(b, p.uid) > 0) || count(a) - count(b))[0];
+    // fewest players first; among those (and the next size up), the lightest links (household worst, then device, internet, cluster)
+    let dest = open.filter(t => count(t) <= low + 1).sort((a, b) => linkScore(a, p.uid, cl) - linkScore(b, p.uid, cl) || count(a) - count(b))[0];
     // never drop a player: fall back to any table with a free seat, or open a new one
     if(!dest) dest = active().filter(t => t !== x && count(t) < size()).sort((a, b) => count(a) - count(b))[0];
     if(!dest){ const n = Math.max(0, ...[...tables.values()].map(t => t.n)) + 1; dest = newTable(T().id + '-' + n, n); if(running) loop(dest); console.error('breakTable: no room, opened table', n); }
@@ -538,9 +552,10 @@ function balance(tb){
   if(!others.length) return;
   const shortest = others.sort((a, b) => count(a) - count(b))[0];
   while(count(tb) - count(shortest) >= 2){
-    // TDA: move the player who will be big blind next; skip anyone linked to a player at the destination
-    let s = E.nextLive(tb.g, tb.g.bb);
-    for(let k = 0, c = s; k < 9; k++, c = E.nextLive(tb.g, c)){ const q = tb.g.seats[c]; if(q && !linkedAt(shortest, q.uid)){ s = c; break; } }
+    // TDA: move the player who will be big blind next; skip anyone linked (or in a cluster) with a player at the destination
+    let s = E.nextLive(tb.g, tb.g.bb), best = Infinity;
+    const cl = clustersOf(everyone([]));
+    for(let k = 0, c = s; k < 9; k++, c = E.nextLive(tb.g, c)){ const q = tb.g.seats[c], w = q ? linkScore(shortest, q.uid, cl) : Infinity; if(w < best){ s = c; best = w; } if(!w) break; }
     const p = tb.g.seats[s];
     if(!p) break;
     tb.g.seats[s] = null; seatInto(shortest, p, 'balance');
@@ -554,7 +569,9 @@ function lateJoin(uid){
   const us = store.get('user:' + uid); if(!us || us.removed) throw new Error('Unknown player.');
   const p = mkPlayer(uid, t.stack);
   const open = active().filter(x => count(x) < size() && !x.toBreak);
-  let dest = open.sort((a, b) => (linkedAt(a, uid) > 0) - (linkedAt(b, uid) > 0) || count(a) - count(b))[0];
+  // lightest links first (none, same cluster, internet, device, household; then fewer of them), then fewest players
+  const cl = clustersOf(everyone([uid]));
+  let dest = open.sort((a, b) => linkScore(a, uid, cl) - linkScore(b, uid, cl) || count(a) - count(b))[0];
   let fresh = false;
   if(!dest){ const n = Math.max(0, ...[...tables.values()].map(x => x.n)) + 1; dest = newTable(t.id + '-' + n, n); fresh = true; }
   // everyone already knocked out now finishes one place lower
@@ -668,4 +685,4 @@ function totalChips(){
 }
 
 module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, edit, join, leave, cancel, start, resume, pause, unpause, act, extend, back, offline,
-  snapshot, cardsFor, show, gp: GP, onBreak, breaksOn, BREAK_EVERY, _extras: { resultMs, rabbitCards, resultExtras }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };
+  snapshot, cardsFor, show, gp: GP, onBreak, breaksOn, BREAK_EVERY, _extras: { resultMs, rabbitCards, resultExtras }, _seat: { breakTable, newTable }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };
