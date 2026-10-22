@@ -38,7 +38,10 @@ th{color:var(--text3);font-weight:500}
 #viewer{position:fixed;inset:0;background:rgba(0,0,0,.94);display:grid;place-items:center;z-index:9}
 #viewer img{max-width:100vw;max-height:100vh}
 [hidden]{display:none!important}
-#status{min-height:22px;color:var(--gold-text);font-size:13px}
+#status,.vstat{min-height:22px;color:var(--gold-text);font-size:13px;margin-top:8px}
+.vprev{margin-top:10px;border-radius:12px;overflow:hidden;max-width:240px}
+.vprev video{display:block;width:100%;height:auto;background:#000}
+#sendstate{font-size:14px;font-weight:600;min-height:22px}
 </style>
 </head>
 <body>
@@ -48,12 +51,14 @@ th{color:var(--text3);font-weight:500}
 <div id="signin" class="card" hidden><p>Sign in to the preview app first, then come back to this page.</p><p><a href="/" style="color:var(--gold-text)">Open the preview app</a></p></div>
 <div id="lab" hidden>
   <div class="card gold">
-    <p><b style="color:var(--text)">1. Photos</b>: pick up to 20. Each becomes a 1080 px photo and a 400 px thumbnail, on this phone.</p>
+    <p><b style="color:var(--text)">1. Photos</b>: pick up to 20. Each becomes a 1080 px wide photo (1080×1440 for a portrait) and a small thumbnail, on this phone.</p>
     <div class="row"><label class="pick primary">Choose photos<input id="photos" type="file" accept="image/*" multiple></label></div>
   </div>
   <div class="card gold">
     <p><b style="color:var(--text)">2. Videos</b>: pick clips. Each is made 720p and at most 15 s, on this phone, in real time: keep the screen on while it works.</p>
     <div class="row"><label class="pick primary">Choose videos<input id="videos" type="file" accept="video/*" multiple></label><button id="nextVideo" hidden>Prepare next video</button></div>
+    <div id="vstatus" class="vstat" aria-live="polite"></div>
+    <div id="vprev" class="vprev" hidden></div>
   </div>
   <div id="status" aria-live="polite"></div>
   <h2>Measurements</h2>
@@ -62,6 +67,7 @@ th{color:var(--text3);font-weight:500}
   <h2>Monthly cost from these measurements</h2>
   <div class="card scroll" id="costs"><p class="note">Appears after the first file.</p></div>
   <div class="row"><button id="send" class="primary" disabled>Send results to Claude</button><button id="copy" disabled>Copy results</button><button id="clear">Clear my lab files</button></div>
+  <p id="sendstate" aria-live="polite"></p>
   <h2>Feed preview</h2>
   <p class="note">The same files as a feed would show them: thumbnails load as you scroll, a tap opens the full photo, and videos show their poster until tapped.</p>
   <div id="feed" class="feed"></div>

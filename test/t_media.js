@@ -51,7 +51,7 @@ function mp4(seconds, pad = 5000){
   assert.throws(() => lab.api.commit({ key: s.key }, ub, B), /No such upload/); check(true, 'another club\'s member cannot commit someone else\'s upload');
   lab.api.commit({ key: s.key }, ua, A);
   check(lab.api.list({}, ua, A).items.length === 1 && lab.api.list({}, ub, B).items.length === 0, 'a club\'s files are listed only for that club');
-  assert.throws(() => lab.api.slot({ kind: 'photo', bytes: 500 * 1024 }, ua, A), /Too big/); check(true, 'an upload slot is refused above the size cap (photo 400 KB)');
+  assert.throws(() => lab.api.slot({ kind: 'photo', bytes: 700 * 1024 }, ua, A), /Too big/); check(true, 'an upload slot is refused above the size cap (photo 600 KB)');
   assert.throws(() => lab.api.slot({ kind: 'video', bytes: 11 * 1048576 }, ua, A), /Too big/); check(true, 'and a video above 10 MB');
   fs.rmSync(dir, { recursive: true, force: true });
 
@@ -70,7 +70,8 @@ function mp4(seconds, pad = 5000){
   S = await serve({ MEDIA_LAB: '1' });
   const B0 = S.base, j = (p, body, tok) => fetch(B0 + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body || {}) });
   const page = await fetch(B0 + '/lab/media');
-  check(page.status === 200 && /Media lab/.test(await page.text()) && /script-src 'self'/.test(page.headers.get('content-security-policy')), 'switch on: the lab page is served, under the app\'s security policy');
+  check(page.status === 200 && /Media lab/.test(await page.text()) && /script-src 'self'/.test(page.headers.get('content-security-policy')) && /media-src 'self' blob:/.test(page.headers.get('content-security-policy')), 'switch on: the lab page is served, under the app\'s security policy plus playing the chosen clip (blob:)');
+  check(!/media-src/.test((await fetch(B0 + '/')).headers.get('content-security-policy')), 'the app\'s own pages keep their policy unchanged');
   check((await j('/media/api/list')).status === 401, 'the lab API needs a signed-in member');
   const tok = (await (await j('/api/setup', { code: 'secret', name: 'Lab Tester', pin: '246810', agree: true })).json()).token;
   const up = async (kind, buf) => { const sl = await (await j('/media/api/slot', { kind, bytes: buf.length, group: 'g' }, tok)).json(); const put = await fetch(B0 + sl.put, { method: 'PUT', body: buf }); return { sl, put, commit: await j('/media/api/commit', { key: sl.key }, tok) }; };

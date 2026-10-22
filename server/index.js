@@ -387,6 +387,8 @@ const server = http.createServer((req, res) => {
     // app files: the phone keeps a copy but asks every time ("no-cache"); an unchanged file costs a 304 instead of the whole file
     const tag = '"' + crypto.createHash('sha1').update(buf).digest('base64url').slice(0, 20) + '"';
     const fresh = cache || { 'Cache-Control': 'no-cache', ETag: tag };
+    // the media lab plays the chosen clip from the phone's memory (a blob: link) before preparing it; only that page may
+    if(file === 'lab/media.html') fresh['Content-Security-Policy'] = SECURITY['Content-Security-Policy'] + "; media-src 'self' blob:";
     if(!cache && req.headers['if-none-match'] === tag){ res.writeHead(304, { ...SECURITY, ...fresh }); return res.end(); }
     send(res, 200, buf, TYPES[path.extname(full)] || 'application/octet-stream', fresh);
   });

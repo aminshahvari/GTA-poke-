@@ -1,5 +1,6 @@
 // Media lab (preview only, owner GO 2026-10-21). Everything heavy happens on this phone:
-//  - a photo is decoded, drawn at 1080 px on its long side and saved as a JPEG, plus a 400 px thumbnail. Drawing it
+//  - a photo is decoded, drawn 1080 px on its short side (1440 at most on the long) and saved as a JPEG, plus a
+//    400 px thumbnail for grids; the feed loads the full photo on sharp screens. Drawing it
 //    afresh leaves the camera's EXIF behind, GPS included; the server refuses any JPEG that still has EXIF
 //  - a video plays once into a 720p canvas that MediaRecorder encodes (H.264 + AAC in an MP4), at most 15 s,
 //    plus a poster frame
@@ -25,6 +26,7 @@ async function upload(kind, blob, group, w, h){
   return call('commit', { key: s.key, w, h });
 }
 const status = t => { $('status').textContent = t; };
+const vstatus = t => { $('vstatus').textContent = t; };
 
 // ---------- EXIF: is there any, and does it hold a GPS position (tag 0x8825 in the first directory)? ----------
 function exifOf(u8){
@@ -48,10 +50,18 @@ function exifOf(u8){
 
 // ---------- photos ----------
 const loadImg = file => new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => bad(new Error('This photo could not be opened here.')); im.src = URL.createObjectURL(file); });
-function drawAt(src, sw, sh, long){
-  const k = Math.min(1, long / Math.max(sw, sh)), w = Math.round(sw * k), h = Math.round(sh * k);
+// long: the long side's cap; short (optional): the short side's target. A big camera photo is halved step by step
+// first, which keeps fine detail (hair, fabric) sharp where one big jump would alias it
+function drawAt(src, sw, sh, long, short){
+  const k = Math.min(1, long / Math.max(sw, sh), short ? short / Math.min(sw, sh) : 1), w = Math.round(sw * k), h = Math.round(sh * k);
+  let cur = src, cw = sw, ch = sh;
+  while(cw / 2 >= w * 1.5){
+    const half = document.createElement('canvas'); half.width = Math.round(cw / 2); half.height = Math.round(ch / 2);
+    const hx = half.getContext('2d'); hx.imageSmoothingEnabled = true; hx.imageSmoothingQuality = 'high'; hx.drawImage(cur, 0, 0, half.width, half.height);
+    cur = half; cw = half.width; ch = half.height;
+  }
   const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const x = c.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, w, h);
+  const x = c.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(cur, 0, 0, w, h);
   return c;
 }
 // Safari's own JPEG encoder writes a small EXIF block (colour space, size) into every photo it saves. Before upload the
@@ -95,9 +105,9 @@ async function ssim(ref, blob){
 async function doPhoto(file, i){
   encoderExif = encoderGps = null; metaRemoved = 0;
   const t0 = performance.now(), u8 = new Uint8Array(await file.arrayBuffer()), before = exifOf(u8);
-  const im = await loadImg(file), big = drawAt(im, im.naturalWidth, im.naturalHeight, 1080);
-  let q = .82, photo = await jpeg(big, q);
-  while(photo.size > 300 * 1024 && q > .6){ q -= .08; photo = await jpeg(big, q); }
+  const im = await loadImg(file), big = drawAt(im, im.naturalWidth, im.naturalHeight, 1440, 1080);
+  let q = .85, photo = await jpeg(big, q);
+  while(photo.size > 450 * 1024 && q > .65){ q -= .05; photo = await jpeg(big, q); }
   const thumb = await jpeg(drawAt(big, big.width, big.height, 400), .78);
   const ms = performance.now() - t0;
   const after = exifOf(new Uint8Array(await photo.arrayBuffer())), quality = await ssim(big, photo);
@@ -115,13 +125,20 @@ const MIMES = ['video/mp4;codecs=avc1.42E01F,mp4a.40.2', 'video/mp4;codecs=avc1,
 let actx = null;
 async function doVideo(file, i){
   const v = document.createElement('video'); v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(file);
-  v.setAttribute('playsinline', ''); v.style.cssText = 'position:fixed;left:-9999px;width:2px;height:2px'; document.body.appendChild(v);
+  v.setAttribute('playsinline', ''); v.muted = false;
+  // on screen, not hidden: Safari stops presenting frames of a video it cannot see, and the recording would stall
+  $('vprev').innerHTML = ''; $('vprev').appendChild(v); $('vprev').hidden = false;
   // still inside the tap: Safari allows playing with sound (and so recording it) only here, then on this element later
   actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume();
   const first = v.play().then(() => null, e => e);
-  if(v.readyState < 1) await once(v, 'loadedmetadata');
+  if(v.readyState < 1){
+    // a clip this phone cannot open fires 'error' rather than 'loadedmetadata': say so instead of waiting forever
+    const why = await Promise.race([once(v, 'loadedmetadata').then(() => null), once(v, 'error').then(() => 'this phone could not open the clip' + (v.error ? ' (code ' + v.error.code + ')' : '')),
+      new Promise(ok => setTimeout(() => ok('the clip did not open within 15 s'), 15000))]);
+    if(why){ v.remove(); $('vprev').hidden = true; throw new Error(why); }
+  }
   const blocked = await first; v.pause();
-  if(blocked){ v.remove(); throw new Error('This browser would not play the video: ' + blocked.message); }
+  if(blocked){ v.remove(); $('vprev').hidden = true; throw new Error('This browser would not play the video: ' + blocked.message); }
   const W0 = v.videoWidth, H0 = v.videoHeight, dur = v.duration, k = Math.min(1, 1280 / Math.max(W0, H0));
   const w = Math.round(W0 * k / 2) * 2, h = Math.round(H0 * k / 2) * 2, limit = Math.min(dur, 15);
   const r = { i, kind: 'video', origBytes: file.size, origW: W0, origH: H0, origSeconds: +dur.toFixed(2), outW: w, outH: h, exifBefore: null, gpsBefore: null };
@@ -140,15 +157,18 @@ async function doVideo(file, i){
   const t0 = performance.now();
   v.currentTime = 0; await v.play();
   rec.start(1000);
-  await new Promise(done => {
+  await new Promise((done, fail) => {
+    let last = -1, still = performance.now();
     const step = () => {
       x.drawImage(v, 0, 0, w, h);
       if(v.ended || v.currentTime >= limit) return done();
-      status(`Video ${i}: ${v.currentTime.toFixed(1)} of ${limit.toFixed(1)} s`);
-      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      if(v.currentTime !== last){ last = v.currentTime; still = performance.now(); }
+      else if(performance.now() - still > 6000) return fail(new Error(`stalled at ${v.currentTime.toFixed(1)} s (the video stopped playing)`));
+      vstatus(`Video ${i}: preparing ${v.currentTime.toFixed(1)} of ${limit.toFixed(1)} s`);
+      requestAnimationFrame(step);   // a timer on the page, not the video's own frame callback, so a paused video cannot hang it
     };
     step();
-  });
+  }).catch(e => { v.pause(); try{ rec.stop(); }catch(_){} $('vprev').hidden = true; v.remove(); throw e; });
   v.pause(); const stopped = once(rec, 'stop'); rec.stop(); await stopped;
   const out = new Blob(chunks, { type: mime.split(';')[0] });
   r.ms = Math.round(performance.now() - t0); r.outBytes = out.size; r.outSeconds = +limit.toFixed(2); r.kbps = Math.round(out.size * 8 / limit / 1000);
@@ -160,7 +180,7 @@ async function doVideo(file, i){
     const done = await upload('video', out, group, w, h); r.serverSeconds = done.seconds;
     await upload('poster', poster, group, w, h); r.server = 'accepted';
   }catch(e){ r.server = 'refused: ' + e.message; }
-  URL.revokeObjectURL(v.src); v.remove();
+  URL.revokeObjectURL(v.src); v.remove(); $('vprev').hidden = true;
   return r;
 }
 
@@ -218,7 +238,7 @@ async function feed(){
   const { items } = await call('list'), groups = new Map();
   for(const it of items){ if(!it.group) continue; const g = groups.get(it.group) || {}; g[it.kind] = it; groups.set(it.group, g); }
   $('feed').innerHTML = [...groups.values()].map(g => g.thumb && g.photo
-    ? `<div class="post"><img src="${g.thumb.url}" data-full="${g.photo.url}" loading="lazy" decoding="async" width="${g.photo.w || 400}" height="${g.photo.h || 300}" alt="Test photo"><div class="meta">Thumbnail ${size(g.thumb.bytes)} · full photo ${size(g.photo.bytes)} (tap)</div></div>`
+    ? `<div class="post"><img src="${g.thumb.url}" srcset="${g.thumb.url} 400w, ${g.photo.url} ${g.photo.w || 1080}w" sizes="(max-width: 760px) 100vw, 728px" data-full="${g.photo.url}" loading="lazy" decoding="async" width="${g.photo.w || 400}" height="${g.photo.h || 300}" alt="Test photo"><div class="meta">Thumbnail ${size(g.thumb.bytes)} · full photo ${size(g.photo.bytes)} (tap)</div></div>`
     : g.video && g.poster ? `<div class="post"><div class="vid"><video preload="none" playsinline controls poster="${g.poster.url}" width="${g.video.w}" height="${g.video.h}" src="${g.video.url}"></video></div><div class="meta">Poster ${size(g.poster.bytes)} · video ${size(g.video.bytes)}${g.video.seconds ? ' · ' + g.video.seconds.toFixed(1) + ' s' : ''} (loads only when played)</div></div>` : '').join('');
   $('feed').querySelectorAll('img[data-full]').forEach(im => im.onclick = () => { $('viewer').innerHTML = `<img src="${im.dataset.full}" alt="Test photo, full size">`; $('viewer').hidden = false; });
 }
@@ -234,7 +254,14 @@ function report(){
     files: results.map(({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, encoderExif, encoderGps, metaRemoved, mime, kbps, outSeconds, serverSeconds, server, audio }) =>
       ({ i, kind, origBytes, origW, origH, origSeconds, outBytes, outW, outH, q, thumbBytes, ms, ssim, exifBefore, gpsBefore, exifAfter, encoderExif, encoderGps, metaRemoved, mime, kbps, outSeconds, serverSeconds, server, audio })) };
 }
-$('send').onclick = async () => { try{ await call('report', { report: report() }); status('Sent. Claude reads it from the preview server\'s log.'); }catch(e){ status('Not sent: ' + e.message); } };
+$('send').onclick = async () => {
+  const b = $('send'), n = results.length; b.disabled = true; b.textContent = 'Sending…'; $('sendstate').textContent = '';
+  try{
+    await call('report', { report: report() });
+    b.textContent = 'Sent ✓'; $('sendstate').className = 'ok'; $('sendstate').textContent = `Sent ${n} results at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Claude has them now.`;
+  }catch(e){ b.textContent = 'Send results to Claude'; $('sendstate').className = 'no'; $('sendstate').textContent = 'Not sent: ' + e.message + '. Tap again.'; }
+  setTimeout(() => { b.disabled = false; b.textContent = 'Send results to Claude'; }, 4000);
+};
 $('copy').onclick = async () => { const t = JSON.stringify(report(), null, 1); try{ await navigator.clipboard.writeText(t); status('Copied.'); }catch(e){ status('Copy did not work here.'); } };
 $('clear').onclick = async () => { try{ const r = await call('clear'); status(`Removed ${r.removed} files.`); feed(); }catch(e){ status(e.message); } };
 
@@ -250,12 +277,16 @@ $('photos').onchange = async e => {
 // one video per tap: Safari lets a page play sound (needed to record it) only right after a tap
 let queue = [];
 async function nextVideo(){
-  const f = queue.shift(); $('nextVideo').hidden = true; if(!f) return;
-  const i = results.length + 1;
-  try{ const r = await doVideo(f, i); results.push(r); row(r); }catch(x){ const r = { i, kind: 'video', origBytes: f.size, server: x.message }; results.push(r); row(r); }
-  summary(); $('nextVideo').hidden = !queue.length; status(queue.length ? `${queue.length} more: tap "Prepare next video".` : 'Videos done.'); feed();
+  const f = queue.shift(); $('nextVideo').disabled = true; if(!f) return;
+  const i = results.length + 1; vstatus(`Video ${i}: opening…`);
+  let r;
+  try{ r = await doVideo(f, i); }catch(x){ r = { i, kind: 'video', origBytes: f.size, server: x.message }; }
+  results.push(r); row(r); summary();
+  const ok = /^accepted/.test(r.server || '');
+  vstatus(`Video ${i}: ${ok ? `ready, ${size(r.outBytes)} in ${(r.ms / 1000).toFixed(1)} s` : 'not prepared: ' + r.server}. ${queue.length ? `${queue.length} more: tap "Prepare next video".` : 'All videos done.'}`);
+  $('nextVideo').disabled = false; $('nextVideo').hidden = !queue.length; feed();
 }
-$('videos').onchange = e => { queue = [...e.target.files].slice(0, 20); e.target.value = ''; $('nextVideo').hidden = !queue.length; status(`${queue.length} videos chosen: tap "Prepare next video" for each.`); };
+$('videos').onchange = e => { queue = [...e.target.files].slice(0, 20); e.target.value = ''; $('nextVideo').hidden = !queue.length; vstatus(`${queue.length} videos chosen: tap "Prepare next video" for each, and keep this screen on.`); };
 $('nextVideo').onclick = nextVideo;
 
 (async () => {
