@@ -961,7 +961,7 @@ function clubsSwitchHTML(){
 // table extras (show or muck, rabbit hunt, pause between hands): only offered where the server allows them
 const extrasOn = () => !!(club && club.features && club.features.tableExtras);
 // the sponsor and the prize on the lobby's tournament card
-const presentedHTML = T => T.sponsor || T.prize ? `<p class="note sp-note">${T.sponsor ? `Presented by <b>${esc(T.sponsor.name)}</b>.` : ''}${T.sponsor && T.prize ? ' ' : ''}${T.prize ? `<span class="sp-prize">Prize: <b>${esc(T.prize)}</b></span>` : ''}</p>` : '';
+const presentedHTML = T => T.sponsor || T.prize ? `<p class="note sp-note">${T.sponsor ? `Presented by <b>${esc(T.sponsor.name)}</b>${/\.$/.test(T.sponsor.name) ? '' : '.'}` : ''}${T.sponsor && T.prize ? ' ' : ''}${T.prize ? `<span class="sp-prize">Prize: <b>${esc(T.prize)}</b></span>` : ''}</p>` : '';
 function extrasNote(T){
   if(!extrasOn() || !T) return '';
   const x = [T.showMuck ? 'after each hand, players may show one or both of their cards' : '', T.rabbit ? 'the unused turn and river are shown when a hand ends early' : '', T.handPause ? `${T.handPause} seconds between hands` : ''].filter(Boolean);
