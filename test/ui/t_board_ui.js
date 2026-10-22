@@ -129,14 +129,14 @@ async function b3(pg, tag, sock, me, w, h){
     return { top: r(top), card: r(card), cardText: card ? card.innerText.replace(/\s+/g, ' ').trim() : '', lobby: r(document.getElementById('lobbyBtn')), chat: r(document.getElementById('chatBtn')),
       inTop: document.getElementById('lobbyBtn').closest('#bTop') === top, popup: card && card.getAttribute('aria-haspopup'), label: card && card.getAttribute('aria-label'),
       oldHdr: shown('#game>.clock') || shown('#game>.stats'), field: r(document.getElementById('fieldBar')), side: r(document.getElementById('sidePanel')), sideText: document.getElementById('sidePanel').textContent,
-      area: r(document.getElementById('tableArea')), ctl: r(document.getElementById('controls')), W: innerWidth, H: innerHeight, col: document.getElementById('game').classList.contains('b-col'),
+      area: r(document.getElementById('tableArea')), ctl: r(document.getElementById('controls')), W: innerWidth, H: innerHeight, col: document.getElementById('game').classList.contains('b-col'), row1: document.getElementById('game').classList.contains('row1'),
       time: (e => e && getComputedStyle(e).color)(document.getElementById('bhTime')), gold: getComputedStyle(document.documentElement).getPropertyValue('--b-gold').trim(),
       sponsorWords: /Aurora Test Roasters/.test(words), seats: [...document.querySelectorAll('#seats .seat.b-seat:not(.hero) .plate, #seats .seat.b-seat:not(.hero) .av')].map(r).filter(Boolean),
       ring: [...document.querySelectorAll('#seats .seat.b-seat:not(.hero):not(.acting) .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, getComputedStyle(a).borderTopColor]),
       ringAct: [...document.querySelectorAll('#seats .seat.b-seat.acting .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, getComputedStyle(a).borderTopColor]) };
   });
   check(m.top && m.card && m.inTop && m.popup === 'dialog' && !m.oldHdr, `${tag} B3: the header is the board's: ${land ? 'one pill' : 'one card'} that opens the tournament sheet, the Lobby pill in the same row; today's clock and stats rows are not drawn`);
-  check(!land ? Math.abs(m.card.h - (ps ? 44 : 56)) <= 1 && m.lobby.l >= m.card.r && m.lobby.h >= 44 : Math.abs(m.card.h - 36) <= 1, `${tag} B3: ${land ? 'the pill 36 tall' : `the card ${ps ? 44 : 56} tall (${Math.round(m.card.h)}), Lobby to its right, at least 44 tall`}`);
+  check(!land ? Math.abs(m.card.h - (m.row1 ? 44 : 56)) <= 1 && m.lobby.l >= m.card.r && m.lobby.h >= 44 : Math.abs(m.card.h - 30) <= 1 && Math.abs(m.top.h - 35) <= 1, `${tag} B3: ${land ? 'the pill 30 tall, the header 35 (today\'s room: the table keeps its room)' : `the card ${m.row1 ? 44 : 56} tall (${Math.round(m.card.h)}), Lobby to its right, at least 44 tall`}`);
   check(/Level\s*3/.test(m.cardText) && /200\/400/.test(m.cardText) && /32\/48( players)?/.test(m.cardText) && /3rd/.test(m.cardText) && /\d+:\d\d/.test(m.cardText), `${tag} B3: the collapsed bar: level, blinds, the clock, players left and your rank: "${m.cardText}"`);
   check(!/leader|Avg|watching|tables|Aurora/i.test(m.cardText), `${tag} B3: and nothing else of the HUD (players left and your rank only: owner's GO)`);
   check(/32 of 48 players left/.test(m.label) && /Your rank 3rd/.test(m.label), `${tag} B3: the card reads out what it shows: "${m.label}"`);

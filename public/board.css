@@ -380,7 +380,7 @@
    ====================================================================================================================== */
 [data-ui="board"] #game>.clock,[data-ui="board"] #game>.stats{display:none}
 [data-ui="board"] #game:not(.b-col)>#fieldBar{display:none}
-[data-ui="board"] #game .b-top{flex:none;position:relative;z-index:30;display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top,0px)) 12px 8px}
+[data-ui="board"] #game .b-top{flex:none;position:relative;z-index:30;display:flex;align-items:center;gap:8px;padding:8px 12px}
 [data-ui="board"] #game:not(.land) .b-top-l{display:none}
 [data-ui="board"] #game .b-top-l,[data-ui="board"] #game .b-top-r{flex:none;display:flex;align-items:center}
 [data-ui="board"] #game .b-hudw{position:relative;flex:1;min-width:0;display:flex}
@@ -402,11 +402,14 @@
 [data-ui="board"] #game .b-hud .bh-idle{display:none;font-size:var(--b-t-15);font-weight:600}
 [data-ui="board"] #game .b-top.idle .b-hud>span{display:none}
 [data-ui="board"] #game .b-top.idle .b-hud>.bh-idle{display:flex}
-/* the smallest phones: a lower card (the table keeps its room) */
-[data-ui="board"] #game[data-bcls="P-S"] .b-top{padding-top:calc(4px + env(safe-area-inset-top,0px));padding-bottom:2px}
-[data-ui="board"] #game[data-bcls="P-S"] .b-hud{height:44px;gap:10px;padding:0 10px}
-[data-ui="board"] #game[data-bcls="P-S"] .b-hud b{font-size:var(--b-t-17)}
-[data-ui="board"] #game[data-bcls="P-S"] .b-hud .bh-tm b{font-size:var(--b-t-20)}
+/* short screens (today's one-row header: the smallest phones, and upright phones with the browser's bars showing): a
+   44 px card, the header as tall as today's one row (49 px at 320 wide, 51 px wider), so the table keeps B2's room to
+   the pixel. (The top inset is the page's own: body padding, index.html) */
+[data-ui="board"] #game.row1:not(.land) .b-top{padding-top:4px;padding-bottom:3px}
+[data-ui="board"] #game.row1[data-bcls="P-S"] .b-top{padding-bottom:1px}
+[data-ui="board"] #game.row1:not(.land) .b-hud{height:44px;gap:10px;padding:0 10px}
+[data-ui="board"] #game.row1:not(.land) .b-hud b{font-size:var(--b-t-17)}
+[data-ui="board"] #game.row1:not(.land) .b-hud .bh-tm b{font-size:var(--b-t-20)}
 [data-ui="board"] #game[data-bcls="P-S"] .b-top #lobbyBtn{padding:0 10px;font-size:var(--b-t-14)}
 /* (long blinds on a narrow phone) */
 [data-ui="board"] #game .b-hud.tight{gap:8px;padding:0 12px}
@@ -433,11 +436,14 @@
 [data-ui="board"] #game .b-hudw .spn .sp-logo .bz-logo.sp{width:36px;height:36px}
 
 /* ---------- sideways: one centred pill, Chat top left, Lobby top right ---------- */
-[data-ui="board"] #game.land .b-top{padding:calc(4px + env(safe-area-inset-top,0px)) 12px 4px}
+/* (35 px in all, the room today's sideways header and its hairline take, so the table keeps B2's room to the pixel:
+   §3.1's L budget says 36 + 4, which took 7 px from the felt; the hit area of the pill reaches 44 px tall) */
+[data-ui="board"] #game.land .b-top{padding:2px 12px 3px}
 [data-ui="board"] #game.land .b-top-l,[data-ui="board"] #game.land .b-top-r{flex:1 1 0;min-width:44px}
 [data-ui="board"] #game.land .b-top-r{justify-content:flex-end}
 [data-ui="board"] #game.land .b-hudw{flex:0 1 auto}
-[data-ui="board"] #game.land .b-hud{height:36px;border-radius:var(--b-r-pill);gap:0;padding:0 16px;box-shadow:none}
+[data-ui="board"] #game.land .b-hud{height:30px;border-radius:var(--b-r-pill);gap:0;padding:0 16px;box-shadow:none;overflow:visible;position:relative}
+[data-ui="board"] #game.land .b-hud::after{content:"";position:absolute;left:0;right:0;top:-7px;bottom:-7px}
 [data-ui="board"] #game.land .b-hud>span{flex-direction:row;align-items:baseline;gap:5px}
 [data-ui="board"] #game.land .b-hud .bh-tm{display:contents}
 [data-ui="board"] #game.land .b-hud b,[data-ui="board"] #game.land .b-hud .bh-tm b{font-size:var(--b-t-15)}
@@ -452,8 +458,8 @@
 [data-ui="board"] #game.land .b-hud.tight .bh-rk small,[data-ui="board"] #game.land .b-hud.tighter .bh-lvl small{display:none}
 [data-ui="board"] #game.land .b-hud.tight b{font-size:var(--b-t-14)}
 [data-ui="board"] #game.land .b-hud.tight small{font-size:12px}
-[data-ui="board"] #game.land .b-top #lobbyBtn{min-height:36px;padding:0 14px;font-size:var(--b-t-14)}
-[data-ui="board"] #game.land .b-top #chatBtn{min-height:36px;width:44px;height:36px}
+[data-ui="board"] #game.land .b-top #lobbyBtn{min-height:30px;height:30px;padding:0 14px;font-size:var(--b-t-14)}
+[data-ui="board"] #game.land .b-top #chatBtn{min-height:30px;width:44px;height:30px;font-size:15px}
 
 /* ---------- the tiles (the sheet; sideways, the column) ---------- */
 [data-ui="board"] #game .b-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
