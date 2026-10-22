@@ -377,13 +377,14 @@ const server = http.createServer((req, res) => {
   let file = url.pathname === '/lab/media' ? 'lab/media.html' : url.pathname === '/' || url.pathname === '/login' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
   if(file === 'engine.js') return fs.readFile(path.join(__dirname, 'engine.js'), (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES['.js']));
   const full = path.join(PUBLIC, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
-  if(!full.startsWith(PUBLIC)) return send(res, 404, 'Not found', 'text/plain');
+  if(!full.startsWith(PUBLIC)) return notFound(res, file);
   // pinned third-party files (public/vendor/<name>-<version>/): never change at a given path, so phones may keep them for a year.
   // eng.traineddata.gz goes out as plain bytes with no Content-Encoding; the card reader unzips it itself.
   const cache = url.pathname.startsWith('/vendor/') ? { 'Cache-Control': 'public, max-age=31536000, immutable' } : undefined;
   fs.readFile(full, (err, buf) => {
-    if(err) return send(res, 404, 'Not found', 'text/plain');
-    if(file === 'index.html' && quietUI()) buf = quietPage(buf);
+    if(err) return notFound(res, file);
+    if(file === 'index.html' && boardUI()) buf = shellPage(boardPage(buf));
+    else if(file === 'index.html' && quietUI()) buf = shellPage(quietPage(buf));
     // app files: the phone keeps a copy but asks every time ("no-cache"); an unchanged file costs a 304 instead of the whole file
     const tag = '"' + crypto.createHash('sha1').update(buf).digest('base64url').slice(0, 20) + '"';
     const fresh = cache || { 'Cache-Control': 'no-cache', ETag: tag };
@@ -857,7 +858,22 @@ const PROD_DB_HOST = 'dpg-db81kuom7kps73cmh9dg-a';
 // Never on the production database, whatever the environment says.
 const quietUI = () => process.env.UI_QUIET === '1' && !String(process.env.DATABASE_URL || '').includes(PROD_DB_HOST);
 const quietPage = buf => Buffer.from(String(buf).replace('<html lang="en">', '<html lang="en" data-ui="quiet">').replace('</head>', '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">\n<link rel="stylesheet" href="/quiet.css">\n</head>'));
-if(process.env.UI_QUIET === '1') console.log(quietUI() ? 'UI_QUIET: the quiet design is on (preview)' : 'UI_QUIET ignored: this is the production database');
+// The Quiet Luxury board (Issue #32, owner direction 2026-10-21: preview only): UI_BOARD=1 marks the page
+// html[data-ui="board"] and adds public/board.css, whose rules all sit under that marker. It takes the place of
+// UI_QUIET when both are set (one design at a time: no quiet marker, no quiet.css). Unset, the page is byte for byte
+// what it was. Never on the production database, whatever the environment says. With either design on, the app shell
+// gets its branded first paint and a styled not-found page (server/shell.js).
+const shell = require('./shell');
+const boardUI = () => shell.boardOn(process.env, PROD_DB_HOST);
+const { boardPage, shellPage } = shell;
+if(process.env.UI_QUIET === '1') console.log(!quietUI() ? 'UI_QUIET ignored: this is the production database' : boardUI() ? 'UI_QUIET ignored: UI_BOARD is on and takes its place' : 'UI_QUIET: the quiet design is on (preview)');
+if(process.env.UI_BOARD === '1') console.log(boardUI() ? 'UI_BOARD: the board design is on (preview)' : 'UI_BOARD ignored: this is the production database');
+// an unknown page: with a design on, a page-like address (no file extension) gets the styled page; files keep the plain 404
+function notFound(res, file){
+  const mode = boardUI() ? 'board' : quietUI() ? 'quiet' : '';
+  if(!mode || /\.[a-z0-9]+$/i.test(file)) return send(res, 404, 'Not found', 'text/plain');
+  send(res, 404, shell.notFoundPage(mode), TYPES['.html'], NOINDEX);
+}
 // The media lab (owner GO 2026-10-21: preview only, local storage, test data): MEDIA_LAB=1, never on the production database
 const media = require('./media').create({ prodHost: PROD_DB_HOST });
 // who is asking, for the media lab: the signed-in member and the club they are showing (as the JSON API decides it)

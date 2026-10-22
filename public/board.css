@@ -1,0 +1,89 @@
+/* Blindrise, the Quiet Luxury board (Issue #32: Step-0 spec 6328417238, Muse's rulings 6328611548).
+   Preview only: loaded when the server runs with UI_BOARD=1, and every rule sits under html[data-ui="board"], so
+   without the switch nothing here applies. Phase B1: the token sheet (spec §2) and the older --lx-* / --q-* names
+   pointed at it, so the current components take the board's palette and type. No geometry changes here (B2 on).
+   test/t_board.js counts the hard-coded colours in this file: that count may only go down. Colours belong in the
+   token block below; components use the tokens. */
+
+/* ---------- tokens (§2) ---------- */
+[data-ui="board"]{
+  /* §2.1 surfaces */
+  --b-bg:#03070d; --b-surface:#0a1420; --b-surface-2:#101c2b;
+  --b-hair:rgba(255,255,255,.08); --b-hair-gold:rgba(212,178,108,.30);
+  --b-felt:#05472a; --b-felt-edge:#01261a; --b-rail:#07111a; --b-rail-hi:rgba(212,178,108,.18);
+  /* §2.1 text and accents (--b-text-3 is .49, not the spec's .42: .42 measures 3.7:1, under AA; .49 is the nearest that passes; see t_board) */
+  --b-text:#f4f0e7; --b-text-2:rgba(244,240,231,.64); --b-text-3:rgba(244,240,231,.49);
+  --b-gold:#d4b26c; --b-gold-text:#f1d48c;
+  --b-live:#e5484d; --b-online:#3fcf6e; --b-away:#8a93a3; --b-warn:#f0a24a;
+  /* §2.1 action buttons, gradients top to bottom, and their labels */
+  --b-fold-top:#bc2c34; --b-fold-bot:#83121b; --b-fold-label:#fff;
+  --b-call-top:#226eba; --b-call-bot:#0b3061; --b-call-label:#fff;
+  --b-raise-top:#d8ad5f; --b-raise-bot:#9c7238; --b-raise-label:#1a1206;
+  --b-fold:linear-gradient(180deg,var(--b-fold-top),var(--b-fold-bot));
+  --b-call:linear-gradient(180deg,var(--b-call-top),var(--b-call-bot));
+  --b-raise:linear-gradient(180deg,var(--b-raise-top),var(--b-raise-bot));
+  --b-more:var(--b-surface); --b-more-line:var(--b-hair); --b-more-icon:var(--b-text-2);
+  --b-gold-fill:rgba(212,178,108,.14);
+  /* §2.2 type: the device's own face (San Francisco on Apple devices), no hosted font */
+  --b-font:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"IBM Plex Sans",sans-serif;
+  --b-t-11:11px; --b-t-13:13px; --b-t-14:14px; --b-t-15:15px; --b-t-17:17px; --b-t-20:20px; --b-t-22:22px; --b-t-28:28px;
+  /* §2.3 shape */
+  --b-r-chip:8px; --b-r-plate:12px; --b-r-btn:12px; --b-r-card:16px; --b-r-sheet:16px; --b-r-hero:24px; --b-r-pill:999px;
+  /* §2.3 space and touch */
+  --b-s1:4px; --b-s2:8px; --b-s3:12px; --b-s4:16px; --b-s5:20px; --b-s6:28px;
+  --b-tap:44px; --b-act-h:60px;
+  /* §2.3 motion */
+  --b-press-scale:.97; --b-press-dur:120ms;
+  --b-sheet-dur:340ms; --b-sheet-ease:cubic-bezier(.32,.72,0,1);
+  --b-seat-dur:220ms; --b-glow-dur:400ms;
+  --b-slide:1;
+
+  /* the older names, pointed at the board's (palette and type only: radii and spacing stay as they are until B2) */
+  --display:var(--b-font); --body:var(--b-font); --cond:var(--b-font); --lx-serif:var(--b-font);
+  --ink:var(--b-bg); --panel:var(--b-surface); --panel2:var(--b-surface-2); --text:var(--b-text); --muted:var(--b-text-2);
+  --felt:var(--b-felt); --rail:var(--b-rail); --red:var(--b-live); --good:var(--b-online);
+  --lx-ink:var(--b-bg); --lx-ink2:var(--b-bg); --lx-navy:var(--b-surface); --lx-navy2:var(--b-surface-2); --lx-navy3:var(--b-surface-2);
+  --lx-gold:var(--b-gold); --lx-gold-hi:var(--b-gold-text); --lx-gold-deep:var(--b-raise-bot);
+  --lx-ivory:var(--b-text); --lx-mute:var(--b-text-2); --lx-mute2:var(--b-text-3);
+  --lx-hair:var(--b-hair); --lx-hair2:var(--b-hair-gold); --lx-emerald:var(--b-online); --lx-garnet:var(--b-fold-top);
+  --lx-glass:linear-gradient(var(--b-surface),var(--b-surface));
+  --lx-gold-grad:var(--b-raise);
+  --lx-t-xs:var(--b-t-11); --lx-t-sm:var(--b-t-13); --lx-t-md:var(--b-t-15); --lx-t-lg:var(--b-t-17); --lx-t-xl:var(--b-t-22);
+  --q-bg:var(--b-bg); --q-bg2:var(--b-bg); --q-surface:var(--b-surface); --q-surface2:var(--b-surface-2);
+  --q-text:var(--b-text); --q-text2:var(--b-text-2); --q-text3:var(--b-text-3);
+  --q-gold:var(--b-gold); --q-gold-hi:var(--b-gold-text); --q-gold-fill:var(--b-gold-fill);
+  --q-hair:var(--b-hair); --q-hair-gold:var(--b-hair-gold); --q-good:var(--b-online); --q-alert:var(--b-live);
+  --q-felt:var(--b-felt-edge); --q-felt-hi:var(--b-felt); --q-rail:var(--b-rail);
+  --q-font:var(--b-font);
+  --q-t-cap:var(--b-t-11); --q-t-foot:var(--b-t-13); --q-t-sub:var(--b-t-15); --q-t-body:var(--b-t-17); --q-t-title:var(--b-t-20); --q-t-large:var(--b-t-28);
+  --q-ease:var(--b-sheet-ease); --q-fast:var(--b-press-dur); --q-slow:var(--b-sheet-dur);
+}
+/* the signed-in screens point the slate names at --lx-* on their own elements (style.css); the board's names win there too */
+[data-ui="board"] :is(#lobby,#game,#modalRoot,.toast,.offline){--ink:var(--b-bg); --panel:var(--b-surface); --panel2:var(--b-surface-2); --line:var(--b-hair); --text:var(--b-text); --muted:var(--b-text-2)}
+
+/* the welcome screen keeps its own short names (style.css, #auth.lux): the same mapping there */
+[data-ui="board"] #auth.lux{--g:var(--b-gold); --g2:var(--b-gold-text); --gd:var(--b-raise-bot); --iv:var(--b-text); --mu:var(--b-text-2); --serif:var(--b-font)}
+
+/* ---------- type (§2.2) ---------- */
+[data-ui="board"] body{font-family:var(--b-font);background:var(--b-bg);color:var(--b-text);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+/* tabular numbers on every chip, stack, clock and count */
+[data-ui="board"] :is(.num,.st,.pot,.bet,.chips,#cTime,#cBlinds,.stats b,.lvl b,.time b,.blinds b){font-variant-numeric:tabular-nums}
+/* the scale as utility classes, for the B2+ components */
+[data-ui="board"] .b-cap{font-size:var(--b-t-11);font-weight:500;line-height:1.3}
+[data-ui="board"] .b-meta{font-size:var(--b-t-13);font-weight:600;line-height:1.3}
+[data-ui="board"] .b-name{font-size:var(--b-t-14);font-weight:600;line-height:1.25}
+[data-ui="board"] .b-body{font-size:var(--b-t-15);font-weight:400;line-height:1.4}
+[data-ui="board"] .b-title{font-size:var(--b-t-17);font-weight:600;line-height:1.25}
+[data-ui="board"] .b-head{font-size:var(--b-t-20);font-weight:600;line-height:1.2}
+[data-ui="board"] .b-clock{font-size:var(--b-t-22);font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+[data-ui="board"] .b-hero{font-size:var(--b-t-28);font-weight:700;line-height:1.1}
+[data-ui="board"] .b-num{font-variant-numeric:tabular-nums}
+
+/* ---------- motion (§2.3) ---------- */
+[data-ui="board"] .b-press{transition:transform var(--b-press-dur) ease-out}
+[data-ui="board"] .b-press:active{transform:scale(var(--b-press-scale))}
+/* reduced motion: no scale, no slide, fades only */
+@media (prefers-reduced-motion:reduce){
+  [data-ui="board"]{--b-press-scale:1; --b-slide:0; --b-sheet-dur:0ms}
+  [data-ui="board"] .b-press,[data-ui="board"] .b-press:active{transform:none;transition:none}
+}

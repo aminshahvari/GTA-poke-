@@ -4,6 +4,8 @@ const E = Engine;
 const $ = id => document.getElementById(id);
 // the quiet-luxury design (UI_QUIET on the server, preview only): the server marks the page, the app reads the mark
 const QUIET = document.documentElement.dataset.ui === 'quiet';
+// the Quiet Luxury board (UI_BOARD on the server, preview only; it takes the place of the quiet design when both are on)
+const BOARD = document.documentElement.dataset.ui === 'board';
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const ord = n => n + (['th','st','nd','rd'][(n % 100 - 20) % 10] || ['th','st','nd','rd'][n % 100] || 'th');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
