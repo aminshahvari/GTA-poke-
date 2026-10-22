@@ -51,7 +51,7 @@ function create({ prodHost, dir = process.env.MEDIA_DIR || path.join(os.tmpdir()
       pending.set(key, { key, club: club.id, by: u.id, kind, bytes, group: String(group || '').slice(0, 40), exp });
       return { key, put: `/media/put/${key}?e=${exp}&s=${sign('put:' + key + ':' + exp)}`, type: L.type };
     },
-    commit({ key, w, h }, u, club){
+    commit({ key, w, h, c }, u, club){
       const p = pending.get(key);
       if(!p || p.by !== u.id || p.club !== club.id) throw err(404, 'No such upload.');
       let buf; try{ buf = fs.readFileSync(fileOf(key)); }catch(e){ throw err(400, 'The file has not arrived.'); }
@@ -65,19 +65,21 @@ function create({ prodHost, dir = process.env.MEDIA_DIR || path.join(os.tmpdir()
       }else{
         if(buf.toString('latin1', 4, 8) !== 'ftyp') fail('Not an MP4 file.');
         seconds = mp4Seconds(buf);
-        if(MP4META.scan(buf).meta.length) fail('The video still carries metadata (maybe where it was filmed). It must be cleaned on the phone.');
+        const mi = MP4META.scan(buf);
+        if(!mi.moovFirst) fail('The video\'s index (moov) must come before its data, so it starts playing at once.');
+        if(mi.meta.length) fail('The video still carries metadata (maybe where it was filmed). It must be cleaned on the phone.');
         if(seconds == null) fail('The video\'s length could not be read.');
         if(seconds > L.seconds) fail(`Too long: ${seconds.toFixed(1)} s (at most ${L.seconds - 0.5} s).`);
       }
       pending.delete(key);
-      const it = { key, club: p.club, by: u.id, kind: p.kind, bytes: buf.length, w: Math.round(+w) || null, h: Math.round(+h) || null, seconds, at: now(), group: p.group };
+      const it = { key, club: p.club, by: u.id, kind: p.kind, bytes: buf.length, w: Math.round(+w) || null, h: Math.round(+h) || null, c: /^#[0-9a-f]{6}$/.test(c) ? c : null, seconds, at: now(), group: p.group };
       items.set(key, it);
       return { ok: true, bytes: buf.length, seconds, url: readUrl(key) };
     },
     // this club's lab files, with today's read links (a member of another club gets that club's, never these)
     list(_, u, club){
       return { items: [...items.values()].filter(x => x.club === club.id).sort((a, b) => b.at - a.at)
-        .map(x => ({ key: x.key, kind: x.kind, bytes: x.bytes, w: x.w, h: x.h, seconds: x.seconds, group: x.group, mine: x.by === u.id, url: readUrl(x.key) })),
+        .map(x => ({ key: x.key, kind: x.kind, bytes: x.bytes, w: x.w, h: x.h, c: x.c, seconds: x.seconds, group: x.group, mine: x.by === u.id, url: readUrl(x.key) })),
         used: used(), limits: Object.fromEntries(Object.entries(LIMITS).map(([k, v]) => [k, { max: v.max, seconds: v.seconds }])) };
     },
     clear(_, u, club){
