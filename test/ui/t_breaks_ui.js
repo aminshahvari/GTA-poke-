@@ -135,6 +135,7 @@ const overlaps = (pg, sel) => pg.evaluate(sel => {
   check(opened, "tap: opens the sponsor's Exchange page");
   await shot(pg, 'sponsor-page');
   check(await until(() => pg.evaluate(() => !document.getElementById('game').hidden), 50000), 'break over: the player is back at the table');
+  check(await until(() => pg.evaluate(() => { const e = document.getElementById('spn'); return !e.hidden && e.textContent.includes('Aurora Coffee Co.'); }), 6000), 'break over: the sponsor ribbon shows again as play resumes');
 
   console.log(`t_breaks_ui (${TAG}): ${oks} ok, ${fails} failed`);
   await browser.close();

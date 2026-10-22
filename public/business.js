@@ -44,7 +44,8 @@ function hue(s){ let x = 0; for(const c of String(s)) x = (x * 31 + c.charCodeAt
 const mono = name => String(name || '?').replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter(w => w && !/^(the|and|of|&)$/i.test(w)).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '★';
 function getLogo(uid, v){
   const k = uid + ':' + v;
-  if(!logos.has(k)) logos.set(k, fetch('/bizlogo/' + encodeURIComponent(uid), { headers: { authorization: 'Bearer ' + (C.token() || ''), ...(C.clubHeader ? C.clubHeader() : {}) } })
+  // versioned URL: the browser keeps a logo for a day, and a new logo (new logoV) is a new URL
+  if(!logos.has(k)) logos.set(k, fetch('/bizlogo/' + encodeURIComponent(uid) + (v ? '?v=' + encodeURIComponent(v) : ''), { headers: { authorization: 'Bearer ' + (C.token() || ''), ...(C.clubHeader ? C.clubHeader() : {}) } })
     .then(r => r.ok ? r.blob() : null).then(b => b && b.type === 'image/jpeg' ? URL.createObjectURL(b) : null).catch(() => null));
   return logos.get(k);
 }
@@ -55,7 +56,24 @@ function logoEl(b, cls){
 }
 
 // ---------- data ----------
-async function loadFeed(){ S.feed = await api('bizFeed'); S.feedAt = Date.now(); return S.feed; }
+// the last feed is kept per club and member and shown at once on the next load while the fresh one comes in (it only
+// holds published businesses and the member's own status; nothing secret). Storage may be off: every access is guarded.
+const feedKey = () => { try{ const me = C.me(), cid = (C.clubHeader && C.clubHeader()['x-club']) || 'main'; return me && me.id ? 'stacked:bizFeed:' + cid + ':' + me.id : null; }catch(e){ return null; } };
+function cachedFeed(){ const k = feedKey(); if(!k) return null; try{ const f = JSON.parse(localStorage.getItem(k)); return f && Array.isArray(f.items) ? f : null; }catch(e){ return null; } }
+async function loadFeed(){
+  const k = feedKey(), f = await api('bizFeed');
+  if(feedKey() !== k) return S.feed; // signed out or switched club meanwhile
+  S.feed = f; S.feedAt = Date.now();
+  if(k) try{ localStorage.setItem(k, JSON.stringify(f)); }catch(e){}
+  return f;
+}
+// start (or join) the feed request: the saved feed first, a fresh one at most every 30s
+let feedP = null;
+function freshFeed(){
+  if(!S.feed) S.feed = cachedFeed();
+  if(!feedP && Date.now() - S.feedAt > 30000){ S.feedAt = Date.now(); feedP = loadFeed().catch(() => { S.feedAt = 0; }).finally(() => { feedP = null; }); }
+  return feedP;
+}
 async function loadList(){ const r = await api('bizList'); S.list = r; S.cats = r.categories; S.canModerate = r.canModerate; return r; }
 async function loadMine(){ const r = await api('bizMine'); S.mine = r.mine; S.cats = r.categories; S.canModerate = r.canModerate; return r; }
 
@@ -503,8 +521,9 @@ function homeInto(sec){
 }
 function mountHome(sec, playing){
   if(playing){ sec.replaceChildren(); return; }
+  const p = freshFeed();
   homeInto(sec);
-  if(Date.now() - S.feedAt > 30000){ S.feedAt = Date.now(); loadFeed().then(() => { if(sec.isConnected) homeInto(sec); }).catch(() => { S.feedAt = 0; }); }
+  if(p) p.then(() => { if(sec.isConnected) homeInto(sec); });
 }
 
 window.BizClub = {
@@ -516,6 +535,8 @@ window.BizClub = {
       openBiz: uid => openDetail(uid, 'opp') });
   },
   render, mountHome,
+  // as soon as the club state arrives: start loading the Home feed before the Lounge renders
+  prefetch(){ freshFeed(); },
   // the sponsor's logo (or monogram) for the poker table's sponsor card
   logo: (b, cls) => logoEl(b, cls),
   // the poker table's sponsor card (during a break): open that business's page
@@ -524,6 +545,6 @@ window.BizClub = {
   myStatus: () => S.feed ? S.feed.mine : null,
   // Member Home cards: open the Business tab on one section ('biz' or 'opp') or straight on the card scanner
   show(seg){ if(seg === 'scan'){ S.view = 'scan'; S.scan = null; S.seg = 'biz'; return; } S.view = 'list'; S.seg = seg; S.listStale = true; if(seg === 'opp') window.OppClub.open('feed'); },
-  reset(){ window.OppClub.reset(); S.seg = 'biz'; S.list = null; S.feed = null; S.feedAt = 0; S.mine = undefined; S.view = 'list'; logos.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); logos.clear(); }
+  reset(){ window.OppClub.reset(); S.seg = 'biz'; S.list = null; S.feed = null; S.feedAt = 0; feedP = null; S.mine = undefined; S.view = 'list'; logos.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); logos.clear(); }
 };
 })();

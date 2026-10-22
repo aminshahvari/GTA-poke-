@@ -13,15 +13,44 @@ const local = {
   del(k){ try{ localStorage.removeItem('stacked:' + k); }catch(e){} }
 };
 const showScreen = id => { ['auth','lobby','game'].forEach(s => $(s).hidden = s !== id); keepAwake(id === 'game'); if(id !== 'lobby') document.querySelector('.app').classList.remove('wide'); };
-// keep the phone screen on while a table is open, so it doesn't lock and sit you out between hands
-let wakeLock = null, wantAwake = false;
+// keep the phone screen on while a table is open, so it doesn't lock and sit you out between hands.
+// The Wake Lock API first; where it is missing or refused (Instagram's in-app browser, older iOS, Low Power Mode)
+// a muted, invisible, looping 16x16 video does the same job (the NoSleep.js trick). iOS often grants either only
+// from a tap, so any tap at the table retries while nothing holds the screen on.
+let wakeLock = null, wantAwake = false, asking = false, nosleep = null;
+const NOSLEEP_MP4 = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMHbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAB9AAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAlZ0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAB9AAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAfQAAAAAAABAAAAAAHObWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAgABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABeW1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAATlzdGJsAAAAuXN0c2QAAAAAAAAAAQAAAKlhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAABAAEABIAAAASAAAAAAAAAABDExhdmMgbGlieDI2NAAAAAAAAAAAAAAAAAAAAAAAAAAAGP//AAAAL2F2Y0MBQsAe/+EAFmdCwB7ZHsBEAAADAAQAAAMACDxYuSABAAZoy4BlLIAAAAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAAAAZAAAAGQAAAAYc3R0cwAAAAAAAAABAAAAAgAAQAAAAAAUc3RzcwAAAAAAAAABAAAAAQAAABxzdHNjAAAAAAAAAAEAAAABAAAAAgAAAAEAAAAcc3RzegAAAAAAAAAAAAAAAgAAAA8AAAAKAAAAFHN0Y28AAAAAAAAAAQAAAzcAAAA9dWR0YQAAADVtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAAAhpbHN0AAAACGZyZWUAAAAhbWRhdAAAAAtliIQFvJigACFPgAAAAAZBmjgK+oA=';
+const NOSLEEP_WEBM = 'data:video/webm;base64,GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAG/EU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHGTbuMU6uEElTDZ1OsggEMTbuMU6uEHFO7a1OsggGp7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmoCrXsYMPQkBNgIRMYXZmV0GETGF2ZkSJiECfQAAAAAAAFlSua8GuAQAAAAAAADjXgQFzxYgAAAAAAAAAAZyBACK1nIN1bmSIgQCGhVZfVlA4g4EBI+ODhDuaygDgibCBELqBEJqBAhJUw2fQc3PNY8CLY8WIAAAAAAAAAAFnyJhFo4dFTkNPREVSRIeLTGF2YyBsaWJ2cHhnyKFFo4hEVVJBVElPTkSHkzAwOjAwOjAyLjAwMDAwMDAwMAAfQ7Z1w+eBAKOjgQAAgBACAJ0BKhAAEAAARwiFhYiZhIgCAgAMDWAA/v+rUICjmYED6ACxAQABEBAAGAAwP/QMAAAA/v+rUIAcU7trkbuPs4EAt4r3gQHxggFh8IED';
+function noSleep(on){
+  if(!on){ if(nosleep && !nosleep.paused) nosleep.pause(); return; }
+  if(!nosleep){
+    const v = nosleep = document.createElement('video');
+    v.muted = v.loop = v.playsInline = true; v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
+    v.className = 'nosleep'; v.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1';
+    v.innerHTML = `<source src="${NOSLEEP_MP4}" type="video/mp4"><source src="${NOSLEEP_WEBM}" type="video/webm">`;
+    document.body.appendChild(v);
+  }
+  if(nosleep.paused) nosleep.play().catch(() => {});
+}
 async function keepAwake(on){
   wantAwake = on;
-  try{
-    if(on && !wakeLock && 'wakeLock' in navigator && document.visibilityState === 'visible'){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
-    if(!on && wakeLock){ const w = wakeLock; wakeLock = null; await w.release(); }
-  }catch(e){ wakeLock = null; }
+  if(!on){ noSleep(false); if(wakeLock){ const w = wakeLock; wakeLock = null; try{ await w.release(); }catch(e){} } return; }
+  if(wakeLock || asking || document.visibilityState !== 'visible') return;
+  if('wakeLock' in navigator){
+    asking = true;
+    try{
+      const w = await navigator.wakeLock.request('screen');
+      w.addEventListener('release', () => { if(wakeLock === w) wakeLock = null; });
+      if(!wantAwake){ w.release().catch(() => {}); return; }
+      wakeLock = w; noSleep(false); return;
+    }catch(e){ wakeLock = null; }
+    finally{ asking = false; }
+  }
+  if(wantAwake) noSleep(true);
 }
+// touchend and click are what iOS counts as a tap; start the video inside the tap itself (iOS may refuse play() later)
+const awakeTap = () => { if(wantAwake && !wakeLock){ noSleep(true); keepAwake(true); } };
+document.addEventListener('touchend', awakeTap, { capture: true, passive: true });
+document.addEventListener('click', awakeTap, true);
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState !== 'visible') return;
   if(wantAwake) keepAwake(true);
@@ -208,6 +237,8 @@ function onClub(c){
   club = c; clockSkew = c.now - Date.now();
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   if(c.clubSwitching) clubSwitching(c);
+  // the Lounge's Exchange cards: start the feed now, not only when Home renders
+  if(!c.suspended && !c.spectate && !c.events && (c.features && c.features.clubs || c.me.owner)) window.BizClub.prefetch();
   $('chatBtn').hidden = !!c.spectate; // watchers from another club never see a table's chat
   $('meChip').innerHTML = c.spectate ? `<button class="club-btn" data-live="home" aria-label="Back to ${esc(c.home.name)}">← ${esc(c.home.name)}</button>` : `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
   if(!c.spectate){
@@ -252,6 +283,7 @@ let field = null;
 function fieldUI(){
   const el = $('fieldBar'), T = club && club.tourney;
   el.hidden = !field || !T || T.status !== 'running';
+  sideUI();
   if(el.hidden) return;
   // laid out like a broadcast HUD (owner's design brief, 2026-10-21): the field, tables and watchers, the average stack,
   // the chip leader in gold, and your rank as a pill coloured by your stack against the average. Tap a chip count to see
@@ -267,6 +299,34 @@ function fieldUI(){
     + (L ? `<button type="button" class="hud-mod hud-lead${meLead ? ' me' : ''}" data-bbtoggle aria-label="Chip leader ${esc(L.name)}. Tap to switch chips and big blinds">${Icons.svg('crown')}<span class="hud-lt"><span class="hud-lbl">Chip leader</span><b class="hud-name">${meLead ? 'You' : esc(L.name)}</b></span><span class="hud-chips"><b>${stackHTML('lead', L.stack, bb)}</b></span></button>` : '')
     + (field.rank ? `<div class="hud-mod hud-rank${tone}" title="Your place among everyone still playing"><span class="hud-lbl">Your rank</span><b class="hud-val">${vs}${odo('rank', ord(field.rank))}<small>/${field.players}</small></b></div>` : '');
   odoPlay(el);
+}
+// Sideways (#game.land) the column beside the table holds the tournament HUD (#fieldBar, placed there by style.css)
+// and under it the sponsor: logo, name, category, the prize and See their page (as on the break card). With no sponsor,
+// a prize alone; with neither, just the HUD. The status box and the action buttons stay at the bottom of the column.
+let sideKey = '';
+function sideUI(){
+  const el = $('sidePanel'), T = club && club.tourney, run = T && T.status === 'running', sp = run && T.sponsor, prize = run && T.prize;
+  el.hidden = !$('game').classList.contains('land') || !(sp || prize);
+  if(el.hidden){ if(sideKey){ sideKey = ''; el.innerHTML = ''; } return; }
+  const key = [T.id, sp && sp.uid, sp && sp.name, sp && sp.logoV, prize, sponsorTap()].join('|');
+  if(key !== sideKey){
+    sideKey = key;
+    el.innerHTML = sp ? sponsorHTML(sp, true, prize) : `<div class="side-prize"><small>Tonight's prize</small><b>${esc(prize)}</b></div>`;
+    if(sp){ fillLogo(el, sp); wireSponsor(el, T); }
+  }
+  fitSide();
+}
+// the sponsor gets the room left between the HUD and what the dock shows (its top part is kept free for a longer helper
+// line, and the sponsor uses it until then): when that is short, its smaller lines give way first, then the whole card
+let sideFit = '';
+function fitSide(){
+  const el = $('sidePanel'); if(el.hidden) return;
+  const tops = [...$('dock').children].filter(e => e.offsetHeight).map(e => e.getBoundingClientRect().top);
+  const room = Math.max(0, Math.floor((tops.length ? Math.min(...tops) : innerHeight) - el.getBoundingClientRect().top - 6));
+  if(sideFit === room + sideKey) return;
+  sideFit = room + sideKey; el.style.maxHeight = room + 'px';
+  el.classList.remove('s1', 's2', 's3', 's4');
+  for(const c of ['s1', 's2', 's3', 's4']){ if(el.scrollHeight <= room + 1) break; el.classList.add(c); }
 }
 // chips or big blinds, everywhere a stack is shown in the HUD and on the live card (a tap switches; kept on this phone)
 let bbMode = !!local.get('bbMode', false);
@@ -476,7 +536,7 @@ function eventMainHTML(){
     return `<div class="card-box"><span class="status-pill">Registration open</span>${mine ? ' <span class="status-pill reg">✓ You\'re registered</span>' : ''}<h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Starts</small><b>${T.startAt ? esc(when(T.startAt)) : 'When the owner starts it'}</b></div><div><small>Stack</small><b>${fmt(T.stack)}</b></div><div><small>Levels</small><b>${T.levelMin} min</b></div></div>
       <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act. Every player has 3 extra-time cards (+30 seconds each) for the tournament, and a fresh 5 at the final table.${extrasNote(T)}${breakNote(T)}</p>
-      ${T.sponsor ? `<p class="note">Presented by <b>${esc(T.sponsor.name)}</b>.</p>` : ''}
+      ${presentedHTML(T)}
       ${T.repeat !== 'none' ? `<p class="note">Repeats ${T.repeat === 'daily' ? 'every day' : 'every week'} at this time.</p>` : ''}
       <p>${T.regs.length} joined</p>
       <div class="plist">${T.regs.map(u => pchip(u, false)).join('') || '<span class="note">Nobody has joined yet.</span>'}</div>
@@ -490,6 +550,7 @@ function eventMainHTML(){
     const [sb, bb] = E.levelFor(T.level, T.anteMode);
     return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Players left</small><b>${T.remaining} of ${T.entrants}</b></div><div><small>Level</small><b>${T.level + 1}</b></div><div><small>Blinds</small><b>${fmt(sb)}/${fmt(bb)}</b></div></div>
+      ${presentedHTML(T)}
       ${T.breakUntil ? `<p class="brk-note"><b>On break</b> until ${esc(clockAt(T.breakUntil - clockSkew))}. Play resumes by itself.</p>` : ''}
       ${club.myTable ? `<button class="btn red" data-watch="${esc(club.myTable)}">Go to my table</button>` : out ? `<p>You finished ${ord(out.place)}. You can still watch.</p>`
         : (T.regs || []).includes(club.me.id) ? `<p><span class="status-pill reg">✓ You're registered</span></p><p>Finding your seat… your table opens by itself in a moment.</p>`
@@ -899,6 +960,8 @@ function clubsSwitchHTML(){
 }
 // table extras (show or muck, rabbit hunt, pause between hands): only offered where the server allows them
 const extrasOn = () => !!(club && club.features && club.features.tableExtras);
+// the sponsor and the prize on the lobby's tournament card
+const presentedHTML = T => T.sponsor || T.prize ? `<p class="note sp-note">${T.sponsor ? `Presented by <b>${esc(T.sponsor.name)}</b>.` : ''}${T.sponsor && T.prize ? ' ' : ''}${T.prize ? `<span class="sp-prize">Prize: <b>${esc(T.prize)}</b></span>` : ''}</p>` : '';
 function extrasNote(T){
   if(!extrasOn() || !T) return '';
   const x = [T.showMuck ? 'after each hand, players may show one or both of their cards' : '', T.rabbit ? 'the unused turn and river are shown when a hand ends early' : '', T.handPause ? `${T.handPause} seconds between hands` : ''].filter(Boolean);
@@ -910,11 +973,15 @@ const breakNote = T => breaksOn() && T ? ` A ${T.breakMin || 5}-minute break aft
 function sponsorFields(P, opt){
   if(club.events) return ''; // the Blindrise Open has no Exchange to pick a sponsor from
   const S = club.sponsors;
-  if(!S || !S.list.length) return `<p class="note">Tournament sponsor: when a member publishes their business in the Exchange, you can pick it here to show on the tables at the start and during breaks.</p>`;
+  // the prize, in the director's words: plain text, never cash (server/club.js prizeOf)
+  const prize = `<label>Prize (optional)<input id="nPrize" maxlength="80" autocomplete="off" placeholder="For example: Dinner for two at Aurora" value="${esc(P ? P.prize || '' : '')}"></label>
+        <p class="note">Shown in the lobby and on the tables. Free social play: a gift or an experience, never cash. No links or phone numbers.</p>`;
+  if(!S || !S.list.length) return `<p class="note">Tournament sponsor: when a member publishes their business in the Exchange, you can pick it here to show on the tables at the start and during breaks.</p>${prize}`;
   const cur = P ? (P.sponsor ? P.sponsor.uid : '') : S.spotlight || '';
   return `<div class="two"><label>Tournament sponsor<select id="nSponsor">${opt('', 'None', cur)}${S.list.map(b => opt(b.uid, esc(b.name) + (b.uid === S.spotlight ? ' (Spotlight)' : ''), cur)).join('')}</select></label>
         <label>Sponsor at the start<select id="nSponsorSec">${[5, 8, 10].map(v => opt(v, v + ' seconds', P ? P.sponsorSec || 8 : 8)).join('')}</select></label></div>
-        <p class="note">The sponsor's name and logo from the Exchange show on every table for a few seconds when play starts and during each break. They never cover cards or buttons.</p>`;
+        <p class="note">The sponsor's name and logo from the Exchange show on every table for a few seconds when play starts and during each break. They never cover cards or buttons.</p>
+        ${prize}`;
 }
 function directorMainHTML(){
   const T = club.tourney;
@@ -1089,7 +1156,7 @@ function wireLobby(){
   on('againBtn', () => {
     const T = club.tourney, d = new Date();
     send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: $('againAt') && $('againAt').value ? +$('againAt').value : null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: 9, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true, ...(extrasOn() && T ? { showMuck: !!T.showMuck, rabbit: !!T.rabbit, handPause: T.handPause || 0 } : {}),
-      ...(T ? { breakMin: T.breakMin || 5, sponsor: T.sponsor ? T.sponsor.uid : null, sponsorSec: T.sponsorSec || 8 } : {}) });
+      ...(T ? { breakMin: T.breakMin || 5, sponsor: T.sponsor ? T.sponsor.uid : null, sponsorSec: T.sponsorSec || 8, prize: T.prize || '' } : {}) });
     send({ t: 'join' }); tab = 'event';
   });
   on('newCustomBtn', () => { tab = 'director'; renderLobby(); });
@@ -1100,7 +1167,7 @@ function wireLobby(){
       e.preventDefault();
       const at = $('nWhen').value === 'at' ? new Date($('nAt').value).getTime() : null;
       send({ t: editingT ? 'edit' : 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value, helper: $('nHelper').value, ...(extrasOn() ? { showMuck: $('nShow').value, rabbit: $('nRabbit').value, handPause: +$('nPause').value } : {}),
-        ...($('nBreak') ? { breakMin: +$('nBreak').value } : {}), ...($('nSponsor') ? { sponsor: $('nSponsor').value || null, sponsorSec: +$('nSponsorSec').value } : {}) });
+        ...($('nBreak') ? { breakMin: +$('nBreak').value } : {}), ...($('nSponsor') ? { sponsor: $('nSponsor').value || null, sponsorSec: +$('nSponsorSec').value } : {}), ...($('nPrize') ? { prize: $('nPrize').value.trim() } : {}) });
       if(editingT){ editingT = false; toast('Tournament updated.'); } else tab = 'event';
     };
     on('editBack', () => { editingT = false; renderLobby(); });
@@ -1484,6 +1551,44 @@ function chipStacks(won, bb){
   const cols = Math.max(1, Math.min(3, Math.ceil(won / Math.max(1, bb * 6))));
   return Array.from({ length: cols }, (_, c) => { const h = Math.max(2, Math.min(6, Math.round(2 + (won / Math.max(1, bb)) / (4 * cols)) - c));
     return `<span class="wcol">${'<i></i>'.repeat(h)}</span>`; }).join('');
+}
+// Another seat's shown cards stand over its avatar (under it at the top of the oval), where on a crowded oval (7 to 9
+// seats, a short screen) the seat above or below (its plate, badge or cards) or a winner's chips can lie over them. Move
+// them the least that clears every other seat, the pot, a winner's chips, the board, the result line and the screen's
+// edge: sideways (toward the middle first) or further over their own avatar; else the place with the least overlap.
+// (Run on every render: a reused seat starts from its own place.)
+function clearShown(){
+  const seats = [...$('seats').querySelectorAll('.seat')], holes = seats.map(s => s.querySelector(':scope[data-side]>.hole.shown')).filter(Boolean);
+  if(!holes.length) return;
+  holes.forEach(h => h.style.translate = '');
+  // (a badge at its full size: Winner grows in after the chips glide over)
+  const R = e => { const b = e.getBoundingClientRect(); if(!e.classList.contains('badge')) return b; const x = (b.left + b.right) / 2, y = (b.top + b.bottom) / 2, w = e.offsetWidth / 2, h = e.offsetHeight / 2; return { left: x - w, right: x + w, top: y - h, bottom: y + h }; };
+  const over = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left) - 1.5) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) - 1.5); // (a touch is no overlap)
+  const text = e => { const r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect(); };
+  const mid = [...$('board').children, $('pot'), ...document.querySelectorAll('#fx .winpile:not(.gone)')].map(R).concat([...$('msg').children].map(text)).filter(b => b.width && b.height);
+  const W = document.documentElement.clientWidth, area = R($('tableArea')), cx = (area.left + area.right) / 2;
+  const moves = [];
+  for(let dy = 0; dy <= 14; dy += 2) for(let k = 0; k <= 24; k++) moves.push([(k % 2 ? 1 : -1) * Math.ceil(k / 2) * 4, dy]);
+  moves.sort((p, q) => Math.abs(p[0]) + p[1] * 3 - Math.abs(q[0]) - q[1] * 3);
+  // (each in turn, then again with the others where they went, until none moves)
+  const base = holes.map(h => { const own = [...h.children].map(R), av = R(h.parentNode.querySelector('.av') || h), hc = (own[0].top + own[0].bottom) / 2;
+    return { h, own, inward: (av.left + av.right) / 2 < cx ? 1 : -1, down: hc < (av.top + av.bottom) / 2 ? 1 : -1, at: '' }; });
+  for(let pass = 0, moved = true; pass < 3 && moved; pass++){
+    moved = false;
+    for(const o of base){
+      const rest = seats.filter(s => s !== o.h.parentNode).flatMap(s => [...s.querySelectorAll('.av, .plate, .badge, .hole .card')]).map(R).concat(mid);
+      let best = null;
+      for(const [mx, my] of moves){
+        const dx = mx * o.inward, dy = my * o.down, at = o.own.map(b => ({ left: b.left + dx, right: b.right + dx, top: b.top + dy, bottom: b.bottom + dy }));
+        if(at.some(b => b.left < 2 || b.right > W - 2)) continue;
+        const cost = at.reduce((t, b) => t + rest.reduce((u, q) => u + over(b, q), 0), 0);
+        if(!best || cost < best.cost) best = { dx, dy, cost };
+        if(!cost) break;
+      }
+      const t = best && (best.dx || best.dy) ? `${best.dx}px ${best.dy}px` : '';
+      if(t !== o.at){ o.h.style.translate = o.at = t; moved = true; }
+    }
+  }
 }
 function potToWinners(d, handKey, LY){
   const key = 'win' + handKey; if(seen.has(key)) return; seen.add(key);
@@ -1990,9 +2095,12 @@ function renderTable(){
     const winStyle = res && p.won > 0 ? `;--wd:${reducedMotion() ? 0 : WIN_DELAY + WIN_GLIDE - 150 - winElapsed(handKey)}ms` : '';
     const av = avHTML(p.uid, p.name);
     const shot = acting ? `<div class="shot"><i class="shotBar${d.dcProtect ? ' dc' : ''}"></i></div>` : '';
+    // a side seat showing its cards wears its badge (its hand, Winner) along their foot: under its plate it sat on the
+    // corner of the cards of the seat below (owner, 9 seats at 430x932)
+    const shown = / show\b/.test(hole), onCards = shown && (oq.side === 'l' || oq.side === 'r');
     parts.push(isMe || foot
       ? `<div class="${cls}" data-uid="${esc(p.uid)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}"><div class="hole">${hole}</div><div class="plate">${av}<div class="pl-txt"><div class="nm" title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div></div>${badge}${shot}</div></div>`
-      : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${av}<div class="plate"><div class="nm${inl ? ' nm-act ' + inl.cls : ''}"${inl ? ` data-act="${esc(inl.txt)}"` : ''} title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${badge}${shot}</div></div>`);
+      : `<div class="${cls}" data-uid="${esc(p.uid)}"${oq.side ? ` data-side="${oq.side}"` : ''} style="left:${pos[0]}%;top:${pos[1]}%${winStyle}${oq.side ? `;--sx:${oq.sx}px;--sy:${oq.sy}px` : ''}"><div class="hole${shown ? ' shown' : ''}">${hole}${onCards ? badge : ''}</div>${av}<div class="plate"><div class="nm${inl ? ' nm-act ' + inl.cls : ''}"${inl ? ` data-act="${esc(inl.txt)}"` : ''} title="${esc(p.name)}">${esc(nick(p.name))}</div><div class="st num">${stackTxt}</div>${onCards ? '' : badge}${shot}</div></div>`);
     if(p.inHand && p.bet > 0){
       const [bx, by] = LY.betOf(s), bp = pxToPct([bx, by]), [sx, sy] = pctToPx(pos);
       const key = `b${handKey}-${d.street}-${s}-${p.bet}`, isNew = !seen.has(key); seen.add(key);
@@ -2001,7 +2109,7 @@ function renderTable(){
   }
   if(d.btn >= 0 && d.phase === 'hand'){
     const dd = pxToPct(LY.dealerOf(d.btn));
-    parts.push(`<div class="dealer" style="left:${dd[0]}%;top:${dd[1]}%">D</div>`);
+    parts.push(`<div class="dealer${res ? ' under' : ''}" style="left:${dd[0]}%;top:${dd[1]}%">D</div>`); // (after the hand, under the shown cards)
   }
   patchKids($('seats'), parts);
   // (where the screen is too small for a clean layout, the smallest phones sideways, the result line can still touch
@@ -2010,6 +2118,7 @@ function renderTable(){
   if(res && G.cost){ const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom, mr = ml.getBoundingClientRect();
     if([...$('seats').querySelectorAll('.av, .plate, .hole .card')].some(e => hit(e.getBoundingClientRect(), mr))) ml.classList.add('up'); }
   if(res) try{ potToWinners(d, handKey, LY); }catch(e){}
+  clearShown();
   $('tName').textContent = `Table ${d.n}`;
   $('sPlayers').textContent = `${d.seats.filter(Boolean).length} seated`;
   fieldUI();
@@ -2202,8 +2311,21 @@ let brkKey = '';
 // brought back to their table when the break ends
 let leftForSponsor = null;
 const sponsorTap = () => !!(club && club.features && club.features.clubs);
-function sponsorHTML(sp, big){
-  return `<div class="sp-card${big ? ' big' : ''}"${big && sponsorTap() ? ` role="button" tabindex="0" data-spbiz="${esc(sp.uid)}" aria-label="See ${esc(sp.name)} in the Exchange"` : ''}><span class="sp-logo" data-splogo></span><span class="sp-txt"><small>${big ? 'Presented by' : 'Tonight\'s tournament is presented by'}</small><b>${esc(sp.name)}</b>${big ? `<small class="sp-cat">${esc(sp.categoryLabel)}${sp.area ? ' · ' + esc(sp.area) : ''}</small>` : ''}${big && sponsorTap() ? '<small class="sp-more">See their page ›</small>' : ''}</span></div>`;
+function sponsorHTML(sp, big, prize){
+  return `<div class="sp-card${big ? ' big' : ''}"${big && sponsorTap() ? ` role="button" tabindex="0" data-spbiz="${esc(sp.uid)}" aria-label="See ${esc(sp.name)} in the Exchange"` : ''}><span class="sp-logo" data-splogo></span><span class="sp-txt"><small>${big ? 'Presented by' : 'Tonight\'s tournament is presented by'}</small><b>${esc(sp.name)}</b>${big ? `<small class="sp-cat">${esc(sp.categoryLabel)}${sp.area ? ' · ' + esc(sp.area) : ''}</small>` : ''}${prize ? `<small class="sp-prize">Prize: ${esc(prize)}</small>` : ''}${big && sponsorTap() ? '<small class="sp-more">See their page ›</small>' : ''}</span></div>`;
+}
+// a tap (or Enter) on a sponsor with See their page opens it in the Exchange. On a break the player is brought back to
+// their table when the break ends; in play (the side panel) they are asked first, since their hand plays on without them.
+function wireSponsor(el, T){
+  const b = el.querySelector('[data-spbiz]'); if(!b) return;
+  const go = async () => {
+    const t = club.tourney && club.tourney.id === T.id ? club.tourney : T, brk = t.paused || t.breakUntil && t.breakUntil > Date.now() + clockSkew, d = tables.get(club.myTable);
+    if(!brk && d && d.phase === 'hand' && d.seats.some(p => p && p.uid === club.me.id && p.inHand && !p.folded)
+      && !await modal(`<h2>Open ${esc(T.sponsor.name)}'s page?</h2><p>Your hand plays on while you look: when it is your turn you check or fold. Come back with Go to my table.</p>`, [{ label: 'Stay here', value: false }, { label: 'Open their page', value: true, primary: true }])) return;
+    if(brk) leftForSponsor = t.id;
+    view = 'lobby'; showScreen('lobby'); window.BizClub.openBiz(b.dataset.spbiz);
+  };
+  b.onclick = go; b.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } };
 }
 function fillLogo(el, sp){
   const slot = el.querySelector('[data-splogo]');
@@ -2215,16 +2337,15 @@ function breakUI(T, d, now){
   const on = T && T.status === 'running' && (paused || T.breakUntil && T.breakUntil > now);
   if(!on || (d && d.phase === 'hand')){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; brkKey = ''; $('tableArea').classList.remove('on-break'); } return; }
   $('tableArea').classList.add('on-break');
-  const key = T.id + ':' + (T.breakUntil || 'p') + ':' + (T.sponsor ? T.sponsor.uid : '');
+  const key = T.id + ':' + (T.breakUntil || 'p') + ':' + (T.sponsor ? T.sponsor.uid : '') + ':' + (T.prize || '');
   if(key !== brkKey){
     brkKey = key;
     const [sb, bb, an] = E.levelFor(T.level, T.anteMode);
     el.innerHTML = `<div class="brk-card"><span class="brk-eye">Tournament break</span><b class="brk-time num" id="brkTime"></b>
       <small class="brk-sub">Play resumes by itself · Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}</small>
-      ${T.sponsor ? sponsorHTML(T.sponsor, true) : ''}</div>`;
+      ${T.sponsor ? sponsorHTML(T.sponsor, true, T.prize) : T.prize ? `<small class="brk-prize">Prize: ${esc(T.prize)}</small>` : ''}</div>`;
     if(T.sponsor) fillLogo(el, T.sponsor);
-    const sb2 = el.querySelector('[data-spbiz]');
-    if(sb2){ const go = () => { leftForSponsor = T.id; view = 'lobby'; showScreen('lobby'); window.BizClub.openBiz(sb2.dataset.spbiz); }; sb2.onclick = go; sb2.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } }; }
+    wireSponsor(el, T);
     el.hidden = false; el.dataset.sig = '';
   }
   // placed again whenever the seats move (the table can arrive after the card, or players get moved)
@@ -2257,14 +2378,25 @@ function brkSeats(){
   return [...document.querySelectorAll('#seats .seat')].map(s => [s, ...s.querySelectorAll('.av,.plate,.hole')].map(x => x.getBoundingClientRect()).filter(q => q.width)
     .reduce((a, q) => a ? { left: Math.min(a.left, q.left), top: Math.min(a.top, q.top), right: Math.max(a.right, q.right), bottom: Math.max(a.bottom, q.bottom) } : q, null)).filter(Boolean);
 }
-// The sponsor ribbon over the clock bar for a few seconds after the tournament starts (never over the felt or the buttons).
-let spnKey = '';
-function sponsorUI(T, now){
+// The sponsor ribbon over the clock bar for the set seconds (never over the felt or the buttons). Each phone shows it the
+// first time it opens a table of a running tournament (whenever that is: from the lobby, a slow load, late registration),
+// and again when a break it saw ends. Kept in memory per tournament, so a reload shows it once more.
+let spnKey = '', spnUntil = 0, spnBrk = null;
+const spnSeen = new Set();
+function sponsorUI(T, now, onTable){
   const el = $('spn'); if(!el) return;
-  const sp = T && T.status === 'running' && T.sponsor, left = sp && T.startedAt ? T.startedAt + (T.sponsorSec || 8) * 1000 - now : 0;
-  if(!sp || left <= 0){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; spnKey = ''; } return; }
-  const key = T.id + ':' + sp.uid;
-  if(key !== spnKey){ spnKey = key; el.innerHTML = sponsorHTML(sp, false); fillLogo(el, sp); el.hidden = false; }
+  const sp = T && T.status === 'running' && T.sponsor;
+  const brk = sp && (T.paused ? T.pausedBreakLeft > 0 : T.breakUntil && T.breakUntil > now);
+  if(brk) spnBrk = T.id + ':' + T.breakUntil;
+  else if(sp && onTable){
+    // a break this phone saw ended (within the last minute), or this tournament's first look at a table
+    const k = spnBrk && spnBrk.startsWith(T.id + ':') && !spnSeen.has(spnBrk) && now - (+spnBrk.split(':')[1] || 0) < 60000 ? spnBrk : !spnSeen.has(T.id) ? T.id : null;
+    if(k){ spnSeen.add(k); spnSeen.add(T.id); spnBrk = null; spnUntil = now + (T.sponsorSec || 8) * 1000; }
+  }
+  const left = sp && onTable && !brk ? spnUntil - now : 0;
+  if(left <= 0){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; spnKey = ''; } return; }
+  const key = T.id + ':' + sp.uid + ':' + (T.prize || '');
+  if(key !== spnKey){ spnKey = key; el.innerHTML = sponsorHTML(sp, false, T.prize); fillLogo(el, sp); el.hidden = false; }
   el.classList.toggle('out', left < 600);
 }
 // ---------- quiet design: the whole tournament in one line, the details one tap away ----------
@@ -2314,8 +2446,8 @@ function qSheet(){
 }
 function tickClock(){
   const T = demo ? demo.T : club && club.tourney;
-  if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(null); if(QUIET) $('qline').hidden = true; return; }
   const now = Date.now() + clockSkew;
+  if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(T, now, false); if(QUIET) $('qline').hidden = true; return; }
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;
   // in the one-row header of the shortest screens the ante takes the second line, in place of the next level
@@ -2328,7 +2460,7 @@ function tickClock(){
   const ms = T.paused ? T.pausedLeft : brk || Math.max(0, T.levelEndsAt - now);
   $('cTime').textContent = T.paused ? 'Paused' : T.breakPending ? 'Break' : mmss(ms);
   $('cTimeLbl').textContent = brk ? 'Break' : T.breakPending ? 'After this hand' : !T.paused && ms <= 0 ? 'Blinds up next hand' : QUIET && $('game').classList.contains('row1') ? `Level ${T.level + 1}` : 'Time left';
-  breakUI(T, tables.get(watchTid || club.myTable), now); sponsorUI(T, now);
+  breakUI(T, tables.get(watchTid || club.myTable), now); sponsorUI(T, now, true); fitSide();
   $('sAvg').textContent = fmt(T.entrants * T.stack / Math.max(1, T.remaining));
   const d = tables.get(watchTid || club.myTable);
   const all = [...tables.values()].flatMap(t => t.seats.filter(Boolean));

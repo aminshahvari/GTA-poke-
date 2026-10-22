@@ -8,6 +8,7 @@ const rand = () => crypto.randomInt(0x100000000) / 0x100000000;
 const store = require('./store');
 const coach = require('./coach');
 const players = require('./players');
+const content = require('./content');
 
 const FAST = process.env.FAST === '1';
 const SPEED = FAST ? 0.02 : 1;
@@ -52,6 +53,19 @@ const onBreak = (t = T()) => !!t && !!t.breakUntil && !t.paused && Date.now() < 
 const SPONSOR_SECS = [5, 8, 10];
 const sponsorOf = (v, keep) => v === undefined ? keep || null : typeof v === 'string' && /^u[0-9a-f]{12}$/.test(v) ? v : null;
 const sponsorSecOf = (v, keep) => SPONSOR_SECS.includes(+v) ? +v : SPONSOR_SECS.includes(+keep) ? +keep : 8;
+// Prize: what the winner gets, in the director's words ("Dinner for two at Aurora"), shown as plain text in the lobby and
+// at the tables. Free social play: never cash or money, and no web addresses, emails, handles or phone numbers (content.js).
+const PRIZE_MAX = 80;
+const PRIZE_BAD = { link: 'web address', email: 'email address', phone: 'phone number', social: 'social media handle' };
+function prizeOf(v, keep){
+  if(v === undefined) return keep || '';
+  const s = String(v == null ? '' : v).normalize('NFC').replace(/\s+/g, ' ').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '').trim();
+  if(s.length > PRIZE_MAX) throw new Error(`The prize is too long (${PRIZE_MAX} characters at most).`);
+  if(/[$€£¥₹]|\b(?:cash|money|dollars?|bucks|usd|cad|eur|euros?)\b/i.test(s)) throw new Error('The prize cannot be cash or money: Blindrise is free social play. Try something like dinner for two or a free class.');
+  const k = content.find(s);
+  if(k) throw new Error(`Please take the ${PRIZE_BAD[k]} out of the prize. Members find the sponsor through their Exchange page.`);
+  return s;
+}
 
 // Disconnect protection (Issue #9): when the player to act has no live connection, their decision gets 30 more seconds by
 // itself, once per hand, without using an extra-time card or marking them away. Tests (FAST=1 only) can set DC_PROTECT_MS.
@@ -67,7 +81,20 @@ const waiters = new Map();  // uid -> pending decision
 let running = false, clockTimer = null;
 let linker = () => null; // (uidA, uidB) -> reason they must not share a table, or null
 function setLinker(f){ linker = f; }
-const linkedAt = (tb, uid) => tb.g.seats.filter(q => q && q.uid !== uid && linker(uid, q.uid)).length;
+// Linked players form clusters (connected over any link): A–B same household and B–C same internet put A, B and C in one
+// cluster, and seating spreads the whole cluster, not only the linked pairs. uid -> cluster id
+function clustersOf(uids){
+  uids = [...new Set(uids)];
+  const up = new Map(uids.map(u => [u, u])), find = u => up.get(u) === u ? u : find(up.get(u));
+  for(let i = 0; i < uids.length; i++) for(let j = i + 1; j < uids.length; j++) if(linker(uids[i], uids[j])) up.set(find(uids[i]), find(uids[j]));
+  return new Map(uids.map(u => [u, find(u)]));
+}
+// cost of two players at one table: household (set by the director) far worst, then device, then internet, then same cluster only;
+// any other truthy reason counts as household. One household outweighs any number of weaker links.
+const LINK_W = { 'same household': 1e6, 'same device': 1e4, 'same internet': 1e2 };
+const pairW = (a, b, cl) => { if(a === b) return 0; const r = linker(a, b); return r ? LINK_W[r] || 1e6 : cl && cl.has(a) && cl.get(a) === cl.get(b) ? 1 : 0; };
+const linkScore = (tb, uid, cl) => tb.g.seats.reduce((n, q) => n + (q ? pairW(uid, q.uid, cl) : 0), 0);
+const everyone = extra => [...seated().map(p => p.uid), ...extra];
 
 const T = () => store.get('tourney') || null;
 function saveT(patch){ return store.set('tourney', { ...(T() || {}), ...patch }); }
@@ -97,7 +124,7 @@ function create(o){
     startAt: startAt ? +startAt : null, repeat: ['daily', 'weekly'].includes(repeat) ? repeat : 'none', regs: [], createdAt: Date.now(),
     anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : 20,
     tableSize: SIZES.includes(+tableSize) ? +tableSize : 9, lateLevels: LATE.includes(+lateLevels) ? +lateLevels : 0, helper: helper !== false && helper !== 'off', ...gpOpts(o),
-    breakMin: breakMinOf(o.breakMin), sponsor: sponsorOf(o.sponsor), sponsorSec: sponsorSecOf(o.sponsorSec) });
+    breakMin: breakMinOf(o.breakMin), sponsor: sponsorOf(o.sponsor), sponsorSec: sponsorSecOf(o.sponsorSec), prize: prizeOf(o.prize) });
   hooks.onClub();
   hooks.onNotice('open', T());
 }
@@ -112,7 +139,7 @@ function edit(o){
     anteMode: anteMode === 'bb' ? 'bb' : 'each', actSec: ACT_SECS.includes(+actSec) ? +actSec : t.actSec, tableSize: 9,
     lateLevels: LATE.includes(+lateLevels) ? +lateLevels : t.lateLevels, helper: helper !== false && helper !== 'off',
     reminded: at === t.startAt ? t.reminded : false, ...gpOpts(o, t),
-    breakMin: breakMinOf(o.breakMin, t.breakMin), sponsor: sponsorOf(o.sponsor, t.sponsor), sponsorSec: sponsorSecOf(o.sponsorSec, t.sponsorSec) });
+    breakMin: breakMinOf(o.breakMin, t.breakMin), sponsor: sponsorOf(o.sponsor, t.sponsor), sponsorSec: sponsorSecOf(o.sponsorSec, t.sponsorSec), prize: prizeOf(o.prize, t.prize) });
   hooks.onClub();
 }
 function join(uid){
@@ -156,15 +183,15 @@ function start(){
   if(regs.length < 2) throw new Error('At least 2 players need to join.');
   for(let i = regs.length - 1; i > 0; i--){ const j = crypto.randomInt(i + 1); [regs[i], regs[j]] = [regs[j], regs[i]]; }
   const nT = Math.ceil(regs.length / size()), groups = Array.from({ length: nT }, () => []), cap = Math.ceil(regs.length / nT);
-  // random seating, but players from the same household / internet / device go to different tables when possible
-  const conflicts = (grp, u) => grp.filter(v => linker(u, v)).length;
-  const order = regs.slice().sort((a, b) => regs.filter(v => linker(b, v)).length - regs.filter(v => linker(a, v)).length);
+  // random seating, but players from the same household / internet / device (and their whole cluster) go to different tables when possible
+  const cl = clustersOf(regs), conflicts = (grp, u) => grp.reduce((n, v) => n + pairW(u, v, cl), 0), heavy = new Map(regs.map(u => [u, conflicts(regs, u)]));
+  const order = regs.slice().sort((a, b) => heavy.get(b) - heavy.get(a));
   order.forEach(u => {
     const best = groups.filter(gp => gp.length < cap).sort((a, b) => conflicts(a, u) - conflicts(b, u) || a.length - b.length)[0];
     best.push(u);
   });
-  // repair pass: swap players between tables while that lowers the number of linked pairs sitting together
-  const cost = grp => grp.reduce((a, u, i) => a + grp.slice(i + 1).filter(v => linker(u, v)).length, 0);
+  // repair pass: swap players between tables while that lowers the weight of linked (and same-cluster) pairs sitting together
+  const cost = grp => grp.reduce((a, u, i) => a + conflicts(grp.slice(i + 1), u), 0);
   for(let pass = 0, improved = true; improved && pass < 50; pass++){
     improved = false;
     for(let a = 0; a < groups.length; a++) for(let b = a + 1; b < groups.length; b++){
@@ -510,10 +537,11 @@ function breakTable(x){
   x.broken = true;
   const movers = x.g.seats.filter(Boolean);
   x.g.seats = Array(9).fill(null);
+  const cl = clustersOf(everyone(movers.map(p => p.uid)));
   for(const p of movers){
     const open = active().filter(t => count(t) < size() && !t.toBreak), low = Math.min(...open.map(count));
-    // fewest players first; among those (and the next size up), avoid tables with a linked player
-    let dest = open.filter(t => count(t) <= low + 1).sort((a, b) => (linkedAt(a, p.uid) > 0) - (linkedAt(b, p.uid) > 0) || count(a) - count(b))[0];
+    // fewest players first; among those (and the next size up), the lightest links (household worst, then device, internet, cluster)
+    let dest = open.filter(t => count(t) <= low + 1).sort((a, b) => linkScore(a, p.uid, cl) - linkScore(b, p.uid, cl) || count(a) - count(b))[0];
     // never drop a player: fall back to any table with a free seat, or open a new one
     if(!dest) dest = active().filter(t => t !== x && count(t) < size()).sort((a, b) => count(a) - count(b))[0];
     if(!dest){ const n = Math.max(0, ...[...tables.values()].map(t => t.n)) + 1; dest = newTable(T().id + '-' + n, n); if(running) loop(dest); console.error('breakTable: no room, opened table', n); }
@@ -538,9 +566,10 @@ function balance(tb){
   if(!others.length) return;
   const shortest = others.sort((a, b) => count(a) - count(b))[0];
   while(count(tb) - count(shortest) >= 2){
-    // TDA: move the player who will be big blind next; skip anyone linked to a player at the destination
-    let s = E.nextLive(tb.g, tb.g.bb);
-    for(let k = 0, c = s; k < 9; k++, c = E.nextLive(tb.g, c)){ const q = tb.g.seats[c]; if(q && !linkedAt(shortest, q.uid)){ s = c; break; } }
+    // TDA: move the player who will be big blind next; skip anyone linked (or in a cluster) with a player at the destination
+    let s = E.nextLive(tb.g, tb.g.bb), best = Infinity;
+    const cl = clustersOf(everyone([]));
+    for(let k = 0, c = s; k < 9; k++, c = E.nextLive(tb.g, c)){ const q = tb.g.seats[c], w = q ? linkScore(shortest, q.uid, cl) : Infinity; if(w < best){ s = c; best = w; } if(!w) break; }
     const p = tb.g.seats[s];
     if(!p) break;
     tb.g.seats[s] = null; seatInto(shortest, p, 'balance');
@@ -554,7 +583,9 @@ function lateJoin(uid){
   const us = store.get('user:' + uid); if(!us || us.removed) throw new Error('Unknown player.');
   const p = mkPlayer(uid, t.stack);
   const open = active().filter(x => count(x) < size() && !x.toBreak);
-  let dest = open.sort((a, b) => (linkedAt(a, uid) > 0) - (linkedAt(b, uid) > 0) || count(a) - count(b))[0];
+  // lightest links first (none, same cluster, internet, device, household; then fewer of them), then fewest players
+  const cl = clustersOf(everyone([uid]));
+  let dest = open.sort((a, b) => linkScore(a, uid, cl) - linkScore(b, uid, cl) || count(a) - count(b))[0];
   let fresh = false;
   if(!dest){ const n = Math.max(0, ...[...tables.values()].map(x => x.n)) + 1; dest = newTable(t.id + '-' + n, n); fresh = true; }
   // everyone already knocked out now finishes one place lower
@@ -590,8 +621,10 @@ function scheduleNext(t){
   let next = t.startAt + step; while(next < Date.now()) next += step;
   setTimeout(() => {
     const cur = T(); if(cur && (cur.status === 'running' || cur.status === 'registering') || !hooks.hosts()) return;
-    create({ name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat, anteMode: t.anteMode, actSec: t.actSec, tableSize: t.tableSize, lateLevels: t.lateLevels, helper: t.helper, showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0,
-      breakMin: t.breakMin, sponsor: t.sponsor, sponsorSec: t.sponsorSec });
+    const o = { name: t.name, stack: t.stack, levelMin: t.levelMin, startAt: next, repeat: t.repeat, anteMode: t.anteMode, actSec: t.actSec, tableSize: t.tableSize, lateLevels: t.lateLevels, helper: t.helper, showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0,
+      breakMin: t.breakMin, sponsor: t.sponsor, sponsorSec: t.sponsorSec, prize: t.prize || '' };
+    // (a prize the rules no longer allow is left off the next one rather than stopping it)
+    try{ create(o); }catch(e){ create({ ...o, prize: '' }); }
   }, FAST ? 50 : 15000);
 }
 // Starts a scheduled tournament on time.
@@ -668,4 +701,4 @@ function totalChips(){
 }
 
 module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, edit, join, leave, cancel, start, resume, pause, unpause, act, extend, back, offline,
-  snapshot, cardsFor, show, gp: GP, onBreak, breaksOn, BREAK_EVERY, _extras: { resultMs, rabbitCards, resultExtras }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };
+  snapshot, cardsFor, show, gp: GP, onBreak, breaksOn, BREAK_EVERY, _extras: { resultMs, rabbitCards, resultExtras }, _seat: { breakTable, newTable }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };

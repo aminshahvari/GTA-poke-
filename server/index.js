@@ -311,7 +311,8 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 const SECURITY = {
   // Everything the app runs comes from this server. 'wasm-unsafe-eval' lets the on-phone business card reader
   // (Tesseract.js, served from /vendor/) compile its WebAssembly; it does not allow eval() of JavaScript.
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  // media-src data: is for the tiny silent video that keeps phone screens on at the table (app.js noSleep).
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data:; connect-src 'self' wss:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer'
 };
 // Business Club data is for signed-in members only and must never be indexed
@@ -372,7 +373,8 @@ const server = http.createServer((req, res) => {
     const lu = clubs.ON() && lr && c ? c.store.get('user:' + lr.id) || null : lr;
     const r = !c || c.id === clubs.EVENTS || clubs.suspended(c.id) || clubsClosedFor(c, lu) ? { status: 404 } : c.business.logoFor(bl[1], lu);
     if(r.status !== 200) return send(res, r.status, 'Not found', 'text/plain', NOINDEX);
-    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
+    // the app asks for /bizlogo/<uid>?v=<logoV>: a new logo is a new URL, so the browser may keep this one for a day
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400', Vary: 'Authorization, X-Club', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
   let file = url.pathname === '/lab/media' ? 'lab/media.html' : url.pathname === '/' || url.pathname === '/login' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
   if(file === 'engine.js') return fs.readFile(path.join(__dirname, 'engine.js'), (err, buf) => err ? send(res, 404, 'Not found', 'text/plain') : send(res, 200, buf, TYPES['.js']));
@@ -458,7 +460,7 @@ const tourneyOf = (c, t) => { const club = c.club; return { id: t.id, status: t.
       places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null,
       ...(club.gp() ? { showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0 } : {}),
       startedAt: t.startedAt || null, breaks: club.breaksOn(), breakEvery: club.BREAK_EVERY, breakMin: t.breakMin || 5, breakUntil: club.onBreak(t) ? t.breakUntil : null, breakPending: !!t.breakPending && !t.paused,
-      pausedBreakLeft: t.paused ? t.pausedBreakLeft || 0 : 0, sponsor: c.business.sponsorCard(t.sponsor), sponsorSec: t.sponsorSec || 8 }; };
+      pausedBreakLeft: t.paused ? t.pausedBreakLeft || 0 : 0, sponsor: c.business.sponsorCard(t.sponsor), sponsorSec: t.sponsorSec || 8, prize: t.prize || '' }; };
 function clubView(c, u){
   if(clubs.ON() && clubs.suspended(c.id)) return suspendedView(c, u);
   const { store, club, rewards } = c;
@@ -556,7 +558,7 @@ function liveCheck(){
 function spectatorView(c, u, home){
   const t = c.club.T(), club = c.club;
   return { spectate: true, me: { id: u.id, name: u.name, owner: false }, clubSwitching: true, club: { id: c.id, name: clubs.def(c.id).name }, home: { id: home, name: (clubs.def(home) || {}).name || 'your club' },
-    clubs: [], tourney: t ? { ...tourneyOf(c, t), regs: [], regCount: t.regs.length, note: null, sponsor: null } : null, hosts: false,
+    clubs: [], tourney: t ? { ...tourneyOf(c, t), regs: [], regCount: t.regs.length, note: null, sponsor: null, prize: '' } : null, hosts: false,
     tables: club.tablesSummary(), myTable: null, members: [], history: [], now: Date.now(), shop: null,
     features: { clubs: false, ...(club.gp() ? { tableExtras: true } : {}), ...(club.breaksOn() ? { breaks: true } : {}) }, chatOff: true, muted: true, version: VERSION,
     ...(DOMINO() && c.id === clubs.MAIN ? { domino: true } : {}) };

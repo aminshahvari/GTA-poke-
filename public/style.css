@@ -156,6 +156,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .chips i:nth-child(2){top:-3px;--cc:#1f5fbf}
 .chips i:nth-child(3){top:-6px;--cc:#222}
 .dealer{position:absolute;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;background:#f5f1e6;box-shadow:0 2px 4px rgba(0,0,0,.5);display:grid;place-items:center;font-size:10px;font-weight:800;color:#222;z-index:6;transition:left .5s,top .5s}
+.dealer.under{z-index:4}
 .card{--w:var(--cw);position:relative;width:var(--w);height:calc(var(--w)*1.4);border-radius:calc(var(--w)*.12);background:#fbfaf6;color:#1b1b1b;box-shadow:0 2px 5px rgba(0,0,0,.45);font-weight:700;line-height:1;flex:none}
 .card .r{position:absolute;left:calc(var(--w)*.09);top:calc(var(--w)*.07);font-size:calc(var(--w)*.4);letter-spacing:-.04em}
 .card .s1{position:absolute;left:calc(var(--w)*.1);top:calc(var(--w)*.48);font-size:calc(var(--w)*.3)}
@@ -2022,6 +2023,8 @@ body{background:var(--lx-ink)}
 #game .table-area.micro .seat[data-side=t] .card.mini{--w:14px}
 #game .seat[data-side]>.hole.shown{bottom:88%;z-index:3}
 #game .seat[data-side^=t]>.hole.shown{bottom:auto;top:88%}
+/* (a side seat's badge at the foot of its shown cards, over the big suit, clear of both corner indexes; see app.js) */
+#game .seat[data-side]>.hole.shown>.badge{left:50%;right:auto;top:auto;bottom:-6px;transform:translateX(-50%);z-index:5}
 
 /* (the oval's dock: the raise panel takes the timer's row and the helper's line, the timer a thin line along its top
    edge and its amount on the Raise button, so the dock is no taller with it open and the table keeps the room) */
@@ -2112,6 +2115,12 @@ body{background:var(--lx-ink)}
 .brk [data-spbiz]{pointer-events:auto;cursor:pointer;transition:opacity .2s}
 .brk [data-spbiz]:active{opacity:.75}
 .sp-txt small.sp-more{text-transform:none;letter-spacing:0;font-size:12px;margin-top:2px}
+/* the prize, in the director's words (never cash): on the sponsor, the break card and the lobby card */
+.sp-txt small.sp-prize{text-transform:none;letter-spacing:0;font-size:12px;color:var(--lx-gold-hi,#f1dfb0)}
+.brk-prize{margin-top:6px;font-size:13px;color:var(--lx-gold-hi,#f1dfb0);overflow-wrap:anywhere}
+.sp-note .sp-prize{display:inline-block;color:var(--lx-gold-hi,#f1dfb0)}
+/* the one-line header (short screens, sideways) has no room for a third line: the prize is in the lobby and the side panel */
+#game.row1 .spn .sp-prize,#game.land .spn .sp-prize{display:none}
 /* the card sits under the seats (same layer, earlier in the page), so a player's seat always shows on top of it;
    the chips left from the last pot are hidden while it shows */
 #tableArea.on-break #fx,#tableArea.on-break .center .pot{visibility:hidden}
@@ -2409,3 +2418,71 @@ body{background:var(--lx-ink)}
   .hud-lead .hud-chips{padding:2px 6px}
   .hud-badges{gap:8px}
 }
+/* one row (480px and wider): the modules shrink to make room, but never below their own content (they shrank together,
+   so the leader pill spilled over by 2px at 1280x800); the leader's name is what gives way, with an ellipsis */
+@media (min-width:480px){
+  #game:not(.land) .field-bar{padding-left:8px;padding-right:8px}
+  #game:not(.land) .field-bar>.hud-mod{min-width:min-content}
+  #game:not(.land) .field-bar>.hud-mod:not(.hud-lead,.hud-rank){padding-left:6px;padding-right:6px}
+  #game:not(.land) .field-bar .hud-lbl{letter-spacing:.1em}
+  #game:not(.land) .hud-rank{padding-left:9px;padding-right:9px}
+  #game:not(.land) .hud-lead{margin:0 3px;gap:6px}
+  #game:not(.land) .hud-lt{min-width:76px}
+  #game:not(.land) .hud-lead .hud-chips{padding:2px 5px}
+}
+/* ---------- sideways: the column beside the table (owner's request, 2026-10-22) ----------
+   A TV side panel: the tournament HUD (#fieldBar) at the top of the column, the sponsor under it (logo, name, category,
+   the prize, See their page), the status box and the action buttons at the bottom as before. The table gets the full
+   height under the header. Upright, nothing changes. When the column is short the sponsor's smaller lines give way
+   first (app.js fitSide: s1 to s4). */
+.side{display:none}
+#game.land{grid-template-rows:auto auto minmax(0,1fr) auto}
+#game.land .table-area{grid-row:2/5}
+#game.land .dock{grid-row:4}
+#game.land .field-bar{grid-column:2;grid-row:2;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"f r" "l l" "b a";gap:4px 6px;
+  margin:4px 8px 0 4px;padding:5px 7px 5px 8px;border-radius:14px}
+#game.land .field-bar .hud-mod{padding:0;border-left:0;min-width:0}
+#game.land .hud-field{grid-area:f;gap:1px}
+#game.land .hud-rank .hud-lbl{font-size:8.5px}
+#game.land .hud-prog{display:none}
+#game.land .field-bar .hud-val{font-size:16px;line-height:1.1}
+#game.land .hud-rank{grid-area:r;margin:0;padding:2px 11px;align-self:center;gap:0}
+#game.land .hud-lead{grid-area:l;margin:0;padding:2px 7px 2px 9px;gap:7px}
+#game.land .hud-lead>svg{width:17px;height:17px}
+#game.land .hud-lead .hud-lt{min-width:0}
+#game.land .hud-lead .hud-lbl{font-size:8.5px}
+#game.land .hud-name{font-size:14px;line-height:1.15}
+#game.land .hud-lead .hud-chips b{font-size:14px}
+#game.land .hud-badges{grid-area:b;flex-direction:row;align-items:center;justify-content:flex-start;gap:10px;padding-left:1px}
+#game.land .hud-badge svg{width:15px;height:15px}
+#game.land .hud-avg{grid-area:a;flex-direction:row;align-items:baseline;justify-content:flex-end;gap:6px}
+#game.land .field-bar .hud-avg .hud-val,#game.land .hud-badge b{font-size:14px}
+#game.land .field-bar:not(:has(.hud-rank)){grid-template-areas:"f f" "l l" "b a"}
+#game.land .side:not([hidden]){display:flex;flex-direction:column;grid-column:2;grid-row:3/5;align-self:start;min-height:0;overflow:hidden;margin:6px 8px 0 4px;position:relative;z-index:2;transition:opacity .3s,visibility .3s}
+#game.land .side>*{flex:none}
+#game.land .side .sp-card{position:relative;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;border:1px solid transparent;
+  background:radial-gradient(120% 90% at 0% 0%,rgba(216,180,106,.16),transparent 60%) padding-box,linear-gradient(180deg,rgba(19,26,44,.94),rgba(10,15,28,.96)) padding-box,
+  linear-gradient(160deg,rgba(243,229,171,.7),rgba(216,180,106,.18) 45%,rgba(255,255,255,.05)) border-box;box-shadow:0 10px 26px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05)}
+#game.land .side .sp-txt{gap:1px}
+#game.land .side .sp-txt b{font-size:18px;line-height:1.15}
+#game.land .side .sp-txt small.sp-prize{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;margin-top:3px;padding-top:4px;border-top:1px solid var(--lx-hair,rgba(241,223,176,.13));font-size:12.5px;line-height:1.3}
+#game.land .side .sp-more{color:var(--lx-gold,#d8b46a)}
+#game.land .side [data-spbiz]{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:opacity .2s}
+#game.land .side [data-spbiz]:active{opacity:.75}
+#game.land .side [data-spbiz]:focus-visible{outline:2px solid #f3e5ab;outline-offset:2px}
+#game.land .side-prize{display:grid;gap:2px;padding:9px 12px;border-radius:14px;border:1px solid rgba(216,180,106,.35);background:linear-gradient(135deg,rgba(216,180,106,.14),rgba(216,180,106,.04))}
+#game.land .side-prize small{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--lx-gold,#d8b46a)}
+#game.land .side-prize b{font-size:14px;color:var(--lx-ivory,#f4eee2);overflow-wrap:anywhere}
+#game.land .side.s1 .sp-cat{display:none}
+#game.land .side.s2 .sp-txt>small:first-child,#game.land .side.s2 .sp-more{display:none}
+#game.land .side.s2 .sp-card{padding:6px 10px}
+#game.land .side.s2 .sp-logo .bz-logo.sp{width:34px;height:34px;font-size:12px}
+#game.land .side.s3 .sp-card{padding:3px 8px;gap:8px;border-radius:11px}
+#game.land .side.s3 .sp-txt b{font-size:15px}
+#game.land .side.s3 .sp-logo .bz-logo.sp{width:28px;height:28px;border-radius:7px;font-size:11px}
+#game.land .side.s3 .sp-txt small.sp-prize{-webkit-line-clamp:1;margin-top:0;padding-top:0;border-top:0;font-size:11.5px;line-height:1.25}
+#game.land .side.s3 .side-prize{padding:4px 10px}
+#game.land .side.s4{visibility:hidden;opacity:0}
+/* the column's pre-action buttons share its width evenly (their labels wrap) instead of running past the screen's edge */
+#game.land .preacts{grid-template-columns:repeat(3,minmax(0,1fr))}
+#game.land .preacts button{min-width:0;gap:5px;padding:0 5px;font-size:13px;line-height:1.15}
