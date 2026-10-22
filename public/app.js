@@ -2238,20 +2238,31 @@ function brkSeats(){
   return [...document.querySelectorAll('#seats .seat')].map(s => [s, ...s.querySelectorAll('.av,.plate,.hole')].map(x => x.getBoundingClientRect()).filter(q => q.width)
     .reduce((a, q) => a ? { left: Math.min(a.left, q.left), top: Math.min(a.top, q.top), right: Math.max(a.right, q.right), bottom: Math.max(a.bottom, q.bottom) } : q, null)).filter(Boolean);
 }
-// The sponsor ribbon over the clock bar for a few seconds after the tournament starts (never over the felt or the buttons).
-let spnKey = '';
-function sponsorUI(T, now){
+// The sponsor ribbon over the clock bar for the set seconds (never over the felt or the buttons). Each phone shows it the
+// first time it opens a table of a running tournament (whenever that is: from the lobby, a slow load, late registration),
+// and again when a break it saw ends. Kept in memory per tournament, so a reload shows it once more.
+let spnKey = '', spnUntil = 0, spnBrk = null;
+const spnSeen = new Set();
+function sponsorUI(T, now, onTable){
   const el = $('spn'); if(!el) return;
-  const sp = T && T.status === 'running' && T.sponsor, left = sp && T.startedAt ? T.startedAt + (T.sponsorSec || 8) * 1000 - now : 0;
-  if(!sp || left <= 0){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; spnKey = ''; } return; }
+  const sp = T && T.status === 'running' && T.sponsor;
+  const brk = sp && (T.paused ? T.pausedBreakLeft > 0 : T.breakUntil && T.breakUntil > now);
+  if(brk) spnBrk = T.id + ':' + T.breakUntil;
+  else if(sp && onTable){
+    // a break this phone saw ended (within the last minute), or this tournament's first look at a table
+    const k = spnBrk && spnBrk.startsWith(T.id + ':') && !spnSeen.has(spnBrk) && now - (+spnBrk.split(':')[1] || 0) < 60000 ? spnBrk : !spnSeen.has(T.id) ? T.id : null;
+    if(k){ spnSeen.add(k); spnSeen.add(T.id); spnBrk = null; spnUntil = now + (T.sponsorSec || 8) * 1000; }
+  }
+  const left = sp && onTable && !brk ? spnUntil - now : 0;
+  if(left <= 0){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; spnKey = ''; } return; }
   const key = T.id + ':' + sp.uid;
   if(key !== spnKey){ spnKey = key; el.innerHTML = sponsorHTML(sp, false); fillLogo(el, sp); el.hidden = false; }
   el.classList.toggle('out', left < 600);
 }
 function tickClock(){
   const T = demo ? demo.T : club && club.tourney;
-  if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(null); return; }
   const now = Date.now() + clockSkew;
+  if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(T, now, false); return; }
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;
   // in the one-row header of the shortest screens the ante takes the second line, in place of the next level
@@ -2262,7 +2273,7 @@ function tickClock(){
   const ms = T.paused ? T.pausedLeft : brk || Math.max(0, T.levelEndsAt - now);
   $('cTime').textContent = T.paused ? 'Paused' : T.breakPending ? 'Break' : mmss(ms);
   $('cTimeLbl').textContent = brk ? 'Break' : T.breakPending ? 'After this hand' : !T.paused && ms <= 0 ? 'Blinds up next hand' : 'Time left';
-  breakUI(T, tables.get(watchTid || club.myTable), now); sponsorUI(T, now);
+  breakUI(T, tables.get(watchTid || club.myTable), now); sponsorUI(T, now, true);
   $('sAvg').textContent = fmt(T.entrants * T.stack / Math.max(1, T.remaining));
   const d = tables.get(watchTid || club.myTable);
   const all = [...tables.values()].flatMap(t => t.seats.filter(Boolean));
