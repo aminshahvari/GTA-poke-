@@ -173,5 +173,51 @@ const mid = (a, b) => a.map((x, i) => (x + b[i]) / 2);
   console.log('     for the record:'); for(const [name, fg, bg] of NOTE) console.log(`       ${ratio(fg, bg).toFixed(2).padStart(5)}:1  ${name}`);
   check(ratio(parse('rgba(245,246,243,.42)'), C('--b-surface-2')) < 4.5 && ratio(parse('rgba(245,246,243,.47)'), C('--b-surface-2')) < 4.5, '--b-text-3 at .48 is the nearest step that passes (the spec\'s .42, and .47, do not)');
 
+  // ---------- B2 (the table, §3): every text the table adds, on what it is drawn over ----------
+  // The B2 tones are color-mix() of the tokens; they are resolved here the way the browser mixes them (srgb with
+  // transparent: the colour at that share of opacity; oklab between two colours), then composited.
+  const lin = x => { x /= 255; return x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4; }, gam = x => 255 * (x <= .0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - .055);
+  const toLab = ([r, g, b]) => { const [R, G, B] = [r, g, b].map(lin), l = Math.cbrt(.4122214708 * R + .5363325363 * G + .0514459929 * B), m = Math.cbrt(.2119034982 * R + .6806995451 * G + .1073969566 * B), s = Math.cbrt(.0883024619 * R + .2817188376 * G + .6299787005 * B);
+    return [.2104542553 * l + .793617785 * m - .0040720468 * s, 1.9779984951 * l - 2.428592205 * m + .4505937099 * s, .0259040371 * l + .7827717662 * m - .808675766 * s]; };
+  const fromLab = ([L, a, b2]) => { const l = (L + .3963377774 * a + .2158037573 * b2) ** 3, m = (L - .1055613458 * a - .0638541728 * b2) ** 3, s = (L - .0894841775 * a - 1.291485548 * b2) ** 3;
+    return [4.0767416621 * l - 3.3077115913 * m + .2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - .3413193965 * s, -.0041960863 * l - .7034186147 * m + 1.707614701 * s].map(x => Math.max(0, Math.min(255, gam(x)))); };
+  const res = v => { v = v.trim(); const ref = v.match(/^var\((--[\w-]+)\)$/); if(ref) return res(tok[ref[1]]);
+    const mx = v.match(/^color-mix\(in (srgb|oklab),(.+)\)$/); if(!mx) return parse(v);
+    const parts = mx[2].split(/,(?![^()]*\))/).map(s => { const m = s.trim().match(/^(.*?)(?:\s+([\d.]+)%)?$/); return { c: m[1].trim(), p: m[2] == null ? null : +m[2] / 100 }; });
+    let [a, b] = parts; if(a.p == null && b.p == null){ a.p = .5; b.p = .5; } else if(a.p == null) a.p = 1 - b.p; else if(b.p == null) b.p = 1 - a.p;
+    if(b.c === 'transparent'){ const c = res(a.c); return [c[0], c[1], c[2], c[3] * a.p]; }
+    const A = res(a.c), B = res(b.c);
+    if(mx[1] === 'srgb') return A.slice(0, 3).map((x, i) => x * a.p + B[i] * b.p).concat(1);
+    const la = toLab(A), lb = toLab(B); return fromLab(la.map((x, i) => x * a.p + lb[i] * b.p)).concat(1); };
+  const T = k => res(tok[k]);
+  // what the seats, the pot and the chips sit on: the felt's lit middle (its lightest), the felt, the rail, the ground
+  const GROUNDS = [['the lit felt', T('--b-felt-hi')], ['the felt', T('--b-felt')], ['the rail', T('--b-rail-top')], ['the ground', T('--b-ground-hi')]];
+  const ON = (fill, g) => over(fill, g), plateOn = g => ON(T('--b-plate'), g), pillOn = g => ON(T('--b-pill'), g);
+  const B2 = [];
+  for(const [gn, g] of GROUNDS){
+    B2.push([`seat name (--b-text) on its plate over ${gn}`, T('--b-text'), plateOn(g)], [`seat stack (--b-gold-text) on its plate over ${gn}`, T('--b-gold-text'), plateOn(g)],
+      [`"Call"/"Check" in a name line (--b-act-call) on the plate over ${gn}`, T('--b-act-call'), plateOn(g)], [`"Raise"/"Winner"/a hand in a name line (--b-gold-text) on the plate over ${gn}`, T('--b-gold-text'), plateOn(g)],
+      [`a folded seat's name, stack and "Fold" (--b-text-2) on the plate over ${gn}`, T('--b-text-2'), plateOn(g)],
+      [`the pot (--b-text) on its pill over ${gn}`, T('--b-text'), pillOn(g)], [`a bet (--b-text) on its pill over ${gn}`, T('--b-text'), pillOn(g)]);
+  }
+  B2.push(['"Away" (--b-text) on --b-surface-2', T('--b-text'), T('--b-surface-2')], ['"Disconnected" (--b-on-warn) on --b-warn', T('--b-on-warn'), T('--b-warn')],
+    ['the dealer button "D" (--b-on-dealer) on --b-dealer', T('--b-on-dealer'), T('--b-dealer')], ['an initials disc (--b-text) on --b-surface-2', T('--b-text'), T('--b-surface-2')],
+    ['the winner line (--b-text) on the lit felt', T('--b-text'), T('--b-felt-hi')],
+    ['the info line (--b-text-2) on --b-bg', T('--b-text-2'), T('--b-bg')], ['the info line, bold (--b-text) on --b-bg', T('--b-text'), T('--b-bg')], ['the free-play line (--b-text-3) on --b-bg', T('--b-text-3'), T('--b-bg')],
+    ['the helper: the hand (--b-text) on --b-bg', T('--b-text'), T('--b-bg')], ['the helper: a good chance (--b-good) on --b-bg', T('--b-good'), T('--b-bg')],
+    ['the helper: a middling chance (--b-gold-text) on --b-bg', T('--b-gold-text'), T('--b-bg')], ['the helper: a poor chance (--b-bad) on --b-bg', T('--b-bad'), T('--b-bg')],
+    ['"+30s" (--b-gold-text) on --b-surface', T('--b-gold-text'), T('--b-surface')], ['"+30s": "3 left" (--b-text-2) on --b-surface', T('--b-text-2'), T('--b-surface')],
+    ['a quick action (--b-text) on --b-surface', T('--b-text'), T('--b-surface')], ['a quick action, on (--b-text) on --b-gold-fill over --b-surface', T('--b-text'), over(T('--b-gold-fill'), T('--b-surface'))],
+    ['a sizing preset, chosen (--b-gold-text) on --b-gold-fill over --b-surface', T('--b-gold-text'), over(T('--b-gold-fill'), T('--b-surface'))],
+    ['the table menu: a row (--b-text) on --b-surface-2', T('--b-text'), T('--b-surface-2')], ['the table menu: a note (--b-text-2) on --b-surface-2', T('--b-text-2'), T('--b-surface-2')],
+    ['the table menu: unread (--b-gold-text) on --b-surface-2', T('--b-gold-text'), T('--b-surface-2')], ['the table menu: its title (--b-text-2) on --b-surface', T('--b-text-2'), T('--b-surface')],
+    ['"Back" in the sizing (--b-text) on --b-surface', T('--b-text'), T('--b-surface')]);
+  console.log('     B2 contrast (AA needs 4.5:1):');
+  for(const [name, fg, bg] of B2) console.log(`       ${ratio(fg, bg).toFixed(2).padStart(5)}:1  ${name}`);
+  const weak = B2.filter(([, fg, bg]) => ratio(fg, bg) < 4.5).map(([name, fg, bg]) => `${ratio(fg, bg).toFixed(2)}:1 ${name}`);
+  check(!weak.length, `B2: all ${B2.length} table texts at least 4.5:1${weak.length ? ' — under: ' + weak.join('; ') : ''}`);
+  // "+" on an empty seat is decoration (aria-hidden, not a control): for the record
+  console.log(`     for the record: "+" on an empty seat (--b-text-3 on --b-surface) ${ratio(T('--b-text-3'), T('--b-surface')).toFixed(2)}:1`);
+
   console.log(`\n${n} checks passed`);
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });
