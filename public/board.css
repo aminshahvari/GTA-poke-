@@ -236,7 +236,7 @@
 [data-ui="board"] #game[data-bcls="P-S"]{--bd-pad:6px; --bd-band:44px; --bd-gap:6px; --bd-row:52px}
 [data-ui="board"] #game[data-bcls="P-S"] .dock #helper.b-info{font-size:12px;line-height:14px}
 /* the info line's place: the hand helper; else the table's news (whose turn, the result) over the free-play line */
-[data-ui="board"] #game .dock :is(#helper,.info-line,#playLine){position:absolute;left:12px;right:12px;top:var(--bd-pad);margin:0;box-sizing:border-box;text-align:center;background:none;border:0;border-radius:0;box-shadow:none}
+[data-ui="board"] #game .dock :is(#helper,.info-line,#playLine,#playNote){position:absolute;left:12px;right:12px;top:var(--bd-pad);margin:0;box-sizing:border-box;text-align:center;background:none;border:0;border-radius:0;box-shadow:none}
 [data-ui="board"] #game .dock #helper.b-info{height:var(--bd-band);display:flex;align-items:center;justify-content:center;flex-wrap:wrap;align-content:center;column-gap:5px;padding:0 4px;
   font-size:var(--b-t-13);font-weight:500;line-height:15px;color:var(--b-text-2);cursor:default;overflow:hidden}
 [data-ui="board"] #game .dock #helper.b-info[hidden]{display:none}
@@ -260,7 +260,13 @@
 [data-ui="board"] #game .dock .info-line b{color:var(--b-text);font-weight:600}
 [data-ui="board"] #game .dock .info-line .btn{min-height:40px}
 [data-ui="board"] #game .dock #playLine{top:calc(var(--bd-pad) + var(--bd-band) - 15px);height:15px;padding:0;font-size:11px;line-height:15px;color:var(--b-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:1}
-[data-ui="board"] #game .dock:has(#helper:not([hidden])) :is(.info-line:not(#controls>:only-child),#playLine),[data-ui="board"] #game .dock:has(.sizing) :is(#helper,.info-line,#playLine){display:none}
+[data-ui="board"] #game .dock:has(#helper:not([hidden])) :is(.info-line:not(#controls>:only-child),#playLine),[data-ui="board"] #game .dock:has(.sizing) :is(#helper,.info-line,#playLine,#playNote){display:none}
+/* the free-play notice at the start of a game (§3.4): on the info line, one line (two at most), over the helper for its
+   four seconds or until your first action (app.js placePlayNote); no box, no × */
+[data-ui="board"] #game .dock #playNote{z-index:3;height:var(--bd-band);flex-direction:row;flex-wrap:wrap;align-content:center;column-gap:.4em;padding:0 4px;background:var(--b-bg);font-size:var(--b-t-13);font-weight:500;line-height:1.3}
+[data-ui="board"] #game .dock #playNote b{color:var(--b-gold-text);letter-spacing:0;font-weight:600}
+[data-ui="board"] #game .dock #playNote span{color:var(--b-text-2);white-space:normal}
+[data-ui="board"] #game .dock #playNote i{display:none}
 /* (an action on its way: "Call · sending…" stands in the action row, in place of the buttons, the info line kept above it) */
 [data-ui="board"] #game .dock #controls>.info-line:only-child{position:static;width:auto;height:var(--bd-row);color:var(--b-text-2)}
 /* your turn: "+30s" at the right of the info line (44 px tall), the time bar over the action row for the last 10 s */
@@ -270,7 +276,7 @@
 [data-ui="board"] #game .dock .turnrow .xtime small{font-size:10px;font-weight:500;color:var(--b-text-2)}
 [data-ui="board"] #game .dock .turnrow .xtime:disabled{display:none}
 [data-ui="board"] #game .dock .turnrow .xtime::after{display:none}
-[data-ui="board"] #game .dock:has(.xtime:not(:disabled)) #helper.b-info{right:80px}
+[data-ui="board"] #game .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote){right:80px}
 [data-ui="board"] #game .dock .turnrow .turnbar{position:absolute;left:0;right:0;top:calc(var(--bd-band) + var(--bd-gap) / 2 - 1px);height:2px;margin:0;border-radius:1px;background:none;opacity:0;transition:opacity .2s}
 [data-ui="board"] #game .dock .turnrow .turnbar.late{opacity:1}
 [data-ui="board"] #game .dock .turnrow .turnbar i,[data-ui="board"] #game .dock .turnrow .turnbar i.low,[data-ui="board"] #game .dock .turnrow .turnbar i.bank{background:var(--b-gold);border-radius:1px}
@@ -335,10 +341,11 @@
 [data-ui="board"] #game.land .dock{height:calc(6px * 2 + var(--bd-land-row));padding:0 12px;align-self:stretch}
 [data-ui="board"] #game.land .dock .controls{margin:6px 0 0 auto;width:min(520px,58%)}
 [data-ui="board"] #game.land .dock .b-acts{height:var(--bd-land-row)}
-[data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine){top:6px;right:auto;width:calc(42% - 24px);left:12px}
+[data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine,#playNote){top:6px;right:auto;width:calc(42% - 24px);left:12px}
 [data-ui="board"] #game.land .dock #helper.b-info{height:var(--bd-land-row);justify-content:flex-start;text-align:left;font-size:12px;line-height:14px}
 [data-ui="board"] #game.land .dock .info-line{height:calc(var(--bd-land-row) - 15px);justify-content:flex-start;text-align:left;font-size:12px}
 [data-ui="board"] #game.land .dock #playLine{top:calc(6px + var(--bd-land-row) - 15px);text-align:left}
+[data-ui="board"] #game.land .dock #playNote{height:var(--bd-land-row);justify-content:flex-start;text-align:left;font-size:12px;line-height:14px}
 [data-ui="board"] #game.land .dock .act-btn{flex-direction:row;gap:5px}
 [data-ui="board"] #game.land .dock .act-btn b,[data-ui="board"] #game.land .dock .act-btn span{font-size:var(--b-t-15)}
 /* (sideways the time row is the dock's own: "+30s" left of the buttons, the time bar over them; the buttons are
@@ -346,7 +353,7 @@
 [data-ui="board"] #game.land .dock .turnrow{display:contents}
 [data-ui="board"] #game.land .dock .turnrow .xtime{top:6px;right:calc(12px + min(520px,(100% - 24px) * .58) + 8px);width:64px;min-width:0;height:var(--bd-land-row)}
 [data-ui="board"] #game.land .dock .turnrow .turnbar{left:auto;right:12px;width:min(520px,(100% - 24px) * .58);top:3px}
-[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) #helper.b-info{width:calc(42% - 100px)}
+[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote){width:calc(42% - 100px)}
 [data-ui="board"] #game.land .dock .sizing.b-sizing{left:12px;right:auto;width:calc(42% - 24px);top:6px;height:var(--bd-land-row)}
 [data-ui="board"] #game.land .dock .sizing.b-sizing .sz-presets{gap:4px}
 [data-ui="board"] #game.land .dock .sizing.b-sizing .sz-presets button{font-size:12px}
@@ -356,7 +363,7 @@
    the buttons read on two lines, as upright */
 @media (max-width:759px){
   [data-ui="board"] #game.land .dock .controls{width:62%}
-  [data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine),[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) #helper.b-info,[data-ui="board"] #game.land .dock .sizing.b-sizing{width:calc(38% - 24px)}
+  [data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine,#playNote),[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote),[data-ui="board"] #game.land .dock .sizing.b-sizing{width:calc(38% - 24px)}
   [data-ui="board"] #game.land .dock .turnrow .xtime{right:64px;width:56px;padding:0 2px}
   [data-ui="board"] #game.land .dock .turnrow .turnbar{width:calc((100% - 24px) * .62)}
   [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 56px 44px}
@@ -533,11 +540,12 @@
 /* (the dock at the column's foot: the info line over the action row, as upright, the row reaching the screen's bottom) */
 [data-ui="board"] #game.land.b-col>.dock{grid-column:2;grid-row:4;align-self:end;padding:0;margin:0 8px 0 4px;height:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap) + var(--bd-row) + var(--bd-pad) + var(--sa-b))}
 [data-ui="board"] #game.land.b-col .dock .controls{margin:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap)) 0 0;width:auto;padding:0 0 calc(var(--bd-pad) + var(--sa-b))}
-[data-ui="board"] #game.land.b-col .dock :is(#helper,.info-line,#playLine),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) #helper.b-info,[data-ui="board"] #game.land.b-col .dock .sizing.b-sizing{left:0;right:0;width:auto;top:var(--bd-pad)}
+[data-ui="board"] #game.land.b-col .dock :is(#helper,.info-line,#playLine,#playNote),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote),[data-ui="board"] #game.land.b-col .dock .sizing.b-sizing{left:0;right:0;width:auto;top:var(--bd-pad)}
 [data-ui="board"] #game.land.b-col .dock #helper.b-info{height:var(--bd-band);justify-content:center;text-align:center}
 [data-ui="board"] #game.land.b-col .dock .info-line{height:calc(var(--bd-band) - 15px);text-align:center}
 [data-ui="board"] #game.land.b-col .dock #playLine{top:calc(var(--bd-pad) + var(--bd-band) - 15px);text-align:center}
-[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) #helper.b-info{right:64px}
+[data-ui="board"] #game.land.b-col .dock #playNote{height:var(--bd-band);justify-content:center;text-align:center}
+[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote){right:64px}
 [data-ui="board"] #game.land.b-col .dock .turnrow{display:block;position:absolute;left:0;right:0;top:var(--bd-pad);height:var(--bd-band);margin:0;pointer-events:none;z-index:2}
 [data-ui="board"] #game.land.b-col .dock .turnrow .xtime{top:0;right:0;width:58px;height:var(--bd-band);min-height:44px;padding:0 2px}
 [data-ui="board"] #game.land.b-col .dock .turnrow .turnbar{left:0;right:0;width:auto;top:calc(var(--bd-band) + var(--bd-gap) / 2 - 1px)}

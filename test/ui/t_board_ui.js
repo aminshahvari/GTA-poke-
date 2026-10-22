@@ -177,6 +177,42 @@ async function b3(pg, tag, sock, me, w, h){
   if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `b3-table-${tag.replace(/ /g, '-')}.png`) });
 }
 
+// ---------- the turn (the owner's iPhone, 2026-10-22): turning the phone mid-hand lays the table out anew ----------
+// The page after a turn must match a fresh load at that size (within a few px): the header and the felt span the new
+// width, the column beside the table at 740 px wide or more, nothing past the screen's edge. Also with the screen's
+// size reported late, as iPhone Safari does: innerWidth and innerHeight keep the old shape after the page has turned.
+const FRESH = {};
+const shape = pg => pg.evaluate(() => {
+  const r = e => { if(!e || !e.getClientRects().length) return null; const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+  const W = document.documentElement.clientWidth, g = document.getElementById('game');
+  const past = [...document.querySelectorAll('#game *')].filter(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden').map(e => [e, e.getBoundingClientRect()])
+    .filter(([e, b]) => b.width && (b.right > W + 1 || b.left < -1)).map(([e]) => e.id || e.className).slice(0, 4);
+  return { W, game: r(g), top: r(document.getElementById('bTop')), card: r(document.getElementById('bHud')), area: r(document.getElementById('tableArea')), felt: r(document.querySelector('#tableArea .felt')),
+    dock: r(document.getElementById('dock')), land: g.classList.contains('land'), col: g.classList.contains('b-col'), past, scroll: document.documentElement.scrollWidth - W };
+});
+const near = (a, b, px = 3) => !!a && !!b && ['l', 't', 'r', 'b'].every(k => Math.abs(a[k] - b[k]) <= px);
+const STALE = `(() => { const pw = Object.getOwnPropertyDescriptor(Window.prototype, 'innerWidth') || Object.getOwnPropertyDescriptor(window, 'innerWidth'), ph = Object.getOwnPropertyDescriptor(Window.prototype, 'innerHeight') || Object.getOwnPropertyDescriptor(window, 'innerHeight');
+  window.__stale = [innerWidth, innerHeight];
+  Object.defineProperty(window, 'innerWidth', { configurable: true, get(){ return window.__stale ? window.__stale[0] : pw.get.call(window); } });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, get(){ return window.__stale ? window.__stale[1] : ph.get.call(window); } }); })()`;
+async function turn(pg, tag, w, h, late){
+  if(late) await pg.evaluate(STALE);
+  const t0 = Date.now(); await pg.setViewportSize({ width: w, height: h });
+  // (the first frame after the turn comes promptly: no long layout work stalls the page)
+  await pg.evaluate(() => new Promise(r => requestAnimationFrame(() => r()))); const frame = Date.now() - t0;
+  await sleep(late ? 1500 : 1200);
+  const m = await shape(pg), f = FRESH[`${w}x${h}`], name = `${tag} turned to ${w}x${h}${late ? ' (size reported late)' : ''}`;
+  if(late) await pg.evaluate(() => { window.__stale = null; });
+  check(frame < 1000, `${name}: the first frame after the turn within a second (${frame} ms)`);
+  check(!m.past.length && m.scroll <= 0, `${name}: nothing past the screen's edge${m.past.length ? ': ' + m.past.join(', ') : ''}`);
+  check(m.land === (w > h) && m.col === (w > h && w >= 740), `${name}: laid out ${w > h ? 'sideways' : 'upright'}${w > h && w >= 740 ? ', the column beside the table' : ''} (land ${m.land}, column ${m.col})`);
+  check(m.game && Math.abs(m.game.l) <= 1 && Math.abs(m.game.r - w) <= 1 && m.top && Math.abs(m.top.r - m.top.l - w) <= 1, `${name}: the screen and the header span the whole width (${m.game && Math.round(m.game.r - m.game.l)}, ${m.top && Math.round(m.top.r - m.top.l)})`);
+  if(f) check(near(m.top, f.top) && near(m.card, f.card) && near(m.area, f.area) && near(m.felt, f.felt) && near(m.dock, f.dock),
+    `${name}: the header, the card, the table area, the felt and the dock as in a fresh load at that size (felt ${JSON.stringify(m.felt)} / ${JSON.stringify(f.felt)})`);
+  if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `turn-${tag.replace(/ /g, '-')}-to-${w}x${h}${late ? '-late' : ''}.png`) });
+  return m;
+}
+
 (async () => {
   for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
   await sleep(400);
@@ -228,7 +264,23 @@ async function b3(pg, tag, sock, me, w, h){
       check(L.nums > 0 && L.tab === 0, `${tag} table: tabular numbers on every stack and the pot (${L.nums} checked)`);
       check(L.scroll <= 0, `${tag} table: nothing scrolls sideways (${L.scroll})`);
       if(SHOTS && motion !== 'reduce') await pg.screenshot({ path: path.join(SHOTS, `table-${size}.png`) });
-      if(motion !== 'reduce' && sock && sock !== 'table'){ await b3pre(pg, tag); await b2(pg, tag, sock, me, w, h); await b3(pg, tag, sock, me, w, h); }
+      // the free-play notice at the start of the game (§3.4): on the info line in the dock, not a box on the felt
+      if(motion !== 'reduce' && sock && sock !== 'table'){
+        const pn = await pg.evaluate(() => { const n = document.getElementById('playNote'), d = document.getElementById('dock'), a = document.getElementById('tableArea'), c = document.querySelector('#controls .b-acts, #controls .act-main');
+          if(!n || n.hidden) return null; const r = n.getBoundingClientRect(), dr = d.getBoundingClientRect(), cr = c && c.getBoundingClientRect();
+          return { inDock: n.parentNode === d, inside: r.top >= dr.top - 1 && r.bottom <= dr.bottom + 1 && r.left >= dr.left - 1 && r.right <= dr.right + 1, above: !cr || r.bottom <= cr.top + 1 || r.right <= cr.left + 1, h: r.height, text: n.textContent, x: getComputedStyle(n.querySelector('i')).display }; });
+        check(pn && pn.inDock && pn.inside && pn.above && pn.h <= 50 && /Free social play/.test(pn.text) && pn.x === 'none', `${tag} table: the free-play notice on the info line, above the action row (sideways: beside it), no box and no × (${JSON.stringify(pn)})`);
+      }
+      if(motion !== 'reduce' && sock && sock !== 'table'){ await b3pre(pg, tag); await b2(pg, tag, sock, me, w, h); await b3(pg, tag, sock, me, w, h);
+        check(await pg.evaluate(() => document.getElementById('playNote').hidden), `${tag}: the free-play notice has gone after its 4 seconds`);
+        FRESH[size] = await shape(pg);
+        // turning the phone mid-hand (and back), as the owner did: from sideways upright and back, then the same with
+        // the size reported late, and to the larger sideways phone
+        if(w > h && FRESH['390x844']){
+          await turn(pg, tag, 390, 844); await turn(pg, tag, w, h);
+          await turn(pg, tag, 390, 844, true); await turn(pg, tag, w, h, true);
+          await turn(pg, tag, 932, 430); await turn(pg, tag, w, h);
+        } }
       await ctx.close();
     }
   }

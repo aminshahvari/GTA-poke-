@@ -1573,7 +1573,7 @@ const BCLS = {
 const BARC = .65, BGAP = 2.5;
 function boardClass(){
   const g = $('game'); if(g.classList.contains('land')) return 'L';
-  return window.innerWidth < 360 ? 'P-S' : (LOCK && LOCK.ih || window.innerHeight) >= 740 ? 'P-L' : 'P-M';
+  const { w, h } = scr(); return w < 360 ? 'P-S' : (LOCK && LOCK.ih || h) >= 740 ? 'P-L' : 'P-M';
 }
 // the middle of the rail as a stadium (straight sides, round ends) centred on cx, cy with half sizes a, b: a point
 // `d` of the way round it (weighted length), starting at the bottom centre and going clockwise (left first), with the
@@ -1632,7 +1632,7 @@ function boardSizes(area, cls){
 // The board's layout for n seats in the table area (pixels of the area), in the shape tableGeo returns
 function boardGeo(n){
   const a = $('tableArea'), W = a.clientWidth || 360, H = a.clientHeight || 520, cls = boardClass(), C = BCLS[cls];
-  const vw = window.innerWidth, key = `b:${n}:${W}:${H}:${cls}:${vw}`;
+  const vw = scr().w, key = `b:${n}:${W}:${H}:${cls}:${vw}`;
   if(GEO && GEO.key === key) return GEO;
   if(GEOS.has(key)) return GEO = GEOS.get(key);
   const land = cls === 'L', AV = C.av, R = C.band, S = boardSizes(a, cls);
@@ -1736,55 +1736,78 @@ function boardGeo(n){
   const hitAny = (bx, list, pad) => list.some(([x, y, w, h]) => Math.abs(bx[0] - x) < bx[2] + w + pad && Math.abs(bx[1] - y) < bx[3] + h + pad);
   const [bW, bH] = S.bet, DB = 11, fa = fw / 2 - R, fb = fh / 2 - R;
   const anchors = seats.map(q => q.hero ? [(hcx + hpx) / 2, (Math.min(hcBot - hh, hpTop) + hpTop + heroPh) / 2] : [q.x, q.y]);
-  const mine = (x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || Math.hypot(x - X, y - Y) > d * 1.08 + 2); };
+  // (the search for the middle's place below asks the same points again and again: every place it tries walks the
+  // same seats' rings. These three depend on their arguments only, so each answer is worked out once per layout: on a
+  // crowded sideways table the search took a third of a second, enough to stall a phone as it turned)
+  const memo = f => { const M = new Map(); return (...a) => { const k = a.join(','); let v = M.get(k); if(v === undefined){ v = f(...a); M.set(k, v); } return v; }; };
+  const mine = memo((x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || Math.hypot(x - X, y - Y) > d * 1.08 + 2); });
   // the point of the ring of `f` of the felt on the line from the middle towards (x, y)
-  const onRing = (x, y, f) => { let lo = 0, hi = 1; for(let k = 0; k < 22; k++){ const t = (lo + hi) / 2; if(inStadium(cx + (x - cx) * t, cy + (y - cy) * t, cx, cy, fa * f, fb * f)) lo = t; else hi = t; } return [cx + (x - cx) * lo, cy + (y - cy) * lo]; };
+  const onRing = memo((x, y, f) => { let lo = 0, hi = 1; for(let k = 0; k < 22; k++){ const t = (lo + hi) / 2; if(inStadium(cx + (x - cx) * t, cy + (y - cy) * t, cx, cy, fa * f, fb * f)) lo = t; else hi = t; } return [cx + (x - cx) * lo, cy + (y - cy) * lo]; });
   // (a box wholly on the felt, its corners 3 px inside)
-  const boxIn = (x, y, w, h) => [[-1, -1], [1, -1], [-1, 1], [1, 1]].every(([i, j]) => inStadium(x + i * w, y + j * h, cx, cy, fa, fb, 3));
+  const boxIn = memo((x, y, w, h) => [[-1, -1], [1, -1], [-1, 1], [1, 1]].every(([i, j]) => inStadium(x + i * w, y + j * h, cx, cy, fa, fb, 3)));
   const RINGS = Array.from({ length: 17 }, (_, i) => .94 - i * .04);
   // (the seats take their spots one by one, round the table; where that leaves one without a clean spot at the middle's
   // chosen place, the other way round, and the side seats first, are tried too, and the order with the least miss kept)
   const ORDERS = [Array.from({ length: m }, (_, i) => i + 1)];
   ORDERS.push([...ORDERS[0]].reverse(), [...ORDERS[0]].sort((a, b) => Math.abs(seats[b].nx) - Math.abs(seats[a].nx)));
-  function chipsFor(stack, orders = ORDERS.slice(0, 1)){
+  // (`bound`: the miss the caller already has in hand. A try that reaches it can't be chosen, so it stops there, and its
+  // miss, at least the bound, says so: the same layout as trying it to the end, found in a fraction of the time)
+  function chipsFor(stack, orders = ORDERS.slice(0, 1), bound = Infinity){
     let r = null;
-    for(const order of orders){ const c = chipsIn(stack, order); if(!r || c.miss < r.miss) r = c; if(!r.miss) break; }
+    for(const order of orders){ const c = chipsIn(stack, order, r ? Math.min(bound, r.miss) : bound); if(!r || c.miss < r.miss) r = c; if(!r.miss) break; }
     return r;
   }
-  function chipsIn(stack, order){
-    const placed = [], bets = [], dealers = []; let miss = 0;
-    const clear = (x, y, w, h, own) => { const b = [x, y, w, h]; return !hitAny(b, flat, 3) && !hitAny(b, stack, 3) && !hitAny(b, placed, 2) && mine(x, y, own); };
-    // (start on the line to the seat, then slide round the ring either way, then the rings inside and just outside it)
-    const spot = (q, own, w, h, rings) => {
-      const d0 = Math.max(60, Math.hypot(q.x - cx, q.y - cy)), a0 = Math.atan2(q.y - cy, q.x - cx);
+  // a seat's places for its chips or its button, in the order they're tried, in steps: the clean spots first, then the
+  // fallbacks, each step with what it adds to the miss (each step worked out once per layout, when first needed)
+  const SPOTS = new Map(), FALLS = [[solid, true, 1], [cores, true, 5], [solid, false, 8], [cores, false, 12], [[], true, 25], [[], false, 28]];
+  function spotStep(q, own, w, h, rings, i){
+    const key = own + ':' + w + ':' + h + ':' + rings.join(',') + ':' + i;
+    let st = SPOTS.get(key); if(st) return st;
+    const d0 = Math.max(60, Math.hypot(q.x - cx, q.y - cy)), a0 = Math.atan2(q.y - cy, q.x - cx), pts = [];
+    if(!i){
       for(const f of rings) for(let s = 0; s <= 96; s += 6) for(const sg of s ? [1, -1] : [1]){
         const ang = a0 + sg * s / d0, [x, y] = onRing(cx + Math.cos(ang) * 4000, cy + Math.sin(ang) * 4000, f);
-        if(boxIn(x, y, w, h) && clear(x, y, w, h, own)) return [x, y]; }
+        if(boxIn(x, y, w, h) && !hitAny([x, y, w, h], flat, 3) && mine(x, y, own)) pts.push([x, y]); }
+      st = [pts, 0];
+    } else {
       // (no clean spot: the first that keeps off the board, the pot, the other chips and every seat's plate and cards,
       // along the ring and then right round its avatar; then one that keeps off the plates only; then the line to the seat.
       // A spot that still reads as this seat's, nearest it by a clear margin, comes first: over another seat's cards
       // before nearer another seat, over a plate last. Each step down weighs more in the choice of the middle's place)
-      const off = list => b => !hitAny(b, stack, 3) && !hitAny(b, placed, 2) && !hitAny(b, list, 2);
-      for(const [loose, own1, c1] of [[off(solid), true, 1], [off(cores), true, 5], [off(solid), false, 8], [off(cores), false, 12], [off([]), true, 25], [off([]), false, 28]]){
-        const ok = (x, y) => boxIn(x, y, w, h) && loose([x, y, w, h]) && (!own1 || mine(x, y, own));
+      const [list, own1, c1] = FALLS[i - 1], ok = (x, y) => boxIn(x, y, w, h) && !hitAny([x, y, w, h], list, 2) && (!own1 || mine(x, y, own));
+      // (still this seat's: a finer search, every ring from 30% to 94% of the felt, and three distances round the avatar)
+      for(const f of own1 ? RINGS : rings) for(let s = 0; s <= 150; s += 6) for(const sg of s ? [1, -1] : [1]){
+        const ang = a0 + sg * s / d0, [x, y] = onRing(cx + Math.cos(ang) * 4000, cy + Math.sin(ang) * 4000, f);
+        if(ok(x, y)) pts.push([x, y]); }
+      for(const dr of own1 ? [0, 10, 20] : [0]) for(let k = 0; k < 16; k++){ const a = a0 + Math.PI + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 8, r = AV / 2 + Math.max(w, h) + 4 + dr, x = q.x + Math.cos(a) * r, y = q.y + Math.sin(a) * r;
+        if(ok(x, y)) pts.push([x, y]); }
+      st = [pts, c1];
+    }
+    SPOTS.set(key, st); return st;
+  }
+  function chipsIn(stack, order, bound = Infinity){
+    const placed = [], bets = [], dealers = []; let miss = 0;
+    const clear = (x, y, w, h, own) => { const b = [x, y, w, h]; return !hitAny(b, flat, 3) && !hitAny(b, stack, 3) && !hitAny(b, placed, 2) && mine(x, y, own); };
+    // (where a spot may go for the seat alone, kept in order: the board, the pot and the chips already placed are
+    // checked against these only, in the same order, so the spot found is the same as checking every point in full)
+    const free = (x, y, w, h) => !hitAny([x, y, w, h], stack, 3) && !hitAny([x, y, w, h], placed, 2);
+    // (start on the line to the seat, then slide round the ring either way, then the rings inside and just outside it)
+    const spot = (q, own, w, h, rings) => {
+      for(let i = 0; i <= FALLS.length; i++){ const [pts, c1] = spotStep(q, own, w, h, rings, i);
         miss += c1;
-        // (still this seat's: a finer search, every ring from 30% to 94% of the felt, and three distances round the avatar)
-        for(const f of own1 ? RINGS : rings) for(let s = 0; s <= 150; s += 6) for(const sg of s ? [1, -1] : [1]){
-          const ang = a0 + sg * s / d0, [x, y] = onRing(cx + Math.cos(ang) * 4000, cy + Math.sin(ang) * 4000, f);
-          if(ok(x, y)) return [x, y]; }
-        for(const dr of own1 ? [0, 10, 20] : [0]) for(let k = 0; k < 16; k++){ const a = a0 + Math.PI + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 8, r = AV / 2 + Math.max(w, h) + 4 + dr, x = q.x + Math.cos(a) * r, y = q.y + Math.sin(a) * r;
-          if(ok(x, y)) return [x, y]; }
+        for(const [x, y] of pts) if(free(x, y, w, h)) return [x, y];
         miss -= c1;
       }
-      miss += 25; return onRing(q.x, q.y, rings[0]);
+      miss += 25; return [...onRing(q.x, q.y, rings[0])];
     };
     // your chips: just over your cards, to the right; your button: left of your cards
     let p = null; for(const dx of [0, 24, -24, 48, -48]){ const x = hcx + hw * .6 + bW / 2 + dx, y = hcBot - hh - bH / 2 - 4; if(clear(x, y, bW / 2, bH / 2, 0)){ p = [x, y]; break; } }
     if(!p) miss++;
     bets[0] = p || [hcx, hcBot - hh - bH / 2 - 4]; placed.push([...bets[0], bW / 2, bH / 2]);
     dealers[0] = hside ? [hpx - hpw / 2 - DB - 6, hpTop + heroPh / 2] : [cx - hw - DB - 6, hcBot - hh * .35]; placed.push([...dealers[0], DB, DB]);
-    for(const i of order){ bets[i] = spot(seats[i], i, bW / 2, bH / 2, [.78, .7, .86, .62, .5, .4]); placed.push([...bets[i], bW / 2, bH / 2]); }
-    for(const i of order){ dealers[i] = spot(seats[i], i, DB, DB, [.9, .84, .7, .62, .5]); placed.push([...dealers[i], DB, DB]); }
+    if(miss >= bound) return { bets, dealers, miss };
+    for(const i of order){ bets[i] = spot(seats[i], i, bW / 2, bH / 2, [.78, .7, .86, .62, .5, .4]); placed.push([...bets[i], bW / 2, bH / 2]); if(miss >= bound) return { bets, dealers, miss }; }
+    for(const i of order){ dealers[i] = spot(seats[i], i, DB, DB, [.9, .84, .7, .62, .5]); placed.push([...dealers[i], DB, DB]); if(miss >= bound) return { bets, dealers, miss }; }
     return { bets, dealers, miss };
   }
   let best = null;
@@ -1795,7 +1818,7 @@ function boardGeo(n){
       if(!inStadium(cx, by - bh / 2 - 6 - potH, cx, cy, fa, fb, 2) || !inStadium(cx, by + bh / 2 + 6 + mh, cx, cy, fa, fb, 2)) continue;
       const stack = [[cx, by, boardW / 2, bh / 2], [cx, by - bh / 2 - 6 - potH / 2, S.pot[0] / 2, potH / 2], [cx, by + bh / 2 + 6 + mh / 2, msgW / 2, mh / 2]];
       if(stack.some(b => hitAny(b, flat, 4)) || stack.slice(0, 2).some(b => hitAny(b, unions, 1))) continue;
-      const ch = chipsFor(stack), cand = { bw, bh, by, msgW, stack, ...ch, ch };
+      const ch = chipsFor(stack, undefined, best ? best.miss : Infinity), cand = { bw, bh, by, msgW, stack, ...ch, ch };
       if(!best || ch.miss < best.miss) best = cand;
       if(!ch.miss) break search;
     } }
@@ -1807,11 +1830,11 @@ function boardGeo(n){
       const stack = [[cx, by, boardW / 2, bh / 2], [cx, by - bh / 2 - 6 - potH / 2, S.pot[0] / 2, potH / 2], [cx, by + bh / 2 + 6 + mh / 2, msgW / 2, mh / 2]];
       // (the board and the pot over a plate weigh most; the winner line, there only after a hand, less; then the chips)
       const touch = cores.filter(b => hitAny(b, stack.slice(0, 2), 2)).length * 100 + unions.filter(b => hitAny(b, stack.slice(0, 2), 2)).length * 60 + cores.filter(b => hitAny(b, [stack[2]], 2)).length * 20;
-      const ch = chipsFor(stack), cand = { bw, bh, by, msgW, stack, ...ch, ch, miss: ch.miss + 10 * touch };
+      const ch = chipsFor(stack, undefined, best ? best.miss - 10 * touch : Infinity), cand = { bw, bh, by, msgW, stack, ...ch, ch, miss: ch.miss + 10 * touch };
       if(!best || cand.miss < best.miss) best = cand;
     } }
   const ch0 = best.ch;
-  if(ch0.miss){ const ch = chipsFor(best.stack, ORDERS); if(ch.miss < ch0.miss) best = { ...best, ...ch, miss: best.miss - ch0.miss + ch.miss }; }
+  if(ch0.miss){ const ch = chipsFor(best.stack, ORDERS, ch0.miss); if(ch.miss < ch0.miss) best = { ...best, ...ch, miss: best.miss - ch0.miss + ch.miss }; }
   const mid = best, cost = best.miss, bets = best.bets, dealers = best.dealers;
   const geo = { key, W, H, cls, land, look: '', sq: 1, k: 0, inset: 7, g: 0, nar: 0, compact: false, mini: false, tight: false, potSide: false, rail: R, cx, cy, tall: !land, fw, fh, top, left,
     seats, bw: mid.bw, by: mid.by, bx: cx, msgW: mid.msgW, mline: mid.bh / 2 + 6, av: AV, cost, bets, dealers, betAt: k => bets[k], dealerAt: k => dealers[k] };
@@ -2222,7 +2245,7 @@ function renderPlayNote(d){
   playNoted.add(k); try{ localStorage.setItem('stacked:playnote', k); }catch(e){}
   el.dataset.key = k; el.hidden = false; placePlayNote(el);
   // (quiet design: four seconds, over the helper's line only briefly; the line under the strip says it all the time)
-  clearTimeout(playNoteTimer); playNoteTimer = setTimeout(hidePlayNote, QUIET ? 4000 : 10000);
+  clearTimeout(playNoteTimer); playNoteTimer = setTimeout(hidePlayNote, QUIET || BOARD ? 4000 : 10000);
 }
 // over the board's five empty slots (and, when no message is showing, the message line under them: the layout keeps
 // both clear of seats and chips), the text as large as fits there, on two lines or, if need be, three
@@ -2230,6 +2253,9 @@ function renderPlayNote(d){
 // same words, as one line in the gap between the hand helper and the buttons; it covered the helper's line, the hand
 // and its chance to win, before: owner, 2026-10-22)
 function placePlayNote(el){
+  // (the board, spec §3.4: on the info line between your plate and the action row, one line over the helper for its
+  // four seconds, placed by board.css; never a box on the felt)
+  if(BOARD){ if(el.parentNode !== $('dock')) $('dock').appendChild(el); el.classList.remove('line', 'wrap'); if(el.style.cssText) el.style.cssText = ''; return; }
   let area = $('tableArea').getBoundingClientRect(); const slots = [...$('board').children].map(c => c.getBoundingClientRect());
   if(!slots.length) return hidePlayNote();
   let l = Math.min(...slots.map(r => r.left)), t = Math.min(...slots.map(r => r.top)), r = Math.max(...slots.map(r => r.right));
@@ -2258,6 +2284,16 @@ $('playNote').onclick = hidePlayNote;
 // hand, the table keeps its size and the dock (the action bar) stays at the bottom of the screen, over the table's
 // lower edge, until the next hand is dealt.
 let LOCK = null, SVH = null;
+// The screen's size for the layout's decisions. iPhone Safari reports a turned screen's new size late: for a while after
+// the turn innerWidth and innerHeight can still give the old shape while the page is already laid out for the new one.
+// The board takes the page's own size then (the root's), so it is laid out for the screen it is really on. (Today's
+// table reads innerWidth and innerHeight as before.)
+function scr(){
+  const w = window.innerWidth, h = window.innerHeight;
+  if(!BOARD) return { w, h };
+  const de = document.documentElement, cw = de.clientWidth, ch = de.clientHeight;
+  return cw && ch && Math.abs(cw - w) > 24 ? { w: cw, h: ch } : { w, h };
+}
 function svhPx(){
   if(!SVH){ SVH = document.createElement('div'); SVH.setAttribute('aria-hidden', 'true');
     SVH.style.cssText = 'position:fixed;left:0;top:0;width:0;height:100vh;height:100svh;visibility:hidden;pointer-events:none'; document.body.appendChild(SVH); }
@@ -2268,24 +2304,24 @@ function svhPx(){
 function newLock(d){
   const g = $('game'), hand = d ? d.tid + ':' + d.handNo : '';
   if(LOCK && LOCK.w === g.clientWidth && LOCK.hand === hand) return false;
-  const H = window.innerHeight; g.classList.toggle('h700', H <= 700); g.classList.toggle('h600', H <= 600);
+  const { w: IW, h: H } = scr(); g.classList.toggle('h700', H <= 700); g.classList.toggle('h600', H <= 600);
   // a phone held sideways: the table takes the full width on the left and the action bar stands beside it
-  const land = window.innerWidth > H && H <= 600 && window.innerWidth >= 560;
+  const land = IW > H && H <= 600 && IW >= 560;
   if(g.classList.contains('land') !== land){ g.classList.toggle('land', land); LOCK = null; }
   if(BOARD) boardCol();
   // the smallest phones sideways (iPhone SE): your cards go back above your plate, smaller, so the bottom row of
   // a full table has the width it needs
-  g.classList.toggle('land-s', land && window.innerWidth < 700);
+  g.classList.toggle('land-s', land && IW < 700);
   // on short screens the header is one row: the chat and Lobby buttons move up beside the clock. Short is judged by
   // the height with Safari's bars showing (svh), which is the room the table is laid out for: an iPhone upright in
   // Safari (393x659, 430x739) gets the second row's height for the felt, so a full table is an oval, not round
-  const row1 = H <= 600 || Math.min(H, svhPx()) <= 760 && window.innerWidth < 600;
+  const row1 = H <= 600 || Math.min(H, svhPx()) <= 760 && IW < 600;
   g.classList.toggle('row1', row1);
   // a phone held upright (not the shortest screens): the table fills the screen from the header to the bottom edge,
   // your seat at the bottom left and the action buttons a narrow column at the bottom right, over the felt (as WPT)
   const wpt = false;
   if(g.classList.contains('wpt') !== wpt){ g.classList.toggle('wpt', wpt); LOCK = null; }
-  g.style.setProperty('--dock-w', Math.min(184, Math.round(window.innerWidth * .47)) + 'px');
+  g.style.setProperty('--dock-w', Math.min(184, Math.round(IW * .47)) + 'px');
   const hb = g.querySelector('.hdr-btns'), home = g.querySelector(row1 || QUIET ? '.clock' : '.stats');
   if(hb && hb.parentNode !== home) home.appendChild(hb);
   // quiet design, one-row header: the tournament line becomes the header's first cell (in place of the level, which
@@ -2293,7 +2329,7 @@ function newLock(d){
   const ql = QUIET && $('qline'), qhome = row1 ? g.querySelector('.clock') : g.querySelector('.stats');
   if(ql && (row1 ? ql.parentNode !== qhome : ql.previousElementSibling !== qhome)) row1 ? qhome.prepend(ql) : qhome.after(ql);
   hudPlace();
-  LOCK = { w: g.clientWidth, hand, h: 0, iw: window.innerWidth, ih: H };
+  LOCK = { w: g.clientWidth, hand, h: 0, iw: IW, ih: H, wide: g.clientWidth > g.clientHeight };
   return true;
 }
 function lockArea(){
@@ -2571,8 +2607,8 @@ function sendAction(d, a){
     lastSent = null; $('controls').dataset.turn = ''; if(view === 'table' && watchTid === d.tid) renderTable();
   }, 4000);
   // (quiet design: the free-play notice steps aside at my first action, so it never sits on the helper while I play,
-  // Muse on Issue #31 from the owner's iPhone)
-  if(QUIET) hidePlayNote();
+  // Muse on Issue #31 from the owner's iPhone; the board, spec §3.4, the same)
+  if(QUIET || BOARD) hidePlayNote();
   if(d.tid === 'demo' && demo){ if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){} $('controls').innerHTML = '<div class="info-line">…</div>'; return demo.answer(a); }
   const words = { fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' };
   $('controls').innerHTML = `<div class="info-line">${words[a.t] || ''}${a.t === 'raise' ? ' to ' + fmt(a.to) : ''} · sending…</div>`;
@@ -2766,7 +2802,7 @@ if(BOARD){
 // sideways, wide enough, a tournament running with its field: the column beside the table (owner's sponsor panel)
 function boardCol(){
   const g = $('game'), T = club && club.tourney;
-  const on = g.classList.contains('land') && window.innerWidth >= 740 && !!field && !!T && T.status === 'running';
+  const on = g.classList.contains('land') && scr().w >= 740 && !!field && !!T && T.status === 'running';
   if(g.classList.contains('b-col') !== on){
     g.classList.toggle('b-col', on); LOCK = null; GEO = null;
     // (decided after the table was laid out: lay it out again for the room it has now)
@@ -3014,28 +3050,39 @@ function tickClock(){
   if(tbar && d && d.deadline){ const left = Math.max(0, d.deadline - now), f = Math.min(1, left / d.bank); tbar.style.transform = `scaleX(${f})`; tbar.classList.toggle('low', !d.usingBank && left < 5000); tbar.classList.toggle('bank', !!d.usingBank); const ts = $('turnSecs'); if(ts) ts.textContent = (d.usingBank ? 'Extra time · ' : '') + Math.ceil(left / 1000) + 's'; }
 }
 setInterval(tickClock, 200);
-window.addEventListener('resize', () => { if(view === 'table') renderTable(); });
+// (the board: one layout a frame, however many resize events a turn brings, before the frame is drawn)
+let RAFT = 0;
+const renderSoon = () => { if(!RAFT) RAFT = requestAnimationFrame(() => { RAFT = 0; if(view === 'table') renderTable(); }); };
+window.addEventListener('resize', () => { if(view === 'table') BOARD ? renderSoon() : renderTable(); });
 // iPhone Safari reports a turned screen's new size late (after the resize/orientationchange events have fired), so
 // the table was laid out for the old shape and kept it: look again a few times while the turn settles (for a few
 // seconds: a busy phone can be slow to report it). A screen
 // that only got taller or shorter (the toolbar, the keyboard) keeps its held layout; a turned one (a new width) is laid
 // out anew.
-let TURN = [], TURNW = window.innerWidth;
+let TURN = [], TURNW = scr().w;
 function settleTurn(){
   TURN.forEach(clearTimeout);
   TURN = [60, 200, 450, 900, 1600, 2600].map((ms, i, all) => setTimeout(() => {
+    const { w, h } = scr();
     if(view === 'table'){
       // the screen really turned (its width is not the one it settled at last time): while the turn settles, a
       // height arriving late decides the layout again too
-      if(LOCK && window.innerWidth !== TURNW && (LOCK.iw !== window.innerWidth || LOCK.ih !== window.innerHeight)) LOCK = null;
+      if(LOCK && w !== TURNW && (LOCK.iw !== w || LOCK.ih !== h)) LOCK = null;
       renderTable();
     }
-    if(i === all.length - 1) TURNW = window.innerWidth;
+    if(i === all.length - 1) TURNW = w;
   }, ms));
 }
 window.addEventListener('orientationchange', settleTurn);
 if(screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', settleTurn);
-window.addEventListener('resize', () => { if(window.innerWidth !== TURNW) settleTurn(); });
+window.addEventListener('resize', () => { if(scr().w !== TURNW) settleTurn(); });
+// (the board: whenever the page itself takes a new width or turns, after the events and the timers above too, as
+// Safari may lay the page out for the turned screen later still, the table is laid out again for it)
+if(BOARD && window.ResizeObserver) new ResizeObserver(() => {
+  const g = $('game'); if(view !== 'table' || !LOCK || !g.clientWidth) return;
+  if(g.clientWidth !== LOCK.w || (g.clientWidth > g.clientHeight) !== LOCK.wide){ LOCK = null; renderSoon(); }
+}).observe($('game'));
+if(BOARD && window.visualViewport) window.visualViewport.addEventListener('resize', () => { if(scr().w !== TURNW) settleTurn(); });
 // the layout measures text, so measure again once the web fonts have arrived (the table keeps its held height)
 if(document.fonts) document.fonts.addEventListener('loadingdone', () => { SIZES.clear(); GEOS.clear(); DOCKS.clear(); GEO = null; if(view === 'table') renderTable(); });
 // the table area also changes size without the window doing so (the action bar, the raise panel or the hand
