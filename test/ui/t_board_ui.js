@@ -10,6 +10,10 @@
 // The spec's later items (button colours and labels "Raise to N" / "Call N", presence dots and the disconnected
 // label, the initials fallback, "+" seats not focusable, the ⋯ menu, label contrast in place) are listed at the end as
 // PENDING B2+: B2 and later phases fill them in here.
+// B3 (the header and the tournament sheet, §4): the card or the pill with Lobby (and Chat sideways), the collapsed bar
+// carrying players left and your rank only, the sheet's four tiles with "watching", "Your place" and the sponsor, the
+// sponsor intro over the card only, the column beside the table sideways (tiles, sponsor panel, the action row at its
+// foot), and the avatar rings (2 px champagne gold at rest, 3 px --b-gold on the player to act).
 // PLAYWRIGHT=/path/to/playwright-core CHROMIUM=/path/to/chromium node test/ui/t_board_ui.js   SHOTS=<dir> screenshots
 const { spawn } = require('child_process');
 const fs = require('fs'), path = require('path');
@@ -101,6 +105,78 @@ async function b2(pg, tag, sock, me, w, h){
   check(idle.row && idle.more, `${tag} B2: not my turn, the row keeps "⋯"`);
 }
 
+// ---------- B3: the header and the tournament sheet (§4), the column sideways, the avatar rings (§3.3) ----------
+const FIELD = { players: 32, tables: 4, leader: { name: 'Player 2', stack: 89200, table: 2 }, watchers: 12, rank: 3 };
+// the sponsor intro at the table's first look (the start splash): over the header card only, never over the table
+async function b3pre(pg, tag){
+  // the sponsor intro over the card (the start splash): only over the card, never over the table
+  const intro = await pg.evaluate(() => { const s = document.getElementById('spn'), c = document.getElementById('bHud'); if(!s || s.hidden || !c) return null;
+    const a = s.getBoundingClientRect(), b = c.getBoundingClientRect(), t = document.getElementById('tableArea').getBoundingClientRect();
+    return { text: s.textContent, inCard: a.left >= b.left - 1 && a.right <= b.right + 1 && a.top >= b.top - 1 && a.bottom <= b.bottom + 1, offTable: a.bottom <= t.top + 1 }; });
+  check(intro && /Aurora Test Roasters/.test(intro.text) && intro.inCard && intro.offTable, `${tag} B3: the sponsor intro shows at the start, over the header card only (${intro ? intro.inCard + '/' + intro.offTable : 'not shown'})`);
+}
+async function b3(pg, tag, sock, me, w, h){
+  const land = w > h, wide = land && w >= 740, ps = w < 360;
+  sock.send(JSON.stringify({ t: 'table', table: { ...tableFor(me), seq: 20 }, you: { hand: 3, cards: ['Ah', 'Qd'] }, field: FIELD }));
+  await pg.waitForFunction(() => document.getElementById('spn').hidden, null, { timeout: 12000 }).catch(() => {});
+  await sleep(900);
+  const m = await pg.evaluate(() => {
+    const r = e => { if(!e || !e.getClientRects().length) return null; const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+    const shown = sel => [...document.querySelectorAll(sel)].some(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden');
+    const top = document.getElementById('bTop'), card = document.getElementById('bHud');
+    const vis = e => e && e.getClientRects().length > 0;
+    const words = [...document.querySelectorAll('#game *')].filter(e => vis(e) && !e.children.length && getComputedStyle(e).visibility !== 'hidden').map(e => e.textContent).join(' ');
+    return { top: r(top), card: r(card), cardText: card ? card.innerText.replace(/\s+/g, ' ').trim() : '', lobby: r(document.getElementById('lobbyBtn')), chat: r(document.getElementById('chatBtn')),
+      inTop: document.getElementById('lobbyBtn').closest('#bTop') === top, popup: card && card.getAttribute('aria-haspopup'), label: card && card.getAttribute('aria-label'),
+      oldHdr: shown('#game>.clock') || shown('#game>.stats'), field: r(document.getElementById('fieldBar')), side: r(document.getElementById('sidePanel')), sideText: document.getElementById('sidePanel').textContent,
+      area: r(document.getElementById('tableArea')), ctl: r(document.getElementById('controls')), W: innerWidth, H: innerHeight, col: document.getElementById('game').classList.contains('b-col'),
+      time: (e => e && getComputedStyle(e).color)(document.getElementById('bhTime')), gold: getComputedStyle(document.documentElement).getPropertyValue('--b-gold').trim(),
+      sponsorWords: /Aurora Test Roasters/.test(words), seats: [...document.querySelectorAll('#seats .seat.b-seat:not(.hero) .plate, #seats .seat.b-seat:not(.hero) .av')].map(r).filter(Boolean),
+      ring: [...document.querySelectorAll('#seats .seat.b-seat:not(.hero):not(.acting) .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, getComputedStyle(a).borderTopColor]),
+      ringAct: [...document.querySelectorAll('#seats .seat.b-seat.acting .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, getComputedStyle(a).borderTopColor]) };
+  });
+  check(m.top && m.card && m.inTop && m.popup === 'dialog' && !m.oldHdr, `${tag} B3: the header is the board's: ${land ? 'one pill' : 'one card'} that opens the tournament sheet, the Lobby pill in the same row; today's clock and stats rows are not drawn`);
+  check(!land ? Math.abs(m.card.h - (ps ? 44 : 56)) <= 1 && m.lobby.l >= m.card.r && m.lobby.h >= 44 : Math.abs(m.card.h - 36) <= 1, `${tag} B3: ${land ? 'the pill 36 tall' : `the card ${ps ? 44 : 56} tall (${Math.round(m.card.h)}), Lobby to its right, at least 44 tall`}`);
+  check(/Level\s*3/.test(m.cardText) && /200\/400/.test(m.cardText) && /32\/48( players)?/.test(m.cardText) && /3rd/.test(m.cardText) && /\d+:\d\d/.test(m.cardText), `${tag} B3: the collapsed bar: level, blinds, the clock, players left and your rank: "${m.cardText}"`);
+  check(!/leader|Avg|watching|tables|Aurora/i.test(m.cardText), `${tag} B3: and nothing else of the HUD (players left and your rank only: owner's GO)`);
+  check(/32 of 48 players left/.test(m.label) && /Your rank 3rd/.test(m.label), `${tag} B3: the card reads out what it shows: "${m.label}"`);
+  if(land){
+    check(Math.abs((m.card.l + m.card.r) / 2 - (m.col ? (m.top.l + m.top.r) / 2 : m.W / 2)) <= 2 && m.chat && m.chat.r <= m.card.l && m.chat.l <= 16 && m.lobby.l >= m.card.r && m.lobby.r >= m.W - 16,
+      `${tag} B3: sideways the pill is centred, Chat at the top left, Lobby at the top right`);
+    check(m.time === `rgb(${[1, 3, 5].map(i => parseInt(m.gold.slice(i, i + 2), 16)).join(', ')})`, `${tag} B3: the clock in the pill is gold (${m.time})`);
+  } else check(!m.chat, `${tag} B3: upright, Chat is in "⋯", not in the header`);
+  if(wide){
+    check(m.col && m.field && m.field.l >= m.area.r - 1 && m.field.r <= m.W + 1, `${tag} B3: sideways, the tournament tiles stand in the column beside the table`);
+    check(m.side && m.side.l >= m.area.r - 1 && /Aurora Test Roasters/.test(m.sideText) && /Prize: Coffee for a month/.test(m.sideText), `${tag} B3: the sponsor panel and the prize under them (owner's requirement)`);
+    check(m.ctl && m.ctl.l >= m.area.r - 1 && Math.abs(m.ctl.b - m.H) <= 2, `${tag} B3: the action row at the column's foot, on the screen's bottom edge`);
+    check(m.seats.length && m.seats.every(s => s.r <= m.area.r + 1 && s.l >= -1), `${tag} B3: every seat stays left of the column`);
+  } else if(!land) check(!m.sponsorWords && !m.field, `${tag} B3: during the hand no sponsor on the table screen and no HUD bar (the sponsor is in the sheet)`);
+  // the avatar rings (§3.3): champagne gold at rest, 2 px; the player to act 3 px --b-gold
+  check(m.ring.length && m.ring.every(([bw, c]) => bw === '2px' && (n => n.length >= 3 && n[0] + n[1] + n[2] > 1.2 && (n[3] == null || n[3] >= .5))((c.match(/[\d.]+/g) || []).map(Number).map((x, i, a) => /^rgb/.test(c) && i < 3 ? x / 255 : x))), `${tag} B3: every initials disc has its 2 px gold ring at rest (${m.ring[0] && m.ring[0][1]})`);
+  // (my turn here: no other seat is acting; the ring of the acting player is checked in the B2 disconnected case above, sent again)
+  // the sheet
+  await pg.click('#bHud'); await sleep(600);
+  const s = await pg.evaluate(() => { const sh = document.getElementById('bHudSheet'); if(!sh || sh.hidden) return null;
+    const tiles = [...sh.querySelectorAll('.b-tile')].map(t => ({ k: t.querySelector('small').textContent, v: t.textContent.replace(/\s+/g, ' ').trim(), top: t.getBoundingClientRect().top }));
+    return { tiles, dialog: !!sh.querySelector('[role=dialog][aria-modal=true]'), place: (sh.querySelector('.b-place') || {}).textContent || '', pres: (sh.querySelector('.b-pres') || {}).textContent || '',
+      tap: !!sh.querySelector('.b-pres [data-spbiz]'), focus: document.activeElement && document.activeElement.hasAttribute('data-bhclose'), head: sh.querySelector('.bs-head').textContent.replace(/\s+/g, ' ') }; });
+  check(s && s.dialog && s.tiles.map(t => t.k).join('|') === 'Avg stack|Chip leader|Active tables|Spectators', `${tag} B3: a tap opens the sheet with the board's four tiles: ${s ? s.tiles.map(t => t.k).join(', ') : 'no sheet'}`);
+  check(s && /Player 2/.test(s.tiles[1].v) && /89,200/.test(s.tiles[1].v) && /4/.test(s.tiles[2].v) && /12 watching/.test(s.tiles[3].v), `${tag} B3: the chip leader with chips, the tables, and "12 watching" (${s ? s.tiles.map(t => t.v).join(' / ') : ''})`);
+  check(s && (land ? new Set(s.tiles.map(t => Math.round(t.top))).size === 1 : new Set(s.tiles.map(t => Math.round(t.top))).size === 2), `${tag} B3: the tiles ${land ? 'four across' : 'two by two'}`);
+  check(s && /Your place\s*3rd of 32/.test(s.place) && /(above|below|about) average/.test(s.place), `${tag} B3: then "Your place": ${s ? s.place.replace(/\s+/g, ' ') : ''}`);
+  check(s && /Presented by\s*Aurora Test Roasters/.test(s.pres) && /Prize: Coffee for a month/.test(s.pres), `${tag} B3: then "Presented by" the sponsor, with the prize`);
+  check(s && s.focus, `${tag} B3: focus on Done`);
+  if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `b3-sheet-${tag.replace(/ /g, '-')}.png`) });
+  await pg.keyboard.press('Escape'); await sleep(300);
+  check(await pg.evaluate(() => document.getElementById('bHudSheet').hidden && document.activeElement && document.activeElement.id === 'bHud'), `${tag} B3: Escape closes it, focus back on the card`);
+  // the player to act: a 3 px --b-gold ring
+  sock.send(JSON.stringify({ t: 'table', table: { ...tableFor(me), acting: 2, actUid: 'p2', legal: null, seq: 21 }, you: { hand: 3, cards: ['Ah', 'Qd'] }, field: FIELD })); await sleep(600);
+  const act = await pg.evaluate(() => [...document.querySelectorAll('#seats .seat.b-seat.acting .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, getComputedStyle(a).borderTopColor]));
+  check(act.length === 1 && act[0][0] === '3px' && act[0][1] === 'rgb(217, 166, 81)', `${tag} B3: the player to act has the 3 px --b-gold ring (${act.map(a => a.join(' ')).join(', ')})`);
+  // the break: the sponsor's spotlight on the felt, between hands
+  if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `b3-table-${tag.replace(/ /g, '-')}.png`) });
+}
+
 (async () => {
   for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
   await sleep(400);
@@ -119,7 +195,8 @@ async function b2(pg, tag, sock, me, w, h){
         ws.onMessage(m => { try{ const j = JSON.parse(m); if(j.t === 'watch' || j.t === 'act') return; }catch(e){} server.send(m); });
         server.onMessage(m => { let j; try{ j = JSON.parse(m); }catch(e){ return ws.send(m); }
           if(j.t === 'table' || j.t === 'closed') return;
-          if(j.t === 'club' && sock === 'table'){ me = j.club.me; j.club.tourney = { ...j.club.tourney, status: 'running', name: 'Friday Night', stack: 30000, anteMode: 'bb', regs: [me.id], entrants: 9, remaining: 9, level: 2, levelEndsAt: Date.now() + 600000, paused: false, places: [], lateOpen: false, helper: true };
+          if(j.t === 'club' && sock === 'table'){ me = j.club.me; j.club.tourney = { ...j.club.tourney, status: 'running', name: 'Friday Night', stack: 30000, anteMode: 'bb', regs: [me.id], entrants: 9, remaining: 9, level: 2, levelEndsAt: Date.now() + 600000, paused: false, places: [], lateOpen: false, helper: true,
+            id: 'tbui', entrants: 48, remaining: 32, sponsor: { uid: 'u00000000005a', name: 'Aurora Test Roasters', categoryLabel: 'Food & drink', area: 'Toronto', logoV: null }, sponsorSec: 8, prize: 'Coffee for a month' };
             j.club.myTable = 'bui'; j.club.tables = [{ tid: 'bui', n: 1, players: 9 }]; sock = ws; }
           ws.send(JSON.stringify(j)); });
       });
@@ -151,7 +228,7 @@ async function b2(pg, tag, sock, me, w, h){
       check(L.nums > 0 && L.tab === 0, `${tag} table: tabular numbers on every stack and the pot (${L.nums} checked)`);
       check(L.scroll <= 0, `${tag} table: nothing scrolls sideways (${L.scroll})`);
       if(SHOTS && motion !== 'reduce') await pg.screenshot({ path: path.join(SHOTS, `table-${size}.png`) });
-      if(motion !== 'reduce' && sock && sock !== 'table') await b2(pg, tag, sock, me, w, h);
+      if(motion !== 'reduce' && sock && sock !== 'table'){ await b3pre(pg, tag); await b2(pg, tag, sock, me, w, h); await b3(pg, tag, sock, me, w, h); }
       await ctx.close();
     }
   }

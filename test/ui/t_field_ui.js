@@ -1,5 +1,7 @@
 // The tournament bar at the table (players' feedback, 2026-10-21), at 390x844, 320x568, 844x390 and 1280x800:
 // players still playing and tables, the chip leader of every table, how many watch, and your place among everyone.
+// Under UI_BOARD=1 (Issue #32 B3) the same facts are checked where the board puts them (boardField): the header card,
+// the tournament sheet and, sideways on a wide phone, the column beside the table.
 // Usage: PLAYWRIGHT=/path/to/playwright-core CHROMIUM=/path/to/chromium [FONTS_DIR=..] node test/ui/t_field_ui.js [shotDir]
 const fs = require('fs');
 const path = require('path');
@@ -35,6 +37,24 @@ function sock(tok, club){
 }
 const noSideScroll = pg => pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 const shot = (pg, name) => SHOTS ? pg.screenshot({ path: path.join(SHOTS, name) }) : null;
+async function boardField(pg, tag, sz, seated){
+  const card = pg.locator('#bHud');
+  check(await card.isVisible(), `${tag} (board): the header card shows`);
+  const ct = (await card.innerText()).replace(/\s+/g, ' ');
+  check(/\d+\s*\/\s*\d+/.test(ct), `${tag} (board): players left of the field on the card: ${ct}`);
+  check(seated ? /\d+(st|nd|rd|th)/.test(ct) : !/(st|nd|rd|th)\b/.test(ct.replace(/\d+:\d+/, '')), `${tag} (board): ${seated ? 'your rank on the card' : 'no place of their own'}`);
+  check(!/leader|Avg|watching/i.test(ct), `${tag} (board): and nothing more on the card`);
+  if(sz[0] >= 740 && sz[1] <= 600){ const col = (await pg.locator('#fieldBar').innerText()).replace(/\s+/g, ' ');
+    check(await pg.locator('#fieldBar').isVisible() && /Chip leader/.test(col) && /\d+ watching/.test(col), `${tag} (board): sideways the column holds the tiles: ${col}`); }
+  await card.click(); await sleep(500);
+  const sh = (await pg.locator('#bHudSheet').innerText()).replace(/\s+/g, ' ');
+  check(/Avg stack [\d,]+/.test(sh) && /Chip leader \S.*[\d,]{3,}/.test(sh) && /Active tables \d+/.test(sh) && /Spectators \d+ watching/.test(sh), `${tag} (board): the sheet: avg stack, chip leader with chips, tables, watching: ${sh.slice(0, 160)}`);
+  check(seated ? /Your place \d+(st|nd|rd|th) of \d+/.test(sh) : !/Your place/.test(sh), `${tag} (board): ${seated ? '"Your place" in the sheet' : 'no "Your place" for a watcher'}`);
+  check(!/\p{Extended_Pictographic}/u.test(ct + sh), `${tag} (board): no emoji`);
+  check(await noSideScroll(pg), `${tag} (board): no sideways scroll`);
+  await shot(pg, `field-board-${sz.join('x')}${seated ? '' : '-watcher'}.png`);
+  await pg.keyboard.press('Escape'); await sleep(200);
+}
 const firstInHome = pg => pg.evaluate(() => { const b = document.getElementById('lobbyBody'), f = b && b.firstElementChild; return f ? f.className : null; });
 (async () => {
   for(let i = 0; i < 50; i++){ try{ if((await fetch(BASE + '/healthz')).ok) break; }catch(e){} await sleep(200); }
@@ -80,6 +100,10 @@ const firstInHome = pg => pg.evaluate(() => { const b = document.getElementById(
   for(const sz of [[390, 844], [320, 568], [844, 390], [1280, 800]]){
     const pg = await page(toks[0], sz, 'main'), tag = sz.join('x');
     await sleep(1500);
+    // the board design (UI_BOARD, Issue #32 B3): the same facts, where the board puts them: players left and your rank
+    // on the header card, the chip leader, tables, watchers and average in the sheet a tap away (and sideways on a wide
+    // phone, in the column beside the table too)
+    if(await pg.evaluate(() => document.documentElement.dataset.ui === 'board')){ await boardField(pg, tag, sz, true); await pg.context().close(); continue; }
     const bar = pg.locator('#fieldBar');
     check(await bar.isVisible(), `${tag}: the tournament bar shows under the table header`);
     const txt = await bar.textContent();
@@ -112,7 +136,8 @@ const firstInHome = pg => pg.evaluate(() => { const b = document.getElementById(
     await pg.context().close();
   }
   await shot(watcher, 'field-watcher-390.png');
-  check(await watcher.locator('#fieldBar').isVisible() && /leader/i.test(await watcher.locator('#fieldBar').textContent()) && !/Your rank/.test(await watcher.locator('#fieldBar').textContent()) && /Chip leader/i.test(await watcher.locator('#fieldBar').textContent()), 'a watcher from another club sees the bar too');
+  if(await watcher.evaluate(() => document.documentElement.dataset.ui === 'board')) await boardField(watcher, 'a watcher from another club, 390x844', [390, 844], false);
+  else check(await watcher.locator('#fieldBar').isVisible() && /leader/i.test(await watcher.locator('#fieldBar').textContent()) && !/Your rank/.test(await watcher.locator('#fieldBar').textContent()) && /Chip leader/i.test(await watcher.locator('#fieldBar').textContent()), 'a watcher from another club sees the bar too');
   check(/Watching/.test(await watcher.locator('#sPos').textContent()), 'and no place of their own');
   await watcher.context().close();
   so.close(); socks[0].close();
