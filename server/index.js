@@ -452,7 +452,7 @@ const tourneyOf = (c, t) => { const club = c.club; return { id: t.id, status: t.
       places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null,
       ...(club.gp() ? { showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0 } : {}),
       startedAt: t.startedAt || null, breaks: club.breaksOn(), breakEvery: club.BREAK_EVERY, breakMin: t.breakMin || 5, breakUntil: club.onBreak(t) ? t.breakUntil : null, breakPending: !!t.breakPending && !t.paused,
-      pausedBreakLeft: t.paused ? t.pausedBreakLeft || 0 : 0, sponsor: c.business.sponsorCard(t.sponsor), sponsorSec: t.sponsorSec || 8 }; };
+      pausedBreakLeft: t.paused ? t.pausedBreakLeft || 0 : 0, sponsor: c.business.sponsorCard(t.sponsor), sponsorSec: t.sponsorSec || 8, prize: t.prize || '' }; };
 function clubView(c, u){
   if(clubs.ON() && clubs.suspended(c.id)) return suspendedView(c, u);
   const { store, club, rewards } = c;
@@ -550,7 +550,7 @@ function liveCheck(){
 function spectatorView(c, u, home){
   const t = c.club.T(), club = c.club;
   return { spectate: true, me: { id: u.id, name: u.name, owner: false }, clubSwitching: true, club: { id: c.id, name: clubs.def(c.id).name }, home: { id: home, name: (clubs.def(home) || {}).name || 'your club' },
-    clubs: [], tourney: t ? { ...tourneyOf(c, t), regs: [], regCount: t.regs.length, note: null, sponsor: null } : null, hosts: false,
+    clubs: [], tourney: t ? { ...tourneyOf(c, t), regs: [], regCount: t.regs.length, note: null, sponsor: null, prize: '' } : null, hosts: false,
     tables: club.tablesSummary(), myTable: null, members: [], history: [], now: Date.now(), shop: null,
     features: { clubs: false, ...(club.gp() ? { tableExtras: true } : {}), ...(club.breaksOn() ? { breaks: true } : {}) }, chatOff: true, muted: true, version: VERSION,
     ...(DOMINO() && c.id === clubs.MAIN ? { domino: true } : {}) };

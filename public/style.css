@@ -2112,6 +2112,12 @@ body{background:var(--lx-ink)}
 .brk [data-spbiz]{pointer-events:auto;cursor:pointer;transition:opacity .2s}
 .brk [data-spbiz]:active{opacity:.75}
 .sp-txt small.sp-more{text-transform:none;letter-spacing:0;font-size:12px;margin-top:2px}
+/* the prize, in the director's words (never cash): on the sponsor, the break card and the lobby card */
+.sp-txt small.sp-prize{text-transform:none;letter-spacing:0;font-size:12px;color:var(--lx-gold-hi,#f1dfb0)}
+.brk-prize{margin-top:6px;font-size:13px;color:var(--lx-gold-hi,#f1dfb0);overflow-wrap:anywhere}
+.sp-note .sp-prize{display:inline-block;color:var(--lx-gold-hi,#f1dfb0)}
+/* the one-line header (short screens, sideways) has no room for a third line: the prize is in the lobby and the side panel */
+#game.row1 .spn .sp-prize,#game.land .spn .sp-prize{display:none}
 /* the card sits under the seats (same layer, earlier in the page), so a player's seat always shows on top of it;
    the chips left from the last pot are hidden while it shows */
 #tableArea.on-break #fx,#tableArea.on-break .center .pot{visibility:hidden}

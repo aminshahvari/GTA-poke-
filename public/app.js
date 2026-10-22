@@ -474,7 +474,7 @@ function eventMainHTML(){
     return `<div class="card-box"><span class="status-pill">Registration open</span>${mine ? ' <span class="status-pill reg">✓ You\'re registered</span>' : ''}<h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Starts</small><b>${T.startAt ? esc(when(T.startAt)) : 'When the owner starts it'}</b></div><div><small>Stack</small><b>${fmt(T.stack)}</b></div><div><small>Levels</small><b>${T.levelMin} min</b></div></div>
       <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table (WSOP/WPT style)'} · ${T.actSec || 20} seconds to act. Every player has 3 extra-time cards (+30 seconds each) for the tournament, and a fresh 5 at the final table.${extrasNote(T)}${breakNote(T)}</p>
-      ${T.sponsor ? `<p class="note">Presented by <b>${esc(T.sponsor.name)}</b>.</p>` : ''}
+      ${presentedHTML(T)}
       ${T.repeat !== 'none' ? `<p class="note">Repeats ${T.repeat === 'daily' ? 'every day' : 'every week'} at this time.</p>` : ''}
       <p>${T.regs.length} joined</p>
       <div class="plist">${T.regs.map(u => pchip(u, false)).join('') || '<span class="note">Nobody has joined yet.</span>'}</div>
@@ -488,6 +488,7 @@ function eventMainHTML(){
     const [sb, bb] = E.levelFor(T.level, T.anteMode);
     return `<div class="card-box"><span class="status-pill live">Live</span><h3>${esc(T.name)}</h3>
       <div class="kv num"><div><small>Players left</small><b>${T.remaining} of ${T.entrants}</b></div><div><small>Level</small><b>${T.level + 1}</b></div><div><small>Blinds</small><b>${fmt(sb)}/${fmt(bb)}</b></div></div>
+      ${presentedHTML(T)}
       ${T.breakUntil ? `<p class="brk-note"><b>On break</b> until ${esc(clockAt(T.breakUntil - clockSkew))}. Play resumes by itself.</p>` : ''}
       ${club.myTable ? `<button class="btn red" data-watch="${esc(club.myTable)}">Go to my table</button>` : out ? `<p>You finished ${ord(out.place)}. You can still watch.</p>`
         : (T.regs || []).includes(club.me.id) ? `<p><span class="status-pill reg">✓ You're registered</span></p><p>Finding your seat… your table opens by itself in a moment.</p>`
@@ -897,6 +898,8 @@ function clubsSwitchHTML(){
 }
 // table extras (show or muck, rabbit hunt, pause between hands): only offered where the server allows them
 const extrasOn = () => !!(club && club.features && club.features.tableExtras);
+// the sponsor and the prize on the lobby's tournament card
+const presentedHTML = T => T.sponsor || T.prize ? `<p class="note sp-note">${T.sponsor ? `Presented by <b>${esc(T.sponsor.name)}</b>.` : ''}${T.sponsor && T.prize ? ' ' : ''}${T.prize ? `<span class="sp-prize">Prize: <b>${esc(T.prize)}</b></span>` : ''}</p>` : '';
 function extrasNote(T){
   if(!extrasOn() || !T) return '';
   const x = [T.showMuck ? 'after each hand, players may show one or both of their cards' : '', T.rabbit ? 'the unused turn and river are shown when a hand ends early' : '', T.handPause ? `${T.handPause} seconds between hands` : ''].filter(Boolean);
@@ -908,11 +911,15 @@ const breakNote = T => breaksOn() && T ? ` A ${T.breakMin || 5}-minute break aft
 function sponsorFields(P, opt){
   if(club.events) return ''; // the Blindrise Open has no Exchange to pick a sponsor from
   const S = club.sponsors;
-  if(!S || !S.list.length) return `<p class="note">Tournament sponsor: when a member publishes their business in the Exchange, you can pick it here to show on the tables at the start and during breaks.</p>`;
+  // the prize, in the director's words: plain text, never cash (server/club.js prizeOf)
+  const prize = `<label>Prize (optional)<input id="nPrize" maxlength="80" autocomplete="off" placeholder="For example: Dinner for two at Aurora" value="${esc(P ? P.prize || '' : '')}"></label>
+        <p class="note">Shown in the lobby and on the tables. Free social play: a gift or an experience, never cash. No links or phone numbers.</p>`;
+  if(!S || !S.list.length) return `<p class="note">Tournament sponsor: when a member publishes their business in the Exchange, you can pick it here to show on the tables at the start and during breaks.</p>${prize}`;
   const cur = P ? (P.sponsor ? P.sponsor.uid : '') : S.spotlight || '';
   return `<div class="two"><label>Tournament sponsor<select id="nSponsor">${opt('', 'None', cur)}${S.list.map(b => opt(b.uid, esc(b.name) + (b.uid === S.spotlight ? ' (Spotlight)' : ''), cur)).join('')}</select></label>
         <label>Sponsor at the start<select id="nSponsorSec">${[5, 8, 10].map(v => opt(v, v + ' seconds', P ? P.sponsorSec || 8 : 8)).join('')}</select></label></div>
-        <p class="note">The sponsor's name and logo from the Exchange show on every table for a few seconds when play starts and during each break. They never cover cards or buttons.</p>`;
+        <p class="note">The sponsor's name and logo from the Exchange show on every table for a few seconds when play starts and during each break. They never cover cards or buttons.</p>
+        ${prize}`;
 }
 function directorMainHTML(){
   const T = club.tourney;
@@ -1087,7 +1094,7 @@ function wireLobby(){
   on('againBtn', () => {
     const T = club.tourney, d = new Date();
     send({ t: 'create', name: T ? T.name : `${d.toLocaleDateString('en-US', { weekday: 'long' })} Night Tournament`, stack: T ? T.stack : 30000, levelMin: T ? T.levelMin : 20, startAt: $('againAt') && $('againAt').value ? +$('againAt').value : null, repeat: 'none', anteMode: T && T.anteMode ? T.anteMode : 'each', actSec: T && T.actSec ? T.actSec : 20, tableSize: 9, lateLevels: T && T.lateLevels != null ? T.lateLevels : 4, helper: T ? T.helper !== false : true, ...(extrasOn() && T ? { showMuck: !!T.showMuck, rabbit: !!T.rabbit, handPause: T.handPause || 0 } : {}),
-      ...(T ? { breakMin: T.breakMin || 5, sponsor: T.sponsor ? T.sponsor.uid : null, sponsorSec: T.sponsorSec || 8 } : {}) });
+      ...(T ? { breakMin: T.breakMin || 5, sponsor: T.sponsor ? T.sponsor.uid : null, sponsorSec: T.sponsorSec || 8, prize: T.prize || '' } : {}) });
     send({ t: 'join' }); tab = 'event';
   });
   on('newCustomBtn', () => { tab = 'director'; renderLobby(); });
@@ -1098,7 +1105,7 @@ function wireLobby(){
       e.preventDefault();
       const at = $('nWhen').value === 'at' ? new Date($('nAt').value).getTime() : null;
       send({ t: editingT ? 'edit' : 'create', name: $('nName').value.trim(), stack: +$('nStack').value, levelMin: +$('nLevel').value, startAt: at, repeat: at ? $('nRepeat').value : 'none', anteMode: $('nAnte').value, actSec: +$('nAct').value, tableSize: +$('nSize').value, lateLevels: +$('nLate').value, helper: $('nHelper').value, ...(extrasOn() ? { showMuck: $('nShow').value, rabbit: $('nRabbit').value, handPause: +$('nPause').value } : {}),
-        ...($('nBreak') ? { breakMin: +$('nBreak').value } : {}), ...($('nSponsor') ? { sponsor: $('nSponsor').value || null, sponsorSec: +$('nSponsorSec').value } : {}) });
+        ...($('nBreak') ? { breakMin: +$('nBreak').value } : {}), ...($('nSponsor') ? { sponsor: $('nSponsor').value || null, sponsorSec: +$('nSponsorSec').value } : {}), ...($('nPrize') ? { prize: $('nPrize').value.trim() } : {}) });
       if(editingT){ editingT = false; toast('Tournament updated.'); } else tab = 'event';
     };
     on('editBack', () => { editingT = false; renderLobby(); });
@@ -2183,8 +2190,8 @@ let brkKey = '';
 // brought back to their table when the break ends
 let leftForSponsor = null;
 const sponsorTap = () => !!(club && club.features && club.features.clubs);
-function sponsorHTML(sp, big){
-  return `<div class="sp-card${big ? ' big' : ''}"${big && sponsorTap() ? ` role="button" tabindex="0" data-spbiz="${esc(sp.uid)}" aria-label="See ${esc(sp.name)} in the Exchange"` : ''}><span class="sp-logo" data-splogo></span><span class="sp-txt"><small>${big ? 'Presented by' : 'Tonight\'s tournament is presented by'}</small><b>${esc(sp.name)}</b>${big ? `<small class="sp-cat">${esc(sp.categoryLabel)}${sp.area ? ' · ' + esc(sp.area) : ''}</small>` : ''}${big && sponsorTap() ? '<small class="sp-more">See their page ›</small>' : ''}</span></div>`;
+function sponsorHTML(sp, big, prize){
+  return `<div class="sp-card${big ? ' big' : ''}"${big && sponsorTap() ? ` role="button" tabindex="0" data-spbiz="${esc(sp.uid)}" aria-label="See ${esc(sp.name)} in the Exchange"` : ''}><span class="sp-logo" data-splogo></span><span class="sp-txt"><small>${big ? 'Presented by' : 'Tonight\'s tournament is presented by'}</small><b>${esc(sp.name)}</b>${big ? `<small class="sp-cat">${esc(sp.categoryLabel)}${sp.area ? ' · ' + esc(sp.area) : ''}</small>` : ''}${prize ? `<small class="sp-prize">Prize: ${esc(prize)}</small>` : ''}${big && sponsorTap() ? '<small class="sp-more">See their page ›</small>' : ''}</span></div>`;
 }
 function fillLogo(el, sp){
   const slot = el.querySelector('[data-splogo]');
@@ -2196,13 +2203,13 @@ function breakUI(T, d, now){
   const on = T && T.status === 'running' && (paused || T.breakUntil && T.breakUntil > now);
   if(!on || (d && d.phase === 'hand')){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; brkKey = ''; $('tableArea').classList.remove('on-break'); } return; }
   $('tableArea').classList.add('on-break');
-  const key = T.id + ':' + (T.breakUntil || 'p') + ':' + (T.sponsor ? T.sponsor.uid : '');
+  const key = T.id + ':' + (T.breakUntil || 'p') + ':' + (T.sponsor ? T.sponsor.uid : '') + ':' + (T.prize || '');
   if(key !== brkKey){
     brkKey = key;
     const [sb, bb, an] = E.levelFor(T.level, T.anteMode);
     el.innerHTML = `<div class="brk-card"><span class="brk-eye">Tournament break</span><b class="brk-time num" id="brkTime"></b>
       <small class="brk-sub">Play resumes by itself · Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}</small>
-      ${T.sponsor ? sponsorHTML(T.sponsor, true) : ''}</div>`;
+      ${T.sponsor ? sponsorHTML(T.sponsor, true, T.prize) : T.prize ? `<small class="brk-prize">Prize: ${esc(T.prize)}</small>` : ''}</div>`;
     if(T.sponsor) fillLogo(el, T.sponsor);
     const sb2 = el.querySelector('[data-spbiz]');
     if(sb2){ const go = () => { leftForSponsor = T.id; view = 'lobby'; showScreen('lobby'); window.BizClub.openBiz(sb2.dataset.spbiz); }; sb2.onclick = go; sb2.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } }; }
@@ -2255,8 +2262,8 @@ function sponsorUI(T, now, onTable){
   }
   const left = sp && onTable && !brk ? spnUntil - now : 0;
   if(left <= 0){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; spnKey = ''; } return; }
-  const key = T.id + ':' + sp.uid;
-  if(key !== spnKey){ spnKey = key; el.innerHTML = sponsorHTML(sp, false); fillLogo(el, sp); el.hidden = false; }
+  const key = T.id + ':' + sp.uid + ':' + (T.prize || '');
+  if(key !== spnKey){ spnKey = key; el.innerHTML = sponsorHTML(sp, false, T.prize); fillLogo(el, sp); el.hidden = false; }
   el.classList.toggle('out', left < 600);
 }
 function tickClock(){

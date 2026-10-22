@@ -94,6 +94,8 @@ const overlaps = (pg, sel) => pg.evaluate(sel => {
   check((await overlaps(late, '#spn') || []).length === 0, 'late: the intro covers no seat, card or button');
   check(await until(() => late.evaluate(() => document.getElementById('spn').hidden), 9000), 'late: and goes away by itself');
   await late.click('#lobbyBtn'); await sleep(500);
+  check(await late.evaluate(p => { const n = document.querySelector('#lobbyBody .sp-note'); return !!n && /Presented by Aurora Coffee Co\./.test(n.textContent) && n.textContent.includes('Prize: ' + p); }, PRIZE), 'lobby: the tournament card says who presents it and the prize');
+  await shot(late, 'sp-lobby-430x932');
   await late.click('[data-watch]'); await sleep(1200);
   check(!(await spnOn(late)), 'late: back at the table from the lobby, not again');
   await late.close();
