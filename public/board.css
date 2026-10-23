@@ -317,13 +317,22 @@
 [data-ui="board"] #game .dock .b-sz .sz-slider{display:flex;align-items:center;gap:4px;min-width:0}
 [data-ui="board"] #game .dock .b-sz .sz-slider .step{width:44px;height:44px;flex:none;border-radius:50%;background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);font-size:20px}
 [data-ui="board"] #game .dock .b-sz .sz-slider .step::after{display:none}
-[data-ui="board"] #game .dock .b-sz .sz-slider input{flex:1;min-width:0;width:100%;height:44px;background:transparent;accent-color:var(--b-gold)}
+[data-ui="board"] #game .dock .b-sz .sz-slider input{flex:1;min-width:0;width:100%;height:44px;background:transparent;accent-color:var(--b-gold);font-size:16px}
+/* no double-tap zoom at the table (the owner's iPhone, 2026-10-22: quick taps on − / + and the presets zoomed iPhone
+   Safari in to about 1.6x, the action row off the screen): taps are taps, pinch zoom and scrolling stay */
+[data-ui="board"] #game,[data-ui="board"] #game :is(.dock,#controls,.sizing,.sz-presets,.sz-slider,.b-acts,.b-sheet,.b-sheet-in,button,input,a,[role=button]){touch-action:manipulation}
 
 /* ---------- "⋯": the table menu, a sheet from the bottom ---------- */
 [data-ui="board"] #game .b-sheet{position:absolute;inset:0;z-index:60;display:flex;align-items:flex-end;background:var(--b-scrim)}
 [data-ui="board"] #game .b-sheet[hidden]{display:none}
-[data-ui="board"] #game .b-sheet-in{width:100%;box-sizing:border-box;padding:10px 12px calc(12px + var(--sa-b));background:var(--b-surface);border-top:1px solid var(--b-hair-gold);border-radius:var(--b-r-sheet) var(--b-r-sheet) 0 0;display:grid;gap:6px;
+[data-ui="board"] #game .b-sheet-in{width:100%;box-sizing:border-box;padding:10px 12px calc(12px + var(--sa-b));background:var(--b-surface);border-top:1px solid var(--b-hair-gold);border-radius:var(--b-r-sheet) var(--b-r-sheet) 0 0;display:grid;gap:6px;max-height:100%;overflow-y:auto;overscroll-behavior:contain;
   animation:b-up var(--b-sheet-dur) var(--b-sheet-ease) both}
+/* a short sideways phone (under 420 tall): the menu's rows two by two, so the whole menu fits on the screen (at 320
+   tall, six rows one under another ran off its top: the title and Chat cut) */
+@media (max-height:419px) and (orientation:landscape){
+  [data-ui="board"] #game .b-sheet:not(.b-hsheet) .b-sheet-in{grid-template-columns:1fr 1fr;column-gap:8px}
+  [data-ui="board"] #game .b-sheet:not(.b-hsheet) .b-sheet-t,[data-ui="board"] #game .b-sheet:not(.b-hsheet) .b-row.b-close{grid-column:1 / -1}
+}
 [data-ui="board"] #game .b-sheet-t{font-size:var(--b-t-13);font-weight:600;color:var(--b-text-2);padding:2px 4px 4px;letter-spacing:.02em}
 [data-ui="board"] #game .b-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:0 14px;border-radius:var(--b-r-btn);background:var(--b-surface-2);border:1px solid var(--b-hair);color:var(--b-text);font-size:var(--b-t-15);font-weight:600;text-align:left}
 [data-ui="board"] #game .b-row small{font-size:var(--b-t-13);font-weight:500;color:var(--b-text-2)}

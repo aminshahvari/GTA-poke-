@@ -24,7 +24,7 @@ const DATA = require('os').tmpdir() + '/t_bui_' + process.pid + '.json';
 const srv = spawn('node', ['server/index.js'], { cwd: ROOT, env: { ...process.env, UI_BOARD: '1', PORT, NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, FAST: '', STAGING: '1', DATABASE_URL: '' }, stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const SHOTS = process.env.SHOTS || '';
-const SIZES = (process.env.SIZES || '390x844,320x568,844x390').split(',');
+const SIZES = (process.env.SIZES != null ? process.env.SIZES : '390x844,320x568,844x390').split(',').filter(Boolean);
 const api = async (p, body) => { const j = await (await fetch(BASE + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })).json(); if(j.error) throw new Error(p + ': ' + j.error); return j; };
 const fails = [];
 let oks = 0;
@@ -213,6 +213,93 @@ async function turn(pg, tag, w, h, late){
   return m;
 }
 
+// ---------- the raise sizing on a short sideways iPhone (the owner's iPhone, 2026-10-22) ----------
+// In a real tournament (bots that check or call), at 667x320, 700x330, 568x320 and 844x390 in an iPhone-like context:
+// my turn, Raise opens the sizing, then +, −, the presets tapped quickly (twice, and double-tapped). Then: nothing scrolls
+// sideways, the page is exactly the screen's width, every sizing control and the Raise / Back buttons whole on the
+// screen, no zoom (visualViewport.scale 1), touch-action: manipulation on the controls (no double-tap zoom on iPhone
+// Safari), no input under 16 px (iPhone Safari zooms into those on focus). Also the "⋯" menu on my turn there.
+const RAISE_SIZES = (process.env.RAISE_SIZES || '667x320,700x330,568x320,844x390').split(',').filter(Boolean);
+const RAISE_SHOTS = process.env.RAISE_SHOTS || SHOTS;
+const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+function wsBot(tok){
+  const WebSocket = require(path.join(ROOT, 'node_modules', 'ws'));
+  const ws = new WebSocket(`ws://localhost:${PORT}/ws`), c = { ws, send: o => ws.send(JSON.stringify(o)) };
+  ws.on('open', () => c.send({ t: 'hello', token: tok, device: 'bot' + Math.random() }));
+  ws.on('message', raw => { const m = JSON.parse(raw);
+    if(m.t === 'club'){ c.club = m.club; c.id = m.club.me.id; }
+    if(m.t !== 'table') return; const tb = m.table;
+    if(tb.actUid === c.id && tb.legal && c.last !== tb.tid + tb.seq){ c.last = tb.tid + tb.seq; const L = tb.legal; setTimeout(() => c.send({ t: 'act', tid: tb.tid, hand: tb.handNo, seq: tb.seq, a: L.canCheck ? { t: 'check' } : { t: 'call' } }), 30); } });
+  return new Promise(r => { const t = setInterval(() => { if(c.club){ clearInterval(t); r(c); } }, 30); });
+}
+const raiseLook = pg => pg.evaluate(() => {
+  const W = innerWidth, H = innerHeight, de = document.documentElement;
+  const r = e => { const b = e.getBoundingClientRect(); return { id: e.id || e.dataset.to || e.className, l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+  const ctl = [...document.querySelectorAll('#controls .sz-presets button, #controls #minus, #controls #plus, #controls #raiseRange, #controls #szGo, #controls #szBack')].filter(e => e.getClientRects().length);
+  const out = ctl.map(r).filter(b => b.l < -.5 || b.t < -.5 || b.r > W + .5 || b.b > H + .5);
+  const ta = [...document.querySelectorAll('#game, #controls, #controls button, #controls input')].filter(e => e.getClientRects().length).map(e => [e.id || e.className, getComputedStyle(e).touchAction]).filter(([, t]) => !/manipulation|none|pan-x pan-y pinch-zoom/.test(t));
+  const small = [...document.querySelectorAll('input, select, textarea')].filter(e => e.getClientRects().length && parseFloat(getComputedStyle(e).fontSize) < 16).map(e => (e.id || e.name || e.type) + ' ' + getComputedStyle(e).fontSize);
+  const vv = window.visualViewport;
+  return { W, H, docW: de.scrollWidth, cw: de.clientWidth, bodyW: document.body.scrollWidth, scrollX, scrollY, docH: de.scrollHeight, scale: vv ? vv.scale : 1, vvw: vv ? vv.width : W,
+    n: ctl.length, sizing: !!document.querySelector('#controls .b-sizing'), out, ta, small, meta: (document.querySelector('meta[name=viewport]') || {}).content };
+});
+async function raiseCase(browser, tok, w, h, phase){
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, screen: { width: Math.max(w, h), height: Math.min(w, h) }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: IPHONE_UA });
+  const pg = await ctx.newPage(), tag = `${w}x${h} real tournament`;
+  await pg.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
+  await pg.goto(BASE + '/'); await pg.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), tok); await pg.reload();
+  // my turn with a raise open to me (the bots only check or call)
+  const up = await pg.waitForFunction(() => { const b = document.querySelector('#game:not([hidden]) #aRaise'); return b && !b.disabled; }, null, { timeout: 90000 }).then(() => true, () => false);
+  check(up, `${tag}: my turn comes, with Raise`);
+  if(!up){ await ctx.close(); return; }
+  await sleep(300);
+  await pg.tap('#aRaise'); await sleep(250);
+  const T = async sel => { await pg.tap(sel); await sleep(60); };
+  // quick taps: + + − −, every preset twice, then double clicks (a double tap)
+  for(const s of ['#plus', '#plus', '#minus', '#minus', '#plus']) await T(s);
+  for(const b of await pg.$$('#controls .sz-presets button')){ await b.tap(); await sleep(40); await b.tap(); await sleep(40); }
+  await pg.dblclick('#plus'); await pg.dblclick('#minus'); await pg.dblclick('#controls .sz-presets button');
+  await sleep(300);
+  const m = await raiseLook(pg);
+  if(RAISE_SHOTS) await pg.screenshot({ path: path.join(RAISE_SHOTS, `raise-${phase}-${w}x${h}.png`) });
+  check(m.sizing && m.n >= 7, `${tag}: the sizing is open (${m.n} controls)`);
+  check(m.docW === m.W && m.cw === m.W && m.bodyW <= m.W && m.scrollX === 0, `${tag}: no sideways scroll, the page exactly the screen's width (page ${m.docW}, body ${m.bodyW}, screen ${m.W}, scrolled ${m.scrollX})`);
+  check(m.docH <= m.H && m.scrollY === 0, `${tag}: nothing below the screen (page ${m.docH} tall, screen ${m.H})`);
+  check(!m.out.length, `${tag}: every sizing control, Raise and Back whole on the screen${m.out.length ? ': ' + m.out.map(o => `${o.id} ${Math.round(o.l)},${Math.round(o.t)}-${Math.round(o.r)},${Math.round(o.b)}`).join('; ') : ''}`);
+  check(m.scale === 1 && Math.abs(m.vvw - m.W) <= .5, `${tag}: no zoom after the quick taps (visualViewport.scale ${m.scale}, width ${m.vvw})`);
+  check(!m.ta.length, `${tag}: touch-action: manipulation on the table and its controls (no double-tap zoom)${m.ta.length ? ': ' + m.ta.map(x => x.join(' ')).join(', ') : ''}`);
+  check(!m.small.length, `${tag}: no input under 16 px (iPhone Safari zooms into those)${m.small.length ? ': ' + m.small.join(', ') : ''}`);
+  check(/width=device-width/.test(m.meta) && /initial-scale=1/.test(m.meta), `${tag}: the viewport meta "${m.meta}"`);
+  // the "⋯" menu on my turn: Chat, Add 30 seconds, Hand helper, Hand history, Leave table, Close
+  await pg.tap('#szBack'); await sleep(200);
+  await pg.tap('[data-bmore]'); await sleep(450);
+  const menu = await pg.evaluate(() => { const sh = document.getElementById('bSheet'); if(!sh || sh.hidden) return null;
+    const H = innerHeight; return [...sh.querySelectorAll('[data-bm]')].map(b => { const r = b.getBoundingClientRect(); return { k: b.dataset.bm, inside: r.top >= -.5 && r.bottom <= H + .5 }; }); });
+  check(menu && ['chat', 'time', 'helper', 'hands', 'leave', 'close'].every(k => menu.some(x => x.k === k)), `${tag}: "⋯" on my turn: ${menu ? menu.map(x => x.k).join(', ') : 'nothing'}`);
+  check(menu && menu.every(x => x.inside), `${tag}: every menu row whole on the screen${menu ? ': ' + menu.filter(x => !x.inside).map(x => x.k).join(', ') : ''}`);
+  if(RAISE_SHOTS) await pg.screenshot({ path: path.join(RAISE_SHOTS, `menu-${phase}-${w}x${h}.png`) });
+  await pg.keyboard.press('Escape'); await sleep(150);
+  // let play go on: fold (or check)
+  await pg.evaluate(() => { const b = document.getElementById('aFold') || document.getElementById('aCall'); if(b) b.click(); });
+  await sleep(300); await ctx.close();
+}
+async function raiseSuite(browser){
+  if(!RAISE_SIZES.length) return;
+  if(RAISE_SHOTS) fs.mkdirSync(RAISE_SHOTS, { recursive: true });
+  const L = n => api('login', { name: 'Test Player 0' + n, pin: '1357' + String(n).repeat(2) });
+  const dir = await api('login', { name: 'Test Director', pin: '246810' }), me = await L(1);
+  const d = await wsBot(dir.token), bots = [d, await wsBot((await L(2)).token), await wsBot((await L(3)).token), await wsBot((await L(4)).token)];
+  d.send({ t: 'create', name: 'Raise Night', stack: 30000, levelMin: 20, lateLevels: 0 });
+  for(let i = 0; i < 50 && !(d.club.tourney && d.club.tourney.status === 'registering'); i++) await sleep(100);
+  const mine = await wsBot(me.token); mine.send({ t: 'join' }); bots.forEach(b => b.send({ t: 'join' })); await sleep(600);
+  d.send({ t: 'start' });
+  for(let i = 0; i < 50 && d.club.tourney.status !== 'running'; i++) await sleep(100);
+  check(d.club.tourney.status === 'running', 'raise: a real tournament is running (4 bots and me)');
+  mine.ws.close();
+  for(const s of RAISE_SIZES){ const [w, h] = s.split('x').map(Number); await raiseCase(browser, me.token, w, h, process.env.RAISE_PHASE || 'after'); }
+  bots.forEach(b => b.ws.close());
+}
+
 (async () => {
   for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
   await sleep(400);
@@ -284,6 +371,7 @@ async function turn(pg, tag, w, h, late){
       await ctx.close();
     }
   }
+  await raiseSuite(browser);
   await browser.close();
   for(const p of ['B8 reduced motion on the sheets and seats'])
     console.log(`PENDING B8 (not run) ${p}`);
