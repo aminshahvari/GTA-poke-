@@ -690,3 +690,20 @@
 /* (the wordmark stays on every width: the top bar's right side is three icons now) */
 [data-ui="board"] #lobby .mini-logo{min-width:0}
 [data-ui="board"] #lobby .mini-logo .lx-word{display:inline}
+
+/* ---------- B4 on a wide screen (owner, desktop Chrome, 2026-10-23): one column on every tab, the page scrolls as one ----------
+   The top bar, the content and the tab bar share the lobby's one centred 540 px column on every tab (the lobby no longer
+   widens for Home and Exchange). While the lobby shows, the page itself scrolls (no inner scroll box): the top bar
+   sticks at the top, the tab bar is fixed at the foot, and the content ends clear of it (56 + the inset + 24). The table
+   keeps its own fixed screen: these rules apply only while the lobby is the screen showing. */
+[data-ui="board"]:has(#lobby:not([hidden])),[data-ui="board"]:has(#lobby:not([hidden])) body{height:auto;min-height:100%;overflow:visible}
+[data-ui="board"]:has(#lobby:not([hidden])) body{overflow-x:clip}
+[data-ui="board"] .app:has(>#lobby:not([hidden])){height:auto;min-height:100vh;min-height:100dvh;overflow:visible}
+[data-ui="board"] #lobby:not([hidden]){position:relative;inset:auto;display:block;min-height:100vh;min-height:100dvh}
+[data-ui="board"] #lobby .topbar{position:sticky;top:0;z-index:10}
+[data-ui="board"] #lobby #lobbyBody{overflow:visible;padding-bottom:calc(56px + var(--sa-b) + 24px)}
+[data-ui="board"] #lobby .tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;width:100%;max-width:540px;margin:0 auto}
+[data-ui="board"] #lobby .bz-find{top:56px}
+/* (a sideways row, the Exchange spotlight: it keeps its own sideways scroll; with a mouse, a thin quiet bar under the
+   cards, well clear of the tab bar) */
+[data-ui="board"] #lobby .bz-rail{scrollbar-width:thin;scrollbar-color:var(--b-hair) transparent}

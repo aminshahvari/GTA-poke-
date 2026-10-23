@@ -434,6 +434,8 @@ const bIc = (k, cls = '') => `<svg class="b-ic${cls ? ' ' + cls : ''}" viewBox="
 const B_TABS = [['home', 'Home'], ['poker', 'Poker'], ['biz', 'Exchange'], ['club', 'Club'], ['profile', 'Profile']];
 if(BOARD){
   $('tabs').setAttribute('aria-label', 'Main');
+  // the page scrolls while the lobby shows (board.css), so the lobby's "scroll to the top" moves the page
+  Object.defineProperty($('lobbyBody'), 'scrollTop', { configurable: true, get: () => window.scrollY, set: v => window.scrollTo(0, v) });
   $('tabs').innerHTML = B_TABS.map(([k, l]) => `<button role="tab" data-tab="${k}" aria-selected="${k === 'home'}"${k === 'biz' ? ' class="biz-tab"' : ''}>${bIc(k)}<span>${l}</span></button>`).join('');
 }
 // the top bar's right side: the bell (this phone's reminders), Director (the club director only), the avatar (Profile)
@@ -502,7 +504,7 @@ function boardLobby(body, clubsOn, clubsVisible){
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === lit));
   if($('dirTab')) $('dirTab').classList.toggle('on', tab === 'director');
   if(clubsVisible) window.OppClub.badge(document.querySelector('#tabs [data-tab="club"]'), playing);
-  document.querySelector('.app').classList.toggle('wide', tab === 'biz' || (tab === 'home' && clubsVisible && !playing));
+  document.querySelector('.app').classList.remove('wide');   // (one column on every tab: board.css)
   if(tab === 'biz'){ body.replaceChildren(); window.BizClub.render(body); return; }
   const back = (t, l) => `<button type="button" class="b-back" data-bgo="${t}">${bIc('chev', 'b-back-ic')}${l}</button>`;
   if(tab === 'board'){ body.innerHTML = back('poker', 'Poker') + pageHead('Poker · The Strategy Table', 'Standings &amp; prizes') + boardHTML(); wireLobby(); return; }

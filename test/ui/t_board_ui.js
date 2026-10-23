@@ -637,6 +637,38 @@ const bodyHas = (pg, sel) => pg.evaluate(s => !!document.querySelector('#lobbyBo
 const lit = pg => pg.evaluate(() => (document.querySelector('#tabs [aria-selected="true"]') || {}).dataset.tab);
 const modalText = pg => pg.evaluate(() => { const m = document.querySelector('#modalRoot .modal'); return m ? m.textContent.replace(/\s+/g, ' ') : ''; });
 const closeModal = async pg => { await pg.evaluate(() => { const b = document.querySelector('#modalRoot [data-i="0"]'); if(b) b.click(); }); await sleep(300); };
+
+// one column on every tab, the page scrolling as one, and the end of each tab clear of the bar (owner, desktop Chrome)
+const navEnd = pg => pg.evaluate(async () => {
+  const r = e => e && e.getClientRects().length ? e.getBoundingClientRect() : null;
+  const top = r(document.querySelector('#lobby .topbar')), body = r(document.getElementById('lobbyBody')), bar = r(document.getElementById('tabs'));
+  const inner = [...document.querySelectorAll('#lobby, #lobby *')].filter(e => { const o = getComputedStyle(e).overflowY; return (o === 'auto' || o === 'scroll') && e.scrollHeight > e.clientHeight + 1 && e.getClientRects().length; })
+    .map(e => e.id || e.className.toString().slice(0, 30));
+  window.scrollTo(0, document.documentElement.scrollHeight); await new Promise(f => setTimeout(f, 250));
+  const kids = [...document.getElementById('lobbyBody').children].filter(e => e.getClientRects().length && e.getBoundingClientRect().height > 0);
+  const last = kids[kids.length - 1], lb = r(last), b2 = r(document.getElementById('tabs'));
+  return { edges: [top, body, bar].map(x => x ? [Math.round(x.left), Math.round(x.right)] : null), inner,
+    last: last ? (last.id || last.className.toString().slice(0, 30)) : '', lastB: lb ? Math.round(lb.bottom) : -1, lastT: lb ? Math.round(lb.top) : -1, barT: b2 ? Math.round(b2.top) : -1 };
+});
+const sameEdges = m => m.edges.every(e => e && Math.abs(e[0] - m.edges[0][0]) <= 1 && Math.abs(e[1] - m.edges[0][1]) <= 1);
+async function navWideSuite(browser){
+  const OWN = (await api('login', { name: 'Test Director', pin: '246810' })).token, MEM = (await api('login', { name: 'Test Player 01', pin: '135711' })).token;
+  for(const s of ['1280x800', '1440x900', '1024x768']) for(const [who, tok] of [['owner', OWN], ['member', MEM]]){
+    const [w, h] = s.split('x').map(Number), tag = `${s} ${who} B4 wide`;
+    const { ctx, pg } = await navPage(browser, tok, w, h, 0);
+    let width = null;
+    for(const k of ['home', 'poker', 'biz', 'club', 'profile']){
+      await pg.evaluate(() => window.scrollTo(0, 0)); await tapTab(pg, k); await sleep(k === 'biz' || k === 'home' || k === 'club' ? 900 : 300);
+      if(SHOTS && s === '1280x800' && who === 'owner') await pg.screenshot({ path: path.join(SHOTS, `b4-owner-1280x800-${k}.png`) });
+      const m = await navEnd(pg);
+      check(sameEdges(m), `${tag} ${k}: the top bar, the content and the tab bar share one column (${m.edges.map(e => e && e.join('-')).join(', ')})`);
+      if(width == null) width = m.edges[2]; else check(m.edges[2] && m.edges[2][0] === width[0] && m.edges[2][1] === width[1], `${tag} ${k}: the same column as Home (${m.edges[2]} vs ${width})`);
+      check(!m.inner.length, `${tag} ${k}: no inner scroll box, the page scrolls as one${m.inner.length ? ': ' + m.inner.join(', ') : ''}`);
+      check(m.lastB > 0 && m.lastB <= m.barT, `${tag} ${k}: scrolled to the end, the last item (${m.last}) ends above the bar (${m.lastB} vs ${m.barT})`);
+    }
+    await ctx.close();
+  }
+}
 async function navSuite(browser){
   const OWN = (await api('login', { name: 'Test Director', pin: '246810' })).token, MEM = (await api('login', { name: 'Test Player 01', pin: '135711' })).token;
   // the frame at every size: the bar, the tabs, the top bar
@@ -653,6 +685,9 @@ async function navSuite(browser){
     check(m.word && m.word.shown && /BLIND\s*RISE/.test(m.word.text), `${tag}: the BLINDRISE wordmark on the left`);
     for(const k of ['poker', 'biz', 'club', 'profile', 'home']){ await tapTab(pg, k);
       const n = await navLook(pg); check(n.sel === k && n.scroll <= 0, `${tag}: ${k} lit after a tap, nothing scrolls sideways (${n.sel}, ${n.scroll})`);
+      await sleep(k === 'biz' || k === 'club' ? 600 : 100); const e = await navEnd(pg);
+      check(sameEdges(e) && !e.inner.length && e.lastB > 0 && e.lastB <= e.barT, `${tag}: ${k}: one column, no inner scroll box, the end (${e.last}) clear of the bar (${e.lastB} vs ${e.barT}${e.inner.length ? '; ' + e.inner.join(', ') : ''})`);
+      await pg.evaluate(() => window.scrollTo(0, 0)); await sleep(100);
       if(SHOTS && !sa && (s === '390x844' || s === '844x390')) await pg.screenshot({ path: path.join(SHOTS, `b4-${who}-${s}-${k}.png`) }); }
     await ctx.close();
   }
@@ -804,6 +839,7 @@ async function navSuite(browser){
   if(!process.env.NAV_ONLY) await headsUpSuite(browser, TOK);
   if(!process.env.NAV_ONLY) await raiseSuite(browser);
   await navSuite(browser);
+  await navWideSuite(browser);
   await browser.close();
   for(const p of ['B8 reduced motion on the sheets and seats'])
     console.log(`PENDING B8 (not run) ${p}`);
