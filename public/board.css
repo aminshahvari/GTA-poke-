@@ -199,7 +199,7 @@
 [data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole .card.mini{--w:var(--cwb);border-width:1.5px;box-shadow:0 2px 4px var(--b-shadow)}
 [data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole .card.mini:first-child{transform:rotate(-8deg)}
 [data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole .card.mini+.card.mini{margin-left:calc(var(--cwb) * -.45);transform:rotate(8deg)}
-[data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole.shown{left:calc(var(--cwb) * -1.45);top:calc(var(--av) / -2 - var(--cwb) * 1.75 + var(--hy,0px));z-index:4}
+[data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole.shown{left:calc(var(--cwb) * -1.45);top:calc(var(--av) / -2 - var(--cwb) * 1.75 + var(--hys,var(--hy,0px)));z-index:4}
 [data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole.shown .card.show{--w:calc(var(--cwb) * 1.45)}
 [data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole.shown .card.show:first-child{transform:rotate(-5deg)}
 [data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole.shown .card.show+.card.show{margin-left:-4px;transform:rotate(5deg)}
@@ -298,6 +298,14 @@
 [data-ui="board"] #game .dock .act-btn.back{background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);box-shadow:none}
 [data-ui="board"] #game .dock .act-btn.back b{font-size:24px;font-weight:400}
 [data-ui="board"] #game .dock .b-more{position:relative;height:100%;min-height:44px;border-radius:var(--b-r-btn);background:var(--b-more);border:1px solid var(--b-more-line);color:var(--b-more-icon);font-size:20px;font-weight:600;line-height:1;padding:0}
+/* (the amount: a narrow button beside Raise opens the sizing; Raise itself raises in one tap. Its own 44 px column) */
+[data-ui="board"] #game .dock .b-acts:has(.b-szb){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px 44px}
+[data-ui="board"] #game .dock .b-szb{position:relative;height:100%;min-height:44px;min-width:44px;border-radius:var(--b-r-btn);background:var(--b-more);border:1px solid var(--b-hair-gold);color:var(--b-gold-text);padding:0;display:flex;align-items:center;justify-content:center}
+[data-ui="board"] #game .dock .b-szb::after{display:none}
+/* (where that leaves Raise too narrow for "Raise to" on one line, under 70 px: "Raise" over the amount, as Call reads) */
+[data-ui="board"] #game .dock .b-acts .act-btn.raise#aRaise{container-type:inline-size}
+[data-ui="board"] #game .dock .act-btn.raise b .b-to{font:inherit;color:inherit;opacity:inherit;letter-spacing:inherit}
+@container (max-width:70px){ [data-ui="board"] #game .dock .act-btn.raise .b-to{display:none} }
 [data-ui="board"] #game .dock .b-more .b-unread{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--b-live);display:none}
 [data-ui="board"] #game .dock .b-more.unread .b-unread{display:block}
 /* not your turn: the quick actions in the same row, neutral (§3.5) */
@@ -377,6 +385,7 @@
   [data-ui="board"] #game.land .dock .turnrow .turnbar{width:calc((100% - 24px) * .62)}
   [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 56px 44px}
   [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz) .b-more{grid-column:-2}
+  [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz):has(.b-szb){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px 56px 44px}
   [data-ui="board"] #game.land .dock .act-btn{flex-direction:column;gap:0}
   [data-ui="board"] #game.land .dock .act-btn b,[data-ui="board"] #game.land .dock .act-btn span{font-size:var(--b-t-14)}
 }
@@ -415,6 +424,15 @@
 [data-ui="board"] #game .b-hud .bh-tm{margin-left:auto;align-items:flex-end}
 [data-ui="board"] #game .b-hud .bh-tm b{font-size:var(--b-t-22)}
 [data-ui="board"] #game .b-top.b-brk .b-hud .bh-tm b{color:var(--b-gold-text)}
+/* (a quiet "›" at the card's right edge: the card opens the tournament details; owner, 2026-10-23: nothing said it could
+   be tapped. Upright it stands in the card's right padding, 4 px wider for it, so it takes no room from the values) */
+[data-ui="board"] #game .b-hud>.bh-go{font-weight:400;line-height:1;color:var(--b-gold);opacity:.8}
+[data-ui="board"] #game:not(.land) #bHud{position:relative;padding-right:16px}
+[data-ui="board"] #game:not(.land) #bHud>.bh-go{position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:var(--b-t-15)}
+/* (the tightest card, 320 wide: no room to spare, the "›" a size smaller in the card's own 10 px padding) */
+[data-ui="board"] #game:not(.land) #bHud.tighter{padding-right:10px}
+[data-ui="board"] #game:not(.land) #bHud.tighter>.bh-go{right:3px;font-size:var(--b-t-13)}
+[data-ui="board"] #game.land .b-hud>.bh-go{order:6;margin-left:8px;font-size:var(--b-t-17);align-self:center}
 [data-ui="board"] #game .b-hud .bh-idle{display:none;font-size:var(--b-t-15);font-weight:600}
 [data-ui="board"] #game .b-top.idle .b-hud>span{display:none}
 [data-ui="board"] #game .b-top.idle .b-hud>.bh-idle{display:flex}
@@ -561,6 +579,7 @@
 [data-ui="board"] #game.land.b-col .dock .turnrow .turnbar{left:0;right:0;width:auto;top:calc(var(--bd-band) + var(--bd-gap) / 2 - 1px)}
 [data-ui="board"] #game.land.b-col .dock .b-acts:not(.b-sz):not(.b-idle),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz):not(.b-idle){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px;gap:6px}
 [data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz) .b-more{grid-column:auto}
+[data-ui="board"] #game.land.b-col .dock .b-acts:not(.b-sz):not(.b-idle):has(.b-szb),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz):not(.b-idle):has(.b-szb){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px 44px}
 [data-ui="board"] #game.land.b-col .dock .b-acts.b-sz{grid-template-columns:44px minmax(0,1fr) minmax(84px,.9fr);gap:6px}
 [data-ui="board"] #game.land.b-col .dock .act-btn{flex-direction:column;gap:0;padding:0 2px}
 [data-ui="board"] #game.land.b-col .dock .act-btn b,[data-ui="board"] #game.land.b-col .dock .act-btn span{font-size:var(--b-t-14)}
@@ -603,3 +622,15 @@
 [data-ui="board"] #game.land.b-ncol .side-prize{padding:5px 8px;border:1px solid var(--b-hair-gold);background:var(--b-gold-fill);border-radius:var(--b-r-plate)}
 [data-ui="board"] #game.land.b-ncol .side-prize small{color:var(--b-text-2)}
 [data-ui="board"] #game.land.b-ncol .side-prize b{font-size:12px;color:var(--b-gold-text)}
+
+/* ---------- your turn with "+30s": the free-play line ends before the button (owner's game, 2026-10-23: sideways
+   "+30s · 5 left" stood over "No real money") ---------- */
+/* (the line keeps its foot where it was; where it no longer fits on one line it takes two, "Free social play ·" over
+   "No betting · No real money", never cut short) */
+[data-ui="board"] #game .dock:has(.xtime:not(:disabled)) #playLine{height:30px;top:calc(var(--bd-pad) + var(--bd-band) - 30px);display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-end;
+  column-gap:.3em;white-space:normal;text-overflow:clip}
+[data-ui="board"] #game .dock:has(.xtime:not(:disabled)) #playLine span{white-space:nowrap}
+[data-ui="board"] #game:not(.land) .dock:has(.xtime:not(:disabled)) #playLine{right:80px}
+[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) #playLine{top:calc(6px + var(--bd-land-row) - 30px)}
+@media (min-width:760px){ [data-ui="board"] #game.land:not(.b-col) .dock:has(.xtime:not(:disabled)) #playLine{width:calc(42% - 100px)} }
+[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) #playLine{top:calc(var(--bd-pad) + var(--bd-band) - 30px);right:64px}

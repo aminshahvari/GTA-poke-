@@ -141,6 +141,14 @@ async function b3(pg, tag, sock, me, w, h){
   check(/Level\s*3/.test(m.cardText) && /200\/400/.test(m.cardText) && /32\/48( players)?/.test(m.cardText) && /3rd/.test(m.cardText) && /\d+:\d\d/.test(m.cardText), `${tag} B3: the collapsed bar: level, blinds, the clock, players left and your rank: "${m.cardText}"`);
   check(!/leader|Avg|watching|tables|Aurora/i.test(m.cardText), `${tag} B3: and nothing else of the HUD (players left and your rank only: owner's GO)`);
   check(/32 of 48 players left/.test(m.label) && /Your rank 3rd/.test(m.label), `${tag} B3: the card reads out what it shows: "${m.label}"`);
+  // (owner, 2026-10-23: nothing said the card could be tapped) a quiet gold "›" at its right edge, whole inside it, past
+  // the clock, hidden from screen readers (the card's label says it opens the tournament details)
+  const go = await pg.evaluate(() => { const c = document.getElementById('bHud'), g = c && c.querySelector('.bh-go'); if(!g || !g.getClientRects().length) return null;
+    const a = g.getBoundingClientRect(), b = c.getBoundingClientRect(), t = document.getElementById('bhTime').getBoundingClientRect(), cs = getComputedStyle(g);
+    return { text: g.textContent, hidden: g.getAttribute('aria-hidden'), inside: a.left >= b.left && a.right <= b.right - 4 && a.top >= b.top && a.bottom <= b.bottom, past: a.left >= t.right - .5, color: cs.color,
+      gold: getComputedStyle(document.documentElement).getPropertyValue('--b-gold').trim(), over: c.scrollWidth - c.clientWidth, label: c.getAttribute('aria-label') }; });
+  check(go && go.text === '›' && go.hidden === 'true' && go.inside && go.past && go.over <= 1, `${tag} B3: a "›" at the card's right edge says it opens (inside ${go && go.inside}, past the clock ${go && go.past}, overflow ${go && go.over})`);
+  check(go && /^rgb\(217, 166, 81\)$/.test(go.color.replace(/rgba\((\d+), (\d+), (\d+), 1\)/, 'rgb($1, $2, $3)')) && /Opens the tournament details\.$/.test(go.label), `${tag} B3: the "›" in --b-gold (${go && go.color}), the card's label ends "Opens the tournament details."`);
   if(land){
     check(Math.abs((m.card.l + m.card.r) / 2 - (m.col ? (m.top.l + m.top.r) / 2 : m.W / 2)) <= 2 && m.chat && m.chat.r <= m.card.l && m.chat.l <= 16 && m.lobby.l >= m.card.r && m.lobby.r >= m.W - 16,
       `${tag} B3: sideways the pill is centred, Chat at the top left, Lobby at the top right`);
@@ -247,6 +255,10 @@ const raiseLook = pg => pg.evaluate(() => {
 async function raiseCase(browser, tok, w, h, phase){
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, screen: { width: Math.max(w, h), height: Math.min(w, h) }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: IPHONE_UA });
   const pg = await ctx.newPage(), tag = `${w}x${h} real tournament`;
+  // (what the page sends and what the server answers: my raise, and my bet in the tables after it)
+  const sent = [], got = []; let meUid = '';
+  pg.on('websocket', ws => { ws.on('framesent', f => { try{ const j = JSON.parse(f.payload); if(j.t === 'act') sent.push(j); }catch(e){} });
+    ws.on('framereceived', f => { try{ const j = JSON.parse(f.payload); if(j.t === 'club' && j.club && j.club.me) meUid = j.club.me.id; if(j.t === 'table' && j.table) got.push(j.table); }catch(e){} }); });
   await pg.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
   await pg.goto(BASE + '/'); await pg.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), tok); await pg.reload();
   // my turn with a raise open to me (the bots only check or call)
@@ -254,7 +266,7 @@ async function raiseCase(browser, tok, w, h, phase){
   check(up, `${tag}: my turn comes, with Raise`);
   if(!up){ await ctx.close(); return; }
   await sleep(300);
-  await pg.tap('#aRaise'); await sleep(250);
+  await pg.tap('#aSize'); await sleep(250);
   const T = async sel => { await pg.tap(sel); await sleep(60); };
   // quick taps: + + − −, every preset twice, then double clicks (a double tap)
   for(const s of ['#plus', '#plus', '#minus', '#minus', '#plus']) await T(s);
@@ -280,8 +292,22 @@ async function raiseCase(browser, tok, w, h, phase){
   check(menu && menu.every(x => x.inside), `${tag}: every menu row whole on the screen${menu ? ': ' + menu.filter(x => !x.inside).map(x => x.k).join(', ') : ''}`);
   if(RAISE_SHOTS) await pg.screenshot({ path: path.join(RAISE_SHOTS, `menu-${phase}-${w}x${h}.png`) });
   await pg.keyboard.press('Escape'); await sleep(150);
-  // let play go on: fold (or check)
-  await pg.evaluate(() => { const b = document.getElementById('aFold') || document.getElementById('aCall'); if(b) b.click(); });
+  // one tap on Raise raises by the amount it shows (owner, 2026-10-23), and the server takes it: my turn ends, my bet is
+  // that amount
+  const want = await pg.evaluate(() => { const b = document.getElementById('aRaise'); return b && !b.disabled ? +b.querySelector('.num').textContent.replace(/[^\d]/g, '') : 0; });
+  if(want){
+    const n0 = sent.length, g0 = got.length;
+    await pg.tap('#aRaise');
+    const done = await pg.waitForFunction(() => !document.querySelector('#controls #aRaise'), null, { timeout: 6000 }).then(() => true, () => false);
+    await sleep(300);
+    const a = sent.slice(n0).map(j => j.a), mine = got.slice(g0).map(t => (t.seats || []).find(q => q && q.uid === meUid)).filter(Boolean);
+    const took = mine.some(q => q.bet === want || q.act === 'Raise' || q.act === 'Bet' || q.allIn);
+    check(done && a.length === 1 && a[0].t === 'raise' && a[0].to === want && took && !(await pg.evaluate(() => !!document.querySelector('#controls .b-sizing'))),
+      `${tag}: one tap on Raise (${want}) sends the raise, no sizing opened, and the server takes it (sent ${JSON.stringify(a)}; my bet after ${mine.map(q => q.bet + ' ' + q.act).slice(0, 2).join(', ')})`);
+  } else {
+    // let play go on: fold (or check)
+    await pg.evaluate(() => { const b = document.getElementById('aFold') || document.getElementById('aCall'); if(b) b.click(); });
+  }
   await sleep(300); await ctx.close();
 }
 async function raiseSuite(browser){
@@ -311,17 +337,18 @@ async function raiseSuite(browser){
 // The initials' ring at rest an opaque gold 2 px, at least 3:1 on the felt and the ground; the player to act 3 px --b-gold.
 const NCOL = (process.env.NCOL_SIZES || '667x320,700x330,568x320').split(',').filter(Boolean);
 const INSETS = [['844x390', 21], ['667x320', 21], ['700x330', 21], ['390x844', 34], ['667x320', 0], ['390x844', 0]];
-async function fixturePage(browser, TOK, w, h, { sa = 0, sponsor = true, legal = true } = {}){
+async function fixturePage(browser, TOK, w, h, { sa = 0, sponsor = true, legal = true, helperOff = false, field = FIELD } = {}){
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: IPHONE_UA });
   const pg = await ctx.newPage();
   // (Chromium can't emulate the home-screen inset: the page's --sa-b, env(safe-area-inset-bottom) by default, is set)
+  if(helperOff) await pg.addInitScript(() => { try{ localStorage.setItem('stacked:helper-board', 'off'); }catch(e){} });
   if(sa) await pg.addInitScript(b => { const put = () => { const st = document.createElement('style'); st.textContent = `:root{--sa-b:${b}px}`; document.body.appendChild(st); };
     if(document.readyState !== 'loading') put(); else document.addEventListener('DOMContentLoaded', put); }, sa);
   await pg.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
-  let sock = null, me = null;
+  let sock = null, me = null; const acts = [];
   await pg.routeWebSocket(/\/ws$/, ws => {
     const server = ws.connectToServer();
-    ws.onMessage(m => { try{ const j = JSON.parse(m); if(j.t === 'watch' || j.t === 'act') return; }catch(e){} server.send(m); });
+    ws.onMessage(m => { try{ const j = JSON.parse(m); if(j.t === 'act') acts.push(j); if(j.t === 'watch' || j.t === 'act') return; }catch(e){} server.send(m); });
     server.onMessage(m => { let j; try{ j = JSON.parse(m); }catch(e){ return ws.send(m); }
       if(j.t === 'table' || j.t === 'closed') return;
       if(j.t === 'club' && sock === 'table'){ me = j.club.me; j.club.tourney = { ...j.club.tourney, status: 'running', name: 'Friday Night', stack: 30000, anteMode: 'bb', regs: [me.id], level: 2, levelEndsAt: Date.now() + 600000, paused: false, places: [], lateOpen: false, helper: true,
@@ -333,16 +360,16 @@ async function fixturePage(browser, TOK, w, h, { sa = 0, sponsor = true, legal =
   sock = 'table'; await pg.reload();
   for(let k = 0; k < 100 && (!sock || sock === 'table'); k++) await sleep(100);
   const t = tableFor(me); if(!legal) Object.assign(t, { acting: 2, actUid: 'p2', legal: null });
-  sock.send(JSON.stringify({ t: 'table', table: { ...t, street: 1, board: ['Ts', 'Jh', 'Qc'] }, you: { hand: 3, cards: ['Ah', 'Qd'] }, field: FIELD }));
+  sock.send(JSON.stringify({ t: 'table', table: { ...t, street: 1, board: ['Ts', 'Jh', 'Qc'] }, you: { hand: 3, cards: ['Ah', 'Qd'] }, ...(field ? { field } : {}) }));
   await pg.waitForFunction(() => document.getElementById('spn').hidden, null, { timeout: 8000 }).catch(() => {});
   await sleep(900);
-  return { ctx, pg, sock, me };
+  return { ctx, pg, sock, me, acts };
 }
 const dockIn = pg => pg.evaluate(() => {
   const H = innerHeight, W = innerWidth, sa = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sa-b')) || 0;
   const els = [...document.querySelectorAll('#dock button, #dock input')].filter(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden');
   const rs = els.map(e => { const b = e.getBoundingClientRect(); return { id: e.id || e.dataset.to || e.className, l: b.left, t: b.top, r: b.right, b: b.bottom }; });
-  const row = rs.filter(r => /aFold|aCall|aRaise|szGo|szBack|b-more/.test(r.id));
+  const row = rs.filter(r => /aFold|aCall|aRaise|aSize|szGo|szBack|b-more/.test(r.id));
   return { sa, H, out: rs.filter(r => r.l < -.5 || r.t < -.5 || r.r > W + .5 || r.b > H + .5), gap: row.length ? H - Math.max(...row.map(r => r.b)) : -1, n: rs.length,
     scroll: document.documentElement.scrollWidth - W, tall: document.documentElement.scrollHeight - H };
 });
@@ -386,7 +413,7 @@ async function narrowSuite(browser, TOK){
     const [w, h] = s.split('x').map(Number), tag = `${s} ${sa ? 'Home Screen (inset ' + sa + ')' : 'Safari'}`;
     const { ctx, pg } = await fixturePage(browser, TOK, w, h, { sa });
     for(const view of ['row', 'sizing']){
-      if(view === 'sizing'){ await pg.tap('#aRaise'); await sleep(300); }
+      if(view === 'sizing'){ await pg.tap('#aSize'); await sleep(300); }
       const d = await dockIn(pg);
       check(d.n >= 4 && !d.out.length && d.scroll <= 0 && d.tall <= 0, `${tag} ${view}: every dock control whole on the screen${d.out.length ? ': ' + d.out.map(o => `${o.id} ${Math.round(o.t)}-${Math.round(o.b)}`).join(', ') : ''}`);
       check(d.gap >= sa - .5 && d.gap <= sa + 16, `${tag} ${view}: the action row ${Math.round(d.gap)} px over the screen's foot (the inset ${sa} counted once)`);
@@ -407,6 +434,94 @@ async function narrowSuite(browser, TOK){
   check(ring.act.length === 1 && ring.act[0][0] === '3px' && ring.act[0][1] === ring.gold, `the player to act: 3 px --b-gold (${ring.act.map(a => a.join(' ')).join(', ')})`);
   if(SHOTS){ const a = await pg.$('#seats .seat.b-seat.acting'); if(a) await pg.screenshot({ path: path.join(SHOTS, 'rings-390x844.png'), clip: await pg.evaluate(() => { const b = document.querySelector('#seats .seat.b-seat.acting .av').getBoundingClientRect(); return { x: Math.max(0, b.left - 120), y: Math.max(0, b.top - 60), width: 300, height: 160 }; }) }); }
   await ctx.close();
+}
+
+// ---------- short upright phones (the owner's iPhone in an in-app browser, 2026-10-23, 390x650) ----------
+// At a showdown the seat at 12 o'clock showed its cards face up and its avatar under the header card. At 390x650,
+// 375x560, 390x667 and 320x568, a 6-max table and a 9-max one, in play and at the showdown (the top seat the winner,
+// face up, its "Winner" plate): every seat's avatar, plate and cards under the header (by 1 px at least; laid out 2 px), the felt whole
+// under it. Also: the sheet with no spectator count reads "0 watching", never a dash; and with "+30s" up (the helper
+// off, so the free-play line shows), the line and the button never overlap and the line is never cut short.
+const SHORT = (process.env.SHORT_SIZES || '390x650,375x560,390x667,320x568').split(',').filter(Boolean);
+function sixFor(me, n, show){
+  const names = [me.name, 'Ana', 'Ben', 'Carla', 'Dev', 'Eli', 'Fay', 'Gus', 'Hal'];
+  const seats = Array.from({ length: n }, (_, s) => ({ uid: s ? 'p' + s : me.id, name: names[s], stack: 30000 - s * 1100, inHand: true, bet: 0, folded: false, allIn: false, act: '', lastAmt: 0, won: 0, shown: null, cat: '', away: false }));
+  const t = { tid: 'bui', n: 1, phase: 'hand', handNo: 7 + n + (show ? 1 : 0), street: 3, seats, size: n, allowed: seats.map((p, s) => s), cur: 0, board: ['Ts', 'Jh', 'Qc', '2d', '7s'], pot: 0, btn: n - 1, blinds: [100, 200, 0],
+    acting: 1, actUid: 'p1', seq: 40 + n + (show ? 1 : 0), deadline: Date.now() + 60000, bank: 60000, usingBank: false, extras: 3, legal: null, result: null, note: '' };
+  if(show){ const top = Math.floor(n / 2);
+    seats.forEach((p, s) => { if(s && s !== top){ p.shown = ['9h', '9c']; p.cat = 'Pair'; } });
+    Object.assign(seats[top], { won: 42725, stack: 42725, shown: ['As', 'Kd'], cat: 'Straight' });
+    Object.assign(t, { acting: -1, actUid: null, phase: 'result', result: { lines: ['Carla wins 12,725 with a Straight'], winCards: ['As', 'Kd', 'Ts', 'Jh', 'Qc'], showdown: true } }); }
+  return t;
+}
+async function shortSuite(browser, TOK){
+  for(const s of SHORT){
+    const [w, h] = s.split('x').map(Number);
+    const { ctx, pg, sock, me } = await fixturePage(browser, TOK, w, h, { legal: false, field: { ...FIELD, watchers: null } });
+    for(const n of [6, 9]) for(const show of [false, true]){
+      sock.send(JSON.stringify({ t: 'table', table: sixFor(me, n, show), you: { hand: 3, cards: ['Ah', 'Qd'] }, field: { ...FIELD, watchers: null } }));
+      await sleep(1600);
+      const m = await pg.evaluate(() => {
+        const hdr = Math.max(...['bTop', 'bHud', 'lobbyBtn'].map(id => document.getElementById(id)).filter(e => e && e.getClientRects().length).map(e => e.getBoundingClientRect().bottom));
+        const seats = [...document.querySelectorAll('#seats .seat.b-seat:not(.hero)')].map(q => { const els = [...q.querySelectorAll('.av, .hole .card, .plate, .badge')].filter(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden');
+          return { name: (q.getAttribute('aria-label') || '').split(',')[0], top: Math.min(...els.map(e => e.getBoundingClientRect().top)), shown: !!q.querySelector('.hole.shown') }; });
+        const felt = document.querySelector('#tableArea .felt').getBoundingClientRect();
+        return { hdr, seats, felt: felt.top, n: seats.length, shown: seats.filter(q => q.shown).length };
+      });
+      const hi = m.seats.reduce((a, b) => a.top < b.top ? a : b, { top: 1e4 });
+      const tag = `${s} ${n}-max ${show ? 'showdown' : 'in play'}`;
+      check(m.n === n - 1 && (!show || m.shown === n - 1), `${tag}: the table drawn (${m.n} seats, ${m.shown} face up)`);
+      check(hi.top >= m.hdr + 1 && m.felt >= m.hdr, `${tag}: every seat's avatar, plate and cards clear of the header (highest ${hi.name} at ${hi.top.toFixed(1)}, header to ${m.hdr.toFixed(1)})`);
+      if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `short-${s}-n${n}${show ? '-show' : ''}.png`) });
+    }
+    // the sheet, no spectator count known
+    await pg.click('#bHud'); await sleep(500);
+    const wt = await pg.evaluate(() => { const t = document.querySelector('#bHudSheet:not([hidden]) .bt-watch'); return t ? { v: t.textContent.replace(/\s+/g, ' ').trim(), label: t.getAttribute('aria-label') } : null; });
+    check(wt && /Spectators\s*0 watching/.test(wt.v) && !/[–—]/.test(wt.v) && wt.label === '0 watching', `${s}: no spectator count known: "${wt && wt.v}" (${wt && wt.label}), no dash`);
+    await pg.keyboard.press('Escape'); await sleep(200);
+    await ctx.close();
+  }
+  // the action row: Raise raises in one tap; the narrow "Choose amount" button beside it (44 px at least) opens the sizing;
+  // Fold, Call, Raise, the amount button and "⋯" in that order on one row, whole, none over "+30s", every label whole
+  for(const s of ['320x568', '390x650', '390x844', '568x320', '667x320', '800x330', '844x390']){
+    const [w, h] = s.split('x').map(Number), tag = `${s} the action row`;
+    const { ctx, pg, acts } = await fixturePage(browser, TOK, w, h);
+    const m = await pg.evaluate(() => {
+      const ids = ['aFold', 'aCall', 'aRaise', 'aSize'].map(id => document.getElementById(id)).concat(document.querySelector('#controls [data-bmore]'));
+      if(ids.some(e => !e || !e.getClientRects().length)) return { missing: ids.map(e => !!e) };
+      const rs = ids.map(e => e.getBoundingClientRect()), x = document.querySelector('#dock .xtime:not(:disabled)'), xr = x && x.getClientRects().length ? x.getBoundingClientRect() : null;
+      const clip = ids.slice(0, 3).filter(e => e.scrollWidth > e.clientWidth + 1 || [...e.children].some(c => { const a = c.getBoundingClientRect(), b = e.getBoundingClientRect(); return a.left < b.left - .5 || a.right > b.right + .5 || a.top < b.top - .5 || a.bottom > b.bottom + .5; })).map(e => e.id);
+      const sz = ids[3];
+      return { order: rs.every((r, i) => !i || r.left >= rs[i - 1].right - .5) && rs.every(r => Math.abs(r.top - rs[0].top) < 1), size: [rs[3].width, rs[3].height], label: sz.getAttribute('aria-label'), type: sz.type,
+        out: rs.some(r => r.left < -.5 || r.right > innerWidth + .5 || r.bottom > innerHeight + .5), xhit: !!xr && rs.some(r => r.right > xr.left + .5 && r.left < xr.right - .5 && r.bottom > xr.top + .5 && r.top < xr.bottom - .5), clip,
+        raise: +document.querySelector('#aRaise .num').textContent.replace(/[^\d]/g, '') };
+    });
+    check(m && m.order && !m.out && !m.xhit && !m.clip.length, `${tag}: Fold, Call, Raise, the amount button and "⋯" in order on one row, whole, clear of "+30s", every label whole${m && m.clip && m.clip.length ? ' (cut: ' + m.clip.join(', ') + ')' : ''}${m && m.missing ? ' (missing ' + m.missing + ')' : ''}`);
+    check(m && m.size && m.size[0] >= 44 && m.size[1] >= 44 && m.label === 'Choose amount', `${tag}: the amount button "${m && m.label}", ${m && m.size ? m.size.map(Math.round).join('x') : ''} (44 at least)`);
+    if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `row-${s}.png`) });
+    await pg.tap('#aSize'); await sleep(300);
+    check(await pg.evaluate(() => !!document.querySelector('#controls .b-sizing') && !!document.getElementById('szGo')), `${tag}: the amount button opens the sizing`);
+    await pg.tap('#szBack'); await sleep(250);
+    const n0 = acts.length; await pg.tap('#aRaise'); await sleep(400);
+    const a = acts.slice(n0);
+    check(a.length === 1 && a[0].a && a[0].a.t === 'raise' && a[0].a.to === m.raise && !(await pg.evaluate(() => !!document.querySelector('#controls .b-sizing'))), `${tag}: one tap on Raise sends the raise to ${m && m.raise} (${JSON.stringify(a.map(x => x.a))})`);
+    await ctx.close();
+  }
+  // "+30s" and the free-play line (the owner's game sideways, about 800x330 with the in-app browser's bars)
+  for(const [s, field] of [['800x330', FIELD], ['800x330', null], ['844x390', FIELD], ['844x390', null], ['667x320', FIELD], ['390x650', FIELD], ['390x844', FIELD], ['320x568', FIELD]]){
+    const [w, h] = s.split('x').map(Number), tag = `${s}${field ? '' : ' (no field)'} +30s`;
+    const { ctx, pg } = await fixturePage(browser, TOK, w, h, { helperOff: true, field });
+    await pg.evaluate(() => { const n = document.getElementById('playNote'); if(n && !n.hidden) n.click(); }); await sleep(300);
+    const q = await pg.evaluate(() => {
+      const x = document.querySelector('#dock .xtime'), pl = document.getElementById('playLine'); if(!x || !x.getClientRects().length || !pl || !pl.getClientRects().length) return null;
+      const rg = document.createRange(); rg.selectNodeContents(pl); const lines = [...rg.getClientRects()].filter(r => r.width), b = x.getBoundingClientRect(), p = pl.getBoundingClientRect();
+      const hit = lines.some(r => r.right > b.left + .5 && r.left < b.right - .5 && r.bottom > b.top + .5 && r.top < b.bottom - .5);
+      return { hit, cut: pl.scrollWidth > pl.clientWidth + .5 || lines.some(r => r.right > p.right + .5 || r.left < p.left - .5 || r.top < p.top - .5 || r.bottom > p.bottom + .5), text: pl.textContent, n: new Set(lines.map(r => Math.round(r.top))).size };
+    });
+    check(q && !q.hit && !q.cut && /No real money$/.test(q.text), `${tag}: the free-play line and the button never overlap, the line whole (${q ? `${q.n} line${q.n > 1 ? 's' : ''}, overlap ${q.hit}, cut ${q.cut}` : 'not shown'})`);
+    if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `xtime-${s}${field ? '' : '-nf'}.png`) });
+    await ctx.close();
+  }
 }
 
 (async () => {
@@ -481,6 +596,7 @@ async function narrowSuite(browser, TOK){
     }
   }
   await narrowSuite(browser, TOK);
+  await shortSuite(browser, TOK);
   await raiseSuite(browser);
   await browser.close();
   for(const p of ['B8 reduced motion on the sheets and seats'])

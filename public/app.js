@@ -1625,6 +1625,10 @@ function boardSizes(area, cls){
     seats.appendChild(q);
     const o = q.getBoundingClientRect(), rs = [...q.querySelectorAll('.card')].map(e => e.getBoundingClientRect());
     if(rs.length && rs[0].width) S.cards = { l: Math.min(...rs.map(r => r.left)) - o.left, r: Math.max(...rs.map(r => r.right)) - o.left, t: Math.min(...rs.map(r => r.top)) - o.top, b: Math.max(...rs.map(r => r.bottom)) - o.top };
+    // (and its two cards face up at a showdown: larger, standing higher over the avatar; how far their top reaches)
+    q.innerHTML = `<div class="hole shown">${cardHTML(cs('As'), 'show')}${cardHTML(cs('Kd'), 'show')}</div>`;
+    const ss = [...q.querySelectorAll('.card')].map(e => e.getBoundingClientRect());
+    if(ss.length && ss[0].width) S.shownT = Math.min(...ss.map(r => r.top)) - q.getBoundingClientRect().top;
     q.remove(); }
   if(area.clientWidth && S.cards) BSIZE = S;
   return S;
@@ -1650,6 +1654,14 @@ function boardGeo(n){
     // the height left over: under the table at most 14 px (your seat stays by the action bar), the rest above it
     const spare = Math.max(0, H - tp - bp - fh), below = Math.min(spare / 2, 14);
     top = tp + spare - below; left = (W - fw) / 2;
+    // (a seat along the top shows its cards face up at a showdown, larger and standing higher over its avatar than its
+    // backs: on a short phone, where the table fills the height, they rose under the header (the owner's iPhone in an
+    // in-app browser, 390x650). They may come down over the avatar as far as the backs do on the tightest table (`lift`),
+    // no further; the table starts low enough for them to stay 2 px inside the area (as the backs do), a little shorter
+    // there (and as much narrower as its proportion needs). Where there was room already nothing moves)
+    const K = S.cards || { t: -AV / 2 + 8 - 1.4 * C.cw }, SH = S.shownT != null ? S.shownT : -AV / 2 - 2.2 * C.cw;
+    const lift = Math.max(0, Math.round(2 - (tp + R / 2 + K.t))), tps = Math.ceil(2 - SH - lift - R / 2);
+    if(top < tps){ top = tps; fh = Math.min(fh, H - top - bp); if(fh < fw * C.min){ fw = Math.max(140, Math.min(fw, Math.floor(fh / C.min))); left = (W - fw) / 2; } }
   } else {
     const tp = AV / 2 + 8 - R / 2 + 2, bp = 8;
     // (a short table, under 240 px, is drawn longer, up to 2.6 times as wide as tall, so its seats keep apart: the
@@ -1701,7 +1713,9 @@ function boardGeo(n){
     let hx = beside ? sgn * (AV / 2 + gw / 2 - 6) : q.ny < -.8 ? sgn * Math.min(AV / 2 - C.cw * .1, 32 - gw / 2) : sgn * (AV / 2 - C.cw * .1 + (cy0 ? Math.min(cy0, C.cw * .9) : 0)); const gx0 = x + hx - gw / 2;
     if(gx0 < 8) hx += 8 - gx0; else if(gx0 + gw > W - 8) hx -= gx0 + gw - (W - 8);
     // (hx is where the fan's middle stands; the page is given it less the fan's own offset)
-    return { x, y, nx: q.nx, ny: q.ny, side: sgn < 0 ? 'l' : 'r', pl, pwx, sx: Math.round(sx), hx: Math.round(hx - ox), hy: cy0, core: [px, py + C.ph / 2, half, C.ph / 2],
+    // (upright, a seat along the top: its cards face up come down just enough to stay 2 px inside the area, on their own)
+    const hys = !land && !beside && q.ny < -.8 && S.shownT != null ? Math.max(0, Math.round(2 - (y + S.shownT))) : null;
+    return { x, y, nx: q.nx, ny: q.ny, side: sgn < 0 ? 'l' : 'r', pl, pwx, sx: Math.round(sx), hx: Math.round(hx - ox), hy: cy0, hys, core: [px, py + C.ph / 2, half, C.ph / 2],
       boxes: [[x, y, AV / 2, AV / 2], [px, py + (C.ph + pill) / 2, half, (C.ph + pill) / 2], [x + Math.round(hx - ox) + ox, y + cy0 + oy, gw / 2, ch / 2]] };
   };
   const seats = [null];
@@ -1869,7 +1883,7 @@ function boardSeatHTML(d, p, s, o){
   const shot = acting ? `<div class="shot"><i class="shotBar${dc ? ' dc' : ''}"></i></div>` : '';
   const at = `data-uid="${esc(p.uid)}" aria-label="${esc(label)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}`;
   if(isMe) return `<div class="${cls}" ${at}"><div class="hole">${hole}</div><div class="plate">${boardAvHTML(p.uid, p.name)}<div class="pl-txt">${nm}${st}</div>${shot}</div>${status}</div>`;
-  return `<div class="${cls}" ${at};--sx:${oq.sx || 0}px;--hx:${oq.hx || 0}px;--hy:${oq.hy || 0}px${oq.pwx ? `;--pw:${oq.pwx}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${boardAvHTML(p.uid, p.name)}${shot}`
+  return `<div class="${cls}" ${at};--sx:${oq.sx || 0}px;--hx:${oq.hx || 0}px;--hy:${oq.hy || 0}px${oq.hys != null ? `;--hys:${oq.hys}px` : ''}${oq.pwx ? `;--pw:${oq.pwx}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${boardAvHTML(p.uid, p.name)}${shot}`
     + `<i class="b-dot${dc ? ' dc' : away ? ' away' : ''}" aria-hidden="true"></i><div class="plate">${nm}${st}</div>${status}</div>`;
 }
 const pxToPct = ([x, y]) => [x / GEO.W * 100, y / GEO.H * 100];
@@ -2687,8 +2701,10 @@ function drawSizing(d, meSeat){
 }
 // ---------- the board's action row (UI_BOARD, Step-0 spec §3.5) ----------
 // Fold red, Call blue with the amount, Raise gold "Raise to N" (the sizing it would open on), and "⋯" for the rest.
-// The first tap on Raise opens the sizing (the presets over the row, the slider in it); the gold button then confirms.
+// One tap on Raise raises by the amount it shows (owner, 2026-10-23); the narrow button beside it (sliders, "Choose
+// amount") opens the sizing (the presets over the row, the slider in it), whose gold button then confirms.
 const B_MORE = '<button type="button" class="b-more" data-bmore aria-label="Table menu" aria-haspopup="dialog">⋯<i class="b-unread" aria-hidden="true"></i></button>';
+const B_SIZE = '<button type="button" class="b-szb" id="aSize" aria-label="Choose amount"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h12M4 14h12"/><circle cx="8" cy="6" r="2.2" fill="var(--b-surface)"/><circle cx="12.5" cy="14" r="2.2" fill="var(--b-surface)"/></svg></button>';
 function boardPresets(d){
   const L = d.legal, bb = L.bb || d.blinds[1];
   const round = v => v >= L.maxTo ? L.maxTo : Math.round(v / 100) * 100;
@@ -2708,11 +2724,11 @@ function boardActions(d, meSeat){
   c.innerHTML = `${turnBarHTML(d)}<div class="act-main b-acts" style="--n:${(L.canCheck ? 1 : 2) + (L.canRaise ? 1 : 0)}">
     ${L.canCheck ? '' : '<button class="act-btn fold" id="aFold"><b>Fold</b></button>'}
     <button class="act-btn call" id="aCall"><b>${L.canCheck ? 'Check' : callAll ? 'All-in' : 'Call'}</b>${L.canCheck ? '' : ` <span class="num">${fmt(L.toCall)}</span>`}</button>
-    ${L.canRaise ? `<button class="act-btn raise${word === 'All-in' ? ' allin' : ''}" id="aRaise"><b>${word}</b> <span class="num">${fmt(to)}</span></button>` : ''}${B_MORE}
+    ${L.canRaise ? `<button class="act-btn raise${word === 'All-in' ? ' allin' : ''}" id="aRaise"><b>${word === 'Raise to' ? 'Raise<span class="b-to"> to</span>' : word}</b> <span class="num">${fmt(to)}</span></button>` : ''}${L.canRaise && !allInOnly ? B_SIZE : ''}${B_MORE}
   </div>`;
   if($('aFold')) $('aFold').onclick = () => sendAction(d, { t: 'fold' });
   $('aCall').onclick = () => sendAction(d, L.canCheck ? { t: 'check' } : { t: 'call' });
-  if(L.canRaise) $('aRaise').onclick = allInOnly ? () => sendAction(d, { t: 'raise', to: L.maxTo }) : () => drawSizing(d, meSeat);
+  if(L.canRaise){ $('aRaise').onclick = () => sendAction(d, { t: 'raise', to }); if(!allInOnly) $('aSize').onclick = () => drawSizing(d, meSeat); }
   tickClock();
 }
 function boardSizing(d, meSeat){
@@ -2796,7 +2812,7 @@ if(BOARD){
   top.innerHTML = `<div class="b-top-l"></div><div class="b-hudw"><button type="button" class="b-hud" id="bHud" data-bhud aria-haspopup="dialog">
     <span class="bh-lvl"><small>Level</small><b class="num" id="bhLvl"></b></span><span class="bh-bl"><b class="num" id="bhBl"></b><small class="num" id="bhAnte"></small></span>
     <span class="bh-rk" id="bhRk"><small><span class="bh-yr">Your rank</span><span class="bh-r">Rank</span></small><b class="num" id="bhRank"></b></span><span class="bh-tm"><b class="num" id="bhTime"></b><small class="num" id="bhPl"></small></span>
-    <span class="bh-idle" id="bhIdle"></span></button></div><div class="b-top-r"></div>`;
+    <span class="bh-idle" id="bhIdle"></span><span class="bh-go" aria-hidden="true">›</span></button></div><div class="b-top-r"></div>`;
   g.prepend(top);
   top.querySelector('.b-top-l').appendChild($('chatBtn'));
   top.querySelector('.b-top-r').appendChild($('lobbyBtn'));
@@ -2836,7 +2852,7 @@ function boardTop(T, d, me, brk){
   const key = [T.level, sb, bb, an, f.players, f.total, rank, brk ? 1 : 0, $('cTime').textContent.length, $('bHud').clientWidth, $('game').dataset.bcls, $('game').classList.contains('land')].join('|');
   if(key === bTopKey) return;
   bTopKey = key;
-  $('bHud').setAttribute('aria-label', `Level ${T.level + 1}, blinds ${fmt(sb)}/${fmt(bb)}${an ? ', ante ' + fmt(an) : ''}. ${f.players} of ${f.total} players left.${rank ? ' Your rank ' + ord(rank) + '.' : ''} ${brk ? 'On a break' : 'Time left'} ${$('cTime').textContent}. Tap for the tournament.`);
+  $('bHud').setAttribute('aria-label', `Level ${T.level + 1}, blinds ${fmt(sb)}/${fmt(bb)}${an ? ', ante ' + fmt(an) : ''}. ${f.players} of ${f.total} players left.${rank ? ' Your rank ' + ord(rank) + '.' : ''} ${brk ? 'On a break' : 'Time left'} ${$('cTime').textContent}. Opens the tournament details.`);
   // (long blinds on a narrow phone: the values a size smaller, then the ante and the caption go)
   const card = $('bHud'); card.classList.remove('tight', 'tighter');
   if(card.scrollWidth > card.clientWidth + 1) card.classList.add('tight');
@@ -2849,7 +2865,8 @@ function boardTiles(f){
     + tile('lead', 'Chip leader', f.leader ? (f.meLead ? 'You' : esc(f.leader.name)) : '–', f.leader ? `<span class="num">${fmt(f.leader.stack)}</span>` : '')
     + tile('tables', 'Active tables', f.tables, '', `${f.tables} tables`)
     // (the owner's word for it, tonight: "watching"; the board calls the tile Spectators)
-    + tile('watch', 'Spectators', f.watchers == null ? '–' : f.watchers, ' <span>watching</span>', f.watchers == null ? '' : `${f.watchers} watching`) + '</div>';
+    // (a count not known, the demo table: nobody is watching it, "0 watching", never a dash)
+    + tile('watch', 'Spectators', f.watchers || 0, ' <span>watching</span>', `${f.watchers || 0} watching`) + '</div>';
 }
 function boardField(el, T){
   const d = tables.get(curTid()), me = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id);
