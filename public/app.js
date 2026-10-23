@@ -156,14 +156,14 @@ async function clubJoinScreen(){
     <div class="cj-av" aria-hidden="true">${esc(info.initials)}</div>
     <span class="cj-eyebrow">Private club on Blindrise</span>
     <h2 class="cj-title">Join the <em>${esc(clubTitle(info.name))}</em></h2>
-    <ul class="cj-perks"><li>Meet &amp; connect with people in the club</li><li>Get exclusive club events &amp; updates</li><li>Free poker nights &amp; club tournaments</li></ul>
+    <ul class="cj-perks"><li>Meet &amp; connect with people in the club</li><li>Get exclusive club events &amp; updates</li><li>Social game nights with members</li></ul>
     <form class="cj-form" id="cjForm" novalidate>
       <label class="cj-field" for="cjEmail"><span>Email</span><input id="cjEmail" type="email" inputmode="email" autocomplete="email" maxlength="254" placeholder="you@example.com"></label>
       <label class="cj-agree"><input type="checkbox" id="cjAgree"> <span>${esc(info.consent.text)}</span></label>
       <div class="err" id="cjErr" role="alert"></div>
       <button class="lux-btn" type="submit" id="cjGo">JOIN THE CLUB</button>
     </form>
-    <p class="cj-fine">Free social play · No betting · No real money</p>
+    <p class="cj-fine">Meet people · Build community · Grow your business</p>
     <p class="cj-fine">Your email goes to this club only — never shared with other clubs.</p>
     ${member}</div>`;
   $('cjMember').onclick = leaveJoin;
@@ -515,7 +515,7 @@ function startChoices(){
 function friendsHTML(){
   if(club.me.owner || !club.membersInvite) return '';
   const n = club.invitedCount || 0, mi = club.myInvite;
-  return `<div class="card-box friends-box"><span class="eyebrow">Grow the club</span><h3>Invite your poker friends</h3>
+  return `<div class="card-box friends-box"><span class="eyebrow">Grow the club</span><h3>Invite your friends</h3>
     <p>Share your own link on WhatsApp, Telegram or by text. Friends join free with their own name and PIN.${n ? ` <b>${n} ${n === 1 ? 'friend has' : 'friends have'} joined with your link.</b>` : ''}${mi ? ` Your link: ${mi.used} of ${mi.max} used.` : ''}</p>
     <div class="btn-row"><button class="btn red big" data-invite>Invite friends</button></div></div>`;
 }
@@ -709,7 +709,7 @@ function qrPoster(c){
   const q = drawQr(document.createElement('canvas'), joinUrl(c), 1000);
   g.imageSmoothingEnabled = false; g.drawImage(q, (W - 1000) / 2, 270, 1000, 1000);
   g.fillStyle = '#0b1424'; g.font = '500 38px "IBM Plex Sans", system-ui, sans-serif'; g.fillText(joinUrl(c), W / 2, 1340, W - 120);
-  g.fillStyle = '#4a5468'; g.font = '400 30px "IBM Plex Sans", system-ui, sans-serif'; g.fillText('Free social play · No betting · No real money', W / 2, 1410, W - 120);
+  g.fillStyle = '#4a5468'; g.font = '400 30px "IBM Plex Sans", system-ui, sans-serif'; g.fillText('Meet people · Build community · Grow your business', W / 2, 1410, W - 120);
   return cv;
 }
 const posterBlob = c => new Promise(res => qrPoster(c).toBlob(res, 'image/png'));
@@ -725,7 +725,7 @@ async function wireJoinQr(){
   document.querySelectorAll('.qr-leads').forEach(d => { d.open = qrLeadsOpen; d.ontoggle = () => { qrLeadsOpen = d.open; }; });
   const pick = b => club.joinQr[+(b.dataset.qshare ?? b.dataset.qdl ?? b.dataset.qprint)];
   document.querySelectorAll('[data-qshare]').forEach(b => b.onclick = async () => {
-    const c = pick(b), url = joinUrl(c), text = `Join the ${clubTitle(c.name)} on Blindrise. Free social play, no betting, no real money:`;
+    const c = pick(b), url = joinUrl(c), text = `Join the ${clubTitle(c.name)} on Blindrise — meet people, build community, grow your business:`;
     if(navigator.share){
       const file = files.get(+b.dataset.qshare);
       const withFile = file && navigator.canShare && navigator.canShare({ files: [file] });
@@ -1220,9 +1220,9 @@ function showInvite(code, group, max){
   const url = location.origin + '/join/' + code;
   const T = club.tourney, open = T && ['registering', 'running'].includes(T.status);
   const what = open ? ` for ${T.name}${T.status === 'registering' && T.startAt ? ', ' + new Date(T.startAt).toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : ''}` : '';
-  const text = `${club.me.name} invited you to the Blindrise poker club${what}. Free to play. Tap to join${group ? ' (pick your own name and PIN)' : ''}:`;
+  const text = `${club.me.name} invited you to Blindrise, a private members' club: meet people, build community, grow your business.${what ? ` Join us${what}.` : ''} It's free to join. Tap to join${group ? ' (pick your own name and PIN)' : ''}:`;
   const enc = encodeURIComponent;
-  modal(`<h2>${!club.me.owner ? 'Your invite link' : group ? 'Group invite link' : 'Invite link'}</h2><p>${!club.me.owner ? `Send it to friends who play poker, or post it in a group. Up to ${max || 10} people can join with your link for 7 days. It's free, and they pick their own name and PIN.` : group ? 'Post it in your group. Up to 100 people can join with it for 30 days, and anyone who joins is signed up for the open tournament. It stays the same link until you cancel it in Director.' : 'Send this to one friend. It works once.'}</p>
+  modal(`<h2>${!club.me.owner ? 'Your invite link' : group ? 'Group invite link' : 'Invite link'}</h2><p>${!club.me.owner ? `Send it to friends you'd like in the club, or post it in a group. Up to ${max || 10} people can join with your link for 7 days. It's free, and they pick their own name and PIN.` : group ? 'Post it in your group. Up to 100 people can join with it for 30 days, and anyone who joins is signed up for the open tournament. It stays the same link until you cancel it in Director.' : 'Send this to one friend. It works once.'}</p>
     ${navigator.share ? '<button class="btn-red" id="shareBtn" style="width:100%;margin-bottom:10px">Share invite</button>' : ''}
     <div class="share-row"><a class="btn-ghost" target="_blank" rel="noopener" href="https://wa.me/?text=${enc(text + ' ' + url)}">WhatsApp</a><a class="btn-ghost" target="_blank" rel="noopener" href="https://t.me/share/url?url=${enc(url)}&text=${enc(text)}">Telegram</a><a class="btn-ghost" href="sms:?&body=${enc(text + ' ' + url)}">Text</a></div>
     <div class="copy-row"><input id="invUrl" readonly value="${esc(url)}"><button class="btn-ghost" id="copyBtn" style="width:auto;padding:9px 12px">Copy</button></div>`, [{ label: 'Done', value: 1 }]);
