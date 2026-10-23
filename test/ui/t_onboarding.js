@@ -104,13 +104,13 @@ const homeBox = pg => pg.evaluate(async () => {
   check(b && b.card === '1', 'A: the welcome opens on Home after joining with an invite (card 1 of 3)');
   check(await A.evaluate(() => { const d = document.querySelector('#bOnb [role=dialog]'); return !!d && d.getAttribute('aria-modal') === 'true' && !!document.getElementById(d.getAttribute('aria-labelledby')); }), 'A: the welcome is a labelled modal dialog');
   const c1 = await text(A, '#bOnb .b-onb-card');
-  check(/Welcome to Blindrise/.test(c1) && /private poker club/.test(c1) && /free/.test(c1) && /no betting and no real money/.test(c1), `A: card 1 says what Blindrise is: "${c1}"`);
+  check(/Welcome to Blindrise/.test(c1) && c1.includes("Blindrise is a private members' club — a place to meet people, build real relationships, and grow your business, with social game nights to unwind together.") && c1.includes("It's free to join.") && !/poker club|betting|real money|gambl|wager|casino/i.test(c1), `A: card 1 says what Blindrise is: "${c1}"`);
   check(b && b.focus, 'A: focus is inside the welcome');
   await sleep(2200);
   check(!(await A.$('#modalRoot .modal')), 'A: the reminder question waits while the welcome is open');
   await A.click('#bOnb [data-onb=next]'); b = await welcomeBox(A);
   const c2 = await text(A, '#bOnb .b-onb-card');
-  check(b.card === '2' && /Where things are/.test(c2) && /Poker/.test(c2) && /Home/.test(c2) && /Club/.test(c2), `A: card 2 says where things are: "${c2}"`);
+  check(b.card === '2' && /Where things are/.test(c2) && await A.$$eval('#bOnb .b-onb-tabs b', l => l.map(e => e.textContent).join()) === 'Home,Poker,Exchange,Club,Profile' && c2.includes('Member businesses. Find services, exchange referrals, and get found.') && c2.includes('Your picture, your business, and your settings.'), `A: card 2 says where things are: "${c2}"`);
   await A.click('#bOnb [data-onb=next]'); b = await welcomeBox(A);
   const c3 = await text(A, '#bOnb .b-onb-card');
   check(b.card === '3' && c3.includes(tName) && /You're registered/.test(c3) && /Your invite signed you up/.test(c3), `A: card 3 names the next game and says they're registered by their invite: "${c3}"`);
@@ -133,22 +133,32 @@ const homeBox = pg => pg.evaluate(async () => {
   check(/Community Activity/.test(fd) && /The Bulletin/.test(fd), `A: Community Activity with the Bulletin's newest listings: "${fd.slice(0, 160)}"`);
   check(await A.evaluate(() => document.querySelectorAll('#lobbyBody .bz-rail').length <= 1 && !document.querySelector('#lobbyBody .b-feed .bz-vcard')), 'A: the Exchange\'s businesses show once on Home (its own section), not in Community Activity');
   let st = await text(A, '#lobbyBody .b-steps');
-  check(/First steps/.test(st) && /1 of 3 done/.test(st), `A: First steps shows, the registration already ticked: "${st}"`);
-  check(await A.evaluate(() => [...document.querySelectorAll('#lobbyBody .b-steps li')].map(l => !!l.querySelector('.b-step.done')).join()) === 'true,false,false', 'A: the ticks: registered yes, picture no, club no');
+  check(/First steps/.test(st) && /1 of 4 done/.test(st), `A: First steps shows, the registration already ticked: "${st}"`);
+  check(await A.evaluate(() => [...document.querySelectorAll('#lobbyBody .b-steps li')].map(l => !!l.querySelector('.b-step.done')).join()) === 'true,false,false,false', 'A: the ticks: registered yes, picture no, business no, invite no');
+  check(st.includes('So people know who they are playing with.') && st.includes('List it in the Exchange so members can find and refer you.') && st.includes("Bring someone you'd like in the club.") && /Register for the next game.*Add a profile picture.*Introduce your business.*Invite a friend/s.test(st), `A: the four steps, in order, with their lines: "${st}"`);
   await A.reload(); await A.waitForSelector('#lobby:not([hidden]) #lobbyBody .b-next'); await sleep(1500);
   check(!(await A.$('#bOnb')), 'A: the welcome does not come back after a reload');
   { const A2 = await page(390, 844); await A2.goto(S.base + '/'); await A2.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), await tokenOf(A)); await A2.reload();
     await A2.waitForSelector('#lobby:not([hidden]) #lobbyBody .b-next'); await sleep(1200);
     check(!(await A2.$('#bOnb')) && !!(await A2.$('#lobbyBody .b-steps')), 'A: on another device (a fresh browser) no welcome either: it is kept on the account; First steps still there'); await A2.context().close(); }
-  // the Club tab ticks "Look around your club"
-  await A.click('#lobbyBody [data-bstep=club]'); await sleep(300);
-  check(await A.evaluate(() => document.querySelector('#tabs [data-tab=club]').getAttribute('aria-selected') === 'true'), 'A: "Look around your club" opens Club');
-  await A.click('#tabs [data-tab=home]'); await sleep(300);
-  st = await text(A, '#lobbyBody .b-steps');
-  check(/2 of 3 done/.test(st), `A: back on Home, two ticked: "${st}"`);
+  // "Introduce your business" opens My business on the Exchange; a published card ticks it
+  await A.click('#lobbyBody [data-bstep=biz]'); await sleep(400);
+  check(await A.evaluate(() => document.querySelector('#tabs [data-tab=biz]').getAttribute('aria-selected') === 'true'), 'A: "Introduce your business" opens the Exchange (My business)');
+  { const tok = await tokenOf(A), call = (p, b) => fetch(S.base + '/api/' + p, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok }, body: JSON.stringify(b) }).then(r => r.json());
+    await call('bizSave', { name: 'Newcomer Studio', category: 'education', description: 'Lessons.', services: 'Lessons', area: 'Toronto', fullName: 'Newcomer A', jobTitle: 'Owner', categoryOther: '', website: '', instagram: '', email: '', phone: '' });
+    await call('bizPublish', { on: true }); }
+  await A.reload(); await A.waitForSelector('#lobby:not([hidden]) #lobbyBody .b-next');
+  st = await until(async () => { const t = await text(A, '#lobbyBody .b-steps'); return /2 of 4 done/.test(t) && t; });
+  check(!!st, `A: with a published business card, two ticked: "${st}"`);
+  // "Invite a friend": making an invite link ticks it
+  await A.click('#lobbyBody [data-bstep=invite]');
+  await A.waitForSelector('#modalRoot .modal', { timeout: 4000 }).catch(() => {});
+  await A.keyboard.press('Escape'); await sleep(300); await A.evaluate(() => { const m = document.querySelector('#modalRoot'); if(m) m.innerHTML = ''; });
+  st = await until(async () => { const t = await text(A, '#lobbyBody .b-steps'); return /3 of 4 done/.test(t) && t; });
+  check(!!st, `A: after making an invite link, three ticked: "${st}"`);
   // a picture: the last step; the card hides
   await A.click('#lobbyBody [data-bstep=pic]'); await A.waitForSelector('#modalRoot .av-grid'); await A.click('#modalRoot .av-grid [data-v="g:fox"]');
-  check(!!(await until(() => A.evaluate(() => !document.querySelector('#lobbyBody .b-steps')))), 'A: with a picture added all three are done and First steps hides');
+  check(!!(await until(() => A.evaluate(() => !document.querySelector('#lobbyBody .b-steps')))), 'A: with a picture added all four are done and First steps hides');
   await A.reload(); await A.waitForSelector('#lobby:not([hidden]) #lobbyBody .b-next'); await sleep(800);
   check(!(await A.$('#lobbyBody .b-steps')), 'A: and stays hidden after a reload');
   const aws = await sock(S.base, await tokenOf(A));
@@ -167,14 +177,14 @@ const homeBox = pg => pg.evaluate(async () => {
   bws.send({ t: 'leave' }); await until(() => B.evaluate(() => !!document.querySelector('#lobbyBody .b-next [data-bjoin]')));
   const nB = await text(B, '#lobbyBody .b-next');
   check(nB.includes(tName) && !/You're registered/.test(nB) && !!(await B.$('#lobbyBody .b-next [data-bjoin]')), `B: not registered, Next game offers Register: "${nB}"`);
-  check(/0 of 3 done/.test(await text(B, '#lobbyBody .b-steps')), 'B: First steps has nothing ticked');
+  check(/0 of 4 done/.test(await text(B, '#lobbyBody .b-steps')), 'B: First steps has nothing ticked');
   await shot(B, 'test-home-unregistered-390x844');
   await B.click('#lobbyBody .b-next [data-bjoin]');
   check(!!(await until(() => B.evaluate(() => /You're registered/.test(document.querySelector('#lobbyBody .b-next').textContent)))), 'B: Register on Home registers (the card now says "You\'re registered")');
   const remB = await reminder(B);
   check(!!remB && /You're registered for Saturday Night Open\./.test(remB), 'B: and the reminder question starts with the registered line');
   check(!/Your invite signed you up/.test(await text(B, '#lobbyBody .b-next')), 'B: registered by hand, the card does not say the invite did it');
-  check(/1 of 3 done/.test(await text(B, '#lobbyBody .b-steps')), 'B: First steps ticks the registration');
+  check(/1 of 4 done/.test(await text(B, '#lobbyBody .b-steps')), 'B: First steps ticks the registration');
   await B.click('#lobbyBody [data-bstepsx]');
   check(!(await B.$('#lobbyBody .b-steps')), 'B: Hide removes First steps');
   await B.reload(); await B.waitForSelector('#lobby:not([hidden]) #lobbyBody .b-next'); await sleep(800);

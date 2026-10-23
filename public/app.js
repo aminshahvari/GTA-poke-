@@ -522,7 +522,6 @@ function boardLobby(body, clubsOn, clubsVisible){
       bRow('data-bgo="learn" data-seg="hands"', 'hands', 'My hands', 'Review the hands you played'),
       bRow('data-bgo="learn" data-seg="lessons"', 'learn', 'Learn', 'Lessons, rules and the fair deal')]));
   } else if(tab === 'club'){
-    if(onbNew()) local.set('onbClub', 1);
     const switching = club.clubSwitching && club.clubs && club.clubs.length > 1, invite = owner || club.membersInvite;
     body.innerHTML = bHead(esc(club.club ? club.club.name : 'Club'), owner ? 'Club director' : 'Members') + bRows('Club', [
       owner ? bRow('data-bgo="director"', 'dir', 'Director', 'Run the club and its tournaments') : '',
@@ -586,12 +585,15 @@ function bNextHTML(){
     : `<button class="btn" data-bgo="poker">${run ? 'Watch' : 'See details'}</button>`;
   return `<section class="card-box b-next" aria-labelledby="bNextH"><span class="eyebrow">Next game</span><h3 id="bNextH">${esc(T.name)}</h3><p class="b-next-when">${bWhen(T)}</p>${status}<div class="btn-row">${acts}</div></section>`;
 }
-// First steps: each ticks from what the app already knows (registered, a picture, the Club tab opened on this phone)
+// First steps: each ticks from what the app already knows: registered, a picture, a published Exchange card (the Home
+// feed's own status), an invite link made or a friend joined with it (club.myInvite, club.invitedCount)
 function bSteps(){
   const T = bGame(), m = memberOf(club.me.id);
   return [{ k: 'reg', done: bMine(T), t: 'Register for the next game', sub: T ? esc(T.name) : 'No game open yet' },
-    { k: 'pic', done: !!(m && m.av), t: 'Add a profile picture', sub: 'So people know who they are playing' },
-    { k: 'club', done: !!local.get('onbClub', 0), t: 'Look around your club', sub: 'See who is in it, and invite friends' }];
+    { k: 'pic', done: !!(m && m.av), t: 'Add a profile picture', sub: 'So people know who they are playing with.' },
+    { k: 'biz', done: window.BizClub.myStatus() === 'published', t: 'Introduce your business', sub: 'List it in the Exchange so members can find and refer you.' },
+    // only where members can invite (the director can switch that off)
+    ...(club.membersInvite || club.me.owner ? [{ k: 'invite', done: !!(club.myInvite || club.invitedCount), t: 'Invite a friend', sub: "Bring someone you'd like in the club." }] : [])];
 }
 function bStepsHTML(){
   if(!onbNew()) return '';
@@ -609,7 +611,8 @@ if(BOARD) document.addEventListener('click', e => {
   const s = e.target.closest('[data-bstep]'); if(!s) return;
   const k = s.dataset.bstep, T = bGame();
   if(k === 'pic') return pickAvatar();
-  if(k === 'club') return bGo('club');
+  if(k === 'biz') return bGo('mine');
+  if(k === 'invite') return askInvite();
   if(bCanJoin(T)) return bJoin();
   bGo('poker');
 });
@@ -643,10 +646,10 @@ if(BOARD) document.addEventListener('click', e => {
   const s = e.target.closest('[data-bsponsor]'); if(s){ bFrom = 'home'; window.BizClub.openBiz(s.dataset.bsponsor); }
 });
 // the welcome: three cards over Home, skippable at any card (Skip, Escape); the last one leads to the next game
-const ONB_TABS = [['home', 'Home', "What's next for you, like your next game."], ['poker', 'Poker', 'Club games, a practice table and short lessons.'], ['club', 'Club', 'The people in your club. Invite friends from here.']];
+const ONB_TABS = [['home', 'Home', "What's next for you, like your next game."], ['poker', 'Poker', 'Club games, a practice table and short lessons.'], ['biz', 'Exchange', 'Member businesses. Find services, exchange referrals, and get found.'], ['club', 'Club', 'The people in your club. Invite friends from here.'], ['profile', 'Profile', 'Your picture, your business, and your settings.']];
 function onbCardHTML(i){
   const T = bGame(), mine = bMine(T), head = (t, n) => `<div class="b-onb-top"><span class="eyebrow">${n} of 3</span><button type="button" class="b-onb-skip" data-onb="skip">Skip</button></div><h2 id="bOnbH">${t}</h2>`;
-  if(i === 0) return head('Welcome to Blindrise', 1) + '<p>Blindrise is a private poker club for you and your friends.</p><p><b>It is free.</b> There is no betting and no real money.</p>'
+  if(i === 0) return head('Welcome to Blindrise', 1) + "<p>Blindrise is a private members' club — a place to meet people, build real relationships, and grow your business, with social game nights to unwind together.</p><p>It's free to join.</p>"
     + '<div class="b-onb-btns"><button type="button" class="btn red" data-onb="next">Next</button></div>';
   if(i === 1) return head('Where things are', 2) + `<ul class="b-onb-tabs">${ONB_TABS.map(([k, l, d]) => `<li>${bIc(k)}<span><b>${l}</b><small>${d}</small></span></li>`).join('')}</ul><p>The bar at the bottom of the screen takes you to each one.</p>`
     + '<div class="b-onb-btns"><button type="button" class="btn red" data-onb="next">Next</button></div>';
