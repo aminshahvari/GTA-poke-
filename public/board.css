@@ -63,7 +63,7 @@
   --b-av-hi:color-mix(in srgb,var(--b-text) 12%,transparent);       /* the initials disc's soft light */
   --b-gold-glow:color-mix(in srgb,var(--b-gold) 45%,transparent);   /* the glow round the player to act and the winner */
   /* B3: an avatar's ring at rest, the board's champagne gold (the board's resting rings sample a light champagne; --b-hair-gold at 30% read as no ring) */
-  --b-ring:color-mix(in srgb,color-mix(in oklab,var(--b-gold),var(--b-text) 30%) 60%,transparent);
+  --b-ring:color-mix(in oklab,var(--b-gold),var(--b-text) 22%);   /* the initials disc's ring at rest: opaque champagne gold, at least 3:1 on the felt and the ground */
   --b-btn-hi:color-mix(in srgb,var(--b-text) 18%,transparent);      /* an action button's top edge */
   --b-act-call:color-mix(in oklab,var(--b-online),var(--b-text) 45%); /* "Call" / "Check" in a name line (spec #9fe3c2) */
   --b-good:var(--b-online); --b-bad:color-mix(in oklab,var(--b-live),var(--b-text) 22%); /* the helper's chance to win */
@@ -214,7 +214,7 @@
 [data-ui="board"] #game #seats .seat.b-seat.hero .shot{left:8px;right:8px;bottom:2px;height:2px;background:var(--b-hair)}
 [data-ui="board"] #game #seats .seat.b-seat.hero .shot i{background:var(--b-gold)}
 [data-ui="board"] #game #seats .seat.b-seat.hero>.hole{position:absolute;left:0;bottom:calc(var(--hph) / 2 + 1px);top:auto;transform:translateX(-50%);margin:0;display:flex;gap:0;width:max-content;min-height:0}
-[data-ui="board"] #game #seats .seat.b-seat.hero.hside>.hole{left:calc(var(--hpw) / 2 + var(--hw) * .16 + 4px);transform:none;bottom:calc(var(--hph) / -2)}
+[data-ui="board"] #game #seats .seat.b-seat.hero.hside>.hole{left:calc(var(--hpw) / 2 + var(--hw) * .16 + 4px);transform:none;bottom:calc(var(--hph) / -2 + 14px)}
 [data-ui="board"] #game #seats .seat.b-seat.hero .card.hero{--w:var(--hw);box-shadow:0 6px 14px var(--b-shadow)}
 /* (fanned on their outer bottom corners, so no corner dips onto your plate) */
 [data-ui="board"] #game #seats .seat.b-seat.hero .card.hero:first-child{transform:rotate(-6deg);transform-origin:0 100%;margin-right:-4px}
@@ -317,7 +317,7 @@
 [data-ui="board"] #game .dock .b-sz .sz-slider{display:flex;align-items:center;gap:4px;min-width:0}
 [data-ui="board"] #game .dock .b-sz .sz-slider .step{width:44px;height:44px;flex:none;border-radius:50%;background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);font-size:20px}
 [data-ui="board"] #game .dock .b-sz .sz-slider .step::after{display:none}
-[data-ui="board"] #game .dock .b-sz .sz-slider input{flex:1;min-width:0;width:100%;height:44px;background:transparent;accent-color:var(--b-gold);font-size:16px}
+[data-ui="board"] #game .dock .b-sz .sz-slider input{flex:1;min-width:0;width:100%;height:44px;background:transparent;accent-color:var(--b-gold);font-size:16px;margin:0}
 /* no double-tap zoom at the table (the owner's iPhone, 2026-10-22: quick taps on − / + and the presets zoomed iPhone
    Safari in to about 1.6x, the action row off the screen): taps are taps, pinch zoom and scrolling stay */
 [data-ui="board"] #game,[data-ui="board"] #game :is(.dock,#controls,.sizing,.sz-presets,.sz-slider,.b-acts,.b-sheet,.b-sheet-in,button,input,a,[role=button]){touch-action:manipulation}
@@ -351,10 +351,10 @@
 [data-ui="board"] #game.land .dock .controls{margin:6px 0 0 auto;width:min(520px,58%)}
 [data-ui="board"] #game.land .dock .b-acts{height:var(--bd-land-row)}
 [data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine,#playNote){top:6px;right:auto;width:calc(42% - 24px);left:12px}
-[data-ui="board"] #game.land .dock #helper.b-info{height:var(--bd-land-row);justify-content:flex-start;text-align:left;font-size:12px;line-height:14px}
-[data-ui="board"] #game.land .dock .info-line{height:calc(var(--bd-land-row) - 15px);justify-content:flex-start;text-align:left;font-size:12px}
-[data-ui="board"] #game.land .dock #playLine{top:calc(6px + var(--bd-land-row) - 15px);text-align:left}
-[data-ui="board"] #game.land .dock #playNote{height:var(--bd-land-row);justify-content:flex-start;text-align:left;font-size:12px;line-height:14px}
+[data-ui="board"] #game.land .dock #helper.b-info{height:var(--bd-land-row);justify-content:center;text-align:center;font-size:12px;line-height:14px}
+[data-ui="board"] #game.land .dock .info-line{height:calc(var(--bd-land-row) - 15px);justify-content:center;text-align:center;font-size:12px}
+[data-ui="board"] #game.land .dock #playLine{top:calc(6px + var(--bd-land-row) - 15px);text-align:center}
+[data-ui="board"] #game.land .dock #playNote{height:var(--bd-land-row);justify-content:center;text-align:center;font-size:12px;line-height:14px}
 [data-ui="board"] #game.land .dock .act-btn{flex-direction:row;gap:5px}
 [data-ui="board"] #game.land .dock .act-btn b,[data-ui="board"] #game.land .dock .act-btn span{font-size:var(--b-t-15)}
 /* (sideways the time row is the dock's own: "+30s" left of the buttons, the time bar over them; the buttons are
@@ -395,7 +395,7 @@
    beside the table (owner): the four tiles, the sponsor, then the info line and the action row at its foot.
    ====================================================================================================================== */
 [data-ui="board"] #game>.clock,[data-ui="board"] #game>.stats{display:none}
-[data-ui="board"] #game:not(.b-col)>#fieldBar{display:none}
+[data-ui="board"] #game:not(.b-col):not(.b-ncol)>#fieldBar{display:none}
 [data-ui="board"] #game .b-top{flex:none;position:relative;z-index:30;display:flex;align-items:center;gap:8px;padding:8px 12px}
 [data-ui="board"] #game:not(.land) .b-top-l{display:none}
 [data-ui="board"] #game .b-top-l,[data-ui="board"] #game .b-top-r{flex:none;display:flex;align-items:center}
@@ -455,9 +455,9 @@
 /* (35 px in all, the room today's sideways header and its hairline take, so the table keeps B2's room to the pixel:
    §3.1's L budget says 36 + 4, which took 7 px from the felt; the hit area of the pill reaches 44 px tall) */
 [data-ui="board"] #game.land .b-top{padding:2px 12px 3px}
-[data-ui="board"] #game.land .b-top-l,[data-ui="board"] #game.land .b-top-r{flex:1 1 0;min-width:44px}
+[data-ui="board"] #game.land .b-top-l,[data-ui="board"] #game.land .b-top-r{flex:1 1 0;min-width:max-content}
 [data-ui="board"] #game.land .b-top-r{justify-content:flex-end}
-[data-ui="board"] #game.land .b-hudw{flex:0 1 auto}
+[data-ui="board"] #game.land .b-hudw{flex:0 1 auto;min-width:0}
 [data-ui="board"] #game.land .b-hud{height:30px;border-radius:var(--b-r-pill);gap:0;padding:0 16px;box-shadow:none;overflow:visible;position:relative}
 [data-ui="board"] #game.land .b-hud::after{content:"";position:absolute;left:0;right:0;top:-7px;bottom:-7px}
 [data-ui="board"] #game.land .b-hud>span{flex-direction:row;align-items:baseline;gap:5px}
@@ -471,7 +471,7 @@
 [data-ui="board"] #game.land .b-hud .bh-rk{order:4}
 [data-ui="board"] #game.land .b-hud #bhTime{order:5;color:var(--b-gold)}
 [data-ui="board"] #game.land .b-hud :is(.bh-bl,#bhPl,.bh-rk,#bhTime)::before{content:'·';margin:0 8px;color:var(--b-text-3);font-weight:400}
-[data-ui="board"] #game.land .b-hud.tight .bh-rk small,[data-ui="board"] #game.land .b-hud.tighter .bh-lvl small{display:none}
+[data-ui="board"] #game.land .b-hud.tight .bh-rk small,[data-ui="board"] #game.land .b-hud.tighter .bh-lvl small,[data-ui="board"] #game.land .b-hud.tighter .bh-plw{display:none}
 [data-ui="board"] #game.land .b-hud.tight b{font-size:var(--b-t-14)}
 [data-ui="board"] #game.land .b-hud.tight small{font-size:12px}
 [data-ui="board"] #game.land .b-top #lobbyBtn{min-height:30px;height:30px;padding:0 14px;font-size:var(--b-t-14)}
@@ -547,8 +547,9 @@
 [data-ui="board"] #game.land.b-col .side-prize small{color:var(--b-text-2)}
 [data-ui="board"] #game.land.b-col .side-prize b{color:var(--b-gold-text)}
 /* (the dock at the column's foot: the info line over the action row, as upright, the row reaching the screen's bottom) */
-[data-ui="board"] #game.land.b-col>.dock{grid-column:2;grid-row:4;align-self:end;padding:0;margin:0 8px 0 4px;height:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap) + var(--bd-row) + var(--bd-pad) + var(--sa-b))}
-[data-ui="board"] #game.land.b-col .dock .controls{margin:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap)) 0 0;width:auto;padding:0 0 calc(var(--bd-pad) + var(--sa-b))}
+[data-ui="board"] #game.land.b-col>.dock{grid-column:2;grid-row:4;align-self:end;padding:0;margin:0 8px 0 4px;height:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap) + var(--bd-row) + var(--bd-pad))}
+[data-ui="board"] #game.land.b-col .dock .controls{margin:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap)) 0 0;width:auto;padding:0 0 var(--bd-pad)}
+/* (the home-screen inset is the screen's own padding sideways, #game.land: counted once, not again in the dock; Issue #19's class) */
 [data-ui="board"] #game.land.b-col .dock :is(#helper,.info-line,#playLine,#playNote),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote),[data-ui="board"] #game.land.b-col .dock .sizing.b-sizing{left:0;right:0;width:auto;top:var(--bd-pad)}
 [data-ui="board"] #game.land.b-col .dock #helper.b-info{height:var(--bd-band);justify-content:center;text-align:center}
 [data-ui="board"] #game.land.b-col .dock .info-line{height:calc(var(--bd-band) - 15px);text-align:center}
@@ -571,3 +572,34 @@
   [data-ui="board"] #game .dock .act-btn:active{transform:none}
   [data-ui="board"] #game .b-hud,[data-ui="board"] #game .b-hud:active{transition:none;transform:none}
 }
+
+/* ---------- sideways under 740 wide during a tournament (the owner's iPhone with Safari's bars, 667-700 x 307-330):
+   a narrow column right of the table, the four tiles compact over the sponsor (logo or initials, "Presented by", the
+   name); the action row stays full width under the table and the column, as on any sideways phone. With no sponsor and
+   no prize the column holds the tiles only. (owner's ruling, 2026-10-23) ---------- */
+[data-ui="board"] #game.land.b-ncol{display:grid;--b-ncolw:clamp(148px,26vw,184px);grid-template-columns:minmax(0,1fr) var(--b-ncolw);grid-template-rows:auto auto minmax(0,1fr) auto}
+[data-ui="board"] #game.land.b-ncol>.b-top{grid-column:1/-1;grid-row:1;min-width:0}
+[data-ui="board"] #game.land.b-ncol>.table-area{grid-column:1;grid-row:2/4;min-height:0}
+[data-ui="board"] #game.land.b-ncol>.dock{grid-column:1/-1;grid-row:4}
+[data-ui="board"] #game.land.b-ncol>#fieldBar{grid-column:2;grid-row:2;display:block;margin:0 8px 0 0;padding:0;border:0;border-radius:0;background:none!important;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;min-width:0}
+[data-ui="board"] #game.land.b-ncol .b-tiles{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-flow:row dense;gap:4px}
+[data-ui="board"] #game.land.b-ncol .b-tile{padding:3px 7px;gap:0;border-radius:10px}
+[data-ui="board"] #game.land.b-ncol .b-tile small{font-size:10px;line-height:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+[data-ui="board"] #game.land.b-ncol .b-tile b{font-size:13px;line-height:16px}
+[data-ui="board"] #game.land.b-ncol .b-tile span{font-size:12px;line-height:16px}
+[data-ui="board"] #game.land.b-ncol .b-tile.bt-lead{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,auto) auto;column-gap:6px;align-items:baseline;justify-content:start}
+[data-ui="board"] #game.land.b-ncol .b-tile.bt-lead small{grid-column:1/-1}
+[data-ui="board"] #game.land.b-ncol .b-tile.bt-watch>span{display:none}
+[data-ui="board"] #game.land.b-ncol>.side:not([hidden]){grid-column:2;grid-row:3;margin:6px 8px 0 0;min-width:0}
+[data-ui="board"] #game.land.b-ncol .side .sp-card{gap:8px;padding:6px 8px;background:var(--b-surface);border:1px solid var(--b-hair-gold);border-radius:var(--b-r-plate);box-shadow:none}
+[data-ui="board"] #game.land.b-ncol .side .sp-logo .bz-logo.sp{width:32px;height:32px;border-radius:8px;font-size:12px}
+[data-ui="board"] #game.land.b-ncol .side .sp-txt{min-width:0}
+[data-ui="board"] #game.land.b-ncol .side .sp-txt small{font-size:9px;letter-spacing:.08em;color:var(--b-gold-text)}
+[data-ui="board"] #game.land.b-ncol .side .sp-txt b{font-family:var(--b-font);font-size:13px;line-height:1.2;color:var(--b-text);white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+[data-ui="board"] #game.land.b-ncol .side .sp-txt small.sp-cat,[data-ui="board"] #game.land.b-ncol .side .sp-more{display:none}
+[data-ui="board"] #game.land.b-ncol .side .sp-txt small.sp-prize{font-size:11px;letter-spacing:0;-webkit-line-clamp:2;margin-top:2px;padding-top:2px;border-top-color:var(--b-hair)}
+[data-ui="board"] #game.land.b-ncol .side.s2 .sp-txt>small:first-child{display:block}
+[data-ui="board"] #game.land.b-ncol .side.s2 .sp-txt small.sp-prize{display:none}
+[data-ui="board"] #game.land.b-ncol .side-prize{padding:5px 8px;border:1px solid var(--b-hair-gold);background:var(--b-gold-fill);border-radius:var(--b-r-plate)}
+[data-ui="board"] #game.land.b-ncol .side-prize small{color:var(--b-text-2)}
+[data-ui="board"] #game.land.b-ncol .side-prize b{font-size:12px;color:var(--b-gold-text)}

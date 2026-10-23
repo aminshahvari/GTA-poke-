@@ -337,7 +337,7 @@ let hudRO = null;
 let sideKey = '';
 function sideUI(){
   const el = $('sidePanel'), T = club && club.tourney, run = T && T.status === 'running', sp = run && T.sponsor, prize = run && T.prize;
-  el.hidden = !$('game').classList.contains('land') || (BOARD && !$('game').classList.contains('b-col')) || !(sp || prize);
+  el.hidden = !$('game').classList.contains('land') || (BOARD && !$('game').classList.contains('b-col') && !$('game').classList.contains('b-ncol')) || !(sp || prize);
   if(el.hidden){ if(sideKey){ sideKey = ''; el.innerHTML = ''; } return; }
   const key = [T.id, sp && sp.uid, sp && sp.name, sp && sp.logoV, prize, sponsorTap()].join('|');
   if(key !== sideKey){
@@ -1566,7 +1566,7 @@ const BCLS = {
   'P-L': { width: .86, max: 1.58, min: 1.50, av: 40, pw: 88, ph: 40, cw: 18, hw: .15, bw: .125, band: 12, hph: 40 },
   'P-M': { width: .86, max: 1.58, min: 1.30, av: 36, pw: 86, ph: 40, cw: 16, hw: .14, bw: .12, band: 12, hph: 38 },
   'P-S': { width: .90, max: 1.58, min: 1.25, av: 32, pw: 84, ph: 37, cw: 15, hw: .13, bw: .115, band: 10, hph: 34 },
-  'L':   { wh: 1.98, maxW: .70, av: 36, pw: 88, ph: 37, cw: 16, hw: .062, bw: .056, band: 12, hph: 36 } };
+  'L':   { wh: 1.98, maxW: .70, av: 36, pw: 88, ph: 37, cw: 16, hw: .054, bw: .056, band: 12, hph: 36 } };
 // The seats' spacing (§3.2): equal arc length round the middle of the rail, the long sides counted at BARC of their
 // length (the board's ring is rounder than the felt), and your own place BGAP seats wide. These two numbers put a full
 // table of 9 within ±2% of the spec's 9-max slot table (t_board_layout checks ±4%) at every upright size class.
@@ -1719,11 +1719,12 @@ function boardGeo(n){
     row.forEach(k => { seats[k] = seatAt(qs[k], k - 1, d); });
   }
   // your seat: your cards over the bottom rail, your plate under the rail (upright) or on it (sideways), in the middle
-  const hw = Math.round(Math.max(30, Math.min(64, vw * C.hw, land ? fh * .2 : 64))), hh = Math.round(hw * 1.4), hpw = Math.max(104, Math.min(120, hw * 2 + 8));
+  // (sideways a size smaller, at most 0.17 of the felt's height: the owner's iPhone, 2026-10-23, the two cards large over the rail)
+  const hw = Math.round(Math.max(30, Math.min(64, vw * C.hw, land ? fh * .17 : 64))), hh = Math.round(hw * 1.4), hpw = Math.max(104, Math.min(120, hw * 2 + 8));
   // (on a short sideways table, under 240 px, your cards stand beside your plate, right of it, so the middle keeps room
   // for the pot, the board and the winner line)
   const hside = short, hpTop = top + fh - heroOver;
-  const hgap = Math.round(hw * .16 + 4), hpx = hside ? Math.round(cx - (hpw + hgap + 2 * hw) / 2 + hpw / 2) : cx, hcx = hside ? hpx + hpw / 2 + hgap + hw : cx, hcBot = hside ? hpTop + heroPh : hpTop - 1;
+  const hgap = Math.round(hw * .16 + 4), hpx = hside ? Math.round(cx - (hpw + hgap + 2 * hw) / 2 + hpw / 2) : cx, hcx = hside ? hpx + hpw / 2 + hgap + hw : cx, hcBot = hside ? hpTop + heroPh - R - 2 : hpTop - 1;
   seats[0] = { x: hpx, y: hpTop + heroPh / 2, nx: 0, ny: 1, hero: true, hw, hpw, hside,
     boxes: [[hcx, hcBot - hh / 2 - hw * .05, hw + 4, hh / 2 + hw * .05], [hpx, hpTop + heroPh / 2, hpw / 2, heroPh / 2]] };
   // ---- the middle (§3.4): the pot over the board, the winner line under it; and the chips and the dealer button
@@ -2802,9 +2803,13 @@ if(BOARD){
 // sideways, wide enough, a tournament running with its field: the column beside the table (owner's sponsor panel)
 function boardCol(){
   const g = $('game'), T = club && club.tourney;
-  const on = g.classList.contains('land') && scr().w >= 740 && !!field && !!T && T.status === 'running';
-  if(g.classList.contains('b-col') !== on){
-    g.classList.toggle('b-col', on); LOCK = null; GEO = null;
+  const run = g.classList.contains('land') && !!field && !!T && T.status === 'running', on = run && scr().w >= 740;
+  // (narrower sideways phones, under 740 wide, the iPhone with Safari's bars: a narrow column, the sponsor and the four
+  // tiles compact, the action row staying full width under the table and the column; owner's ruling, 2026-10-23)
+  // (under 600 wide, the iPhone SE sideways, the table needs the whole width for its nine seats: no column there)
+  const nar = run && !on && scr().w >= 600;
+  if(g.classList.contains('b-col') !== on || g.classList.contains('b-ncol') !== nar){
+    g.classList.toggle('b-col', on); g.classList.toggle('b-ncol', nar); LOCK = null; GEO = null;
     // (decided after the table was laid out: lay it out again for the room it has now)
     requestAnimationFrame(() => { if(view === 'table') renderTable(); });
   }

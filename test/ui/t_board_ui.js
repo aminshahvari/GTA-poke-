@@ -132,7 +132,8 @@ async function b3(pg, tag, sock, me, w, h){
       area: r(document.getElementById('tableArea')), ctl: r(document.getElementById('controls')), W: innerWidth, H: innerHeight, col: document.getElementById('game').classList.contains('b-col'), row1: document.getElementById('game').classList.contains('row1'),
       time: (e => e && getComputedStyle(e).color)(document.getElementById('bhTime')), gold: getComputedStyle(document.documentElement).getPropertyValue('--b-gold').trim(),
       sponsorWords: /Aurora Test Roasters/.test(words), seats: [...document.querySelectorAll('#seats .seat.b-seat:not(.hero) .plate, #seats .seat.b-seat:not(.hero) .av')].map(r).filter(Boolean),
-      ring: [...document.querySelectorAll('#seats .seat.b-seat:not(.hero):not(.acting) .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, getComputedStyle(a).borderTopColor]),
+      // (as sRGB: the ring is an oklab mix, which the browser reports as oklab())
+      ring: [...document.querySelectorAll('#seats .seat.b-seat:not(.hero):not(.acting) .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, (c => { const x = document.createElement('canvas').getContext('2d'); x.fillStyle = c; x.fillRect(0, 0, 1, 1); const d = x.getImageData(0, 0, 1, 1).data; return `rgba(${d[0]}, ${d[1]}, ${d[2]}, ${d[3] / 255})`; })(getComputedStyle(a).borderTopColor)]),
       ringAct: [...document.querySelectorAll('#seats .seat.b-seat.acting .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, getComputedStyle(a).borderTopColor]) };
   });
   check(m.top && m.card && m.inTop && m.popup === 'dialog' && !m.oldHdr, `${tag} B3: the header is the board's: ${land ? 'one pill' : 'one card'} that opens the tournament sheet, the Lobby pill in the same row; today's clock and stats rows are not drawn`);
@@ -300,6 +301,114 @@ async function raiseSuite(browser){
   bots.forEach(b => b.ws.close());
 }
 
+// ---------- sideways under 740 wide (the owner's iPhone, 2026-10-23): the narrow column, your cards, the info line,
+// the dock with the home-screen inset, the gold rings ----------
+// A fixture table (fake data) with the sponsor: at 667x320 and 700x330 the narrow column right of the table holds the
+// four tiles and the sponsor ("Presented by", the name, the logo or initials); at 568x320 no column (the nine seats need
+// the width). Your two cards smaller and inside the rail. The info line centred. Every dock control whole on the screen,
+// in Safari (no inset) and from the Home Screen (the bottom inset 21 px sideways, 34 px upright), the action row and the
+// sizing; the inset counted once (the row no more than the inset and the dock's own 6-12 px above the screen's foot).
+// The initials' ring at rest an opaque gold 2 px, at least 3:1 on the felt and the ground; the player to act 3 px --b-gold.
+const NCOL = (process.env.NCOL_SIZES || '667x320,700x330,568x320').split(',').filter(Boolean);
+const INSETS = [['844x390', 21], ['667x320', 21], ['700x330', 21], ['390x844', 34], ['667x320', 0], ['390x844', 0]];
+async function fixturePage(browser, TOK, w, h, { sa = 0, sponsor = true, legal = true } = {}){
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: IPHONE_UA });
+  const pg = await ctx.newPage();
+  // (Chromium can't emulate the home-screen inset: the page's --sa-b, env(safe-area-inset-bottom) by default, is set)
+  if(sa) await pg.addInitScript(b => { const put = () => { const st = document.createElement('style'); st.textContent = `:root{--sa-b:${b}px}`; document.body.appendChild(st); };
+    if(document.readyState !== 'loading') put(); else document.addEventListener('DOMContentLoaded', put); }, sa);
+  await pg.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
+  let sock = null, me = null;
+  await pg.routeWebSocket(/\/ws$/, ws => {
+    const server = ws.connectToServer();
+    ws.onMessage(m => { try{ const j = JSON.parse(m); if(j.t === 'watch' || j.t === 'act') return; }catch(e){} server.send(m); });
+    server.onMessage(m => { let j; try{ j = JSON.parse(m); }catch(e){ return ws.send(m); }
+      if(j.t === 'table' || j.t === 'closed') return;
+      if(j.t === 'club' && sock === 'table'){ me = j.club.me; j.club.tourney = { ...j.club.tourney, status: 'running', name: 'Friday Night', stack: 30000, anteMode: 'bb', regs: [me.id], level: 2, levelEndsAt: Date.now() + 600000, paused: false, places: [], lateOpen: false, helper: true,
+          id: 'tnc', entrants: 48, remaining: 32, ...(sponsor ? { sponsor: { uid: 'u00000000005a', name: 'Aurora Test Roasters', categoryLabel: 'Food & drink', area: 'Toronto', logoV: null }, sponsorSec: 1, prize: 'Coffee for a month' } : {}) };
+        j.club.myTable = 'bui'; j.club.tables = [{ tid: 'bui', n: 1, players: 9 }]; sock = ws; }
+      ws.send(JSON.stringify(j)); });
+  });
+  await pg.goto(BASE + '/'); await pg.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), TOK);
+  sock = 'table'; await pg.reload();
+  for(let k = 0; k < 100 && (!sock || sock === 'table'); k++) await sleep(100);
+  const t = tableFor(me); if(!legal) Object.assign(t, { acting: 2, actUid: 'p2', legal: null });
+  sock.send(JSON.stringify({ t: 'table', table: { ...t, street: 1, board: ['Ts', 'Jh', 'Qc'] }, you: { hand: 3, cards: ['Ah', 'Qd'] }, field: FIELD }));
+  await pg.waitForFunction(() => document.getElementById('spn').hidden, null, { timeout: 8000 }).catch(() => {});
+  await sleep(900);
+  return { ctx, pg, sock, me };
+}
+const dockIn = pg => pg.evaluate(() => {
+  const H = innerHeight, W = innerWidth, sa = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sa-b')) || 0;
+  const els = [...document.querySelectorAll('#dock button, #dock input')].filter(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden');
+  const rs = els.map(e => { const b = e.getBoundingClientRect(); return { id: e.id || e.dataset.to || e.className, l: b.left, t: b.top, r: b.right, b: b.bottom }; });
+  const row = rs.filter(r => /aFold|aCall|aRaise|szGo|szBack|b-more/.test(r.id));
+  return { sa, H, out: rs.filter(r => r.l < -.5 || r.t < -.5 || r.r > W + .5 || r.b > H + .5), gap: row.length ? H - Math.max(...row.map(r => r.b)) : -1, n: rs.length,
+    scroll: document.documentElement.scrollWidth - W, tall: document.documentElement.scrollHeight - H };
+});
+const RGB = `window.RGB = c => { const x = document.createElement('canvas').getContext('2d'); x.fillStyle = '#000'; x.fillStyle = c; x.fillRect(0, 0, 1, 1); const d = x.getImageData(0, 0, 1, 1).data; return 'rgb(' + d[0] + ', ' + d[1] + ', ' + d[2] + ')'; };`;
+async function narrowSuite(browser, TOK){
+  for(const s of NCOL){
+    const [w, h] = s.split('x').map(Number), tag = `${s} narrow sideways`, want = w >= 600 && w < 740;
+    for(const sponsor of [true, false]){
+      const { ctx, pg } = await fixturePage(browser, TOK, w, h, { sponsor });
+      const m = await pg.evaluate(() => {
+        const r = e => { if(!e || !e.getClientRects().length || e.hidden) return null; const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+        const g = document.getElementById('game'), W = innerWidth, side = document.getElementById('sidePanel');
+        const past = [...document.querySelectorAll('#game *')].filter(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden').map(e => [e, e.getBoundingClientRect()])
+          .filter(([e, b]) => b.width && (b.right > W + 1 || b.left < -1)).map(([e]) => e.id || e.className).slice(0, 4);
+        const felt = r(document.querySelector('#tableArea .felt')), cards = [...document.querySelectorAll('#seats .seat.hero .card.hero')].map(e => r(e) && { ...r(e), ow: e.offsetWidth }).filter(Boolean);
+        const info = document.querySelector('#dock #helper:not([hidden]), #dock #playNote:not([hidden]), #dock .info-line');
+        return { ncol: g.classList.contains('b-ncol'), col: g.classList.contains('b-col'), area: r(document.getElementById('tableArea')), field: r(document.getElementById('fieldBar')), side: r(side),
+          sideText: side.hidden ? '' : side.textContent, logo: !!side.querySelector('[data-splogo] *'), tiles: [...document.querySelectorAll('#fieldBar .b-tile small')].map(e => e.textContent),
+          past, W, H: innerHeight, dock: r(document.getElementById('dock')), felt, cards, info: info ? [getComputedStyle(info).textAlign, info.id || info.className] : null,
+          seats: [...document.querySelectorAll('#seats .seat.b-seat .plate, #seats .seat.b-seat .av')].map(r).filter(Boolean) };
+      });
+      const st = sponsor ? '' : ' (no sponsor)';
+      if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `ncol-${s}${sponsor ? '' : '-nosp'}.png`) });
+      check(m.ncol === want && !m.col, `${tag}${st}: ${want ? 'the narrow column beside the table' : 'no column (under 600 wide, the nine seats keep the width)'} (b-ncol ${m.ncol})`);
+      if(want){
+        check(m.field && m.field.l >= m.area.r - 1 && m.field.r <= m.W + 1 && m.field.b <= m.dock.t + 1 && m.tiles.join('|') === 'Avg stack|Chip leader|Active tables|Spectators', `${tag}${st}: the four tiles in the column, right of the table, over the dock (${m.tiles.join(', ')})`);
+        if(sponsor) check(m.side && m.side.l >= m.area.r - 1 && m.side.r <= m.W + 1 && m.side.t >= m.field.b - 1 && m.side.b <= m.dock.t + 1 && /Presented by/i.test(m.sideText) && /Aurora Test Roasters/.test(m.sideText) && m.logo,
+          `${tag}: the sponsor in the column during play: the logo or initials, "Presented by", the name (${JSON.stringify(m.side)})`);
+        else check(!m.side, `${tag}${st}: no sponsor and no prize: the column holds the tiles only`);
+        check(m.seats.every(q => q.r <= m.area.r + 1 && q.l >= -1), `${tag}${st}: every seat stays left of the column`);
+        check(m.dock && Math.abs(m.dock.l) <= 1 && Math.abs(m.dock.r - m.W) <= 1, `${tag}${st}: the action row full width under the table and the column`);
+      }
+      check(!m.past.length, `${tag}${st}: nothing past the screen's edge${m.past.length ? ': ' + m.past.join(', ') : ''}`);
+      check(m.cards.length === 2 && m.felt && m.cards.every(c => c.b <= m.felt.b - 10 && c.ow <= m.felt.h * .17 + 2), `${tag}${st}: your two cards inside the rail, at most 0.17 of the felt's height wide (${m.cards.map(c => c.ow + 'x' + Math.round(c.h) + ' to ' + Math.round(c.b)).join(', ')}; felt ${m.felt && Math.round(m.felt.h)} to ${m.felt && Math.round(m.felt.b)})`);
+      check(m.info && m.info[0] === 'center', `${tag}${st}: the info line centred (${m.info && m.info.join(' ')})`);
+      await ctx.close();
+    }
+  }
+  // the dock with the home-screen inset and without, the action row and the sizing
+  for(const [s, sa] of INSETS){
+    const [w, h] = s.split('x').map(Number), tag = `${s} ${sa ? 'Home Screen (inset ' + sa + ')' : 'Safari'}`;
+    const { ctx, pg } = await fixturePage(browser, TOK, w, h, { sa });
+    for(const view of ['row', 'sizing']){
+      if(view === 'sizing'){ await pg.tap('#aRaise'); await sleep(300); }
+      const d = await dockIn(pg);
+      check(d.n >= 4 && !d.out.length && d.scroll <= 0 && d.tall <= 0, `${tag} ${view}: every dock control whole on the screen${d.out.length ? ': ' + d.out.map(o => `${o.id} ${Math.round(o.t)}-${Math.round(o.b)}`).join(', ') : ''}`);
+      check(d.gap >= sa - .5 && d.gap <= sa + 16, `${tag} ${view}: the action row ${Math.round(d.gap)} px over the screen's foot (the inset ${sa} counted once)`);
+      if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `dock-${s}-sa${sa}-${view}.png`) });
+    }
+    await ctx.close();
+  }
+  // the gold rings
+  const { ctx, pg, sock, me } = await fixturePage(browser, TOK, 390, 844, { legal: false });
+  const ring = await pg.evaluate(src => { eval(src);
+    const cs = getComputedStyle(document.documentElement), v = k => RGB(cs.getPropertyValue(k).trim());
+    const rest = [...document.querySelectorAll('#seats .seat.b-seat:not(.acting) .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, getComputedStyle(a).borderTopColor]);
+    const act = [...document.querySelectorAll('#seats .seat.b-seat.acting .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, RGB(getComputedStyle(a).borderTopColor)]);
+    const c = rest[0] && RGB(rest[0][1]), grounds = { felt: v('--b-felt'), 'felt edge': v('--b-felt-edge'), 'felt light': v('--b-felt-hi'), ground: v('--b-bg'), rail: v('--b-surface') };
+    return { rest, act, alpha: rest[0] ? (/\/\s*[\d.]+%?\s*\)$/.test(rest[0][1]) || /^rgba\(/.test(rest[0][1]) ? 0 : 1) : 0, raw: rest[0] && rest[0][1], ratios: Object.fromEntries(Object.entries(grounds).map(([k, g]) => [k, c ? +R(c, g).toFixed(2) : 0])), gold: v('--b-gold') }; }, CONTRAST + RGB);
+  check(ring.rest.length && ring.rest.every(([bw, c]) => bw === '2px' && c === ring.rest[0][1]) && ring.alpha === 1, `the initials' ring at rest: 2 px, opaque (${ring.raw})`);
+  check(Object.values(ring.ratios).every(x => x >= 3), `the ring at rest at least 3:1 on the felt and the ground (${Object.entries(ring.ratios).map(([k, x]) => k + ' ' + x).join(', ')})`);
+  check(ring.act.length === 1 && ring.act[0][0] === '3px' && ring.act[0][1] === ring.gold, `the player to act: 3 px --b-gold (${ring.act.map(a => a.join(' ')).join(', ')})`);
+  if(SHOTS){ const a = await pg.$('#seats .seat.b-seat.acting'); if(a) await pg.screenshot({ path: path.join(SHOTS, 'rings-390x844.png'), clip: await pg.evaluate(() => { const b = document.querySelector('#seats .seat.b-seat.acting .av').getBoundingClientRect(); return { x: Math.max(0, b.left - 120), y: Math.max(0, b.top - 60), width: 300, height: 160 }; }) }); }
+  await ctx.close();
+}
+
 (async () => {
   for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
   await sleep(400);
@@ -371,6 +480,7 @@ async function raiseSuite(browser){
       await ctx.close();
     }
   }
+  await narrowSuite(browser, TOK);
   await raiseSuite(browser);
   await browser.close();
   for(const p of ['B8 reduced motion on the sheets and seats'])
