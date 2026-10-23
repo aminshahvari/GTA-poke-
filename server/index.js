@@ -99,6 +99,7 @@ const acctKey = (path, data) => path === '/api/login' || path === '/api/redeem' 
 // Owner recovery (setup code): 5 wrong codes lock only the address they came from, so a stranger cannot lock the real
 // owner out. A club-wide cap of 60 wrong codes per 10 minutes stops guessing spread over many addresses.
 // Opening a club (club switching) asks for the same setup code, so it counts against the same limits.
+let seeding = false;   // the staging seed is creating its fake members
 const RECOVERY = ['/api/setup', '/api/resetOwner', '/api/createClub'], RECOVERY_IP = 5, RECOVERY_ALL = 60;
 
 const api = {
@@ -133,6 +134,9 @@ const api = {
     const u = createUser(name, pin, 'member');
     if(c.id !== clubs.MAIN) store.set('user:' + u.id, { ...u, noMain: true, clubs: { [c.id]: { role: 'member', joinedAt: Date.now(), ...(inv.by ? { invitedBy: inv.by } : {}) } } });
     else if(inv.by) store.set('user:' + u.id, { ...u, invitedBy: inv.by });
+    // the board design's first visit (UI_BOARD only): a new account sees the welcome once (onb 1), then the First steps
+    // card on Home until it is done or dismissed (onb 2); 3 is finished. Off, nothing is stored.
+    if(boardUI() && !seeding) store.set('user:' + u.id, { ...store.get('user:' + u.id), onb: 1 });
     joined(c, u.id, code, inv);
     return clubs.ON() ? { token: newSession(u.id), club: c.id } : { token: newSession(u.id) };
   },
@@ -509,7 +513,7 @@ function clubView(c, u){
   const t = club.T();
   const { members, history } = membersView(c);
   const view = {
-    me: { id: u.id, name: u.name, owner: isOwner(u) },
+    me: { id: u.id, name: u.name, owner: isOwner(u), ...(boardUI() && u.onb ? { onb: u.onb } : {}) },
     tourney: t ? tourneyOf(c, t) : null,
     ...(isOwner(u) && hosts(c) ? { sponsors: c.business.sponsorOptions() } : {}), hosts: hosts(c),
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
@@ -858,6 +862,10 @@ wss.on('connection', (ws, req) => {
         // a picture belongs to the shared account, so only the main organizer can clear one
         case 'avatarClear': own(u); if(c.id !== clubs.MAIN) throw new Error('Only the Blindrise organizer can remove a picture.'); { const x = c.store.get('user:' + m.uid); if(x){ c.store.set('user:' + x.id, players.setAvatar(x, { kind: 'none' })); c.memo = null; broadcastAll(); } } break;
         case 'leave': club.leave(u.id); break;
+        // the board's first visit: the welcome seen (2), the First steps card done or dismissed (3); it only moves forward.
+        // Kept on the account record (one account, every club and device).
+        case 'onb': if(boardUI() && u.onb && (m.step === 2 || m.step === 3) && m.step > u.onb){ const raw = store.get('user:' + u.id); if(raw) store.set('user:' + u.id, { ...raw, onb: m.step });
+          for(const s of sockets) if(!s.spectator && s.user && s.user.id === u.id) s.user = { ...s.user, onb: m.step }; } break;
         // owner controls
         case 'create': own(u); if(!hosts(c)) throw new Error(NO_HOST); club.create(m); break;
         case 'edit': own(u); if(!hosts(c)) throw new Error(NO_HOST); club.edit(m); break;
@@ -959,9 +967,11 @@ process.on('SIGINT', () => onSignal('SIGINT'));
   if(process.env.STAGING === '1' && !owner() && process.env.OWNER_CODE){
     try{
       const tok = api.setup({ code: process.env.OWNER_CODE, name: 'Test Director', pin: '246810', agree: true }).token, dir = userByToken(tok);
+      seeding = true;   // (the seeded accounts are not newcomers: no first visit)
       for(let i = 1; i <= 12; i++) api.redeem({ code: inviteCode(clubs.get(clubs.MAIN), dir), name: 'Test Player ' + String(i).padStart(2, '0'), pin: '1357' + String(i % 10).repeat(2), agree: true });
       console.log('staging: seeded Test Director and 12 fake members');
     }catch(e){ console.error('staging seed failed', e.message); }
+    seeding = false;
   }
   // Staging only: a few fake demo businesses for the fake Test Player accounts (once; never in production)
   if(process.env.STAGING === '1'){ const { business, opportunity } = clubs.get(clubs.MAIN); const n = business.seedDemo(); if(n) console.log(`staging: seeded ${n} fake demo businesses`); const k = opportunity.seedDemo(); if(k) console.log(`staging: seeded ${k} fake demo opportunity listings`); }

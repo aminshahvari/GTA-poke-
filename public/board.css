@@ -707,3 +707,80 @@
 /* (a sideways row, the Exchange spotlight: it keeps its own sideways scroll; with a mouse, a thin quiet bar under the
    cards, well clear of the tab bar) */
 [data-ui="board"] #lobby .bz-rail{scrollbar-width:thin;scrollbar-color:var(--b-hair) transparent}
+
+/* ---------- the first visit (Issue #39): the welcome, Next game and First steps on Home (tokens only) ---------- */
+/* the welcome: a card over Home; the scrim covers the page, and the card keeps clear of the tab bar (it scrolls inside
+   itself when the screen is short) */
+[data-ui="board"] .b-onb{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+  padding:calc(12px + env(safe-area-inset-top,0px)) 16px calc(56px + var(--sa-b) + 12px);background:color-mix(in srgb,var(--b-bg) 82%,transparent)}
+[data-ui="board"] .b-onb-card{box-sizing:border-box;width:100%;max-width:420px;max-height:100%;overflow:auto;display:grid;gap:var(--b-s3);padding:var(--b-s5);
+  background:var(--b-surface);border:1px solid var(--b-hair-gold);border-radius:var(--b-r-sheet);box-shadow:0 18px 48px var(--b-shadow);color:var(--b-text)}
+[data-ui="board"] .b-onb-top{display:flex;align-items:center;justify-content:space-between;gap:var(--b-s2);margin:-10px -10px -4px 0}
+[data-ui="board"] .b-onb-skip{min-height:var(--b-tap);min-width:var(--b-tap);padding:0 12px;border:0;border-radius:var(--b-r-pill);background:transparent;color:var(--b-text-2);font-size:var(--b-t-15);font-weight:600}
+[data-ui="board"] .b-onb-card h2{margin:0;font-size:var(--b-t-22);font-weight:600;line-height:1.2}
+[data-ui="board"] .b-onb-card p{margin:0;font-size:var(--b-t-15);line-height:1.45;color:var(--b-text-2)}
+[data-ui="board"] .b-onb-card p b{color:var(--b-text)}
+[data-ui="board"] .b-onb-tabs{list-style:none;margin:0;padding:0;display:grid;gap:var(--b-s3)}
+[data-ui="board"] .b-onb-tabs li{display:flex;align-items:flex-start;gap:var(--b-s3)}
+[data-ui="board"] .b-onb-tabs .b-ic{width:22px;height:22px;color:var(--b-gold);margin-top:1px}
+[data-ui="board"] .b-onb-tabs span{display:grid;gap:2px}
+[data-ui="board"] .b-onb-tabs b{font-size:var(--b-t-15);font-weight:600}
+[data-ui="board"] .b-onb-tabs small{font-size:var(--b-t-14);color:var(--b-text-2);line-height:1.35}
+[data-ui="board"] .b-onb-game{display:grid;gap:2px}
+[data-ui="board"] .b-onb-game span{color:var(--b-gold-text);font-weight:600}
+[data-ui="board"] .b-onb-btns{display:flex;gap:var(--b-s2)}
+[data-ui="board"] .b-onb-btns .btn{flex:1;min-height:48px}
+[data-ui="board"] .b-onb :is(.btn,.b-onb-skip):focus-visible{outline:2px solid var(--b-gold);outline-offset:2px}
+/* Next game: compact, first on Home */
+[data-ui="board"] #lobby .b-next{gap:var(--b-s2)}
+[data-ui="board"] #lobby .b-next .b-next-when{color:var(--b-gold-text);font-weight:600}
+[data-ui="board"] #lobby .b-next .b-next-reg{display:flex;align-items:center;gap:6px;color:var(--b-online)}
+[data-ui="board"] #lobby .b-next .b-next-reg .b-ic{width:18px;height:18px;stroke-width:2.2}
+[data-ui="board"] #lobby .b-next .b-next-reg b{color:var(--b-text)}
+[data-ui="board"] #lobby .b-next .btn-row{margin-top:var(--b-s1)}
+/* First steps: three rows that tick, and a way to hide the card */
+[data-ui="board"] #lobby .b-steps{gap:var(--b-s1);padding-bottom:var(--b-s1)}
+[data-ui="board"] #lobby .b-steps-head{display:flex;align-items:center;justify-content:space-between;gap:var(--b-s2);margin:-6px -6px 0 0}
+[data-ui="board"] #lobby .b-steps-t{display:grid;gap:2px}
+[data-ui="board"] #lobby .b-steps-t small{font-size:var(--b-t-13);color:var(--b-text-2)}
+[data-ui="board"] #lobby .b-steps-x{display:inline-grid;place-items:center;width:var(--b-tap);height:var(--b-tap);padding:0;border:0;border-radius:var(--b-r-pill);background:transparent;color:var(--b-text-2)}
+[data-ui="board"] #lobby .b-steps-x .b-ic{width:20px;height:20px}
+[data-ui="board"] #lobby .b-steps-list{list-style:none;margin:0;padding:0;display:grid}
+[data-ui="board"] #lobby .b-steps-list li+li{border-top:1px solid var(--b-hair)}
+[data-ui="board"] #lobby .b-step{display:flex;align-items:center;gap:var(--b-s3);width:100%;min-height:56px;padding:6px 0;background:transparent;border:0;color:var(--b-text);text-align:left}
+[data-ui="board"] #lobby .b-step .b-row-t b{font-size:var(--b-t-15);font-weight:600}
+[data-ui="board"] #lobby .b-step.done .b-row-t b{color:var(--b-text-2);text-decoration:line-through}
+[data-ui="board"] #lobby .b-tick{flex:none;display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--b-text-3);box-sizing:border-box}
+[data-ui="board"] #lobby .b-step.done .b-tick{background:var(--b-gold);border-color:var(--b-gold);color:var(--b-bg)}
+[data-ui="board"] #lobby .b-tick .b-ic{width:16px;height:16px;stroke-width:2.4}
+[data-ui="board"] #lobby :is(.b-step,.b-steps-x):focus-visible{outline:2px solid var(--b-gold);outline-offset:2px}
+/* the line before the reminder question: you're registered */
+[data-ui="board"] #modalRoot .b-reg-line{margin:0 0 6px;color:var(--b-gold-text);font-weight:600}
+/* Home (spec §7): a section's head, Live at Blindrise (a drawn mini felt per table), Community Activity (rows) */
+[data-ui="board"] #lobby .b-sec-head{display:flex;align-items:center;justify-content:space-between;gap:var(--b-s2);min-height:var(--b-tap)}
+[data-ui="board"] #lobby .b-sec-head h2{display:flex;align-items:center;gap:var(--b-s2);margin:0;font-size:var(--b-t-17);font-weight:600;color:var(--b-text)}
+[data-ui="board"] #lobby .b-sec-link{display:inline-flex;align-items:center;gap:2px;min-height:var(--b-tap);padding:0 4px 0 10px;border:0;background:transparent;color:var(--b-gold-text);font-size:var(--b-t-14);font-weight:600}
+[data-ui="board"] #lobby .b-sec-link .b-ic{width:16px;height:16px}
+[data-ui="board"] #lobby .b-live-dot{width:9px;height:9px;border-radius:50%;background:var(--b-text-3);flex:none}
+[data-ui="board"] #lobby .b-live-dot.on{background:var(--b-live);box-shadow:0 0 0 4px color-mix(in srgb,var(--b-live) 22%,transparent)}
+[data-ui="board"] #lobby .b-live{gap:var(--b-s2);padding-top:var(--b-s2)}
+[data-ui="board"] #lobby .b-live-none{display:grid;gap:2px;margin:0 0 var(--b-s1)}
+[data-ui="board"] #lobby .b-live-none b{color:var(--b-text);font-size:var(--b-t-15);font-weight:600}
+[data-ui="board"] #lobby .b-live-none small{color:var(--b-text-2);font-size:var(--b-t-14)}
+[data-ui="board"] #lobby .b-ltables{display:grid;gap:var(--b-s2)}
+[data-ui="board"] #lobby .b-ltable{display:flex;align-items:center;gap:var(--b-s3);width:100%;min-height:64px;padding:8px 12px;border-radius:var(--b-r-btn);background:var(--b-surface-2);border:1px solid var(--b-hair);color:var(--b-text);text-align:left}
+[data-ui="board"] #lobby .b-ltable.mine{border-color:var(--b-hair-gold)}
+[data-ui="board"] #lobby .b-ltable .b-row-t b{font-size:var(--b-t-15);font-weight:600}
+[data-ui="board"] #lobby .b-ltable .b-row-t small{font-size:var(--b-t-13);color:var(--b-text-2)}
+[data-ui="board"] #lobby .b-mfelt{position:relative;flex:none;width:64px;height:40px;border-radius:999px;border:3px solid var(--b-rail);background:radial-gradient(ellipse at 50% 45%,var(--b-felt-hi),var(--b-felt) 60%,var(--b-felt-edge));
+  display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:3px;padding:4px 8px;box-sizing:border-box}
+[data-ui="board"] #lobby .b-mfelt i{width:7px;height:7px;border-radius:50%;background:var(--b-ring)}
+[data-ui="board"] #lobby .b-ltag{flex:none;font-size:var(--b-t-13);font-weight:600;color:var(--b-gold-text)}
+[data-ui="board"] #lobby .b-feed{display:grid;gap:var(--b-s2)}
+[data-ui="board"] #lobby .b-feed .b-sec-head{padding:0 2px}
+[data-ui="board"] #lobby .b-feed-row .av{width:40px;height:40px;font-size:14px;flex:none}
+[data-ui="board"] #lobby .b-feed-row .b-row-ic{width:24px;height:24px;margin:0 8px}
+[data-ui="board"] #lobby .b-feed-row .b-feed-k{font-size:var(--b-t-11);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--b-text-3)}
+[data-ui="board"] #lobby .b-feed-row .b-feed-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+[data-ui="board"] #lobby .b-feed-prize{color:var(--b-gold-text);font-weight:600}
+[data-ui="board"] #lobby .b-feed-none{margin:0;color:var(--b-text-2);font-size:var(--b-t-14)}

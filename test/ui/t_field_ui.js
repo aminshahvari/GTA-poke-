@@ -30,6 +30,8 @@ async function page(tok, [w, h], club){
   await pg.goto(BASE + '/');
   await pg.evaluate(([t, cl]) => { localStorage.setItem('stacked:token', JSON.stringify(t)); if(cl) localStorage.setItem('stacked:club', JSON.stringify(cl)); }, [tok, club]);
   await pg.reload(); await pg.evaluate(() => document.fonts.ready); await sleep(800);
+  // (the board: these accounts are new, so their first visit opens the welcome (Issue #39); skip it, as a member can)
+  if(await pg.$('#bOnb')){ await pg.click('#bOnb [data-onb=skip]'); await sleep(300); }
   return pg;
 }
 function sock(tok, club){

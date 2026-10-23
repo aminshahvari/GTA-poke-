@@ -399,6 +399,11 @@ function mountHome(sec, playing){
 
 window.OppClub = {
   mountHome,
+  // the board's Home (Community Activity): the newest open listings, loaded as the Home section loads them
+  highlights(done){
+    if(Date.now() - homeAt > 30000){ homeAt = Date.now(); api('oppList').then(r => { homeData = r; O.cats = r.categories; O.badge = r.pending; if(done) done(); }).catch(() => { homeAt = 0; }); }
+    return homeData ? homeData.items.slice(0, 2) : [];
+  },
   init(ctx){ C = ctx.C; h = ctx.h; B = ctx; },
   render, topBar, badge, newListing,
   open(view){ O.view = view || 'feed'; if(view === 'feed' || !view){ O.list = null; } },

@@ -238,6 +238,7 @@ const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
 const signOut = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
 function onClub(c){
   club = c; clockSkew = c.now - Date.now();
+  if(BOARD && local.get('askRemind', 0) && c.tourney && (c.tourney.regs || []).includes(c.me.id)) local.set('onbInv', c.tourney.id);   // (the board's Next game card says so)
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   if(c.clubSwitching) clubSwitching(c);
   // the Lounge's Exchange cards: start the feed now, not only when Home renders
@@ -429,7 +430,8 @@ const B_IC = {
   pic: '<rect x="3.5" y="6" width="17" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8.5 6l1.5-2h4l1.5 2"/>',
   scan: '<path d="M4 8V5.5C4 4.7 4.7 4 5.5 4H8M16 4h2.5c.8 0 1.5.7 1.5 1.5V8M20 16v2.5c0 .8-.7 1.5-1.5 1.5H16M8 20H5.5C4.7 20 4 19.3 4 18.5V16"/><rect x="7" y="8.5" width="10" height="7" rx="1.2"/><path d="M9.5 11h3M9.5 13h5"/>',
   out: '<path d="M14 4h4.5c.8 0 1.5.7 1.5 1.5v13c0 .8-.7 1.5-1.5 1.5H14M10 8l-4 4 4 4M6 12h10"/>',
-  chev: '<path d="M9 6l6 6-6 6"/>' };
+  chev: '<path d="M9 6l6 6-6 6"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', post: '<path d="M4 10v4h3l6 4V6L7 10zM16.5 9.5a3.5 3.5 0 0 1 0 5M19 7a7 7 0 0 1 0 10"/>', opp: '<path d="M12 3l2.4 5.6L20 9.3l-4.3 3.9 1.3 5.8L12 16l-5 3 1.3-5.8L4 9.3l5.6-.7z"/>', close: '<path d="M6 6l12 12M18 6 6 18"/>' };
 const bIc = (k, cls = '') => `<svg class="b-ic${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${B_IC[k]}</svg>`;
 const B_TABS = [['home', 'Home'], ['poker', 'Poker'], ['biz', 'Exchange'], ['club', 'Club'], ['profile', 'Profile']];
 if(BOARD){
@@ -520,6 +522,7 @@ function boardLobby(body, clubsOn, clubsVisible){
       bRow('data-bgo="learn" data-seg="hands"', 'hands', 'My hands', 'Review the hands you played'),
       bRow('data-bgo="learn" data-seg="lessons"', 'learn', 'Learn', 'Lessons, rules and the fair deal')]));
   } else if(tab === 'club'){
+    if(onbNew()) local.set('onbClub', 1);
     const switching = club.clubSwitching && club.clubs && club.clubs.length > 1, invite = owner || club.membersInvite;
     body.innerHTML = bHead(esc(club.club ? club.club.name : 'Club'), owner ? 'Club director' : 'Members') + bRows('Club', [
       owner ? bRow('data-bgo="director"', 'dir', 'Director', 'Run the club and its tournaments') : '',
@@ -540,14 +543,145 @@ function boardLobby(body, clubsOn, clubsVisible){
       bRow('data-bact="out"', 'out', 'Sign out', 'Sign back in with your name and PIN')].filter(Boolean));
   } else {
     tab = 'home';
-    const { rest } = bEventSplit();
-    body.innerHTML = liveHTML(true) + blindriseHTML();
+    // Home (Step-0 spec §7, owner's Preview test 2026-10-23): your next game, what is live, then what is new in the
+    // club; the Exchange's own section (the spotlight and "Introduce your business") after that
+    body.innerHTML = bNextHTML() + bStepsHTML() + bLiveHTML() + liveHTML(true) + bFeedHTML(showClubs);
     if(showClubs){ const biz = document.createElement('section'); biz.className = 'hsec hsec-biz'; biz.setAttribute('aria-labelledby', 'hs-biz'); body.append(biz); window.BizClub.mountHome(biz, false); }
-    body.append(...rest);
     if(!body.children.length) body.innerHTML = `<div class="card-box b-empty"><h3>Nothing new right now</h3><p class="note">Tournaments and how to join are on Poker.</p><div class="btn-row"><button class="btn red" data-bgo="poker">Go to Poker</button></div></div>`;
+    if(club.me.onb === 1 && onbNew() && !onbShown && !playing) onbShow();
   }
   odoPlay(body);
   wireLobby();
+}
+// ---------- the board's first visit (UI_BOARD, Issue #39 problems 2, 3 and 5) ----------
+// A new account (club.me.onb 1, set by the server when it joins with an invite) gets a three-card welcome once, then a
+// "First steps" card on Home until its three steps are done or it is hidden (onb 2, then 3). Every member gets a lasting
+// "Next game" card at the top of Home. Nothing here changes a rule, a registration or a reminder: it says what is so.
+const onbNew = () => !!(club && !club.me.owner && !club.events && !club.spectate && (club.me.onb === 1 || club.me.onb === 2));
+let onbOpen = false, onbShown = false, onbRemind = false, onbAt = 0;
+function onbSet(step){ if(!club.me.onb || club.me.onb >= step) return; club.me.onb = step; send({ t: 'onb', step }); }
+// the club's next game: open for registration, or playing now
+const bGame = () => { const T = club.tourney; return T && (T.status === 'registering' || T.status === 'running') ? T : null; };
+const bMine = T => !!T && (T.regs || []).includes(club.me.id);
+const bWhen = T => T.status === 'running' ? 'On now' : T.startAt ? esc(when(T.startAt)) : 'Starts when the organizer is ready';
+// (this phone joined with an invite and the server signed it up then: joined() in server/index.js)
+const bByInvite = T => !!T && local.get('onbInv', null) === T.id;
+const bCanJoin = T => !!T && !bMine(T) && (T.status === 'registering' || !!T.lateOpen);
+function bNextHTML(){
+  if(club.events) return '';
+  const T = bGame();
+  if(!T) return club.hosts === false ? '' : club.me.owner ? `<section class="card-box b-next" aria-labelledby="bNextH"><span class="eyebrow">Next game</span><h3 id="bNextH">No game open yet</h3>
+    <p>Open the next tournament from Director, and it shows here for every member.</p>
+    <div class="btn-row"><button class="btn" data-bgo="director">Open Director</button></div></section>` : `<section class="card-box b-next" aria-labelledby="bNextH"><span class="eyebrow">Next game</span><h3 id="bNextH">No game open yet</h3>
+    <p>New games show up here as soon as the organizer opens one. Check back in a day or two, or practise on your own now.</p>
+    <div class="btn-row"><button class="btn" data-demo>Try the practice table</button></div></section>`;
+  if(!bMine(T) && bByInvite(T)) local.del('onbInv');   // (they cancelled: a later registration is their own)
+  const mine = bMine(T), run = T.status === 'running';
+  const status = run && club.myTable ? '<p>Your table is ready.</p>'
+    : mine ? `<p class="b-next-reg">${bIc('check')}<b>You're registered</b></p><p>${bByInvite(T) ? 'Your invite signed you up, so there is nothing else to do. ' : ''}${run ? 'Your table opens by itself in a moment.' : 'Open Blindrise at the start time and your table opens by itself.'}</p>`
+    : run ? `<p>${T.lateOpen ? 'It has started, and you can still join.' : 'It has started. You can watch any table.'}</p>`
+    : '<p>Free to join. Register to save your seat.</p>';
+  const acts = run && club.myTable ? `<button class="btn red" data-watch="${esc(club.myTable)}">Go to my table</button>`
+    : bCanJoin(T) ? '<button class="btn red" data-bjoin>Register</button><button class="btn" data-bgo="poker">See details</button>'
+    : `<button class="btn" data-bgo="poker">${run ? 'Watch' : 'See details'}</button>`;
+  return `<section class="card-box b-next" aria-labelledby="bNextH"><span class="eyebrow">Next game</span><h3 id="bNextH">${esc(T.name)}</h3><p class="b-next-when">${bWhen(T)}</p>${status}<div class="btn-row">${acts}</div></section>`;
+}
+// First steps: each ticks from what the app already knows (registered, a picture, the Club tab opened on this phone)
+function bSteps(){
+  const T = bGame(), m = memberOf(club.me.id);
+  return [{ k: 'reg', done: bMine(T), t: 'Register for the next game', sub: T ? esc(T.name) : 'No game open yet' },
+    { k: 'pic', done: !!(m && m.av), t: 'Add a profile picture', sub: 'So people know who they are playing' },
+    { k: 'club', done: !!local.get('onbClub', 0), t: 'Look around your club', sub: 'See who is in it, and invite friends' }];
+}
+function bStepsHTML(){
+  if(!onbNew()) return '';
+  const S = bSteps(), n = S.filter(x => x.done).length;
+  if(n === S.length){ onbSet(3); return ''; }
+  return `<section class="card-box b-steps" aria-labelledby="bStepsH"><div class="b-steps-head"><span class="b-steps-t"><span class="eyebrow" id="bStepsH">First steps</span><small>${n} of ${S.length} done</small></span>
+    <button type="button" class="b-steps-x" data-bstepsx aria-label="Hide first steps">${bIc('close')}</button></div>
+    <ul class="b-steps-list">${S.map(x => `<li>${x.done ? `<div class="b-step done"><span class="b-tick">${bIc('check')}</span><span class="b-row-t"><b>${x.t}</b><small>Done</small></span></div>`
+      : `<button type="button" class="b-step" data-bstep="${x.k}"><span class="b-tick"></span><span class="b-row-t"><b>${x.t}</b><small>${x.sub}</small></span>${bIc('chev', 'b-chev')}</button>`}</li>`).join('')}</ul></section>`;
+}
+function bJoin(){ send({ t: 'join' }); setTimeout(offerReminder, 600); }
+if(BOARD) document.addEventListener('click', e => {
+  if(e.target.closest('[data-bjoin]')) return bJoin();
+  if(e.target.closest('[data-bstepsx]')){ onbSet(3); return renderLobby(); }
+  const s = e.target.closest('[data-bstep]'); if(!s) return;
+  const k = s.dataset.bstep, T = bGame();
+  if(k === 'pic') return pickAvatar();
+  if(k === 'club') return bGo('club');
+  if(bCanJoin(T)) return bJoin();
+  bGo('poker');
+});
+// Live at Blindrise (spec §7): this club's tables while its tournament plays (club.tables, club.tourney: nothing from
+// another club). A tap watches the table, or takes you to your seat. Empty: when the next game starts.
+function bLiveHTML(){
+  if(club.events) return '';
+  const T = club.tourney, run = !!T && T.status === 'running', tables = run ? club.tables || [] : [], cname = esc((club.club && club.club.name) || 'Blindrise');
+  const n = tables.length, head = `<div class="b-sec-head"><h2 id="bLiveH"><i class="b-live-dot${n ? ' on' : ''}" aria-hidden="true"></i>Live at Blindrise</h2>${n ? `<button type="button" class="b-sec-link" data-bgo="poker">${n} live ${n === 1 ? 'table' : 'tables'}${bIc('chev')}</button>` : ''}</div>`;
+  if(!n){
+    const next = T && T.status === 'registering' ? (T.startAt ? 'The next game starts ' + esc(when(T.startAt)) + '.' : 'The next game starts when the organizer is ready.') : 'Games show here the moment they start.';
+    return `<section class="card-box b-live" aria-labelledby="bLiveH">${head}<p class="b-live-none"><b>No live tables right now</b><small>${next}</small></p></section>`;
+  }
+  const [sb, bb] = E.levelFor(T.level, T.anteMode), state = T.breakUntil ? 'On break' : T.paused ? 'Paused' : 'Level ' + (T.level + 1) + ' · ' + fmt(sb) + '/' + fmt(bb);
+  return `<section class="card-box b-live" aria-labelledby="bLiveH">${head}<div class="b-ltables">${tables.map(t => { const mine = t.tid === club.myTable;
+    return `<button type="button" class="b-ltable${mine ? ' mine' : ''}" data-watch="${esc(t.tid)}"><span class="b-mfelt" aria-hidden="true">${'<i></i>'.repeat(Math.min(9, t.players))}</span><span class="b-row-t"><b>${cname} – Table ${t.n}</b><small>${state} · ${t.players} ${t.players === 1 ? 'player' : 'players'}</small></span><span class="b-ltag">${mine ? 'Go to my seat' : 'Watch'}</span></button>`; }).join('')}</div></section>`;
+}
+// Community Activity (spec §7): what is new, from what the app already has: the founder's posts, the last result, the
+// night's sponsor and the Bulletin's newest listings. One row each; the Exchange keeps its own section below.
+function bFeedHTML(clubs){
+  const rows = [], T = club.tourney, h = club.history && club.history[0];
+  (club.blindrise || []).forEach((b, i) => rows.push(`<button type="button" class="b-row b-feed-row" data-bpost="${i}">${bIc('post', 'b-row-ic')}<span class="b-row-t"><small class="b-feed-k">${b.kind === 'event' ? 'Official event' : 'From Blindrise'}${b.when ? ' · ' + esc(when(b.when)) : ''}</small><b>${esc(b.title)}</b><small class="b-feed-sub">${esc(b.body)}</small></span>${bIc('chev', 'b-chev')}</button>`));
+  if(h && h.results && h.results[0]) rows.push(`<button type="button" class="b-row b-feed-row" data-bgo="board">${avHTML(h.results[0].uid, h.results[0].name, 'sm')}<span class="b-row-t"><small class="b-feed-k">Latest result · ${esc(new Date(h.endedAt).toLocaleDateString([], { month: 'short', day: 'numeric' }))}</small><b>${esc(h.results[0].name)} won ${esc(h.name)}</b><small class="b-feed-sub">${h.entrants} players${h.results[1] ? ' · 2nd ' + esc(h.results[1].name) : ''}</small></span>${bIc('chev', 'b-chev')}</button>`);
+  if(T && (T.status === 'registering' || T.status === 'running') && T.sponsor && T.sponsor.name) rows.push(`<button type="button" class="b-row b-feed-row" data-bsponsor="${esc(T.sponsor.uid)}">${bIc('biz', 'b-row-ic')}<span class="b-row-t"><small class="b-feed-k">Sponsor of the night</small><b>${esc(T.sponsor.name)}</b><small class="b-feed-sub">${esc(T.sponsor.categoryLabel || '')}${T.prize ? ' · <span class="b-feed-prize">' + esc(T.prize) + '</span>' : ''}</small></span>${bIc('chev', 'b-chev')}</button>`);
+  if(clubs) window.OppClub.highlights(() => { if(view === 'lobby' && tab === 'home') renderLobby(); }).forEach(x => rows.push(`<button type="button" class="b-row b-feed-row" data-bgo="opp">${bIc('opp', 'b-row-ic')}<span class="b-row-t"><small class="b-feed-k">The Bulletin · ${x.type === 'need' ? 'Needs help' : 'Offering help'}</small><b>${esc(x.title)}</b><small class="b-feed-sub">${esc(x.categoryLabel || '')}${x.member ? ' · ' + esc(x.member) : ''}</small></span>${bIc('chev', 'b-chev')}</button>`));
+  return `<section class="b-feed" aria-labelledby="bFeedH"><div class="b-sec-head"><h2 id="bFeedH">Community Activity</h2></div>${rows.length ? `<nav class="b-rows" aria-label="Community Activity">${rows.join('')}</nav>` : '<p class="card-box b-feed-none">Nothing new in the club yet. Posts, results and Bulletin listings show here.</p>'}</section>`;
+}
+if(BOARD) document.addEventListener('click', e => {
+  const p = e.target.closest('[data-bpost]');
+  if(p){ const b = (club.blindrise || [])[+p.dataset.bpost]; if(b) modal(`<h2>${esc(b.title)}</h2>${b.when ? `<p class="br-when">${esc(when(b.when))}</p>` : ''}<p>${linkText(b.body)}</p>`, [{ label: 'Close', value: 1, primary: true }]); return; }
+  const s = e.target.closest('[data-bsponsor]'); if(s){ bFrom = 'home'; window.BizClub.openBiz(s.dataset.bsponsor); }
+});
+// the welcome: three cards over Home, skippable at any card (Skip, Escape); the last one leads to the next game
+const ONB_TABS = [['home', 'Home', "What's next for you, like your next game."], ['poker', 'Poker', 'Club games, a practice table and short lessons.'], ['club', 'Club', 'The people in your club. Invite friends from here.']];
+function onbCardHTML(i){
+  const T = bGame(), mine = bMine(T), head = (t, n) => `<div class="b-onb-top"><span class="eyebrow">${n} of 3</span><button type="button" class="b-onb-skip" data-onb="skip">Skip</button></div><h2 id="bOnbH">${t}</h2>`;
+  if(i === 0) return head('Welcome to Blindrise', 1) + '<p>Blindrise is a private poker club for you and your friends.</p><p><b>It is free.</b> There is no betting and no real money.</p>'
+    + '<div class="b-onb-btns"><button type="button" class="btn red" data-onb="next">Next</button></div>';
+  if(i === 1) return head('Where things are', 2) + `<ul class="b-onb-tabs">${ONB_TABS.map(([k, l, d]) => `<li>${bIc(k)}<span><b>${l}</b><small>${d}</small></span></li>`).join('')}</ul><p>The bar at the bottom of the screen takes you to each one.</p>`
+    + '<div class="b-onb-btns"><button type="button" class="btn red" data-onb="next">Next</button></div>';
+  return head(T ? 'Your next game' : 'How to start', 3) + (T
+    ? `<p class="b-onb-game"><b>${esc(T.name)}</b><span>${bWhen(T)}</span></p><p>${mine ? `You're registered.${bByInvite(T) ? ' Your invite signed you up, so there is nothing else to do.' : ''}` : 'Register to save your seat. It is free.'}</p>`
+      + `<div class="b-onb-btns"><button type="button" class="btn red" data-onb="poker">${mine ? 'See my game' : 'See the game'}</button></div>`
+    : '<p>No game is open yet. New games show up on Home as soon as the organizer opens one.</p><p>Meanwhile, try the practice table at your own pace.</p>'
+      + '<div class="b-onb-btns"><button type="button" class="btn red" data-onb="demo">Try the practice table</button></div>');
+}
+function onbShow(){
+  onbOpen = onbShown = true; onbAt = 0;
+  const el = document.createElement('div'); el.id = 'bOnb'; el.className = 'b-onb';
+  el.innerHTML = `<div class="b-onb-card" role="dialog" aria-modal="true" aria-labelledby="bOnbH"></div>`;
+  $('lobby').appendChild(el);
+  const draw = () => { const c = el.firstChild; c.innerHTML = onbCardHTML(onbAt); c.dataset.card = onbAt + 1; c.scrollTop = 0; c.querySelector('.b-onb-btns .btn').focus(); };
+  el.addEventListener('click', e => {
+    const b = e.target.closest('[data-onb]'); if(!b) return;
+    const a = b.dataset.onb;
+    if(a === 'next'){ onbAt++; return draw(); }
+    onbClose(a);
+  });
+  el.addEventListener('keydown', e => {
+    if(e.key === 'Escape'){ e.preventDefault(); return onbClose('skip'); }
+    if(e.key !== 'Tab') return;
+    const f = [...el.querySelectorAll('button')]; if(!f.length) return;
+    const i = f.indexOf(document.activeElement), j = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i + 1) % f.length;
+    e.preventDefault(); f[j].focus();
+  });
+  draw();
+}
+function onbClose(go){
+  const el = $('bOnb'); if(el) el.remove();
+  onbOpen = false; onbSet(2);
+  if(go === 'poker') bGo('poker'); else if(go === 'demo') startDemo(); else renderLobby();
+  if(onbRemind){ onbRemind = false; setTimeout(offerReminder, 400); }
 }
 // ---------- Home: Poker, then Business, then Opportunities ----------
 // The tournament card always comes first. Business and Opportunities show only when the clubs are open (the owner always
@@ -2200,6 +2334,20 @@ async function enablePush(){
 }
 async function offerReminder(){
   const T = club.tourney; if(!T || T.status !== 'registering' || club.pushOn) return;
+  if(BOARD){
+    // the board: after the welcome, never over it; one line first saying you're registered; on an iPhone outside the
+    // Home Screen app, say up front that reminders need it (the reminders themselves work as before)
+    if(onbOpen){ onbRemind = true; return; }
+    const reg = T.regs.includes(club.me.id) ? `<p class="b-reg-line">You're registered for ${esc(T.name)}.</p>` : '';
+    if(isIOS() && !standalone()){
+      if(await modal(`${reg}<h2>Get a reminder?</h2><p>On iPhone, reminders only work after you add Blindrise to your Home Screen. Until then, Add to calendar on Poker works too.</p>`, [{ label: 'Not now', value: null }, { label: 'Show me how', value: 1, primary: true }])) iosNote();
+      return;
+    }
+    if(pushSupported() && Notification.permission === 'default'){
+      if(await modal(`${reg}<h2>Get a reminder?</h2><p>We'll send a notification to this phone 15 minutes before ${esc(T.name)} starts, and again when the cards are dealt.</p>`, [{ label: 'No thanks', value: null }, { label: 'Notify me', value: 1, primary: true }])) enablePush();
+      return;
+    }
+  }
   if(pushSupported() && Notification.permission === 'default'){
     const v = await modal(`<h2>Get a reminder?</h2><p>We'll send a notification to this phone 15 minutes before ${esc(T.name)} starts, and again when the cards are dealt.</p>`, [{ label: 'No thanks', value: null }, { label: 'Notify me', value: 1, primary: true }]);
     if(v) enablePush();

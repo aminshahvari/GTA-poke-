@@ -696,9 +696,11 @@ async function navSuite(browser){
     const tag = `390x844 ${who} B4 reach`, owner = who === 'owner';
     const { ctx, pg } = await navPage(browser, tok, 390, 844, 0);
     await tapTab(pg, 'home');
-    check(await bodyHas(pg, '.br-post:not(.bo-card)') && /A note from the founder/.test(await pg.textContent('#lobbyBody')), `${tag}: founder broadcasts on Home`);
+    // (Issue #39 / spec §7: founder posts and the last result are rows in Home's Community Activity; the full results
+    // table is a tap away, on Standings & prizes)
+    check(await bodyHas(pg, '.b-feed [data-bpost]') && /A note from the founder/.test(await pg.textContent('#lobbyBody')), `${tag}: founder broadcasts on Home (Community Activity)`);
     check(await bodyHas(pg, '.hsec-biz'), `${tag}: the Exchange spotlight on Home`);
-    check(/Last Friday/.test(await pg.textContent('#lobbyBody')) && await bodyHas(pg, 'table.tbl'), `${tag}: results (last tournament) on Home`);
+    check(/Last Friday/.test(await pg.textContent('#lobbyBody .b-feed')) && await bodyHas(pg, '.b-feed [data-bgo="board"]'), `${tag}: results (last tournament) on Home (Community Activity, opening Standings)`);
     check(!(await bodyHas(pg, '.lx-hello, .lx-door, .home-nav')), `${tag}: the Lounge greeting and its doors are gone from Home`);
     await tapTab(pg, 'poker');
     check(await bodyHas(pg, '.bo-card') && /Blindrise Open Test/.test(await pg.textContent('#lobbyBody')), `${tag}: the Blindrise Open card on Poker`);
