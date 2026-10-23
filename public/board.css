@@ -571,6 +571,9 @@
 [data-ui="board"] #game.land.b-col .dock .b-acts:not(.b-sz):not(.b-idle),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz):not(.b-idle){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px;gap:6px}
 [data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz) .b-more{grid-column:auto}
 [data-ui="board"] #game.land.b-col .dock .b-acts.b-sz{grid-template-columns:44px minmax(0,1fr) minmax(84px,.9fr);gap:6px}
+/* (the column is too narrow for − and + beside the slider: they left it no track, only its knob (owner's iPhone in an
+   in-app browser, 844x350). There the slider takes their room; the presets over it still step the amount) */
+[data-ui="board"] #game.land.b-col .dock .b-sz .sz-slider .step{display:none}
 [data-ui="board"] #game.land.b-col .dock .act-btn{flex-direction:column;gap:0;padding:0 2px}
 [data-ui="board"] #game.land.b-col .dock .act-btn b,[data-ui="board"] #game.land.b-col .dock .act-btn span{font-size:var(--b-t-14)}
 [data-ui="board"] #game.land.b-col .dock .preacts.b-acts button:not(.b-more){font-size:12px}
@@ -617,7 +620,7 @@
    "+30s · 5 left" stood over "No real money") ---------- */
 /* (the line keeps its foot where it was; where it no longer fits on one line it takes two, "Free social play ·" over
    "No betting · No real money", never cut short) */
-[data-ui="board"] #game .dock:has(.xtime:not(:disabled)) #playLine{height:30px;top:calc(var(--bd-pad) + var(--bd-band) - 30px);display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-end;
+[data-ui="board"] #game .dock:has(.xtime:not(:disabled)):not(:has(.sizing)) #playLine{height:30px;top:calc(var(--bd-pad) + var(--bd-band) - 30px);display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-end;
   column-gap:.3em;white-space:normal;text-overflow:clip}
 [data-ui="board"] #game .dock:has(.xtime:not(:disabled)) #playLine span{white-space:nowrap}
 [data-ui="board"] #game:not(.land) .dock:has(.xtime:not(:disabled)) #playLine{right:80px}

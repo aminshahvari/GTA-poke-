@@ -263,11 +263,14 @@ async function raiseCase(browser, tok, w, h, phase){
   if(!up){ await ctx.close(); return; }
   await sleep(300);
   await pg.tap('#aRaise'); await sleep(250);
+  // (in the column beside the table − and + give the slider their room: there the quick taps are on the presets only)
+  const steps = await pg.isVisible('#plus');
   const T = async sel => { await pg.tap(sel); await sleep(60); };
   // quick taps: + + − −, every preset twice, then double clicks (a double tap)
-  for(const s of ['#plus', '#plus', '#minus', '#minus', '#plus']) await T(s);
+  if(steps) for(const s of ['#plus', '#plus', '#minus', '#minus', '#plus']) await T(s);
   for(const b of await pg.$$('#controls .sz-presets button')){ await b.tap(); await sleep(40); await b.tap(); await sleep(40); }
-  await pg.dblclick('#plus'); await pg.dblclick('#minus'); await pg.dblclick('#controls .sz-presets button');
+  if(steps){ await pg.dblclick('#plus'); await pg.dblclick('#minus'); }
+  await pg.dblclick('#controls .sz-presets button');
   await sleep(300);
   const m = await raiseLook(pg);
   if(RAISE_SHOTS) await pg.screenshot({ path: path.join(RAISE_SHOTS, `raise-${phase}-${w}x${h}.png`) });
@@ -526,6 +529,67 @@ async function shortHandedSuite(browser, TOK){
   }
 }
 
+// ---------- the sizing sideways in an in-app browser (owner's iPhone, 2026-10-23, about 844x350) ----------
+// Raise open: the free-play line never shows through the presets (it is hidden while the sizing is open), and the
+// slider has a visible track: in the column beside the table at least 80 px.
+async function sizingSuite(browser, TOK){
+  for(const s of ['844x350', '844x390', '800x330', '667x320', '568x320', '390x700', '320x568']){
+    const [w, h] = s.split('x').map(Number), tag = `${s} sizing`;
+    const { ctx, pg } = await fixturePage(browser, TOK, w, h, { helperOff: true });
+    await pg.evaluate(() => { const n = document.getElementById('playNote'); if(n && !n.hidden) n.click(); }); await sleep(200);
+    await pg.tap('#aRaise'); await sleep(400);
+    const m = await pg.evaluate(() => {
+      const vis = e => e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && getComputedStyle(e).display !== 'none';
+      const pl = document.getElementById('playLine'), rr = document.getElementById('raiseRange'), mi = document.getElementById('minus'), pu = document.getElementById('plus');
+      const r = rr && rr.getBoundingClientRect(), W = innerWidth, H = innerHeight;
+      return { sizing: !!document.querySelector('#controls .b-sizing'), line: vis(pl), range: r ? [Math.round(r.width), Math.round(r.height)] : null,
+        whole: !!r && r.left >= 0 && r.right <= W && r.bottom <= H, steps: [mi, pu].filter(vis).length, col: document.getElementById('game').classList.contains('b-col'),
+        order: !!(mi && pu && r) && (!vis(mi) || mi.getBoundingClientRect().right <= r.left + .5 && r.right <= pu.getBoundingClientRect().left + .5) };
+    });
+    check(m.sizing && !m.line, `${tag}: the free-play line hidden while the sizing is open (shown ${m.line})`);
+    // (sideways in the column beside the table, − and + give the slider their room; elsewhere they stay as they were,
+    // not part of this fix: the track printed, not checked)
+    const want = m.col ? 80 : 0;
+    check(m.range && m.range[0] >= want && m.whole && m.steps === (m.col ? 0 : 2) && m.order, `${tag}: the slider's track ${m.range && m.range[0]} px${m.col ? ' (the column: no − and +)' : ' between − and +'}${want ? ` (${want} at least)` : ''}`);
+    if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `sizing-${s}.png`) });
+    await ctx.close();
+  }
+}
+
+// ---------- heads-up at a 9-max table (owner's iPhone, 2026-10-23, 390x700 and 844x350) ----------
+// The other player has the button and a bet of 100: the D and the bet sit by that seat (within 40 px of its avatar and
+// plate), never in a column with the pot in the middle of the felt.
+// And the tournament sheet, open while the field changes, follows it: its chip leader reads as the column's.
+async function headsUpSuite(browser, TOK){
+  for(const s of ['390x700', '390x844', '320x568', '844x350', '844x390', '667x320']){
+    const [w, h] = s.split('x').map(Number), tag = `${s} heads-up at 9`;
+    const { ctx, pg, sock, me } = await fixturePage(browser, TOK, w, h, { legal: false });
+    const t = shortHanded(me, 9, [0, 4]); Object.assign(t, { street: 0, board: [], btn: 4, acting: 4, actUid: 'p4', cur: 200, pot: 350 }); t.seats[4].bet = 100; t.seats[0].bet = 200;
+    sock.send(JSON.stringify({ t: 'table', table: t, you: { hand: 3, cards: ['6h', 'Qd'] }, field: FIELD })); await sleep(1200);
+    const m = await pg.evaluate(() => {
+      const r = e => e && e.getClientRects().length ? e.getBoundingClientRect() : null;
+      const seat = document.querySelector('#seats .seat[data-uid="p4"]'), sb = [r(seat.querySelector('.av')), r(seat.querySelector('.plate'))].filter(Boolean);
+      const box = { left: Math.min(...sb.map(x => x.left)), right: Math.max(...sb.map(x => x.right)), top: Math.min(...sb.map(x => x.top)), bottom: Math.max(...sb.map(x => x.bottom)) };
+      const gap = (a, b) => a && b ? Math.round(Math.hypot(Math.max(0, b.left - a.right, a.left - b.right), Math.max(0, b.top - a.bottom, a.top - b.bottom))) : -1;
+      const d = r(document.querySelector('#tableArea .dealer')), pot = r(document.querySelector('#tableArea .pot')),
+        bet = [...document.querySelectorAll('#tableArea .bet')].filter(e => e.getClientRects().length && /100$/.test(e.textContent.trim())).map(r)[0];
+      const cx = x => x ? (x.left + x.right) / 2 : 0;
+      return { d: gap(d, box), bet: gap(bet, box), column: !!(d && bet && pot) && Math.abs(cx(d) - cx(pot)) < 24 && Math.abs(cx(bet) - cx(pot)) < 24 };
+    });
+    check(m.d >= 0 && m.d <= 40 && m.bet >= 0 && m.bet <= 40 && !m.column, `${tag}: the D (${m.d} px from the seat) and its bet (${m.bet} px) sit by the seat that has them, not in a column with the pot (40 px at most)`);
+    if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `headsup-${s}.png`) });
+    // the sheet, open, follows the field
+    if(s === '844x390' || s === '390x700'){
+      await pg.click('#bHud'); await sleep(500);
+      sock.send(JSON.stringify({ t: 'table', table: { ...t, seq: t.seq + 1 }, you: { hand: 3, cards: ['6h', 'Qd'] }, field: { ...FIELD, leader: { name: 'Player 2', stack: 31350, table: 2 } } })); await sleep(700);
+      const v = await pg.evaluate(() => { const g = e => e ? e.textContent.replace(/\s+/g, ' ').trim() : ''; return { sheet: g(document.querySelector('#bHudSheet:not([hidden]) .bt-lead')), col: g(document.querySelector('#fieldBar .bt-lead')), colShown: !!document.querySelector('#fieldBar .bt-lead') && document.getElementById('fieldBar').getClientRects().length > 0 }; });
+      check(/31,350/.test(v.sheet) && (!v.colShown || v.sheet === v.col), `${tag}: the open sheet's chip leader follows the field ("${v.sheet}"${v.colShown ? `, the column "${v.col}"` : ''})`);
+      await pg.keyboard.press('Escape'); await sleep(200);
+    }
+    await ctx.close();
+  }
+}
+
 (async () => {
   for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
   await sleep(400);
@@ -600,6 +664,8 @@ async function shortHandedSuite(browser, TOK){
   await narrowSuite(browser, TOK);
   await shortSuite(browser, TOK);
   await shortHandedSuite(browser, TOK);
+  await sizingSuite(browser, TOK);
+  await headsUpSuite(browser, TOK);
   await raiseSuite(browser);
   await browser.close();
   for(const p of ['B8 reduced motion on the sheets and seats'])

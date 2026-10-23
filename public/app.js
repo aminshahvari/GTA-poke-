@@ -1759,7 +1759,8 @@ function boardGeo(n, empty = []){
   // same seats' rings. These three depend on their arguments only, so each answer is worked out once per layout: on a
   // crowded sideways table the search took a third of a second, enough to stall a phone as it turned)
   const memo = f => { const M = new Map(); return (...a) => { const k = a.join(','); let v = M.get(k); if(v === undefined){ v = f(...a); M.set(k, v); } return v; }; };
-  const mine = memo((x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || Math.hypot(x - X, y - Y) > d * 1.08 + 2); });
+  // (an empty seat has no chips to be confused with: a spot near its "+" still reads as its neighbour's)
+  const mine = memo((x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || empty.includes(i) || Math.hypot(x - X, y - Y) > d * 1.08 + 2); });
   // the point of the ring of `f` of the felt on the line from the middle towards (x, y)
   const onRing = memo((x, y, f) => { let lo = 0, hi = 1; for(let k = 0; k < 22; k++){ const t = (lo + hi) / 2; if(inStadium(cx + (x - cx) * t, cy + (y - cy) * t, cx, cy, fa * f, fb * f)) lo = t; else hi = t; } return [cx + (x - cx) * lo, cy + (y - cy) * lo]; });
   // (a box wholly on the felt, its corners 3 px inside)
@@ -1788,6 +1789,9 @@ function boardGeo(n, empty = []){
       for(const f of rings) for(let s = 0; s <= 96; s += 6) for(const sg of s ? [1, -1] : [1]){
         const ang = a0 + sg * s / d0, [x, y] = onRing(cx + Math.cos(ang) * 4000, cy + Math.sin(ang) * 4000, f);
         if(boxIn(x, y, w, h) && !hitAny([x, y, w, h], flat, 3) && mine(x, y, own)) pts.push([x, y]); }
+      // (at a table with empty seats no neighbour's chips hem a seat's spot in, so it could slide far round the ring:
+      // the clean spots nearest the seat come first there. A full table keeps the order above)
+      if(empty.length) pts.sort((a, b) => Math.hypot(a[0] - q.x, a[1] - q.y) - Math.hypot(b[0] - q.x, b[1] - q.y));
       st = [pts, 0];
     } else {
       // (no clean spot: the first that keeps off the board, the pot, the other chips and every seat's plate and cards,
@@ -2882,15 +2886,27 @@ function boardTiles(f){
 }
 function boardField(el, T){
   const d = tables.get(curTid()), me = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id);
-  const html = boardTiles(qFacts(T, d, me));
+  const f = qFacts(T, d, me), html = boardTiles(f);
   if(el.dataset.bh !== html){ el.dataset.bh = html; el.innerHTML = html; }
+  // (the sheet, open, follows too: it was drawn once when opened, so it went on showing the chip leader's count from
+  // then while the column beside it moved on, 31,575 there and 31,350 here: owner's iPhone, 2026-10-23)
+  const sh = $('bHudSheet');
+  if(sh && !sh.hidden && !demo){ const t = sh.querySelector('.b-tiles'), pl = sh.querySelector('.b-place'), ph = boardPlace(T, f, me);
+    if(t && t.outerHTML !== html) t.outerHTML = html;
+    if(pl && ph && pl.outerHTML !== ph) pl.outerHTML = ph; }
+}
+// "Your place" in the sheet: your rank, your chips, in big blinds, against the average
+function boardPlace(T, f, me){
+  if(!(f.rank && me)) return '';
+  const bb = E.levelFor(T.level, T.anteMode)[1], inBB = n => (n / bb >= 100 ? Math.round(n / bb) : Math.round(n / bb * 10) / 10).toLocaleString('en-US') + ' BB';
+  const vsAvg = me.stack > f.avg * 1.05 ? 'above average' : me.stack < f.avg * .95 ? 'below average' : 'about average';
+  return `<div class="b-place"><span>Your place</span><b class="num">${ord(f.rank)} of ${f.players}</b><small class="num">${fmt(me.stack)} · ${inBB(me.stack)} · ${vsAvg}</small></div>`;
 }
 // the tournament sheet (§4's expanded HUD): a tap on the card or the pill
 function boardSheet(){
   const T = demo ? demo.T : club && club.tourney; if(!T || T.status !== 'running' && !demo) return;
   const g = $('game'), d = tables.get(curTid()), me = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id), f = qFacts(T, d, me);
-  const [sb, bb, an] = E.levelFor(T.level, T.anteMode), inBB = n => (n / bb >= 100 ? Math.round(n / bb) : Math.round(n / bb * 10) / 10).toLocaleString('en-US') + ' BB';
-  const vsAvg = !me ? '' : me.stack > f.avg * 1.05 ? 'above average' : me.stack < f.avg * .95 ? 'below average' : 'about average';
+  const [sb, bb, an] = E.levelFor(T.level, T.anteMode);
   let sh = $('bHudSheet');
   if(!sh){ sh = document.createElement('div'); sh.id = 'bHudSheet'; sh.className = 'b-sheet b-hsheet'; sh.hidden = true; g.appendChild(sh);
     sh.addEventListener('click', e => { if(e.target === sh || e.target.closest('[data-bhclose]')) closeSheet(); }); }
@@ -2898,7 +2914,7 @@ function boardSheet(){
   sh.innerHTML = `<div class="b-sheet-in" role="dialog" aria-modal="true" aria-label="Tournament"><div class="bs-head"><b class="b-sheet-t">${esc(T.name || 'Demo table')}</b>
     <small class="num">Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''} · ${f.players}/${f.total} players</small></div>
     ${boardTiles(f)}
-    ${f.rank && me ? `<div class="b-place"><span>Your place</span><b class="num">${ord(f.rank)} of ${f.players}</b><small class="num">${fmt(me.stack)} · ${inBB(me.stack)} · ${vsAvg}</small></div>` : ''}
+    ${boardPlace(T, f, me)}
     ${sp ? `<div class="b-pres">${sponsorHTML(sp, true, T.prize)}</div>` : T.prize && !demo ? `<div class="b-pres"><div class="side-prize"><small>Tonight's prize</small><b>${esc(T.prize)}</b></div></div>` : ''}
     <button type="button" class="b-row b-close" data-bhclose><span>Done</span></button></div>`;
   if(sp){ fillLogo(sh, sp); wireSponsor(sh, T); const b = sh.querySelector('[data-spbiz]'); if(b){ const go = b.onclick, key = b.onkeydown; b.onclick = () => { closeSheet(); go(); }; b.onkeydown = e => { if(e.key === 'Enter' || e.key === ' ') closeSheet(); key(e); }; } }
