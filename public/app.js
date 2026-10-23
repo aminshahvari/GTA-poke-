@@ -886,11 +886,11 @@ function tableOnArrival(){
 // what a member watching a Blindrise game sees instead of the lobby: the tournament, its tables, the domino board
 function watchHTML(){
   const t = club.tourney, live = t && t.status === 'running', dm = window.Domino.state(), dt = dm && dm.t && dm.t.status === 'running' ? dm.t : null;
-  const tables = live ? club.tables.map(x => `<button class="btn lv-table" data-wt="${esc(x.tid)}">Table ${x.n}<small>${x.players} ${x.players === 1 ? 'player' : 'players'}</small></button>`).join('') : '';
+  const tables = live ? club.tables.map(x => `<button class="btn lv-table" data-wt="${esc(x.tid)}" aria-label="Watch table ${x.n}"><span class="lv-table-t">Table ${x.n}<small>${x.players} ${x.players === 1 ? 'player' : 'players'}</small></span><span class="lv-table-go" aria-hidden="true">${Icons.svg('eye')}Watch</span></button>`).join('') : '';
   const sub = !t ? 'No tournament is playing right now.' : live ? `${t.paused ? 'Paused' : 'Level ' + (t.level + 1)} · ${t.remaining} of ${t.entrants} players left` : t.status === 'registering' ? `Starts ${t.startAt ? esc(when(t.startAt)) : 'when the director is ready'} · ${t.regCount} registered` : 'This tournament has finished.';
   return `<section class="card-box lv-watch" aria-label="Watching"><div class="br-head"><span class="br-badge">Blindrise</span><span class="eyebrow">Watching · ${esc(club.club.name)}</span>${live ? '<span class="status-pill live">LIVE</span>' : ''}</div>
     <h2>${esc(t ? t.name : 'Live at Blindrise')}</h2><p class="br-when">${sub}</p>
-    ${tables ? `<p class="note">Pick a table to watch. Cards show only when players show them.</p><div class="lv-tables">${tables}</div>` : ''}
+    ${tables ? `<p class="note">Tap Watch on a table to see it live. Cards show only when players show them.</p><div class="lv-tables">${tables}</div>` : ''}
     ${dt ? `<div class="lv-row"><span class="hsec-ic opp">${Icons.svg('spark')}</span><div class="lv-t"><span class="eyebrow">Dominoes</span><b>${esc(dt.name)}</b></div><div class="lv-acts"><button class="btn red" data-live="tv">Watch the board</button></div></div>` : ''}
     <p class="note">You're watching from ${esc(club.home.name)}. Nothing about you or your club is shown here, and there is no chat while you watch.</p>
     <div class="btn-row"><button class="btn" data-live="home">Back to ${esc(club.home.name)}</button></div></section>`;
