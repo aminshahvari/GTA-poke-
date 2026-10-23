@@ -43,6 +43,23 @@ eq(C.allInEquity(E.parse('Ah Kh'), E.parse('Qs Qd'), E.parse('2h 7h 9c Qc 3d')),
       }
     }
   }
+  // an absent player (sitting out / timed out): the table folds their hand dead, and the coach says nothing about it
+  // (owner's iPhone, 2026-10-23: "Folded for a small price ... call 0 BB" after an automatic fold)
+  let awayNotes = 0, awayHands = 0;
+  for(let t = 0; t < 60; t++){
+    const g = E.newGame({ players: Array.from({ length: 4 }, (_, i) => ({ name: 'A' + i, style: 'tight', isHero: i === 0 })), levelMs: 1000 });
+    g.multi = false; g.seats.forEach((p, i) => { if(p) p.uid = 'a' + t + '_' + i; });
+    const got = [];
+    const rec = C.recorder({ tourneyInfo: () => ({ left: 4, paid: 2, name: 'A' }), save: (uid, h) => { if(uid === 'a' + t + '_0') got.push(h); } });
+    const io = { rng: Math.random, event: async (type, data) => rec(type, g, data), think: async () => {}, heroAction: async (p, L) => {
+      // plays preflop, then steps away: from the flop on the table folds the hand dead, even when a check was free
+      if(g.hand.street === 0){ p.away = false; return L.canCheck ? { t: 'check' } : { t: 'call' }; }
+      p.away = true; return { t: 'fold', dead: true }; } };
+    for(let k = 0; k < 25 && !g.over; k++) await E.playHand(g, io);
+    awayHands += got.length; got.forEach(h => { const auto = h.notes.filter(x => x.st >= 1); awayNotes += auto.length; if(auto.length) P('coach note on an automatic fold: ' + auto.map(x => x.title).join(', ')); });
+  }
+  if(!awayHands) P('no hands recorded for the absent player');
+  console.log(`absent player: ${awayHands} hands, ${awayNotes} coach notes after the flop (want 0)`);
   console.log(`coach test: ${handsPlayed} hands, ${notes} notes`, kinds);
   if(problems){ console.log(problems + ' problems'); process.exit(1); }
   console.log('coach test passed');

@@ -64,7 +64,8 @@ function recorder(ctx){
     } else if(type === 'action'){
       const { p, a } = data;
       const base = pending && pending.seat === p.seat ? pending : { seat: p.seat, st: h.street, pot: 0, toCall: 0, stack: p.stack, bet: 0, cur: 0, raises: 0, board: h.board.slice(), live: 0 };
-      rec.actions.push({ ...base, t: a.t, to: p.bet, allIn: !!p.allIn });
+      // (auto: the table acted for an absent player, a dead hand or a timed-out turn; the coach says nothing about it)
+      rec.actions.push({ ...base, t: a.t, to: p.bet, allIn: !!p.allIn, ...(p.away ? { auto: true } : {}) });
       pending = null;
     } else if(type === 'showdown'){
       rec.board = h.board.slice();
@@ -115,7 +116,7 @@ const pct = x => Math.round(x * 100) + '%';
 const STREET = ['Preflop', 'Flop', 'Turn', 'River'];
 function analyze(rec, me){
   const notes = [], bb = rec.bb, hn = handName(me.cards), score = chen(me.cards);
-  const mine = rec.actions.filter(a => a.seat === me.seat);
+  const mine = rec.actions.filter(a => a.seat === me.seat && !a.auto);
   const startBB = me.start / bb;
   const nearBubble = rec.paid > 0 && rec.left > rec.paid && rec.left <= rec.paid + Math.max(2, Math.ceil(rec.paid * 0.15));
   const add = (st, kind, title, text) => notes.push({ st, kind, title, text });
