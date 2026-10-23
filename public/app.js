@@ -2765,7 +2765,7 @@ function boardMenu(){
     ${row('leave', 'Leave table', 'Back to the lobby')}
     <button type="button" class="b-row b-close" data-bm="close"><span>Close</span></button></div>`;
   sh.hidden = false; g.classList.add('b-menu');
-  sh.querySelector('[data-bm]').focus();
+  sh.querySelector('[data-bm]').focus({ preventScroll: true }); unscroll();
   sh.querySelectorAll('[data-bm]').forEach(b => b.onclick = () => {
     const k = b.dataset.bm; closeMenu();
     if(k === 'chat') openChat(true);
@@ -2775,7 +2775,10 @@ function boardMenu(){
     else if(k === 'leave') $('lobbyBtn').click();
   });
 }
-function closeMenu(){ const sh = $('bSheet'); if(sh && !sh.hidden){ sh.hidden = true; $('game').classList.remove('b-menu'); const m = document.querySelector('[data-bmore]'); if(m) m.focus(); } }
+// the table never scrolls: iPhone Safari (and the in-app browser) scrolled the page to a focused sheet button, leaving
+// the table half off the top and black below it until a reload (owner's iPhone, 2026-10-23)
+function unscroll(){ if(scrollX || scrollY) scrollTo(0, 0); const e = document.scrollingElement; if(e && e.scrollTop) e.scrollTop = 0; }
+function closeMenu(){ const sh = $('bSheet'); if(sh && !sh.hidden){ sh.hidden = true; $('game').classList.remove('b-menu'); const m = document.querySelector('[data-bmore]'); if(m) m.focus({ preventScroll: true }); unscroll(); } }
 document.addEventListener('click', e => { if(e.target.closest('[data-bmore]')) boardMenu(); });
 document.addEventListener('keydown', e => { if(e.key === 'Escape') closeMenu(); });
 // ---------- the board's header and tournament sheet (UI_BOARD, Step-0 spec §4, phase B3) ----------
@@ -2871,9 +2874,9 @@ function boardSheet(){
     <button type="button" class="b-row b-close" data-bhclose><span>Done</span></button></div>`;
   if(sp){ fillLogo(sh, sp); wireSponsor(sh, T); const b = sh.querySelector('[data-spbiz]'); if(b){ const go = b.onclick, key = b.onkeydown; b.onclick = () => { closeSheet(); go(); }; b.onkeydown = e => { if(e.key === 'Enter' || e.key === ' ') closeSheet(); key(e); }; } }
   sh.hidden = false; g.classList.add('b-menu');
-  sh.querySelector('[data-bhclose]').focus();
+  sh.querySelector('[data-bhclose]').focus({ preventScroll: true }); unscroll();
 }
-function closeSheet(){ const sh = $('bHudSheet'); if(sh && !sh.hidden){ sh.hidden = true; $('game').classList.remove('b-menu'); const c = $('bHud'); if(c) c.focus(); } }
+function closeSheet(){ const sh = $('bHudSheet'); if(sh && !sh.hidden){ sh.hidden = true; $('game').classList.remove('b-menu'); const c = $('bHud'); if(c) c.focus({ preventScroll: true }); unscroll(); } }
 if(BOARD) document.addEventListener('keydown', e => { if(e.key === 'Escape') closeSheet(); });
 const mmss = ms => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 // The tournament break card (every 10 levels, server/club.js): over the middle of the felt once this table's hand is over,
