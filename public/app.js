@@ -1634,9 +1634,9 @@ function boardSizes(area, cls){
   return S;
 }
 // The board's layout for n seats in the table area (pixels of the area), in the shape tableGeo returns
-function boardGeo(n){
+function boardGeo(n, empty = []){
   const a = $('tableArea'), W = a.clientWidth || 360, H = a.clientHeight || 520, cls = boardClass(), C = BCLS[cls];
-  const vw = scr().w, key = `b:${n}:${W}:${H}:${cls}:${vw}`;
+  const vw = scr().w, key = `b:${n}:${W}:${H}:${cls}:${vw}:${empty.join('.')}`;
   if(GEO && GEO.key === key) return GEO;
   if(GEOS.has(key)) return GEO = GEOS.get(key);
   const land = cls === 'L', AV = C.av, R = C.band, S = boardSizes(a, cls);
@@ -1732,6 +1732,10 @@ function boardGeo(n){
     const d = Math.min(...row.map(k => gapOf(k, -1))) > Math.min(...row.map(k => gapOf(k, 1))) ? -1 : 1;
     row.forEach(k => { seats[k] = seatAt(qs[k], k - 1, d); });
   }
+  // (an empty seat is its "+" alone, the avatar's size: no plate, no cards. The middle keeps clear of that only, so a
+  // short-handed table at 9 keeps its board cards at their size: a second player's iPhone, 2026-10-23, 2 seated at 9,
+  // the flop drawn small between plates that were not there)
+  for(const k of empty){ const q = seats[k]; if(!q) continue; const a = [q.x, q.y, AV / 2, AV / 2]; seats[k] = { ...q, core: a, boxes: [a, a, a] }; }
   // your seat: your cards over the bottom rail, your plate under the rail (upright) or on it (sideways), in the middle
   // (sideways a size smaller, at most 0.17 of the felt's height: the owner's iPhone, 2026-10-23, the two cards large over the rail)
   const hw = Math.round(Math.max(30, Math.min(64, vw * C.hw, land ? fh * .17 : 64))), hh = Math.round(hw * 1.4), hpw = Math.max(104, Math.min(120, hw * 2 + 8));
@@ -1763,7 +1767,8 @@ function boardGeo(n){
   const RINGS = Array.from({ length: 17 }, (_, i) => .94 - i * .04);
   // (the seats take their spots one by one, round the table; where that leaves one without a clean spot at the middle's
   // chosen place, the other way round, and the side seats first, are tried too, and the order with the least miss kept)
-  const ORDERS = [Array.from({ length: m }, (_, i) => i + 1)];
+  // (an empty seat has no chips and no button to place: it is left out, and given a spot on the 70% ring at the end)
+  const ORDERS = [Array.from({ length: m }, (_, i) => i + 1).filter(i => !empty.includes(i))];
   ORDERS.push([...ORDERS[0]].reverse(), [...ORDERS[0]].sort((a, b) => Math.abs(seats[b].nx) - Math.abs(seats[a].nx)));
   // (`bound`: the miss the caller already has in hand. A try that reaches it can't be chosen, so it stops there, and its
   // miss, at least the bound, says so: the same layout as trying it to the end, found in a fraction of the time)
@@ -1845,12 +1850,14 @@ function boardGeo(n){
       const stack = [[cx, by, boardW / 2, bh / 2], [cx, by - bh / 2 - 6 - potH / 2, S.pot[0] / 2, potH / 2], [cx, by + bh / 2 + 6 + mh / 2, msgW / 2, mh / 2]];
       // (the board and the pot over a plate weigh most; the winner line, there only after a hand, less; then the chips)
       const touch = cores.filter(b => hitAny(b, stack.slice(0, 2), 2)).length * 100 + unions.filter(b => hitAny(b, stack.slice(0, 2), 2)).length * 60 + cores.filter(b => hitAny(b, [stack[2]], 2)).length * 20;
-      const ch = chipsFor(stack, undefined, best ? best.miss - 10 * touch : Infinity), cand = { bw, bh, by, msgW, stack, ...ch, ch, miss: ch.miss + 10 * touch };
+      // (and a smaller board weighs too, so the board is not made smaller only to find a chip a cleaner spot)
+      const shrink = Math.round((1 - f) * 40), ch = chipsFor(stack, undefined, best ? best.miss - 10 * touch - shrink : Infinity), cand = { bw, bh, by, msgW, stack, ...ch, ch, miss: ch.miss + 10 * touch + shrink };
       if(!best || cand.miss < best.miss) best = cand;
     } }
   const ch0 = best.ch;
   if(ch0.miss){ const ch = chipsFor(best.stack, ORDERS, ch0.miss); if(ch.miss < ch0.miss) best = { ...best, ...ch, miss: best.miss - ch0.miss + ch.miss }; }
   const mid = best, cost = best.miss, bets = best.bets, dealers = best.dealers;
+  for(const k of empty) if(seats[k] && !bets[k]){ bets[k] = onRing(seats[k].x, seats[k].y, .7); dealers[k] = onRing(seats[k].x, seats[k].y, .84); }
   const geo = { key, W, H, cls, land, look: '', sq: 1, k: 0, inset: 7, g: 0, nar: 0, compact: false, mini: false, tight: false, potSide: false, rail: R, cx, cy, tall: !land, fw, fh, top, left,
     seats, bw: mid.bw, by: mid.by, bx: cx, msgW: mid.msgW, mline: mid.bh / 2 + 6, av: AV, cost, bets, dealers, betAt: k => bets[k], dealerAt: k => dealers[k] };
   GEO = geo; if(GEOS.size > 12) GEOS.delete(GEOS.keys().next().value);
@@ -1892,9 +1899,11 @@ function layoutOf(d){
   // the chips in front of a seat never read wider than "8,888" or "88.8K" (bigger bets read 12.5K, 125K, 1.2M; see
   // chipFmt), so the seats have the same room all hand and don't move when someone bets big
   const bet = '88.8K';
-  const allowed = d.allowed || [0, 1, 2, 3, 4, 5, 6, 7, 8], n = allowed.length, G = BOARD ? boardGeo(n) : tableGeo(n, bet);
+  const allowed = d.allowed || [0, 1, 2, 3, 4, 5, 6, 7, 8], n = allowed.length;
   const mySeat = d.seats.findIndex(p => p && club && p.uid === club.me.id), base = Math.max(0, allowed.indexOf(mySeat));
   const rel = s => (allowed.indexOf(s) - base + n) % n;
+  // (the board's layout knows which seats are empty, by their place round the table)
+  const G = BOARD ? boardGeo(n, allowed.filter(s => !d.seats[s]).map(rel).filter(Boolean).sort((x, y) => x - y)) : tableGeo(n, bet);
   return { allowed, rel, G, posOf: s => pxToPct([G.seats[rel(s)].x, G.seats[rel(s)].y]), betOf: s => G.betAt(rel(s)), dealerOf: s => G.dealerAt(rel(s)) };
 }
 const centerPx = () => GEO ? [GEO.bx, GEO.by] : pctToPx([50, 45]);
@@ -2591,8 +2600,13 @@ function renderControls(d, mySeat, mine){
     line = rest.every(x => !x) ? 'Next hand coming up…' : R.length === 1 ? `Winning hand: <b>${esc(rest[0])}</b>` : R.map(esc).join('<br>');
   }
   // (the board: the quick actions, or nothing, with "⋯" at the end of the row, which keeps its height, §3.5)
-  if(BOARD) pre = pre ? pre.replace(/<\/div>$/, B_MORE + '</div>').replace('class="preacts', `style="--n:${(pre.match(/<button/g) || []).length}" class="b-acts preacts`) : `<div class="b-acts b-idle" style="--n:0">${B_MORE}</div>`;
-  c.innerHTML = `<div class="info-line">${line}</div>${pre}`;
+  // (the board, sitting out: the words on the info line, "I'm back" in the action row's empty place before "⋯". In the
+  // line, the button overflowed it, under the free-play line, and Safari centred the overflow up under your plate:
+  // the owner's iPhone, 2026-10-23)
+  const away = BOARD && meSeat && meSeat.away && !showLine;
+  if(away){ line = "You're sitting out, so your hands fold automatically."; pre = `<div class="b-acts b-idle b-back" style="--n:0"><button type="button" class="btn green" id="backBtn">I'm back</button>${B_MORE}</div>`; }
+  else if(BOARD) pre = pre ? pre.replace(/<\/div>$/, B_MORE + '</div>').replace('class="preacts', `style="--n:${(pre.match(/<button/g) || []).length}" class="b-acts preacts`) : `<div class="b-acts b-idle" style="--n:0">${B_MORE}</div>`;
+  c.innerHTML = `<div class="info-line${away ? ' b-away' : ''}">${line}</div>${pre}`;
   const bb = $('backBtn'); if(bb) bb.onclick = () => send({ t: 'back' });
   c.querySelectorAll('[data-show]').forEach(btn => btn.onclick = () => {
     const cards = btn.dataset.show ? btn.dataset.show.split(',').map(Number) : [];
@@ -2701,10 +2715,8 @@ function drawSizing(d, meSeat){
 }
 // ---------- the board's action row (UI_BOARD, Step-0 spec §3.5) ----------
 // Fold red, Call blue with the amount, Raise gold "Raise to N" (the sizing it would open on), and "⋯" for the rest.
-// One tap on Raise raises by the amount it shows (owner, 2026-10-23); the narrow button beside it (sliders, "Choose
-// amount") opens the sizing (the presets over the row, the slider in it), whose gold button then confirms.
+// The first tap on Raise opens the sizing (the presets over the row, the slider in it); the gold button then confirms.
 const B_MORE = '<button type="button" class="b-more" data-bmore aria-label="Table menu" aria-haspopup="dialog">⋯<i class="b-unread" aria-hidden="true"></i></button>';
-const B_SIZE = '<button type="button" class="b-szb" id="aSize" aria-label="Choose amount"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h12M4 14h12"/><circle cx="8" cy="6" r="2.2" fill="var(--b-surface)"/><circle cx="12.5" cy="14" r="2.2" fill="var(--b-surface)"/></svg></button>';
 function boardPresets(d){
   const L = d.legal, bb = L.bb || d.blinds[1];
   const round = v => v >= L.maxTo ? L.maxTo : Math.round(v / 100) * 100;
@@ -2724,11 +2736,11 @@ function boardActions(d, meSeat){
   c.innerHTML = `${turnBarHTML(d)}<div class="act-main b-acts" style="--n:${(L.canCheck ? 1 : 2) + (L.canRaise ? 1 : 0)}">
     ${L.canCheck ? '' : '<button class="act-btn fold" id="aFold"><b>Fold</b></button>'}
     <button class="act-btn call" id="aCall"><b>${L.canCheck ? 'Check' : callAll ? 'All-in' : 'Call'}</b>${L.canCheck ? '' : ` <span class="num">${fmt(L.toCall)}</span>`}</button>
-    ${L.canRaise ? `<button class="act-btn raise${word === 'All-in' ? ' allin' : ''}" id="aRaise"><b>${word === 'Raise to' ? 'Raise<span class="b-to"> to</span>' : word}</b> <span class="num">${fmt(to)}</span></button>` : ''}${L.canRaise && !allInOnly ? B_SIZE : ''}${B_MORE}
+    ${L.canRaise ? `<button class="act-btn raise${word === 'All-in' ? ' allin' : ''}" id="aRaise"><b>${word}</b> <span class="num">${fmt(to)}</span></button>` : ''}${B_MORE}
   </div>`;
   if($('aFold')) $('aFold').onclick = () => sendAction(d, { t: 'fold' });
   $('aCall').onclick = () => sendAction(d, L.canCheck ? { t: 'check' } : { t: 'call' });
-  if(L.canRaise){ $('aRaise').onclick = () => sendAction(d, { t: 'raise', to }); if(!allInOnly) $('aSize').onclick = () => drawSizing(d, meSeat); }
+  if(L.canRaise) $('aRaise').onclick = allInOnly ? () => sendAction(d, { t: 'raise', to: L.maxTo }) : () => drawSizing(d, meSeat);
   tickClock();
 }
 function boardSizing(d, meSeat){

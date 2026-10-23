@@ -298,14 +298,6 @@
 [data-ui="board"] #game .dock .act-btn.back{background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);box-shadow:none}
 [data-ui="board"] #game .dock .act-btn.back b{font-size:24px;font-weight:400}
 [data-ui="board"] #game .dock .b-more{position:relative;height:100%;min-height:44px;border-radius:var(--b-r-btn);background:var(--b-more);border:1px solid var(--b-more-line);color:var(--b-more-icon);font-size:20px;font-weight:600;line-height:1;padding:0}
-/* (the amount: a narrow button beside Raise opens the sizing; Raise itself raises in one tap. Its own 44 px column) */
-[data-ui="board"] #game .dock .b-acts:has(.b-szb){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px 44px}
-[data-ui="board"] #game .dock .b-szb{position:relative;height:100%;min-height:44px;min-width:44px;border-radius:var(--b-r-btn);background:var(--b-more);border:1px solid var(--b-hair-gold);color:var(--b-gold-text);padding:0;display:flex;align-items:center;justify-content:center}
-[data-ui="board"] #game .dock .b-szb::after{display:none}
-/* (where that leaves Raise too narrow for "Raise to" on one line, under 70 px: "Raise" over the amount, as Call reads) */
-[data-ui="board"] #game .dock .b-acts .act-btn.raise#aRaise{container-type:inline-size}
-[data-ui="board"] #game .dock .act-btn.raise b .b-to{font:inherit;color:inherit;opacity:inherit;letter-spacing:inherit}
-@container (max-width:70px){ [data-ui="board"] #game .dock .act-btn.raise .b-to{display:none} }
 [data-ui="board"] #game .dock .b-more .b-unread{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--b-live);display:none}
 [data-ui="board"] #game .dock .b-more.unread .b-unread{display:block}
 /* not your turn: the quick actions in the same row, neutral (§3.5) */
@@ -385,7 +377,6 @@
   [data-ui="board"] #game.land .dock .turnrow .turnbar{width:calc((100% - 24px) * .62)}
   [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 56px 44px}
   [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz) .b-more{grid-column:-2}
-  [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz):has(.b-szb){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px 56px 44px}
   [data-ui="board"] #game.land .dock .act-btn{flex-direction:column;gap:0}
   [data-ui="board"] #game.land .dock .act-btn b,[data-ui="board"] #game.land .dock .act-btn span{font-size:var(--b-t-14)}
 }
@@ -579,7 +570,6 @@
 [data-ui="board"] #game.land.b-col .dock .turnrow .turnbar{left:0;right:0;width:auto;top:calc(var(--bd-band) + var(--bd-gap) / 2 - 1px)}
 [data-ui="board"] #game.land.b-col .dock .b-acts:not(.b-sz):not(.b-idle),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz):not(.b-idle){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px;gap:6px}
 [data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz) .b-more{grid-column:auto}
-[data-ui="board"] #game.land.b-col .dock .b-acts:not(.b-sz):not(.b-idle):has(.b-szb),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz):not(.b-idle):has(.b-szb){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 44px 44px}
 [data-ui="board"] #game.land.b-col .dock .b-acts.b-sz{grid-template-columns:44px minmax(0,1fr) minmax(84px,.9fr);gap:6px}
 [data-ui="board"] #game.land.b-col .dock .act-btn{flex-direction:column;gap:0;padding:0 2px}
 [data-ui="board"] #game.land.b-col .dock .act-btn b,[data-ui="board"] #game.land.b-col .dock .act-btn span{font-size:var(--b-t-14)}
@@ -634,3 +624,14 @@
 [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) #playLine{top:calc(6px + var(--bd-land-row) - 30px)}
 @media (min-width:760px){ [data-ui="board"] #game.land:not(.b-col) .dock:has(.xtime:not(:disabled)) #playLine{width:calc(42% - 100px)} }
 [data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) #playLine{top:calc(var(--bd-pad) + var(--bd-band) - 30px);right:64px}
+
+/* ---------- sitting out: the words on the info line, "I'm back" in the action row before "⋯" (owner's iPhone,
+   2026-10-23: the button in the line overflowed it, cut by the free-play line, and the words rose under your plate) ---------- */
+[data-ui="board"] #game .dock .b-acts.b-back::before{display:none}
+[data-ui="board"] #game .dock .b-acts.b-back #backBtn{justify-self:center;align-self:center;height:44px;min-height:44px;margin:0;padding:0 28px;border-radius:var(--b-r-btn);font-size:var(--b-t-15);font-weight:600}
+/* (where the words take two lines, the smallest phones and sideways: a size smaller, two lines fit the line's height) */
+[data-ui="board"] #game[data-bcls="P-S"] .dock .info-line.b-away,[data-ui="board"] #game.land .dock .info-line.b-away{font-size:12px;line-height:14px}
+/* (sideways, beside the table: the row holds only "I'm back" and "⋯", so it takes only their room and the words and the
+   free-play line beside it get the rest, whole) */
+[data-ui="board"] #game.land:not(.b-col) .dock:has(.b-back) .controls{width:184px}
+[data-ui="board"] #game.land:not(.b-col) .dock:has(.b-back) :is(.info-line,#playLine){width:calc(100% - 24px - 184px - 12px)}
