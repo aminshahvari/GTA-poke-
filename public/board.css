@@ -317,7 +317,7 @@
 [data-ui="board"] #game .dock .b-sz .sz-slider{display:flex;align-items:center;gap:4px;min-width:0}
 [data-ui="board"] #game .dock .b-sz .sz-slider .step{width:44px;height:44px;flex:none;border-radius:50%;background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);font-size:20px}
 [data-ui="board"] #game .dock .b-sz .sz-slider .step::after{display:none}
-[data-ui="board"] #game .dock .b-sz .sz-slider input{flex:1;min-width:0;width:100%;height:44px;background:transparent;accent-color:var(--b-gold);font-size:16px;margin:0}
+[data-ui="board"] #game .dock .b-sz .sz-slider input{flex:1;min-width:0;width:100%;height:44px;background:linear-gradient(90deg,#9c7a3c,#f1dfb0) center/100% 8px no-repeat;border-radius:4px;accent-color:var(--b-gold);font-size:16px;margin:0}
 /* no double-tap zoom at the table (the owner's iPhone, 2026-10-22: quick taps on − / + and the presets zoomed iPhone
    Safari in to about 1.6x, the action row off the screen): taps are taps, pinch zoom and scrolling stay */
 [data-ui="board"] #game,[data-ui="board"] #game :is(.dock,#controls,.sizing,.sz-presets,.sz-slider,.b-acts,.b-sheet,.b-sheet-in,button,input,a,[role=button]){touch-action:manipulation}
