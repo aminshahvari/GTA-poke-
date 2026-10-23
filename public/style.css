@@ -2257,9 +2257,13 @@ body{background:var(--lx-ink)}
 .lv-head .bo-card .br-badge{display:none}
 .lv-head .lv-none{margin:0}
 .lv-watch h2{margin:0;font-size:22px;color:var(--lx-ivory);overflow-wrap:anywhere}
-.lv-tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
-.lv-table{display:grid;gap:2px;min-height:56px;text-align:left}
+.lv-tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:8px}
+.lv-table{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:56px;text-align:left}
+.lv-table-t{display:grid;gap:2px;min-width:0;white-space:nowrap}
 .lv-table small{color:var(--lx-mute);font-weight:500}
+/* the table card says what it does (owner, 2026-10-23: "nobody knows to tap it"): a gold Watch pill with the eye */
+.lv-table-go{flex:none;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:linear-gradient(180deg,#f3e5ab,#d8b46a);color:#14161c;font-size:14px;font-weight:700;letter-spacing:.02em}
+.lv-table-go svg{width:16px;height:16px}
 @media (min-width:600px){ .lv-acts{flex:0 0 auto} }
 /* the whole tournament under the table header as a broadcast HUD (owner's design brief, 2026-10-21, after WSOP / WPT /
    PokerGO / GGPoker): glass strip, thin champagne rules, tiny tracked labels over big tabular numbers; the chip leader in
