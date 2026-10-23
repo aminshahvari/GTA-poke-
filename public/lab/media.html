@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Blindrise · Media lab</title>
+<style>
+:root{--bg:#03070d;--surface:#0a1420;--surface2:#101c2b;--hair:rgba(255,255,255,.08);--hair-gold:rgba(212,178,108,.30);--text:#f4f0e7;--text2:rgba(244,240,231,.64);--text3:rgba(244,240,231,.42);--gold:#d4b26c;--gold-text:#f1d48c;--good:#5ccf98;--bad:#ef7a7f;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"IBM Plex Sans",system-ui,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+body{padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(32px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));max-width:760px;margin:0 auto}
+h1{font-size:13px;letter-spacing:.32em;font-weight:600;color:var(--gold);margin:0 0 2px}
+h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin:28px 0 10px}
+p{margin:6px 0;color:var(--text2)}
+.note{font-size:13px;color:var(--text3)}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:16px;padding:16px;margin:12px 0}
+.gold{border-color:var(--hair-gold)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button,.pick{font:600 15px var(--font);min-height:44px;padding:0 18px;border-radius:12px;border:1px solid var(--hair);background:var(--surface2);color:var(--text);cursor:pointer}
+button.primary,.pick.primary{background:linear-gradient(#d8ad5f,#9c7238);color:#1a1206;border:0}
+button:disabled{opacity:.45}
+.pick{display:inline-flex;align-items:center}
+.pick input{display:none}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:6px 6px;border-bottom:1px solid var(--hair);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--text3);font-weight:500}
+.scroll{overflow-x:auto}
+.ok{color:var(--good)}.no{color:var(--bad)}
+.feed{display:grid;gap:12px}
+.post{background:var(--surface);border:1px solid var(--hair);border-radius:16px;overflow:hidden}
+.post img,.post video{display:block;width:100%;height:auto;background:#000}
+.post .meta{padding:10px 14px;font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums}
+.vid{position:relative}
+.vid .play{position:absolute;inset:0;margin:auto;width:64px;height:64px;border-radius:50%;background:rgba(3,7,13,.6);border:1px solid var(--hair-gold);color:var(--gold-text);font-size:22px}
+#viewer{position:fixed;inset:0;background:rgba(0,0,0,.94);display:grid;place-items:center;z-index:9}
+#viewer img{max-width:100vw;max-height:100vh}
+[hidden]{display:none!important}
+#status,.vstat{min-height:22px;color:var(--gold-text);font-size:13px;margin-top:8px}
+.vprev{margin-top:10px;border-radius:12px;overflow:hidden;max-width:240px}
+.vprev video{display:block;width:100%;height:auto;background:#000}
+#sendstate{font-size:14px;font-weight:600;min-height:22px}
+</style>
+</head>
+<body>
+<h1>BLINDRISE</h1>
+<p><b style="color:var(--text)">Media lab</b> · preview only</p>
+<p class="note">Test files only: no photos of other members, no private documents. Files stay on the preview server and are wiped on every deploy. File names are never sent.</p>
+<div id="signin" class="card" hidden><p><b style="color:var(--text)">Please sign in to the preview app again.</b> Preview accounts are reset each time a new version goes live, so an earlier sign-in stops working. Sign in, then come back to this page.</p><p><a href="/" style="color:var(--gold-text)">Open the preview app</a></p></div>
+<div id="lab" hidden>
+  <div class="card gold">
+    <p><b style="color:var(--text)">1. Photos</b>: pick up to 20. Each becomes a 1080 px wide photo (1080×1440 for a portrait) and a small thumbnail, on this phone.</p>
+    <div class="row"><label class="pick primary">Choose photos<input id="photos" type="file" accept="image/*" multiple></label></div>
+  </div>
+  <div class="card gold">
+    <p><b style="color:var(--text)">2. Videos</b>: pick clips. An H.264 clip of at most 15 s and 10 MB goes as it is, with its location and device details removed. Any other clip is made 720p on this phone, in real time.</p>
+    <div class="row"><label class="pick primary">Choose videos<input id="videos" type="file" accept="video/*" multiple></label><button id="nextVideo" hidden>Prepare next video</button></div>
+    <div id="vstatus" class="vstat" aria-live="polite"></div>
+    <div id="vprev" class="vprev" hidden></div>
+  </div>
+  <div id="status" aria-live="polite"></div>
+  <h2>Measurements</h2>
+  <div class="card scroll"><table id="results"><thead><tr><th>#</th><th>Kind</th><th>Original</th><th>Result</th><th>Thumb / poster</th><th>Size</th><th>Time</th><th>Quality</th><th>EXIF / GPS before</th><th>After</th><th>Check</th></tr></thead><tbody></tbody></table></div>
+  <div class="card" id="summary"><p class="note">Results appear here as files are prepared.</p></div>
+  <h2>Monthly cost from these measurements</h2>
+  <div class="card scroll" id="costs"><p class="note">Appears after the first file.</p></div>
+  <div class="row"><button id="send" class="primary" disabled>Send results to Claude</button><button id="copy" disabled>Copy results</button><button id="clear">Clear my lab files</button></div>
+  <p id="sendstate" aria-live="polite"></p>
+  <h2>Feed preview</h2>
+  <p class="note">The same files as a feed would show them: thumbnails load as you scroll, a tap opens the full photo, and videos show their poster until tapped.</p>
+  <div id="feed" class="feed"></div>
+  <p class="note" id="loadstats"></p>
+</div>
+<div id="viewer" hidden></div>
+<script src="/lab/mp4meta.js"></script>
+<script src="/lab/media.js"></script>
+</body>
+</html>
