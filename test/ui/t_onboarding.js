@@ -114,6 +114,8 @@ const homeBox = pg => pg.evaluate(async () => {
   await A.click('#bOnb [data-onb=next]'); b = await welcomeBox(A);
   const c3 = await text(A, '#bOnb .b-onb-card');
   check(b.card === '3' && c3.includes(tName) && /You're registered/.test(c3) && /Your invite signed you up/.test(c3), `A: card 3 names the next game and says they're registered by their invite: "${c3}"`);
+  check(!(await A.$('#bOnb [data-onb=skip]')) && c3.includes("so there's nothing else to do."), 'A: card 3 has no Skip, and reads "so there\'s nothing else to do."');
+  check(c2.includes('Club games, a practice table, and short lessons.'), 'A: card 2, the Poker line with its comma');
   check(await A.$eval('#bOnb [data-onb=poker]', e => e.textContent.trim()) === 'See my game', 'A: card 3 has a button to the game ("See my game")');
   await A.click('#bOnb [data-onb=poker]');
   check(!(await A.$('#bOnb')) && await A.evaluate(() => document.querySelector('#tabs [data-tab=poker]').getAttribute('aria-selected') === 'true'), 'A: "See my game" closes the welcome and opens Poker');
@@ -135,7 +137,7 @@ const homeBox = pg => pg.evaluate(async () => {
   let st = await text(A, '#lobbyBody .b-steps');
   check(/First steps/.test(st) && /1 of 4 done/.test(st), `A: First steps shows, the registration already ticked: "${st}"`);
   check(await A.evaluate(() => [...document.querySelectorAll('#lobbyBody .b-steps li')].map(l => !!l.querySelector('.b-step.done')).join()) === 'true,false,false,false', 'A: the ticks: registered yes, picture no, business no, invite no');
-  check(st.includes('So people know who they are playing with.') && st.includes('List it in the Exchange so members can find and refer you.') && st.includes("Bring someone you'd like in the club.") && /Register for the next game.*Add a profile picture.*Introduce your business.*Invite a friend/s.test(st), `A: the four steps, in order, with their lines: "${st}"`);
+  check(st.includes("So people know who they're playing with.") && st.includes('List it in the Exchange so members can find and refer you.') && st.includes("Bring someone you'd like in the club.") && /Register for the next game.*Add a profile picture.*Introduce your business.*Invite a friend/s.test(st), `A: the four steps, in order, with their lines: "${st}"`);
   await A.reload(); await A.waitForSelector('#lobby:not([hidden]) #lobbyBody .b-next'); await sleep(1500);
   check(!(await A.$('#bOnb')), 'A: the welcome does not come back after a reload');
   { const A2 = await page(390, 844); await A2.goto(S.base + '/'); await A2.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), await tokenOf(A)); await A2.reload();
@@ -212,7 +214,7 @@ const homeBox = pg => pg.evaluate(async () => {
       await shot(P, `welcome-${k}-${size}`);
       if(k < 3) await P.click('#bOnb [data-onb=next]');
     }
-    await P.click('#bOnb [data-onb=skip]'); await reminder(P, 3000);
+    await P.keyboard.press('Escape'); await reminder(P, 3000);  // card 3 has no Skip; Escape still closes it
     const hb = await homeBox(P);
     check(hb.next && hb.firstIsNext && hb.next.top >= hb.barBottom - .5 && hb.next.bottom <= hb.tabsTop + .5, `${size}: Home opens on the whole Next game card, between the top bar and the tab bar (${hb.next && Math.round(hb.next.top)}-${hb.next && Math.round(hb.next.bottom)}, bar ${Math.round(hb.barBottom)}, tabs ${Math.round(hb.tabsTop)})`);
     check(hb.lastBottom <= hb.tabsTop2 + .5 && hb.sw <= hb.vw, `${size}: the end of Home clears the tab bar (${Math.round(hb.lastBottom)} <= ${Math.round(hb.tabsTop2)}) and nothing scrolls sideways`);

@@ -577,7 +577,7 @@ function bNextHTML(){
   if(!bMine(T) && bByInvite(T)) local.del('onbInv');   // (they cancelled: a later registration is their own)
   const mine = bMine(T), run = T.status === 'running';
   const status = run && club.myTable ? '<p>Your table is ready.</p>'
-    : mine ? `<p class="b-next-reg">${bIc('check')}<b>You're registered</b></p><p>${bByInvite(T) ? 'Your invite signed you up, so there is nothing else to do. ' : ''}${run ? 'Your table opens by itself in a moment.' : 'Open Blindrise at the start time and your table opens by itself.'}</p>`
+    : mine ? `<p class="b-next-reg">${bIc('check')}<b>You're registered</b></p><p>${bByInvite(T) ? "Your invite signed you up, so there's nothing else to do. " : ''}${run ? 'Your table opens by itself in a moment.' : 'Open Blindrise at the start time and your table opens by itself.'}</p>`
     : run ? `<p>${T.lateOpen ? 'It has started, and you can still join.' : 'It has started. You can watch any table.'}</p>`
     : '<p>Free to join. Register to save your seat.</p>';
   const acts = run && club.myTable ? `<button class="btn red" data-watch="${esc(club.myTable)}">Go to my table</button>`
@@ -590,7 +590,7 @@ function bNextHTML(){
 function bSteps(){
   const T = bGame(), m = memberOf(club.me.id);
   return [{ k: 'reg', done: bMine(T), t: 'Register for the next game', sub: T ? esc(T.name) : 'No game open yet' },
-    { k: 'pic', done: !!(m && m.av), t: 'Add a profile picture', sub: 'So people know who they are playing with.' },
+    { k: 'pic', done: !!(m && m.av), t: 'Add a profile picture', sub: "So people know who they're playing with." },
     { k: 'biz', done: window.BizClub.myStatus() === 'published', t: 'Introduce your business', sub: 'List it in the Exchange so members can find and refer you.' },
     // only where members can invite (the director can switch that off)
     ...(club.membersInvite || club.me.owner ? [{ k: 'invite', done: !!(club.myInvite || club.invitedCount), t: 'Invite a friend', sub: "Bring someone you'd like in the club." }] : [])];
@@ -646,15 +646,15 @@ if(BOARD) document.addEventListener('click', e => {
   const s = e.target.closest('[data-bsponsor]'); if(s){ bFrom = 'home'; window.BizClub.openBiz(s.dataset.bsponsor); }
 });
 // the welcome: three cards over Home, skippable at any card (Skip, Escape); the last one leads to the next game
-const ONB_TABS = [['home', 'Home', "What's next for you, like your next game."], ['poker', 'Poker', 'Club games, a practice table and short lessons.'], ['biz', 'Exchange', 'Member businesses. Find services, exchange referrals, and get found.'], ['club', 'Club', 'The people in your club. Invite friends from here.'], ['profile', 'Profile', 'Your picture, your business, and your settings.']];
+const ONB_TABS = [['home', 'Home', "What's next for you, like your next game."], ['poker', 'Poker', 'Club games, a practice table, and short lessons.'], ['biz', 'Exchange', 'Member businesses. Find services, exchange referrals, and get found.'], ['club', 'Club', 'The people in your club. Invite friends from here.'], ['profile', 'Profile', 'Your picture, your business, and your settings.']];
 function onbCardHTML(i){
-  const T = bGame(), mine = bMine(T), head = (t, n) => `<div class="b-onb-top"><span class="eyebrow">${n} of 3</span><button type="button" class="b-onb-skip" data-onb="skip">Skip</button></div><h2 id="bOnbH">${t}</h2>`;
+  const T = bGame(), mine = bMine(T), head = (t, n) => `<div class="b-onb-top"><span class="eyebrow">${n} of 3</span>${n < 3 ? '<button type="button" class="b-onb-skip" data-onb="skip">Skip</button>' : ''}</div><h2 id="bOnbH">${t}</h2>`;
   if(i === 0) return head('Welcome to Blindrise', 1) + "<p>Blindrise is a private members' club — a place to meet people, build real relationships, and grow your business, with social game nights to unwind together.</p><p>It's free to join.</p>"
     + '<div class="b-onb-btns"><button type="button" class="btn red" data-onb="next">Next</button></div>';
   if(i === 1) return head('Where things are', 2) + `<ul class="b-onb-tabs">${ONB_TABS.map(([k, l, d]) => `<li>${bIc(k)}<span><b>${l}</b><small>${d}</small></span></li>`).join('')}</ul><p>The bar at the bottom of the screen takes you to each one.</p>`
     + '<div class="b-onb-btns"><button type="button" class="btn red" data-onb="next">Next</button></div>';
   return head(T ? 'Your next game' : 'How to start', 3) + (T
-    ? `<p class="b-onb-game"><b>${esc(T.name)}</b><span>${bWhen(T)}</span></p><p>${mine ? `You're registered.${bByInvite(T) ? ' Your invite signed you up, so there is nothing else to do.' : ''}` : 'Register to save your seat. It is free.'}</p>`
+    ? `<p class="b-onb-game"><b>${esc(T.name)}</b><span>${bWhen(T)}</span></p><p>${mine ? `You're registered.${bByInvite(T) ? " Your invite signed you up, so there's nothing else to do." : ''}` : 'Register to save your seat. It is free.'}</p>`
       + `<div class="b-onb-btns"><button type="button" class="btn red" data-onb="poker">${mine ? 'See my game' : 'See the game'}</button></div>`
     : '<p>No game is open yet. New games show up on Home as soon as the organizer opens one.</p><p>Meanwhile, try the practice table at your own pace.</p>'
       + '<div class="b-onb-btns"><button type="button" class="btn red" data-onb="demo">Try the practice table</button></div>');
