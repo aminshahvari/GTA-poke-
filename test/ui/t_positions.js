@@ -164,7 +164,7 @@ const nearest = (seats, p) => { const ds = seats.map(s => ({ uid: s.uid, d: Math
     const pg = await browser.newPage({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     await pg.goto(BASE + '/'); await pg.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), dir);
     await pg.reload(); await pg.evaluate(() => document.fonts.ready); await sleep(500);
-    await pg.click('#tabs [data-tab=director]'); await sleep(300);
+    await pg.click('[data-tab=director]'); await sleep(300);   // (the tab, or under UI_BOARD the top bar's Director button)
     await pg.click('[data-demo]'); await sleep(500);
     // the page's state is private, so this reads the table as drawn: the seats with their SB / BB pills before the
     // blinds act again, the D button and the chips

@@ -194,13 +194,13 @@ const DOC_TITLE = document.title;
 let ws = null, club = null, retry = 0;
 const tables = new Map();
 const myCards = new Map(); // tid -> {hand, cards}
-let editingT = false, tab = 'event', view = 'lobby', watchTid = null, lastSent = null, seen = new Set(), lastStatus = null, lastMyTable = null, clockSkew = 0;
+let editingT = false, tab = BOARD ? 'home' : 'event', view = 'lobby', watchTid = null, lastSent = null, seen = new Set(), lastStatus = null, lastMyTable = null, clockSkew = 0;
 // Business Club (public/business.js) gets the few app helpers it needs; it builds its own DOM with textContent
 // dominoes (server/domino, DOMINO=1 only): the club's tournament and the scorepad
 window.Domino.init({ post, toast, modal, me: () => club.me, on: () => !!(club && club.domino),
   rerender: () => { if(club && view === 'lobby' && !(document.activeElement && document.activeElement.closest('#dmForm'))) renderLobby(); } });
 window.BizClub.init({ post, toast, token: () => local.get('token', ''), clubHeader, me: () => club.me, tab: () => tab,
-  openTab: t => { tab = t; view = 'lobby'; showScreen('lobby'); renderLobby(); $('lobbyBody').scrollTop = 0; },
+  openTab: t => { if(BOARD){ bFrom = t === 'biz' ? (tab === 'biz' ? bFrom : tab) : null; if(t === 'event') t = 'home'; } tab = t; view = 'lobby'; showScreen('lobby'); renderLobby(); $('lobbyBody').scrollTop = 0; },
   confirm: (title, text, ok) => modal(`<h2>${esc(title)}</h2><p>${esc(text)}</p>`, [{ label: 'Cancel', value: false }, { label: esc(ok), value: true, primary: true }]) });
 function connect(){
   const token = local.get('token', null);
@@ -235,6 +235,7 @@ function connect(){
 }
 const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
 
+const signOut = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
 function onClub(c){
   club = c; clockSkew = c.now - Date.now();
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
@@ -242,13 +243,13 @@ function onClub(c){
   // the Lounge's Exchange cards: start the feed now, not only when Home renders
   if(!c.suspended && !c.spectate && !c.events && (c.features && c.features.clubs || c.me.owner)) window.BizClub.prefetch();
   $('chatBtn').hidden = !!c.spectate; // watchers from another club never see a table's chat
-  $('meChip').innerHTML = c.spectate ? `<button class="club-btn" data-live="home" aria-label="Back to ${esc(c.home.name)}">← ${esc(c.home.name)}</button>` : `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
-  if(!c.spectate){
+  $('meChip').innerHTML = c.spectate ? `<button class="club-btn" data-live="home" aria-label="Back to ${esc(c.home.name)}">← ${esc(c.home.name)}</button>` : BOARD ? bTopHTML(c) : `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
+  if(!c.spectate && !BOARD){
     $('meBtn').onclick = () => openProfile(c.me.id);
     if($('clubBtn')) $('clubBtn').onclick = pickClub;
-    $('outBtn').onclick = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
+    $('outBtn').onclick = signOut;
   }
-  $('dirTab').hidden = !c.me.owner;
+  if($('dirTab')) $('dirTab').hidden = !c.me.owner;
   const st = c.tourney && c.tourney.status;
   if(st === 'finished' && lastStatus === 'running'){ view = 'lobby'; watchTid = null; showScreen('lobby'); tab = 'event'; celebrate(); }
   lastStatus = st;
@@ -377,7 +378,7 @@ $('lobbyBody').addEventListener('click', e => {
   if(e.target.closest('[data-kick]')) return;
   const t = e.target.closest('[data-prof]'); if(t) openProfile(t.dataset.prof);
 });
-$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if(!b) return; tab = b.dataset.tab; if(tab === 'learn'){ openHand = null; send({ t: 'hands' }); } if(tab === 'biz') window.BizClub.open('list'); renderLobby(); $('lobbyBody').scrollTop = 0; });
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if(!b) return; tab = b.dataset.tab; if(tab === 'learn'){ openHand = null; send({ t: 'hands' }); } if(tab === 'biz'){ if(BOARD){ bFrom = null; window.BizClub.show('biz'); } else window.BizClub.open('list'); } renderLobby(); $('lobbyBody').scrollTop = 0; });
 const nameOf = uid => { const m = club.members.find(x => x.id === uid); if(m) return m.name; for(const h of club.history) for(const r of h.results) if(r.uid === uid) return r.name; return 'Former member'; };
 const pchip = (uid, removable) => `<span class="pchip ${uid === club.me.id ? 'me' : ''}" data-prof="${esc(uid)}">${avHTML(uid, nameOf(uid), 'xs')}${esc(nameOf(uid))}${removable ? `<button data-kick="${esc(uid)}" aria-label="Remove from tournament">×</button>` : ''}</span>`;
 const when = ms => new Date(ms).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -394,6 +395,7 @@ function renderLobby(){
   const bizTab = document.querySelector('#tabs [data-tab="biz"]');
   bizTab.hidden = !clubsVisible;
   if(tab === 'biz' && !clubsVisible) tab = 'event';
+  if(BOARD) return boardLobby(body, clubsOn, clubsVisible);
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   // Opportunity Club: a small count of requests waiting for my answer on the Business tab; never while seated in a running tournament
   if(clubsVisible) window.OppClub.badge(bizTab, !!(club.myTable && club.tourney && club.tourney.status === 'running'));
@@ -403,6 +405,146 @@ function renderLobby(){
   if(tab === 'biz'){ body.replaceChildren(); window.BizClub.render(body); return; }
   if(home) renderHome(body, clubsOn, clubsVisible && !playing);
   else body.innerHTML = tab === 'board' ? pageHead('Poker · The Strategy Table', 'Club standings') + boardHTML() : tab === 'learn' ? pageHead('Learn', 'The Salon') + learnHTML() : directorHTML();
+  wireLobby();
+}
+// ---------- the board's navigation (UI_BOARD, Issue #32 Step-0 spec §5, phase B4) ----------
+// Five tabs at the bottom (Home / Poker / Exchange / Club / Profile) and a top bar (wordmark; bell, Director for the
+// club director, avatar). Today's pages and cards are re-homed into the tabs as they are: nothing is redesigned here.
+// Leaderboard and Learn (today's Salon) open from Poker, Director from the top bar and Club; Exchange is unchanged.
+let bFrom = null;   // the tab that opened an Exchange page (My business from Profile, the Bulletin from Club): it stays lit
+const B_IC = {
+  home: '<path d="M3.5 11 12 4l8.5 7M6 9.5V20h4.5v-5.5h3V20H18V9.5"/>',
+  poker: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3"/>',
+  biz: '<path d="M9 6V4.8c0-.4.4-.8.8-.8h4.4c.4 0 .8.4.8.8V6M4 7h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 12h16"/>',
+  club: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3"/><circle cx="16.5" cy="9" r="2.6"/><path d="M15.8 14.3c2.6.1 4.5 1.8 5 4.7"/>',
+  profile: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-4 3.8-6.3 7.5-6.3s6.7 2.3 7.5 6.3"/>',
+  bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0"/>',
+  dir: '<path d="M5 5v14M12 5v14M19 5v14"/><circle cx="5" cy="15" r="2"/><circle cx="12" cy="8" r="2"/><circle cx="19" cy="13" r="2"/>',
+  learn: '<path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13"/>',
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4.5c0 3 1.5 4.5 3.7 4.8M16 6h3.5c0 3-1.5 4.5-3.7 4.8M12 13v4M8.5 20h7M10 17h4l.5 3h-5z"/>',
+  hands: '<rect x="4" y="5" width="9" height="13" rx="1.5" transform="rotate(-8 8.5 11.5)"/><rect x="11" y="5" width="9" height="13" rx="1.5" transform="rotate(8 15.5 11.5)"/>',
+  invite: '<circle cx="10" cy="8.5" r="3.5"/><path d="M3.5 19.5c.7-3.5 3.3-5.5 6.5-5.5 1.6 0 3 .5 4.1 1.3M18 13v6M15 16h6"/>',
+  swap: '<path d="M5 8h13l-3-3M19 16H6l3 3"/>',
+  stats: '<path d="M5 19V11M10 19V5M15 19v-6M20 19V8"/>',
+  pic: '<rect x="3.5" y="6" width="17" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8.5 6l1.5-2h4l1.5 2"/>',
+  scan: '<path d="M4 8V5.5C4 4.7 4.7 4 5.5 4H8M16 4h2.5c.8 0 1.5.7 1.5 1.5V8M20 16v2.5c0 .8-.7 1.5-1.5 1.5H16M8 20H5.5C4.7 20 4 19.3 4 18.5V16"/><rect x="7" y="8.5" width="10" height="7" rx="1.2"/><path d="M9.5 11h3M9.5 13h5"/>',
+  out: '<path d="M14 4h4.5c.8 0 1.5.7 1.5 1.5v13c0 .8-.7 1.5-1.5 1.5H14M10 8l-4 4 4 4M6 12h10"/>',
+  chev: '<path d="M9 6l6 6-6 6"/>' };
+const bIc = (k, cls = '') => `<svg class="b-ic${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${B_IC[k]}</svg>`;
+const B_TABS = [['home', 'Home'], ['poker', 'Poker'], ['biz', 'Exchange'], ['club', 'Club'], ['profile', 'Profile']];
+if(BOARD){
+  $('tabs').setAttribute('aria-label', 'Main');
+  $('tabs').innerHTML = B_TABS.map(([k, l]) => `<button role="tab" data-tab="${k}" aria-selected="${k === 'home'}"${k === 'biz' ? ' class="biz-tab"' : ''}>${bIc(k)}<span>${l}</span></button>`).join('');
+}
+// the top bar's right side: the bell (this phone's reminders), Director (the club director only), the avatar (Profile)
+function bTopHTML(c){
+  return `<button type="button" class="b-topbtn b-bell${c.pushOn ? ' on' : ''}" id="bBell" aria-label="Notifications ${c.pushOn ? 'on' : 'off'}">${bIc('bell')}</button>`
+    + `<button type="button" class="b-topbtn" id="dirTab" data-tab="director" aria-label="Director"${c.me.owner ? '' : ' hidden'}>${bIc('dir')}</button>`
+    + `<button type="button" class="b-topbtn b-avbtn" id="meBtn" data-tab="profile" aria-label="Profile">${avHTML(c.me.id, c.me.name, 'sm')}</button>`;
+}
+// the bell: today's reminder switch, nothing new (no inbox)
+async function bellTap(){
+  if(club && club.pushOn) return modal('<h2>Notifications are on</h2><p>We notify you 15 minutes before a tournament starts, and again when the cards are dealt.</p>', [{ label: 'OK', value: 1, primary: true }]);
+  if(pushSupported() && Notification.permission !== 'denied'){
+    if(await modal('<h2>Get notifications?</h2><p>We notify this phone 15 minutes before a tournament starts, and again when the cards are dealt.</p>', [{ label: 'Not now', value: null }, { label: 'Notify me', value: 1, primary: true }])) enablePush();
+    return;
+  }
+  if(isIOS() && !standalone()) return iosNote();
+  modal('<h2>Notifications are off</h2><p>This browser can\'t show notifications, or they are blocked in its settings.</p>', [{ label: 'OK', value: 1, primary: true }]);
+}
+// go to a tab (or one of today's pages under it) from a row or the top bar
+function bGo(t, seg){
+  bFrom = null;
+  if(t === 'learn'){ learnSeg = seg || 'lessons'; openHand = null; if(learnSeg === 'hands') send({ t: 'hands' }); }
+  if(t === 'board') boardSeg = seg || 'board';
+  if(t === 'biz' || t === 'opp' || t === 'mine' || t === 'scan'){ bFrom = tab === 'biz' ? bFrom : tab; window.BizClub.show(t === 'opp' ? 'opp' : t === 'scan' ? 'scan' : 'biz'); if(t === 'mine') window.BizClub.open('mine'); t = 'biz'; }
+  tab = t; view = 'lobby'; showScreen('lobby'); renderLobby(); $('lobbyBody').scrollTop = 0;
+}
+if(BOARD){
+  document.addEventListener('click', e => {
+    const top = e.target.closest('#meChip [data-tab]'); if(top) return bGo(top.dataset.tab);
+    if(e.target.closest('#bBell, [data-bbell]')) return bellTap();
+    const r = e.target.closest('[data-bgo]'); if(r) return bGo(r.dataset.bgo, r.dataset.seg);
+    if(e.target.closest('[data-bact="profile"]')) return openProfile(club.me.id);
+    if(e.target.closest('[data-bact="pic"]')) return pickAvatar();
+    if(e.target.closest('[data-bact="club"]')) return pickClub();
+    if(e.target.closest('[data-bact="out"]')) return signOut();
+  });
+}
+// which tab is lit: today's pages light the tab they open from
+function bNav(){
+  if(tab === 'board' || tab === 'learn') return 'poker';
+  if(tab === 'director') return 'club';
+  if(tab === 'biz' && (bFrom === 'club' || bFrom === 'profile')) return bFrom;
+  return tab;
+}
+// a list row that opens one of today's pages; at least 56 tall
+const bRow = (attrs, ic, title, sub) => `<button type="button" class="b-row" ${attrs}>${bIc(ic, 'b-row-ic')}<span class="b-row-t"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span>${bIc('chev', 'b-chev')}</button>`;
+const bRows = (label, rows) => rows.length ? `<nav class="b-rows" aria-label="${label}">${rows.join('')}</nav>` : '';
+const bHead = (title, sub) => `<header class="b-pagehead"><h2>${title}</h2>${sub ? `<small>${sub}</small>` : ''}</header>`;
+// today's tournament cards (eventHTML), split as the Lounge splits them: the hero (and the director's "Start the next
+// tournament" box), then older results
+function bEventSplit(){
+  const ev = document.createElement('div'); ev.innerHTML = eventHTML();
+  const cards = [...ev.children];
+  let n = cards.length ? 1 : 0;
+  if(cards[0] && cards[0].classList.contains('next-box') && cards[1] && !cards[1].querySelector('table')) n = 2;
+  const main = cards.slice(0, n).find(c => !c.classList.contains('next-box') && c.querySelector('.status-pill'));
+  if(main){ main.classList.add('poker-hero'); main.insertAdjacentHTML('afterbegin', HERO_ART); }
+  return { top: cards.slice(0, n), rest: cards.slice(n) };
+}
+function boardLobby(body, clubsOn, clubsVisible){
+  const owner = club.me.owner, playing = !!(club.myTable && club.tourney && club.tourney.status === 'running');
+  if(tab === 'event') tab = 'poker';
+  if(tab === 'director' && !owner) tab = 'club';
+  if(tab === 'biz' && !clubsVisible) tab = 'home';
+  const lit = bNav();
+  document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === lit));
+  if($('dirTab')) $('dirTab').classList.toggle('on', tab === 'director');
+  if(clubsVisible) window.OppClub.badge(document.querySelector('#tabs [data-tab="club"]'), playing);
+  document.querySelector('.app').classList.toggle('wide', tab === 'biz' || (tab === 'home' && clubsVisible && !playing));
+  if(tab === 'biz'){ body.replaceChildren(); window.BizClub.render(body); return; }
+  const back = (t, l) => `<button type="button" class="b-back" data-bgo="${t}">${bIc('chev', 'b-back-ic')}${l}</button>`;
+  if(tab === 'board'){ body.innerHTML = back('poker', 'Poker') + pageHead('Poker · The Strategy Table', 'Standings &amp; prizes') + boardHTML(); wireLobby(); return; }
+  if(tab === 'learn'){ body.innerHTML = back('poker', 'Poker') + pageHead('Poker', 'Learn') + learnHTML(); wireLobby(); return; }
+  if(tab === 'director'){ body.innerHTML = back('club', 'Club') + directorHTML(); wireLobby(); return; }
+  const showClubs = clubsVisible && !playing;
+  if(tab === 'poker'){
+    const { top } = bEventSplit();
+    body.innerHTML = bHead(club.events ? 'Blindrise Open' : 'Poker', club.events ? 'Open to every club' : 'The Strategy Table') + beventHTML();
+    body.append(...top);
+    body.insertAdjacentHTML('beforeend', (owner || playing ? '' : demoCard()) + bRows('Poker', [
+      bRow('data-bgo="board"', 'trophy', 'Standings &amp; prizes', 'The leaderboard, prizes and past tournaments'),
+      bRow('data-bgo="learn" data-seg="hands"', 'hands', 'My hands', 'Review the hands you played'),
+      bRow('data-bgo="learn" data-seg="lessons"', 'learn', 'Learn', 'Lessons, rules and the fair deal')]));
+  } else if(tab === 'club'){
+    const switching = club.clubSwitching && club.clubs && club.clubs.length > 1, invite = owner || club.membersInvite;
+    body.innerHTML = bHead(esc(club.club ? club.club.name : 'Club'), owner ? 'Club director' : 'Members') + bRows('Club', [
+      owner ? bRow('data-bgo="director"', 'dir', 'Director', 'Run the club and its tournaments') : '',
+      invite ? bRow('data-invite', 'invite', 'Invite friends', owner ? 'A group link or a personal link' : 'Share your own link') : '',
+      switching ? bRow('data-bact="club"', 'swap', 'Switch club', 'You are in ' + esc(club.club.name)) : ''].filter(Boolean))
+      + (clubsOn || club.events ? '' : comingHTML()) + (owner ? joinQrHTML() : '') + openClubHTML() + window.Domino.homeHTML();
+    if(showClubs){ const opp = document.createElement('section'); opp.className = 'hsec hsec-opp'; opp.setAttribute('aria-labelledby', 'hs-opp'); body.append(opp); window.OppClub.mountHome(opp, false); }
+  } else if(tab === 'profile'){
+    const me = club.me, m = memberOf(me.id), pts = club.shop ? club.shop.balance : null;
+    body.innerHTML = `<section class="b-me" aria-label="You">${avHTML(me.id, me.name, 'big')}<div class="b-me-t"><h2>${esc(me.name)}</h2>
+      <div class="lx-id-meta"><span class="lx-role">${owner ? 'Club director' : 'Member'}</span>${tierPill(m)}${pts != null ? `<span class="lx-pts"><b class="num">${fmt(pts)}</b> points</span>` : ''}</div></div></section>`
+      + picNudgeHTML() + bRows('Profile', [
+      bRow('data-bact="profile"', 'stats', 'My profile and stats', 'Tournaments, how you play, results'),
+      bRow('data-bact="pic"', 'pic', 'Change picture', 'A photo or an avatar'),
+      clubsVisible && !club.events ? bRow('data-bgo="mine"', 'biz', 'My business', 'Your card in the Exchange') : '',
+      clubsVisible && !club.events ? bRow('data-bgo="scan"', 'scan', 'Business Card Scanner', 'Turn a business card into your profile') : '',
+      bRow('data-bbell', 'bell', 'Notifications', club.pushOn ? 'On for tournament reminders' : 'Off'),
+      bRow('data-bact="out"', 'out', 'Sign out', 'Sign back in with your name and PIN')].filter(Boolean));
+  } else {
+    tab = 'home';
+    const { rest } = bEventSplit();
+    body.innerHTML = liveHTML(true) + blindriseHTML();
+    if(showClubs){ const biz = document.createElement('section'); biz.className = 'hsec hsec-biz'; biz.setAttribute('aria-labelledby', 'hs-biz'); body.append(biz); window.BizClub.mountHome(biz, false); }
+    body.append(...rest);
+    if(!body.children.length) body.innerHTML = `<div class="card-box b-empty"><h3>Nothing new right now</h3><p class="note">Tournaments and how to join are on Poker.</p><div class="btn-row"><button class="btn red" data-bgo="poker">Go to Poker</button></div></div>`;
+  }
+  odoPlay(body);
   wireLobby();
 }
 // ---------- Home: Poker, then Business, then Opportunities ----------
@@ -828,7 +970,7 @@ const watching = () => { try{ return sessionStorage.getItem('watch'); }catch(e){
 function spectate(ctx, board){ try{ sessionStorage.setItem('watch', ctx); if(board) sessionStorage.setItem('watchBoard', '1'); else sessionStorage.removeItem('watchBoard'); }catch(e){} location.replace('/'); }
 function stopWatching(){ try{ sessionStorage.removeItem('watch'); sessionStorage.removeItem('watchBoard'); }catch(e){} location.replace('/'); }
 const goMain = () => { local.set('club', 'main'); location.replace('/'); };
-function liveHTML(){
+function liveHTML(noBev){
   const L = club.live; if(!L) return '';
   const p = L.poker, d = L.domino, row = (ic, eye, name, sub, acts, note) => `<div class="lv-row"><span class="hsec-ic ${ic}">${Icons.svg(ic === 'poker' ? 'spade' : 'spark')}</span><div class="lv-t"><span class="eyebrow">${eye}</span><b>${esc(name)}</b><small>${sub}</small>${note ? `<small class="lv-note">${note}</small>` : ''}</div>${acts ? `<div class="lv-acts">${acts}</div>` : ''}</div>`;
   let rows = '';
@@ -842,7 +984,7 @@ function liveHTML(){
     const note = p.registered && !p.playing ? (live ? '' : "You're registered.") : !L.member ? (live ? 'Played by Blindrise club members. Watch any table.' : 'Played by Blindrise club members. You can watch every table once it starts.') : '';
     rows += live && p.tableList ? broadcastHTML(p, acts, note) : row('poker', 'Blindrise · Poker', p.name, sub, acts, note);
   }
-  if(club.bevent) rows += beventHTML();
+  if(club.bevent && !noBev) rows += beventHTML();
   if(d){
     const live = d.status === 'running', R = { allfives: 'All Fives', block: 'Block', draw: 'Draw' }[d.rules.preset] || 'Dominoes';
     const sub = live ? `<span class="lv-live">Live</span> · ${d.playing} ${d.playing === 1 ? 'match' : 'matches'} on the tables · ${d.count} players` : `Registration open · ${d.count} registered · ${R}`;
@@ -1230,7 +1372,8 @@ function showInvite(code, group, max){
   const sb = $('shareBtn'); if(sb) sb.onclick = () => navigator.share({ title: 'Blindrise invite', text, url }).catch(() => {});
 }
 function openTable(tid){ LOCK = null; if(tid !== watchTid){ chatUnread = 0; $('chatDot').hidden = true; } watchTid = tid; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid }); renderTable(); }
-$('lobbyBtn').onclick = () => { openChat(false); stopDemo(); view = 'lobby'; send({ t: 'watch', tid: null }); showScreen('lobby'); renderLobby(); };
+// (the board: from a table back to Poker, where the tournament card and "Go to my table" are)
+$('lobbyBtn').onclick = () => { openChat(false); stopDemo(); view = 'lobby'; if(BOARD){ tab = 'poker'; bFrom = null; } send({ t: 'watch', tid: null }); showScreen('lobby'); renderLobby(); };
 
 // ---------- table ----------
 let GEO = null;

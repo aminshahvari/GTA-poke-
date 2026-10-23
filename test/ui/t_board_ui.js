@@ -590,13 +590,148 @@ async function headsUpSuite(browser, TOK){
   }
 }
 
+// ---------- B4: navigation (§5): the top bar, the five tabs, and every one of today's lobby entry points a tap or two away ----------
+// The club message is patched in the page (as the table fixtures are) so the cards that need a live event show:
+// the Blindrise Open, a founder broadcast, a tournament open for registration with last week's results, a second club
+// to switch to, and "Create your club".
+const NAV_SIZES = [['390x844', 0], ['390x844', 34], ['390x700', 0], ['320x568', 0], ['844x390', 0], ['844x350', 0]];
+async function navPage(browser, tok, w, h, sa){
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const pg = await ctx.newPage();
+  if(sa) await pg.addInitScript(b => { const put = () => { const st = document.createElement('style'); st.textContent = `:root{--sa-b:${b}px}`; document.body.appendChild(st); };
+    if(document.readyState !== 'loading') put(); else document.addEventListener('DOMContentLoaded', put); }, sa);
+  await pg.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
+  await pg.routeWebSocket(/\/ws$/, ws => {
+    const server = ws.connectToServer();
+    ws.onMessage(m => server.send(m));
+    server.onMessage(m => { let j; try{ j = JSON.parse(m); }catch(e){ return ws.send(m); }
+      if(j.t === 'club'){ const c = j.club;
+        c.bevent = { name: 'Blindrise Open Test', status: 'registering', startAt: Date.now() + 86400000, count: 3, stack: 30000, levelMin: 20, open: true, registered: false, playing: false };
+        c.blindrise = [{ title: 'A note from the founder', body: 'Welcome to the board design.', kind: 'post' }];
+        c.tourney = { id: 'tnav', name: 'Friday Night', status: 'registering', regs: [], stack: 30000, levelMin: 20, tableSize: 9, lateLevels: 4, repeat: 'none', startAt: null };
+        c.history = [{ id: 'hnav', name: 'Last Friday', entrants: 2, endedAt: Date.now() - 86400000, results: [{ uid: 'x1', name: 'Test Player 02', place: 1, pts: 10 }, { uid: 'x2', name: 'Test Player 03', place: 2, pts: 5 }], payouts: [] }];
+        c.clubSwitching = true; c.clubs = [c.club, { id: 'cnav', name: 'Harbour Test Club' }];
+        c.openClub = { rules: { v: 1, text: 'Rules' } }; }
+      ws.send(JSON.stringify(j)); });
+  });
+  await pg.goto(BASE + '/'); await pg.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), tok);
+  await pg.reload(); await pg.waitForSelector('#lobby:not([hidden]) #tabs [data-tab="home"]', { timeout: 10000 }).catch(() => {}); await sleep(900);
+  return { ctx, pg };
+}
+const navLook = pg => pg.evaluate(() => {
+  const r = e => e && e.getClientRects().length ? e.getBoundingClientRect() : null, H = innerHeight, W = innerWidth;
+  const sa = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sa-b')) || 0;
+  const bar = r(document.getElementById('tabs')), btns = [...document.querySelectorAll('#tabs [data-tab]')].filter(b => !b.hidden);
+  const sel = document.querySelector('#tabs [aria-selected="true"]'), cs = getComputedStyle(document.documentElement);
+  const gold = cs.getPropertyValue('--b-gold').trim(), x = document.createElement('canvas').getContext('2d');
+  const rgb = c => { x.fillStyle = '#000'; x.fillStyle = c; x.fillRect(0, 0, 1, 1); const d = x.getImageData(0, 0, 1, 1).data; return d.slice(0, 3).join(','); };
+  const top = ['bBell', 'dirTab', 'meBtn'].map(id => { const e = document.getElementById(id), b = r(e); return { id, shown: !!b && !e.hidden, w: b ? b.width : 0, h: b ? b.height : 0 }; });
+  const word = document.querySelector('#lobby .mini-logo .lx-word'), wb = r(word);
+  return { sa, H, W, bar: bar && { h: bar.height, b: bar.bottom, t: bar.top }, tabs: btns.map(b => ({ k: b.dataset.tab, text: b.textContent.trim(), w: r(b) ? r(b).width : 0, h: r(b) ? r(b).height : 0 })),
+    sel: sel && sel.dataset.tab, selColor: sel && getComputedStyle(sel).color, selBg: sel && getComputedStyle(sel).backgroundColor, gold, goldRgb: rgb(gold), selRgb: sel ? rgb(getComputedStyle(sel).color) : '',
+    top, word: word ? { text: word.textContent, shown: !!wb && wb.right <= W } : null,
+    scroll: Math.max(document.documentElement.scrollWidth - W, ...[...document.querySelectorAll('.screen:not([hidden])')].map(s => s.scrollWidth - s.clientWidth)) };
+});
+const tapTab = async (pg, k) => { await pg.tap(`#tabs [data-tab="${k}"]`); await sleep(500); };
+const bodyHas = (pg, sel) => pg.evaluate(s => !!document.querySelector('#lobbyBody ' + s), sel);
+const lit = pg => pg.evaluate(() => (document.querySelector('#tabs [aria-selected="true"]') || {}).dataset.tab);
+const modalText = pg => pg.evaluate(() => { const m = document.querySelector('#modalRoot .modal'); return m ? m.textContent.replace(/\s+/g, ' ') : ''; });
+const closeModal = async pg => { await pg.evaluate(() => { const b = document.querySelector('#modalRoot [data-i="0"]'); if(b) b.click(); }); await sleep(300); };
+async function navSuite(browser){
+  const OWN = (await api('login', { name: 'Test Director', pin: '246810' })).token, MEM = (await api('login', { name: 'Test Player 01', pin: '135711' })).token;
+  // the frame at every size: the bar, the tabs, the top bar
+  for(const [s, sa] of NAV_SIZES) for(const [who, tok] of [['owner', OWN], ['member', MEM]]){
+    const [w, h] = s.split('x').map(Number), tag = `${s}${sa ? ' inset ' + sa : ''} ${who} B4`;
+    const { ctx, pg } = await navPage(browser, tok, w, h, sa);
+    let m = await navLook(pg);
+    check(m.tabs.map(t => t.text).join('|') === 'Home|Poker|Exchange|Club|Profile' && m.sel === 'home', `${tag}: the five tabs, Home lit at the start (${m.tabs.map(t => t.text).join(', ')}; ${m.sel})`);
+    check(m.bar && Math.abs(m.bar.h - (56 + sa)) <= 1 && Math.abs(m.bar.b - m.H) <= 1, `${tag}: the bar 56 tall plus the inset, counted once, at the foot (${m.bar && Math.round(m.bar.h)} px, foot ${m.bar && Math.round(m.bar.b)} of ${m.H})`);
+    check(m.tabs.every(t => t.w >= 44 && t.h >= 44), `${tag}: every tab at least 44x44 (${m.tabs.map(t => Math.round(t.w) + 'x' + Math.round(t.h)).join(', ')})`);
+    check(m.selRgb === m.goldRgb && /rgba?\(217, 166, 81, 0\.14\)/.test(m.selBg), `${tag}: the lit tab gold on a 14% gold pill (${m.selColor} on ${m.selBg})`);
+    const [bell, dir, av] = m.top;
+    check(bell.shown && av.shown && [bell, av].every(b => b.w >= 44 && b.h >= 44) && (who === 'owner' ? dir.shown && dir.w >= 44 && dir.h >= 44 : !dir.shown), `${tag}: the top bar: bell and avatar 44x44, Director ${who === 'owner' ? 'shown, 44x44' : 'never shown to a member'} (${m.top.map(t => t.id + ' ' + (t.shown ? Math.round(t.w) + 'x' + Math.round(t.h) : 'hidden')).join(', ')})`);
+    check(m.word && m.word.shown && /BLIND\s*RISE/.test(m.word.text), `${tag}: the BLINDRISE wordmark on the left`);
+    for(const k of ['poker', 'biz', 'club', 'profile', 'home']){ await tapTab(pg, k);
+      const n = await navLook(pg); check(n.sel === k && n.scroll <= 0, `${tag}: ${k} lit after a tap, nothing scrolls sideways (${n.sel}, ${n.scroll})`);
+      if(SHOTS && !sa && (s === '390x844' || s === '844x390')) await pg.screenshot({ path: path.join(SHOTS, `b4-${who}-${s}-${k}.png`) }); }
+    await ctx.close();
+  }
+  // every one of today's lobby entry points, by taps from the tabs (390x844)
+  for(const [who, tok] of [['owner', OWN], ['member', MEM]]){
+    const tag = `390x844 ${who} B4 reach`, owner = who === 'owner';
+    const { ctx, pg } = await navPage(browser, tok, 390, 844, 0);
+    await tapTab(pg, 'home');
+    check(await bodyHas(pg, '.br-post:not(.bo-card)') && /A note from the founder/.test(await pg.textContent('#lobbyBody')), `${tag}: founder broadcasts on Home`);
+    check(await bodyHas(pg, '.hsec-biz'), `${tag}: the Exchange spotlight on Home`);
+    check(/Last Friday/.test(await pg.textContent('#lobbyBody')) && await bodyHas(pg, 'table.tbl'), `${tag}: results (last tournament) on Home`);
+    check(!(await bodyHas(pg, '.lx-hello, .lx-door, .home-nav')), `${tag}: the Lounge greeting and its doors are gone from Home`);
+    await tapTab(pg, 'poker');
+    check(await bodyHas(pg, '.bo-card') && /Blindrise Open Test/.test(await pg.textContent('#lobbyBody')), `${tag}: the Blindrise Open card on Poker`);
+    check(await bodyHas(pg, '.poker-hero #joinBtn') && /Friday Night/.test(await pg.textContent('#lobbyBody')), `${tag}: the club tournament card (Join) on Poker`);
+    if(owner) check(await bodyHas(pg, '#againBtn') || await bodyHas(pg, '#startBtn'), `${tag}: the director's tournament controls on Poker`);
+    else check(await bodyHas(pg, '[data-demo]'), `${tag}: the demo table on Poker`);
+    await pg.tap('#lobbyBody [data-bgo="board"]'); await sleep(500);
+    check(await bodyHas(pg, '[data-bseg="prizes"]') && await lit(pg) === 'poker' && await bodyHas(pg, '.b-back'), `${tag}: Poker → "Standings & prizes" opens today's leaderboard and prizes, Poker still lit, a way back`);
+    await pg.tap('#lobbyBody .b-back'); await sleep(400);
+    await pg.tap('#lobbyBody [data-bgo="learn"][data-seg="hands"]'); await sleep(600);
+    check(await bodyHas(pg, '[data-seg="hands"][aria-pressed="true"]') && await lit(pg) === 'poker', `${tag}: Poker → "My hands" opens today's hand review`);
+    await tapTab(pg, 'poker'); await pg.tap('#lobbyBody [data-bgo="learn"][data-seg="lessons"]'); await sleep(500);
+    check(await bodyHas(pg, '[data-seg="lessons"][aria-pressed="true"]') && await bodyHas(pg, 'details.lesson'), `${tag}: Poker → "Learn" opens the lessons`);
+    for(const k of ['rules', 'fair']){ await pg.tap(`#lobbyBody [data-seg="${k}"]`); await sleep(400); check(await bodyHas(pg, `[data-seg="${k}"][aria-pressed="true"]`), `${tag}: Learn → ${k === 'fair' ? 'Fair deal' : 'Rules'}`); }
+    await tapTab(pg, 'biz');
+    check(await bodyHas(pg, '.op-top') && await lit(pg) === 'biz', `${tag}: Exchange, today's page`);
+    await tapTab(pg, 'club');
+    check(owner ? (await pg.evaluate(() => { const r = document.querySelector('#lobbyBody .b-row'); return r && r.dataset.bgo === 'director'; })) : !(await bodyHas(pg, '[data-bgo="director"]')), `${tag}: Director ${owner ? 'the first row of Club' : 'not on Club for a member'}`);
+    check(await bodyHas(pg, '.hsec-opp'), `${tag}: the Bulletin on Club`);
+    await pg.waitForSelector('#lobbyBody .hsec-opp .hsec-link, #lobbyBody .hsec-opp button', { timeout: 5000 }).catch(() => {});
+    const opp = await pg.$('#lobbyBody .hsec-opp .hsec-head button'); if(opp){ await opp.tap(); await sleep(700); }
+    check(!!opp && await bodyHas(pg, '.op-top .op-seg [aria-selected="true"]') && /Opportunities/.test(await pg.textContent('#lobbyBody .op-seg [aria-selected="true"]')) && await lit(pg) === 'club', `${tag}: Club → the Bulletin's full page, Club still lit`);
+    await tapTab(pg, 'club');
+    await pg.tap('#lobbyBody [data-invite]'); await sleep(800);
+    const inv = await modalText(pg);
+    check(owner ? /Invite people/.test(inv) : /Your invite link/.test(inv), `${tag}: Club → "Invite friends" (${owner ? "the group or personal link" : "my own link"}: ${inv.slice(0, 80)})`);
+    await closeModal(pg); await pg.evaluate(() => { const b = document.querySelector('#modalRoot button'); if(b) b.click(); }); await sleep(300);
+    if(owner) check(await bodyHas(pg, '.qr-card'), `${tag}: Join QR on Club`);
+    await pg.tap('#lobbyBody [data-bact="club"]'); await sleep(400);
+    check(/Your clubs/.test(await modalText(pg)) && /Harbour Test Club/.test(await modalText(pg)), `${tag}: Club → "Switch club" (today's club picker)`);
+    await pg.evaluate(() => { const b = [...document.querySelectorAll('#modalRoot button')].find(x => x.textContent === 'Close'); if(b) b.click(); }); await sleep(300);
+    check(await bodyHas(pg, '#openClubBtn'), `${tag}: "Create your club" on Club`);
+    await tapTab(pg, 'profile');
+    check(/points/.test(await pg.textContent('#lobbyBody .b-me')) && /Test (Director|Player 01)/.test(await pg.textContent('#lobbyBody .b-me')), `${tag}: name and points on Profile`);
+    await pg.tap('#lobbyBody [data-bact="profile"]'); await sleep(900);
+    check(await pg.evaluate(() => !!document.querySelector('#modalRoot .prof')), `${tag}: Profile → "My profile and stats" (today's profile)`); await closeModal(pg);
+    await pg.tap('#lobbyBody [data-bact="pic"]'); await sleep(500);
+    check(/picture|photo|avatar/i.test(await modalText(pg)), `${tag}: Profile → "Change picture"`); await closeModal(pg);
+    await pg.tap('#lobbyBody [data-bgo="mine"]'); await sleep(900);
+    check(await lit(pg) === 'profile' && /business/i.test(await pg.textContent('#lobbyBody')) && await bodyHas(pg, '.bz-back'), `${tag}: Profile → "My business", Profile still lit`);
+    await tapTab(pg, 'profile'); await pg.tap('#lobbyBody [data-bgo="scan"]'); await sleep(700);
+    check(await bodyHas(pg, '[data-scan]'), `${tag}: Profile → "Business Card Scanner"`);
+    await tapTab(pg, 'profile'); await pg.tap('#lobbyBody [data-bbell]'); await sleep(400);
+    check(/notif/i.test(await modalText(pg)), `${tag}: Profile → "Notifications" (today's reminder switch)`); await closeModal(pg);
+    await pg.tap('#bBell'); await sleep(400);
+    check(/notif/i.test(await modalText(pg)), `${tag}: the bell opens the same`); await closeModal(pg);
+    await pg.tap('#lobbyBody [data-bact="out"]'); await sleep(400);
+    check(/Sign out\?/.test(await modalText(pg)), `${tag}: Profile → "Sign out" asks first`); await closeModal(pg);
+    await tapTab(pg, 'home'); await pg.tap('#meBtn'); await sleep(400);
+    check(await lit(pg) === 'profile', `${tag}: the avatar opens Profile`);
+    if(owner){
+      for(const k of ['home', 'poker', 'biz', 'club', 'profile']){ await tapTab(pg, k); await pg.tap('#dirTab'); await sleep(500);
+        check(await bodyHas(pg, '.b-back') && await lit(pg) === 'club' && (await bodyHas(pg, '#newForm') || await bodyHas(pg, '[data-demo]')), `${tag}: Director one tap from ${k} (today's Director page)`); }
+      if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, 'b4-owner-director.png') });
+      check(await bodyHas(pg, '[data-demo]'), `${tag}: the demo table in Director, as today`);
+    }
+    await ctx.close();
+  }
+}
+
 (async () => {
   for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
   await sleep(400);
   const TOK = (await api('login', { name: 'Test Player 07', pin: '135777' })).token;
   if(SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
-  for(const size of SIZES){
+  // (NAV_ONLY=1: only the B4 navigation checks, for a quick run)
+  for(const size of process.env.NAV_ONLY ? [] : SIZES){
     const [w, h] = size.split('x').map(Number);
     for(const motion of ['no-preference', 'reduce']){
       const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, reducedMotion: motion });
@@ -640,6 +775,7 @@ async function headsUpSuite(browser, TOK){
       check(await pg.evaluate(() => !!document.querySelector('#game:not([hidden]) #aRaise')), `${tag} table: the table is up with your turn`);
       check(L.nums > 0 && L.tab === 0, `${tag} table: tabular numbers on every stack and the pot (${L.nums} checked)`);
       check(L.scroll <= 0, `${tag} table: nothing scrolls sideways (${L.scroll})`);
+      check(await pg.evaluate(() => !document.getElementById('tabs').getClientRects().length && !document.getElementById('meChip').getClientRects().length), `${tag} table: B4: no tab bar and no top bar at the table`);
       if(SHOTS && motion !== 'reduce') await pg.screenshot({ path: path.join(SHOTS, `table-${size}.png`) });
       // the free-play notice at the start of the game (§3.4): on the info line in the dock, not a box on the felt
       if(motion !== 'reduce' && sock && sock !== 'table'){
@@ -661,12 +797,13 @@ async function headsUpSuite(browser, TOK){
       await ctx.close();
     }
   }
-  await narrowSuite(browser, TOK);
-  await shortSuite(browser, TOK);
-  await shortHandedSuite(browser, TOK);
-  await sizingSuite(browser, TOK);
-  await headsUpSuite(browser, TOK);
-  await raiseSuite(browser);
+  if(!process.env.NAV_ONLY) await narrowSuite(browser, TOK);
+  if(!process.env.NAV_ONLY) await shortSuite(browser, TOK);
+  if(!process.env.NAV_ONLY) await shortHandedSuite(browser, TOK);
+  if(!process.env.NAV_ONLY) await sizingSuite(browser, TOK);
+  if(!process.env.NAV_ONLY) await headsUpSuite(browser, TOK);
+  if(!process.env.NAV_ONLY) await raiseSuite(browser);
+  await navSuite(browser);
   await browser.close();
   for(const p of ['B8 reduced motion on the sheets and seats'])
     console.log(`PENDING B8 (not run) ${p}`);

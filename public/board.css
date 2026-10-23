@@ -638,3 +638,55 @@
    free-play line beside it get the rest, whole) */
 [data-ui="board"] #game.land:not(.b-col) .dock:has(.b-back) .controls{width:184px}
 [data-ui="board"] #game.land:not(.b-col) .dock:has(.b-back) :is(.info-line,#playLine){width:calc(100% - 24px - 184px - 12px)}
+
+/* ---------- B4, navigation (§5): the top bar, the five tabs at the bottom, the rows that open today's pages ---------- */
+/* the top bar: BLINDRISE left; the bell, Director (the club director only) and the avatar right, each 44x44 */
+[data-ui="board"] #lobby .topbar{min-height:56px;padding:6px 12px 6px 16px;gap:var(--b-s2);background:var(--b-bg);border-bottom:1px solid var(--b-hair)}
+[data-ui="board"] #lobby .me-chip{gap:var(--b-s1);flex:none}
+[data-ui="board"] #lobby .b-topbtn{display:inline-grid;place-items:center;width:var(--b-tap);height:var(--b-tap);min-height:var(--b-tap);padding:0;border:0;border-radius:var(--b-r-pill);background:transparent;color:var(--b-text-2);position:relative}
+[data-ui="board"] #lobby .b-topbtn[hidden]{display:none}
+[data-ui="board"] #lobby .b-topbtn .b-ic{width:22px;height:22px}
+[data-ui="board"] #lobby .b-topbtn:active{transform:scale(var(--b-press-scale))}
+[data-ui="board"] #lobby .b-topbtn:focus-visible,[data-ui="board"] #lobby .tabs button:focus-visible,[data-ui="board"] #lobby .b-row:focus-visible,[data-ui="board"] #lobby .b-back:focus-visible{outline:2px solid var(--b-gold);outline-offset:2px}
+/* (the bell on: a gold dot) */
+[data-ui="board"] #lobby .b-bell.on,[data-ui="board"] #lobby #dirTab.on{color:var(--b-gold)}
+[data-ui="board"] #lobby #dirTab.on{background:var(--b-gold-fill)}
+[data-ui="board"] #lobby .b-bell.on::after{content:"";position:absolute;top:10px;right:11px;width:7px;height:7px;border-radius:50%;background:var(--b-gold);box-shadow:0 0 0 2px var(--b-bg)}
+[data-ui="board"] #lobby .b-avbtn .av{width:32px;height:32px;font-size:12px}
+[data-ui="board"] .b-ic{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* the bottom bar: 56 tall plus the bottom inset, counted once (Issue #19); the active tab gold on a 14% gold pill */
+[data-ui="board"] #lobby .tabs{min-height:0;height:calc(56px + var(--sa-b));box-sizing:border-box;padding:0 6px var(--sa-b);gap:2px;align-items:stretch;overflow:visible;
+  background:var(--b-surface);border-top:1px solid var(--b-hair);box-shadow:none}
+[data-ui="board"] #lobby .tabs button{flex:1 1 0;min-width:0;min-height:0;height:48px;margin:4px 0;padding:0 2px;gap:2px;border-radius:var(--b-r-btn);
+  font-family:var(--b-font);font-size:var(--b-t-11);font-weight:500;letter-spacing:0;text-transform:none;color:var(--b-text-2);background:transparent}
+[data-ui="board"] #lobby .tabs button svg{width:22px;height:22px;stroke-width:1.6;filter:none;color:inherit}
+[data-ui="board"] #lobby .tabs button[aria-selected="true"],[data-ui="board"] #lobby .tabs .biz-tab[aria-selected="true"]{color:var(--b-gold);background:var(--b-gold-fill)}
+[data-ui="board"] #lobby .tabs button[aria-selected="true"] svg{color:var(--b-gold);filter:none}
+[data-ui="board"] #lobby .tabs button[aria-selected="true"]::before{display:none}
+[data-ui="board"] #lobby .tabs .biz-tab:not([aria-selected="true"]){color:var(--b-text-2)}
+[data-ui="board"] #lobby .tabs button:active{transform:scale(var(--b-press-scale))}
+
+/* a tab's title, the way back from one of today's pages, and the rows */
+[data-ui="board"] #lobby .b-pagehead{display:grid;gap:2px;padding:4px 2px 2px}
+[data-ui="board"] #lobby .b-pagehead h2{margin:0;font-size:var(--b-t-22);font-weight:600;color:var(--b-text)}
+[data-ui="board"] #lobby .b-pagehead small{font-size:var(--b-t-13);color:var(--b-text-2)}
+[data-ui="board"] #lobby .b-back{align-self:flex-start;display:inline-flex;align-items:center;gap:4px;min-height:var(--b-tap);padding:0 14px 0 8px;border-radius:var(--b-r-pill);
+  background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);font-size:var(--b-t-15);font-weight:600}
+[data-ui="board"] #lobby .b-back .b-ic{width:18px;height:18px;transform:scaleX(-1)}
+[data-ui="board"] #lobby .b-rows{display:flex;flex-direction:column;background:var(--b-surface);border:1px solid var(--b-hair);border-radius:var(--b-r-card);overflow:hidden}
+[data-ui="board"] #lobby .b-row{display:flex;align-items:center;gap:var(--b-s3);min-height:60px;padding:8px var(--b-s4);background:transparent;border:0;border-radius:0;color:var(--b-text);text-align:left;width:100%}
+[data-ui="board"] #lobby .b-row+.b-row{border-top:1px solid var(--b-hair)}
+[data-ui="board"] #lobby .b-row:active{background:var(--b-surface-2)}
+[data-ui="board"] #lobby .b-row-ic{width:22px;height:22px;color:var(--b-gold)}
+[data-ui="board"] #lobby .b-row-t{flex:1;min-width:0;display:grid;gap:2px}
+[data-ui="board"] #lobby .b-row-t b{font-size:var(--b-t-15);font-weight:600}
+[data-ui="board"] #lobby .b-row-t small{font-size:var(--b-t-13);color:var(--b-text-2);line-height:1.3}
+[data-ui="board"] #lobby .b-chev{width:18px;height:18px;color:var(--b-text-3)}
+/* Profile: who you are, then the rows */
+[data-ui="board"] #lobby .b-me{display:flex;align-items:center;gap:var(--b-s4);padding:var(--b-s4);background:var(--b-surface-2);border:1px solid var(--b-hair-gold);border-radius:var(--b-r-card)}
+[data-ui="board"] #lobby .b-me-t{min-width:0}
+[data-ui="board"] #lobby .b-me h2{margin:0;font-size:var(--b-t-20);font-weight:600;color:var(--b-text);overflow-wrap:anywhere}
+/* (the wordmark stays on every width: the top bar's right side is three icons now) */
+[data-ui="board"] #lobby .mini-logo{min-width:0}
+[data-ui="board"] #lobby .mini-logo .lx-word{display:inline}
