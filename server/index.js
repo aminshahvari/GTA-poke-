@@ -978,7 +978,7 @@ process.on('SIGINT', () => onSignal('SIGINT'));
   if(stopping) return;
   { const d = DOMINO() && clubs.get(clubs.MAIN).domino.card(null); if(d) domTold = d.id + ':' + d.status; } // no second notice after a restart
   for(const c of clubs.all()) if(c.club.resume()) console.log(c.id === clubs.MAIN ? 'resumed running tournament' : `resumed running tournament in club ${c.id}`);
-  server.listen(PORT, () => { ready = true; console.log(`Blindrise poker club on :${PORT}`); });
+  server.listen(PORT, () => { ready = true; console.log(`Blindrise on :${PORT}`); });
   if(!process.env.NO_BEACON) clubs.get(clubs.MAIN).fair.probe();
 })();
 module.exports = { server };
