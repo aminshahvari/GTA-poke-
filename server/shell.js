@@ -1,6 +1,7 @@
 // The app shell for the preview designs (Issue #32 comment 6329679268), used only when UI_BOARD or UI_QUIET is on.
 // Without either switch none of this runs and every page is byte for byte the file on disk (test/t_board.js).
-//  - boardOn: the UI_BOARD switch, refused on the production database whatever the environment says
+//  - boardOn: the UI_BOARD switch. On the production database it also needs UI_BOARD_LIVE=1 (owner GO for the live
+//    site, 2026-10-23, decision card "New design, no media"), so UI_BOARD alone never turns it on there
 //  - boardPage: html[data-ui="board"] and /board.css (the system font stack: no hosted font is added)
 //  - shellPage: the Blindrise mark on the welcome screen's navy from the very first paint. The page's stylesheets
 //    (and the small style after them) move, in the same order, from the head to just after the mark at the top of
@@ -8,7 +9,7 @@
 //    fades as soon as the app shows a screen (or a sheet).
 //  - notFoundPage: unknown pages (/demo, /guest, /table ...) in the app's look: navy and gold, the mark, one line of
 //    copy and a way back home (sent with HTTP 404)
-const boardOn = (env, prodHost) => env.UI_BOARD === '1' && !String(env.DATABASE_URL || '').includes(prodHost);
+const boardOn = (env, prodHost) => env.UI_BOARD === '1' && (env.UI_BOARD_LIVE === '1' || !String(env.DATABASE_URL || '').includes(prodHost));
 const boardPage = buf => Buffer.from(String(buf).replace('<html lang="en">', '<html lang="en" data-ui="board">').replace('</head>', '<link rel="stylesheet" href="/board.css">\n</head>'));
 
 const FACE = '-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"IBM Plex Sans",sans-serif';

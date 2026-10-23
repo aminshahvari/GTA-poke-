@@ -361,9 +361,6 @@ const server = http.createServer((req, res) => {
   // 503 until the lease is held and state is loaded, and again while shutting down (Render routes only to 200s)
   if(req.method === 'GET' && url.pathname === '/healthz'){ const ok = ready && !stopping; return send(res, ok ? 200 : 503, { ok, ...store.health() }); }
   if(stopping) return send(res, 503, { error: 'Server is restarting. Try again in a moment.' });
-  // the media lab (preview only, see server/media.js): its API, signed uploads, signed reads and its page
-  if(url.pathname.startsWith('/media/')) return media.ON() ? media.handle(req, res, url, mediaWho, SECURITY) : send(res, 404, 'Not found', 'text/plain');
-  if(url.pathname.startsWith('/lab/') && !media.ON()) return send(res, 404, 'Not found', 'text/plain');
   if(process.env.FAST === '1' && url.pathname === '/debug/chips'){ const club = clubs.get(clubs.MAIN).club, t = club.T(); return send(res, 200, { chips: club.totalChips(), expected: t && t.status === 'running' ? t.stack * t.entrants : null, tables: club.tablesSummary(), hfh: club.hfhState(), detail: process.env.DEBUG_CHIPS ? [...club.tables.values()].map(tb => ({ tid: tb.tid, broken: tb.broken, toBreak: tb.toBreak, inHand: tb.inHand, seats: tb.g.seats.map((p, i) => p && [i, p.uid, p.stack, p.start]).filter(Boolean), hp: tb.g.hand ? tb.g.hand.players.map(p => [p.seat, p.uid, p.start]) : [] })) : undefined }); }
   if(req.method === 'POST' && url.pathname.startsWith('/api/')){
     const ip = 'ip:' + clientIp(req);
@@ -411,7 +408,7 @@ const server = http.createServer((req, res) => {
     // the app asks for /bizlogo/<uid>?v=<logoV>: a new logo is a new URL, so the browser may keep this one for a day
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400', Vary: 'Authorization, X-Club', ...SECURITY, ...NOINDEX }); return res.end(r.buf);
   }
-  let file = url.pathname === '/lab/media' ? 'lab/media.html' : url.pathname === '/' || url.pathname === '/login' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
+  let file = url.pathname === '/' || url.pathname === '/login' || url.pathname.startsWith('/join/') ? 'index.html' : url.pathname.slice(1);
   // /engine.js is the shared rules file in server/; it is served like any app file
   const full = file === 'engine.js' ? path.join(__dirname, 'engine.js') : path.join(PUBLIC, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
   if(file !== 'engine.js' && !full.startsWith(PUBLIC)) return notFound(res, file);
@@ -433,8 +430,6 @@ const server = http.createServer((req, res) => {
       let enc = null, body = buf;
       for(const e of encs){ const out = await p[e]; if(out){ enc = e; body = out; break; } }
       const fresh = { 'Cache-Control': 'no-cache', ETag: tagFor(tag, enc), ...(p ? { Vary: 'Accept-Encoding' } : {}) };
-      // the media lab plays the chosen clip from the phone's memory (a blob: link) before preparing it; only that page may
-      if(file === 'lab/media.html') fresh['Content-Security-Policy'] = SECURITY['Content-Security-Policy'].replace("media-src 'self' data:", "media-src 'self' data: blob:");
       // an unchanged file answers 304, whichever encoding the browser's copy came in
       const seen = String(req.headers['if-none-match'] || '').split(',').map(t => t.trim().replace(/^W\//, ''));
       if(seen.some(t => t === tag || t === tagFor(tag, 'br') || t === tagFor(tag, 'gzip'))){ res.writeHead(304, { ...SECURITY, ...fresh }); return res.end(); }
@@ -915,23 +910,13 @@ const shell = require('./shell');
 const boardUI = () => shell.boardOn(process.env, PROD_DB_HOST);
 const { boardPage, shellPage } = shell;
 if(process.env.UI_QUIET === '1') console.log(!quietUI() ? 'UI_QUIET ignored: this is the production database' : boardUI() ? 'UI_QUIET ignored: UI_BOARD is on and takes its place' : 'UI_QUIET: the quiet design is on (preview)');
-if(process.env.UI_BOARD === '1') console.log(boardUI() ? 'UI_BOARD: the board design is on (preview)' : 'UI_BOARD ignored: this is the production database');
+if(process.env.UI_BOARD === '1') console.log(boardUI() ? 'UI_BOARD: the board design is on' : 'UI_BOARD ignored: this is the production database (it also needs UI_BOARD_LIVE=1)');
 // an unknown page: with a design on, a page-like address (no file extension) gets the styled page; files keep the plain 404
 function notFound(res, file){
   const mode = boardUI() ? 'board' : quietUI() ? 'quiet' : '';
   if(!mode || /\.[a-z0-9]+$/i.test(file)) return send(res, 404, 'Not found', 'text/plain');
   send(res, 404, shell.notFoundPage(mode), TYPES['.html'], NOINDEX);
 }
-// The media lab (owner GO 2026-10-21: preview only, local storage, test data): MEDIA_LAB=1, never on the production database
-const media = require('./media').create({ prodHost: PROD_DB_HOST });
-// who is asking, for the media lab: the signed-in member and the club they are showing (as the JSON API decides it)
-function mediaWho(req){
-  const ur = userByToken(req.headers.authorization?.replace(/^Bearer /, '')); if(!ur) return {};
-  const c = clubs.ON() ? ctxFor(ur, req.headers['x-club']) : clubs.get(clubs.MAIN);
-  if(!c || clubs.suspended(c.id)) return {};
-  return { u: clubs.ON() ? c.store.get('user:' + ur.id) || null : ur, club: c };
-}
-if(process.env.MEDIA_LAB === '1') console.log(media.ON() ? 'MEDIA_LAB: the media lab is on (preview, local storage)' : 'MEDIA_LAB ignored: this is the production database');
 if(process.env.STAGING === '1' && String(process.env.DATABASE_URL || '').includes(PROD_DB_HOST)){
   console.error('STAGING=1 but DATABASE_URL points at the production database. Refusing to start.');
   process.exit(1);

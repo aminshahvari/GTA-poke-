@@ -80,7 +80,7 @@ const mid = (a, b) => a.map((x, i) => (x + b[i]) / 2);
     check(m.status === 404 && /^text\/html/.test(m.type) && m.body.includes('data-ui="board"') && m.body.includes(shell.MARK) && /<a href="\/">[^<]+<\/a>/.test(m.body) && (m.body.match(/<p>/g) || []).length === 1 && !/<script/i.test(m.body) && m.csp === off.missing[p].csp,
       `switch on: ${p} is a styled not-found page (404, the mark, one line of copy, a link home, no script, the same CSP)`); }
   check(on.missing['/nope.js'].status === 404 && on.missing['/nope.js'].body === 'Not found' && on.missing['/avatar/u000000000000'].body === 'Not found', 'switch on: a missing file (not a page) keeps the plain 404');
-  check(/UI_BOARD: the board design is on \(preview\)/.test(on.log), 'switch on: the server says the board design is on');
+  check(/UI_BOARD: the board design is on\b/.test(on.log), 'switch on: the server says the board design is on');
 
   // ---------- both switches: the board wins ----------
   const both = await serve({ UI_BOARD: '1', UI_QUIET: '1' });
@@ -95,7 +95,8 @@ const mid = (a, b) => a.map((x, i) => (x + b[i]) / 2);
 
   // ---------- never on the production database ----------
   const prodUrl = `postgres://u:p@${PROD}.invalid:1/none`;
-  check(!shell.boardOn({ UI_BOARD: '1', DATABASE_URL: prodUrl }, PROD), 'on the production database UI_BOARD is refused');
+  check(!shell.boardOn({ UI_BOARD: '1', DATABASE_URL: prodUrl }, PROD), 'on the production database UI_BOARD alone is refused');
+  check(shell.boardOn({ UI_BOARD: '1', UI_BOARD_LIVE: '1', DATABASE_URL: prodUrl }, PROD) && !shell.boardOn({ UI_BOARD_LIVE: '1', DATABASE_URL: prodUrl }, PROD) && !shell.boardOn({ UI_BOARD: '1', UI_BOARD_LIVE: 'true', DATABASE_URL: prodUrl }, PROD), 'on the production database it needs UI_BOARD=1 and UI_BOARD_LIVE=1, both exactly');
   check(shell.boardOn({ UI_BOARD: '1', DATABASE_URL: 'postgres://u:p@dpg-preview-a/db' }, PROD) && shell.boardOn({ UI_BOARD: '1' }, PROD), 'elsewhere UI_BOARD=1 turns it on');
   check(!shell.boardOn({ UI_BOARD: '' }, PROD) && !shell.boardOn({ UI_BOARD: 'true' }, PROD) && !shell.boardOn({}, PROD), 'only UI_BOARD=1 turns it on');
   check(/const boardUI = \(\) => shell\.boardOn\(process\.env, PROD_DB_HOST\);/.test(fs.readFileSync(path.join(ROOT, 'server', 'index.js'), 'utf8')), 'the server asks shell.boardOn with its production database host');
