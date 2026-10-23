@@ -15,6 +15,8 @@ const rootStore = store; // the plain store, for shared accounts, inside functio
 clubs.onNew(wire);
 const joinqr = require('./joinqr');
 const platform = require('./platform'); // Club Rules, suspend/cancel, Blindrise broadcast (club switching only)
+// the onboarding funnel (Issue #39): counts only, board design only; see server/funnel.js
+const funnel = require('./funnel')({ store, clubs, on: () => boardUI() });
 
 const PORT = +process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -136,7 +138,8 @@ const api = {
     else if(inv.by) store.set('user:' + u.id, { ...u, invitedBy: inv.by });
     // the board design's first visit (UI_BOARD only): a new account sees the welcome once (onb 1), then the First steps
     // card on Home until it is done or dismissed (onb 2); 3 is finished. Off, nothing is stored.
-    if(boardUI() && !seeding) store.set('user:' + u.id, { ...store.get('user:' + u.id), onb: 1 });
+    // The funnel counts the account as a new member and keeps its one field (fn) for counting each step once.
+    if(boardUI() && !seeding) store.set('user:' + u.id, { ...store.get('user:' + u.id), onb: 1, fn: funnel.start(c, u) });
     joined(c, u.id, code, inv);
     return clubs.ON() ? { token: newSession(u.id), club: c.id } : { token: newSession(u.id) };
   },
@@ -181,7 +184,7 @@ const api = {
     revokeSessions(id); // a new PIN signs out every device that used the old one
     return { token: newSession(id), name: u.name };
   },
-  invite(_, u, c){ return { code: inviteCode(c, u) }; },
+  invite(_, u, c){ const code = inviteCode(c, u); if(u) funnel.mark(u.id, 'invite', c); return { code }; },
   status(){ return clubs.ON() ? { hasOwner: !!owner(), clubSwitching: true } : { hasOwner: !!owner() }; },
   pushKey(){ return { key: push.publicKey() }; },
   push(sub, u){ if(!u) throw new Error('Sign in first.'); push.subscribe(u.id, sub); broadcastAll(); return { ok: true }; },
@@ -190,6 +193,7 @@ const api = {
   avatar(a, u){
     if(!u) throw new Error('Sign in first.');
     store.set('user:' + u.id, clubs.get(clubs.MAIN).players.setAvatar(store.get('user:' + u.id), a)); // pictures are part of the shared account
+    if((store.get('user:' + u.id) || {}).av) funnel.mark(u.id, 'picture', null);
     broadcastAll();
     return { ok: true };
   },
@@ -278,7 +282,12 @@ function inviteCheck(c, inv){
 function joined(c, uid, code, inv){
   // the link is usually sent for a tournament: sign the new player up for it straight away
   const t = c.club.T();
-  if(t && (t.status === 'registering' || (t.status === 'running' && c.club.lateOpen()))) try{ c.club.join(uid); }catch(e){}
+  if(t && (t.status === 'registering' || (t.status === 'running' && c.club.lateOpen()))) try{
+    c.club.join(uid);
+    // board design: the account record says this invite signed them up for this game (invReg, '<club>/<tournament>'), so
+    // the Next game card and welcome card 3 can say so on every device; cleared when they unregister or are taken off
+    if(boardUI()){ const x = rootStore.get('user:' + uid); if(x) rootStore.set('user:' + uid, { ...x, invReg: c.id + '/' + t.id }); funnel.mark(uid, 'game', c); }
+  }catch(e){}
   c.store.set('invite:' + code, inv.multi ? { ...inv, uses: [...(inv.uses || []), uid] } : { ...inv, usedBy: uid, usedAt: Date.now() });
   broadcastClub(c);
 }
@@ -390,7 +399,9 @@ const server = http.createServer((req, res) => {
         const u = clubs.ON() && ur && !ACCOUNT_API.includes(name) ? c.store.get('user:' + ur.id) || null : ur;
         if(extra && c.id === clubs.EVENTS) return send(res, 404, { error: 'Not found' }, undefined, extra); // no Exchange in the Blindrise Open
         if(extra && clubsClosedFor(c, u)) return send(res, 403, { error: 'Business Club opens soon.' }, undefined, extra);
-        send(res, 200, typeof fn === 'string' ? clubApi(fn, c)(data, u) : fn(data, u, c, clientIp(req)), undefined, extra);
+        const out = typeof fn === 'string' ? clubApi(fn, c)(data, u) : fn(data, u, c, clientIp(req));
+        if(name === 'bizPublish' && u && data.on === true && c.business.listed(u.id)) funnel.mark(u.id, 'business', c);   // (board only)
+        send(res, 200, out, undefined, extra);
       }catch(e){ if(['/api/setup', '/api/redeem', '/api/login', '/api/resetOwner', '/api/joinClub', '/api/createClub'].includes(url.pathname)){ recordFailure(ip); if(acct) recordFailure(acct); if(RECOVERY.includes(url.pathname) && /setup code/.test(e.message)){ recordFailure('rec' + ip); recordFailure('rec:all'); } } send(res, [401, 403, 404, 409, 429].includes(e.status) ? e.status : 400, { error: e.message || 'Something went wrong.', ...(e.status === 409 && e.current != null ? { current: e.current } : {}) }, undefined, extra); }
     });
     return;
@@ -513,7 +524,7 @@ function clubView(c, u){
   const t = club.T();
   const { members, history } = membersView(c);
   const view = {
-    me: { id: u.id, name: u.name, owner: isOwner(u), ...(boardUI() && u.onb ? { onb: u.onb } : {}) },
+    me: { id: u.id, name: u.name, owner: isOwner(u), ...(boardUI() && u.onb ? { onb: u.onb } : {}), ...(boardUI() && t && u.invReg === c.id + '/' + t.id && t.regs.includes(u.id) ? { byInvite: true } : {}) },
     tourney: t ? tourneyOf(c, t) : null,
     ...(isOwner(u) && hosts(c) ? { sponsors: c.business.sponsorOptions() } : {}), hosts: hosts(c),
     tables: club.tablesSummary(), myTable: club.tableOf(u.id),
@@ -530,6 +541,8 @@ function clubView(c, u){
     const hh = Object.fromEntries(store.values('user:').filter(x => !x.removed && x.household).map(x => [x.id, x.household]));
     view.households = hh;
     view.mutedIds = store.values('user:').filter(x => !x.removed && x.muted).map(x => x.id);
+    // the onboarding funnel (board design only): counts per week of joining, no names
+    if(boardUI() && c.id !== clubs.EVENTS) view.funnel = funnel.view(c) || [];
   }
   if(clubs.ON()){
     // club switching: which club this is, and the clubs this account belongs to (names only)
@@ -818,7 +831,7 @@ wss.on('connection', (ws, req) => {
       const u = c && c.store.get('user:' + ur.id);
       // signed in, but in no club any more (the only club was cancelled): say so, so the app can explain
       if(!u) return sendWS(ws, { t: 'auth', ok: false, ...(clubs.ON() && !c ? { reason: 'noclub' } : {}) });
-      ws.ctx = c; ws.user = u; ws.sess = sha(m.token); remember(ur, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); sendWS(ws, { t: 'auth', ok: true });
+      ws.ctx = c; ws.user = u; ws.sess = sha(m.token); remember(ur, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); funnel.back(rootStore.get('user:' + ur.id)); sendWS(ws, { t: 'auth', ok: true });
       sendWS(ws, { t: 'club', club: clubView(c, u) });
       if(clubs.suspended(c.id)) return;
       const mine = c.club.tableOf(u.id); if(mine){ pushTable(c, mine); chatLogFor(c, ws, mine); }
@@ -852,7 +865,7 @@ wss.on('connection', (ws, req) => {
         case 'chatOff': own(u); c.store.set('settings', { ...(c.store.get('settings') || {}), chatOff: !!m.off }); broadcastClub(c); break;
         case 'mute': own(u); { const x = c.store.get('user:' + m.uid); if(x && x.role !== 'owner') c.store.set('user:' + x.id, { ...x, muted: !!m.muted }); broadcastClub(c); } break;
         case 'back': club.back(u.id); break;
-        case 'join': club.join(u.id); break;
+        case 'join': { const was = ((club.T() || {}).regs || []).includes(u.id); club.join(u.id); if(!was){ funnel.mark(u.id, 'game', c); funnel.mark(u.id, 'gameSelf', c); } } break;
         case 'hands': sendWS(ws, { t: 'hands', hands: club.handsFor(u.id) }); break;
         case 'report': { const h = c.store.get('history:' + String(m.id || '')); if(!h) break;
           const me = h.results.find(r => r.uid === u.id);
@@ -861,10 +874,12 @@ wss.on('connection', (ws, req) => {
         case 'profile': { const x = c.store.get('user:' + m.uid); if(x && !x.removed) sendWS(ws, { t: 'profile', profile: { ...players.profile(x.id, membersView(c).all), name: x.name, av: x.av || null, since: x.createdAt, perks: players.perksFor(players.profile(x.id, membersView(c).all).tier) } }); } break;
         // a picture belongs to the shared account, so only the main organizer can clear one
         case 'avatarClear': own(u); if(c.id !== clubs.MAIN) throw new Error('Only the Blindrise organizer can remove a picture.'); { const x = c.store.get('user:' + m.uid); if(x){ c.store.set('user:' + x.id, players.setAvatar(x, { kind: 'none' })); c.memo = null; broadcastAll(); } } break;
-        case 'leave': club.leave(u.id); break;
+        case 'leave': club.leave(u.id); if(u.invReg && !((club.T() || {}).regs || []).includes(u.id)){ const x = rootStore.get('user:' + u.id); if(x){ const { invReg, ...rest } = x; rootStore.set('user:' + u.id, rest); } } break;
         // the board's first visit: the welcome seen (2), the First steps card done or dismissed (3); it only moves forward.
         // Kept on the account record (one account, every club and device).
         case 'onb': if(boardUI() && u.onb && (m.step === 2 || m.step === 3) && m.step > u.onb){ const raw = store.get('user:' + u.id); if(raw) store.set('user:' + u.id, { ...raw, onb: m.step });
+          // the funnel: the welcome closed from card 3 ("done") or before it ("skip")
+          if(u.onb === 1 && m.step === 2 && (m.how === 'done' || m.how === 'skip')) funnel.mark(u.id, m.how === 'done' ? 'welcomeDone' : 'welcomeSkipped', null);
           for(const s of sockets) if(!s.spectator && s.user && s.user.id === u.id) s.user = { ...s.user, onb: m.step }; } break;
         // owner controls
         case 'create': own(u); if(!hosts(c)) throw new Error(NO_HOST); club.create(m); break;
@@ -873,7 +888,7 @@ wss.on('connection', (ws, req) => {
         case 'cancel': own(u); club.cancel(); break;
         case 'pause': own(u); club.pause(); break;
         case 'resume': own(u); club.unpause(); break;
-        case 'kick': own(u); { const t = club.T(); if(t && t.status === 'registering') c.store.set('tourney', { ...t, regs: t.regs.filter(x => x !== m.uid) }); broadcastClub(c); } break;
+        case 'kick': own(u); { const t = club.T(); if(t && t.status === 'registering'){ c.store.set('tourney', { ...t, regs: t.regs.filter(x => x !== m.uid) }); const x = typeof m.uid === 'string' && rootStore.get('user:' + m.uid); if(x && x.invReg){ const { invReg, ...rest } = x; rootStore.set('user:' + m.uid, rest); } } broadcastClub(c); } break;
         case 'household': own(u); {
           const store = c.store;
           const x = store.get('user:' + m.uid), y = m.with ? store.get('user:' + m.with) : null;
@@ -887,7 +902,7 @@ wss.on('connection', (ws, req) => {
         case 'addReward': own(u); rewards.addReward(m); broadcastClub(c); break;
         case 'removeReward': own(u); rewards.removeReward(String(m.id || '')); broadcastClub(c); break;
         case 'redeemStatus': own(u); rewards.setStatus(String(m.id || ''), m.status); broadcastClub(c); break;
-        case 'invite': { const code = inviteCode(c, u, !!m.group); sendWS(ws, { t: 'invite', code, group: !isOwner(u) || !!m.group, max: c.store.get('invite:' + code).max || 1 }); broadcastClub(c); } break;
+        case 'invite': { const code = inviteCode(c, u, !!m.group); funnel.mark(u.id, 'invite', c); sendWS(ws, { t: 'invite', code, group: !isOwner(u) || !!m.group, max: c.store.get('invite:' + code).max || 1 }); broadcastClub(c); } break;
         case 'membersInvite': own(u); c.store.set('settings', { ...(c.store.get('settings') || {}), membersInvite: !!m.on }); broadcastClub(c); break;
         case 'revoke': own(u); { const inv = c.store.get('invite:' + m.code); if(inv) c.store.set('invite:' + m.code, { ...inv, revoked: true }); broadcastClub(c); } break;
         // removing someone from the main club closes their account (as before); removing them from another club only ends

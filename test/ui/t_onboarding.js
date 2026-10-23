@@ -142,7 +142,8 @@ const homeBox = pg => pg.evaluate(async () => {
   check(!(await A.$('#bOnb')), 'A: the welcome does not come back after a reload');
   { const A2 = await page(390, 844); await A2.goto(S.base + '/'); await A2.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), await tokenOf(A)); await A2.reload();
     await A2.waitForSelector('#lobby:not([hidden]) #lobbyBody .b-next'); await sleep(1200);
-    check(!(await A2.$('#bOnb')) && !!(await A2.$('#lobbyBody .b-steps')), 'A: on another device (a fresh browser) no welcome either: it is kept on the account; First steps still there'); await A2.context().close(); }
+    check(!(await A2.$('#bOnb')) && !!(await A2.$('#lobbyBody .b-steps')), 'A: on another device (a fresh browser) no welcome either: it is kept on the account; First steps still there');
+    check(/Your invite signed you up/.test(await text(A2, '#lobbyBody .b-next')), 'A: on another device Next game still says the invite signed them up (the server says so, not the phone)'); await A2.context().close(); }
   // "Introduce your business" opens My business on the Exchange; a published card ticks it
   await A.click('#lobbyBody [data-bstep=biz]'); await sleep(400);
   check(await A.evaluate(() => document.querySelector('#tabs [data-tab=biz]').getAttribute('aria-selected') === 'true'), 'A: "Introduce your business" opens the Exchange (My business)');
@@ -256,6 +257,12 @@ const homeBox = pg => pg.evaluate(async () => {
   const D = await page(390, 844); await D.goto(S.base + '/'); await D.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), (await S.api('login', { name: 'Test Director', pin: '246810' })).token); await D.reload();
   await D.waitForSelector('#lobby:not([hidden])'); await sleep(1200);
   check(!(await D.$('#lobbyBody .b-steps')) && !(await D.$('#bOnb')) && /Open Director/.test(await text(D, '#lobbyBody .b-next') || ''), 'the director: Next game (open one from Director), no welcome, no First steps');
+  // the director's funnel counts (Director, read-only): plain words, numbers only, no names
+  await D.click('#lobbyBody .b-next [data-bgo=director]'); await D.waitForSelector('#lobbyBody .b-funnel', { timeout: 4000 }).catch(() => {});
+  const fu = await text(D, '#lobbyBody .b-funnel');
+  check(!!fu && /New members · First steps/.test(fu) && /Joined the week of .*: \d+/.test(fu) && /Finished the welcome\d+/.test(fu) && /Came back on another day within 7 days\d+/.test(fu) && !/Newcomer|poker club|betting|real money|gambl|wager|casino/i.test(fu) && !(await D.$('#lobbyBody .b-funnel button, #lobbyBody .b-funnel input')), `the director: Director has the first-steps counts, read-only, no names: "${fu && fu.slice(0, 220)}"`);
+  await shot(D, 'director-funnel-390x844');
+  check(!(await P7.$('.b-funnel')), 'a member never sees the counts');
   // a running tournament: Live at Blindrise lists this club's tables, a tap watches
   dir.send({ t: 'create', name: 'Sunday Live', stack: 30000, levelMin: 60, tableSize: 9, lateLevels: 0 }); await until(() => dir.club.tourney && dir.club.tourney.name === 'Sunday Live');
   const regs = []; for(const n of ['01', '02', '03', '04']){ const s = await sock(S.base, (await S.api('login', { name: 'Test Player ' + n, pin: '1357' + n[1].repeat(2) })).token); s.send({ t: 'join' }); regs.push(s); }
@@ -279,13 +286,14 @@ const homeBox = pg => pg.evaluate(async () => {
   check(!(await F.$('#bOnb')) && !(await F.$('.b-next')) && !(await F.$('.b-steps')), 'off: no welcome, no Next game, no First steps');
   check(remF === `<h2>Get a reminder?</h2><p>We'll send a notification to this phone 15 minutes before ${tName} starts, and again when the cards are dealt.</p><div class="row"><button class="btn-ghost" data-i="0">No thanks</button><button class="btn-red" data-i="1">Notify me</button></div>`, 'off: the reminder question exactly as before');
   const fws = await sock(O.base, await tokenOf(F));
-  check(!('onb' in fws.club.me), 'off: the club message carries no first-visit field');
+  check(!('onb' in fws.club.me) && !('byInvite' in fws.club.me) && !('funnel' in odir.club), 'off: the club message carries no first-visit field, no byInvite, and the director gets no funnel');
   fws.send({ t: 'onb', step: 3 }); await sleep(600);
   const fws2 = await sock(O.base, await tokenOf(F));
   check(!('onb' in fws2.club.me), 'off: an "onb" message changes nothing');
   await sleep(1200);
   const rec = (() => { try{ const j = JSON.parse(fs.readFileSync(O.DATA, 'utf8')); return Object.entries(j.kv || j).filter(([k]) => k.startsWith('user:')).map(([, v]) => v); }catch(e){ return null; } })();
-  if(rec) check(rec.length > 0 && rec.every(u => !('onb' in u)), `off: no account record holds a first-visit field (${rec.length} records)`);
+  if(rec) check(rec.length > 0 && rec.every(u => !('onb' in u) && !('fn' in u) && !('invReg' in u)), `off: no account record holds a first-visit, funnel or invite-registration field (${rec.length} records)`);
+  check(!Object.keys((() => { try{ const j = JSON.parse(fs.readFileSync(O.DATA, 'utf8')); return j.kv || j; }catch(e){ return { error: 1 }; } })()).some(k => /funnel|error/.test(k)), 'off: no funnel key is stored');
 
   await browser.close();
   console.log(`\n${oks} ok, ${fails.length} failed`);

@@ -238,7 +238,6 @@ const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
 const signOut = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
 function onClub(c){
   club = c; clockSkew = c.now - Date.now();
-  if(BOARD && local.get('askRemind', 0) && c.tourney && (c.tourney.regs || []).includes(c.me.id)) local.set('onbInv', c.tourney.id);   // (the board's Next game card says so)
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   if(c.clubSwitching) clubSwitching(c);
   // the Lounge's Exchange cards: start the feed now, not only when Home renders
@@ -558,13 +557,15 @@ function boardLobby(body, clubsOn, clubsVisible){
 // "Next game" card at the top of Home. Nothing here changes a rule, a registration or a reminder: it says what is so.
 const onbNew = () => !!(club && !club.me.owner && !club.events && !club.spectate && (club.me.onb === 1 || club.me.onb === 2));
 let onbOpen = false, onbShown = false, onbRemind = false, onbAt = 0;
-function onbSet(step){ if(!club.me.onb || club.me.onb >= step) return; club.me.onb = step; send({ t: 'onb', step }); }
+// how: for the welcome (step 2), 'done' when it closed from card 3, 'skip' before it (the server counts which, nothing more)
+function onbSet(step, how){ if(!club.me.onb || club.me.onb >= step) return; club.me.onb = step; send(how ? { t: 'onb', step, how } : { t: 'onb', step }); }
 // the club's next game: open for registration, or playing now
 const bGame = () => { const T = club.tourney; return T && (T.status === 'registering' || T.status === 'running') ? T : null; };
 const bMine = T => !!T && (T.regs || []).includes(club.me.id);
 const bWhen = T => T.status === 'running' ? 'On now' : T.startAt ? esc(when(T.startAt)) : 'Starts when the organizer is ready';
-// (this phone joined with an invite and the server signed it up then: joined() in server/index.js)
-const bByInvite = T => !!T && local.get('onbInv', null) === T.id;
+// the server says their invite signed them up for this game and they are still registered (club.me.byInvite: the
+// account record's invReg, set by joined() in server/index.js; on every device)
+const bByInvite = T => !!T && !!club.me.byInvite && bMine(T);
 const bCanJoin = T => !!T && !bMine(T) && (T.status === 'registering' || !!T.lateOpen);
 function bNextHTML(){
   if(club.events) return '';
@@ -574,7 +575,6 @@ function bNextHTML(){
     <div class="btn-row"><button class="btn" data-bgo="director">Open Director</button></div></section>` : `<section class="card-box b-next" aria-labelledby="bNextH"><span class="eyebrow">Next game</span><h3 id="bNextH">No game open yet</h3>
     <p>New games show up here as soon as the organizer opens one. Check back in a day or two, or practise on your own now.</p>
     <div class="btn-row"><button class="btn" data-demo>Try the practice table</button></div></section>`;
-  if(!bMine(T) && bByInvite(T)) local.del('onbInv');   // (they cancelled: a later registration is their own)
   const mine = bMine(T), run = T.status === 'running';
   const status = run && club.myTable ? '<p>Your table is ready.</p>'
     : mine ? `<p class="b-next-reg">${bIc('check')}<b>You're registered</b></p><p>${bByInvite(T) ? "Your invite signed you up, so there's nothing else to do. " : ''}${run ? 'Your table opens by itself in a moment.' : 'Open Blindrise at the start time and your table opens by itself.'}</p>`
@@ -682,7 +682,7 @@ function onbShow(){
 }
 function onbClose(go){
   const el = $('bOnb'); if(el) el.remove();
-  onbOpen = false; onbSet(2);
+  onbOpen = false; onbSet(2, onbAt === 2 ? 'done' : 'skip');
   if(go === 'poker') bGo('poker'); else if(go === 'demo') startDemo(); else renderLobby();
   if(onbRemind){ onbRemind = false; setTimeout(offerReminder, 400); }
 }
@@ -945,7 +945,18 @@ const demoCard = () => `<div class="card-box demo-box"><span class="eyebrow">Dem
 function directorHTML(){
   // the Blindrise Open: no Exchange, invites or prizes to run there, only its tournaments and players
   if(club.events) return conflictsHTML() + directorMainHTML();
-  return newsHTML() + demoCard() + conflictsHTML() + clubListHTML() + eventsRunHTML() + window.Domino.directorHTML() + joinQrHTML() + clubsSwitchHTML() + directorMainHTML() + prizeAdminHTML();
+  return newsHTML() + demoCard() + conflictsHTML() + clubListHTML() + eventsRunHTML() + window.Domino.directorHTML() + joinQrHTML() + clubsSwitchHTML() + directorMainHTML() + funnelHTML() + prizeAdminHTML();
+}
+// ---------- New members' first steps (board design only, Issue #39): counts from the server, per week of joining ----------
+function funnelHTML(){
+  if(!BOARD || !club.funnel) return '';
+  const wk = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString([], { month: 'short', day: 'numeric' }); };
+  const row = (l, n) => `<div class="trow"><b>${l}</b><small>${n || 0}</small></div>`;
+  return `<div class="card-box b-funnel"><span class="eyebrow">New members · First steps</span>
+    <p class="note">How many members who joined with an invite took each first step, by the week they joined. Counts only: no names and nothing about any one member.</p>
+    ${club.funnel.length ? club.funnel.map(w => `<h3>Joined the week of ${esc(wk(w.week))}: ${w.joined || 0}</h3><div class="table-list">${row('Finished the welcome', w.welcomeDone)}${row('Skipped the welcome', w.welcomeSkipped)}${row('Registered for a game', w.game)}${row('Registered for a game themselves', w.gameSelf)}${row('Added a profile picture', w.picture)}${row('Published their business in the Exchange', w.business)}${row('Made an invite link', w.invite)}${row('Came back on another day within 7 days', w.returned)}</div>`).join('')
+      + '<p class="note">A member counts once for each step. "Registered for a game" includes members their invite signed up. The newest weeks can still grow.</p>'
+      : '<p class="note">No new members since counting started.</p>'}</div>`;
 }
 // ---------- the owner's join QR (Director) ----------
 // Each club the owner runs gets a QR code of its public join address, drawn here on the phone from that address only
