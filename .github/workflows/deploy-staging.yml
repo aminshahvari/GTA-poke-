@@ -1,0 +1,123 @@
+# Deploy a commit of the app to the staging server, or roll back to the previous release.
+# Push to ops-staging changing ops/run.txt to "deploy <sha>" (default a795f54) or "rollback"; or run by hand.
+# Steps: check out the ref, rsync it to /srv/blindrise/releases/<full sha>, npm ci --omit=dev, switch the
+# `current` symlink, restart blindrise.service, wait for /healthz; on failure switch back to the previous release.
+name: deploy staging
+
+on:
+  push:
+    branches: [ops-staging]
+    paths: [ops/run.txt]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, branch or tag of the app to deploy
+        required: true
+        default: a795f54
+      rollback:
+        description: Ignore ref and roll back to the previous release
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  DEFAULT_REF: a795f54
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      task: ${{ steps.t.outputs.task }}
+      arg: ${{ steps.t.outputs.arg }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: ops
+      - id: t
+        env:
+          EVENT: ${{ github.event_name }}
+          IN_REF: ${{ inputs.ref }}
+          IN_ROLLBACK: ${{ inputs.rollback }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            if [ "$IN_ROLLBACK" = true ]; then bash ops/ci/read-task.sh ops/run.txt rollback
+            else bash ops/ci/read-task.sh ops/run.txt deploy "${IN_REF:-$DEFAULT_REF}"; fi
+          else bash ops/ci/read-task.sh ops/run.txt; fi
+
+  deploy:
+    needs: gate
+    if: needs.gate.outputs.task == 'deploy' || needs.gate.outputs.task == 'rollback'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: staging-server
+      cancel-in-progress: false
+    env:
+      STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+      STAGING_HOST: ${{ secrets.STAGING_HOST }}
+      STAGING_USER: ${{ secrets.STAGING_USER }}
+      STAGING_DOMAIN: ${{ secrets.STAGING_DOMAIN }}
+      STAGING_HOST_KEY: ${{ secrets.STAGING_HOST_KEY }}
+      STAGING_SMTP_URL: ${{ secrets.STAGING_SMTP_URL }}
+      STAGING_ALERT_TO: ${{ secrets.STAGING_ALERT_TO }}
+      STAGING_ALERT_FROM: ${{ secrets.STAGING_ALERT_FROM }}
+      STAGING_ALERT_WEBHOOK: ${{ secrets.STAGING_ALERT_WEBHOOK }}
+      TASK: ${{ needs.gate.outputs.task }}
+      REF: ${{ needs.gate.outputs.arg }}
+    steps:
+      - name: Check out the ops kit
+        uses: actions/checkout@v4
+        with:
+          path: kit
+          sparse-checkout: ops
+      - name: Check out the app
+        if: env.TASK == 'deploy'
+        uses: actions/checkout@v4
+        with:
+          path: app
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve the ref
+        if: env.TASK == 'deploy'
+        id: ref
+        run: |
+          REF=${REF:-$DEFAULT_REF}
+          SHA=$(git -C app rev-parse --verify --quiet "$REF^{commit}" || git -C app rev-parse --verify --quiet "origin/$REF^{commit}" || true)
+          [ -n "$SHA" ] || { echo "::error::ref '$REF' is not a commit, branch or tag in this repository"; exit 1; }
+          git -C app checkout --quiet --detach "$SHA"
+          [ -f app/server/index.js ] && [ -f app/package-lock.json ] || { echo "::error::$REF has no server/index.js or package-lock.json"; exit 1; }
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Deploying $REF = $SHA: $(git -C app log -1 --format=%s)"
+          echo "### Release ${SHA:0:12} (from \`$REF\`)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Check secrets
+        run: bash kit/ops/ci/require-secrets.sh STAGING_SSH_KEY STAGING_HOST STAGING_USER STAGING_DOMAIN
+      - name: SSH setup
+        run: bash kit/ops/ci/ssh-setup.sh
+      - name: Upload the release
+        if: env.TASK == 'deploy'
+        env:
+          SHA: ${{ steps.ref.outputs.sha }}
+        run: |
+          ssh -o BatchMode=yes staging 'test -d /srv/blindrise/releases && command -v rsync >/dev/null' \
+            || { echo "::error::the server is not bootstrapped yet: run the bootstrap task first"; exit 1; }
+          rsync -rlptz --delete --exclude .git --exclude node_modules --exclude data --exclude ops \
+            --rsync-path="sudo rsync" -e "ssh -o BatchMode=yes" app/ "staging:/srv/blindrise/releases/$SHA/"
+          echo "uploaded $(find app -path app/.git -prune -o -type f -print | wc -l) files"
+      - name: Activate on the server (npm ci, switch, restart, health, auto-rollback)
+        env:
+          SHA: ${{ steps.ref.outputs.sha }}
+        run: |
+          if [ "$TASK" = deploy ]; then bash kit/ops/ci/remote.sh kit/ops deploy "$SHA"
+          else bash kit/ops/ci/remote.sh kit/ops rollback; fi
+      - name: Check from outside (https + WebSocket)
+        run: |
+          code=$(curl -s -o /tmp/h.json -w '%{http_code}' --max-time 15 "https://$STAGING_DOMAIN/healthz" || true)
+          ws=$(node kit/ops/ws-check.js "https://$STAGING_DOMAIN/ws" --timeout 10000 || true)
+          line="external: /healthz HTTP $code $(jq -c '{ok, mode}' /tmp/h.json 2>/dev/null); $ws"
+          echo "$line"; echo "$line" >> "$GITHUB_STEP_SUMMARY"
+          [ "$code" = 200 ] || echo "::warning::the site is not reachable over https yet (DNS A record or certificate still pending?)"
+      - name: Clean up key
+        if: always()
+        run: rm -f ~/.ssh/staging_key

@@ -1,0 +1,17 @@
+# Blindrise staging monitor thresholds. Copied to /srv/blindrise/shared/monitor.conf on the first `monitoring` task;
+# edit that copy on the box (it is never overwritten). KEY=VALUE, no quotes.
+DISK_MAX_PCT=85
+MEM_MIN_AVAIL_PCT=10
+CPU_MAX_PCT=90
+LOAD_MAX_PER_CPU=2.0
+ERRORS_MAX_5MIN=20
+WS_ACT_P95_MAX_MS=1500
+WS_KILLS_MAX_5MIN=30
+BACKUP_MAX_AGE_H=26
+CERT_MIN_DAYS=14
+# a check must fail this many runs in a row (runs are 2 minutes apart) before it alerts
+CONFIRM=2
+# while something stays broken, repeat the alert this often
+REMIND_HOURS=6
+# space-separated check names to switch off, e.g. during load tests: SKIP=cpu load
+SKIP=

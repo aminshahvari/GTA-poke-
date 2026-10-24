@@ -1,0 +1,38 @@
+[Unit]
+Description=Blindrise (staging)
+Documentation=file:///srv/blindrise/ops/README.md
+After=network-online.target docker.service
+Wants=network-online.target
+# nothing to run until the first deploy has made /srv/blindrise/current
+ConditionPathExists=/srv/blindrise/current/server/index.js
+StartLimitIntervalSec=120
+StartLimitBurst=20
+
+[Service]
+Type=simple
+User=blindrise
+Group=blindrise
+WorkingDirectory=/srv/blindrise/current
+EnvironmentFile=/srv/blindrise/shared/env
+# per release: RENDER_GIT_COMMIT=<sha>, so the app reports the version it runs
+EnvironmentFile=-/srv/blindrise/current/.release.env
+ExecStart=/usr/bin/node /srv/blindrise/current/server/index.js
+Restart=always
+RestartSec=3
+# the app saves once on SIGTERM (store.flush, at most 10 s) before it exits
+KillSignal=SIGTERM
+TimeoutStopSec=25
+SyslogIdentifier=blindrise
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

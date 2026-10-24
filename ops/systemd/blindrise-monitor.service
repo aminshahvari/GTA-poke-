@@ -1,0 +1,8 @@
+[Unit]
+Description=Blindrise staging: health probe and alerts
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /srv/blindrise/ops/monitor.sh
+TimeoutStartSec=90

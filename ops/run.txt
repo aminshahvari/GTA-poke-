@@ -1,0 +1,8 @@
+# What the next push to branch ops-staging runs on the staging server. One task per push.
+# The first line that is not blank or a comment is the request: "<task> [argument]".
+# To run the same task again, change anything in this file (e.g. bump the counter below) and push.
+# Tasks, in order of first use (see ops/README.md):
+#   preflight | bootstrap | postgres | deploy <sha> | backup | restore-rehearsal | monitoring | alert-test |
+#   status | check | rollback | none
+# run: 0
+none

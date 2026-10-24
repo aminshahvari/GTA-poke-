@@ -1,0 +1,73 @@
+# External check of the staging site from a GitHub runner: HTTPS /healthz and root page, WebSocket handshake,
+# certificate days left, then the box's own view (status task over ssh).
+# Runs on a push to ops-staging whose ops/run.txt says "check", or by hand.
+# To run it on a schedule later (allowed once the owner agrees; schedules only run from the DEFAULT branch, so this
+# file must be merged there first), add under `on:`
+#     schedule:
+#       - cron: '*/15 * * * *'
+# and change the gate condition below to also accept github.event_name == 'schedule'.
+name: staging check
+
+on:
+  push:
+    branches: [ops-staging]
+    paths: [ops/run.txt]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      task: ${{ steps.t.outputs.task }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: ops
+      - id: t
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then bash ops/ci/read-task.sh ops/run.txt check
+          else bash ops/ci/read-task.sh ops/run.txt; fi
+
+  check:
+    needs: gate
+    if: needs.gate.outputs.task == 'check'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+      STAGING_HOST: ${{ secrets.STAGING_HOST }}
+      STAGING_USER: ${{ secrets.STAGING_USER }}
+      STAGING_DOMAIN: ${{ secrets.STAGING_DOMAIN }}
+      STAGING_HOST_KEY: ${{ secrets.STAGING_HOST_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: ops
+      - name: Check secrets
+        run: bash ops/ci/require-secrets.sh STAGING_DOMAIN
+      - name: External checks
+        run: |
+          fail=0
+          r=$(curl -s -o /dev/null -w '%{http_code} %{time_total}s' --max-time 15 "https://$STAGING_DOMAIN/" || echo "000")
+          h=$(curl -s -o /tmp/h.json -w '%{http_code}' --max-time 15 "https://$STAGING_DOMAIN/healthz" || echo "000")
+          ws=$(node ops/ws-check.js "https://$STAGING_DOMAIN/ws" --timeout 10000) || fail=1
+          end=$(echo | openssl s_client -connect "$STAGING_DOMAIN:443" -servername "$STAGING_DOMAIN" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+          days=$([ -n "$end" ] && echo $(( ($(date -d "$end" +%s) - $(date +%s)) / 86400 )) || echo "?")
+          [ "${r%% *}" = 200 ] || fail=1; [ "$h" = 200 ] || fail=1
+          { echo "### External check: $([ $fail = 0 ] && echo PASS || echo FAIL)"; echo '```'
+            echo "root page     $r"; echo "/healthz      $h $(jq -c '{ok, mode, epoch, leaseLost}' /tmp/h.json 2>/dev/null)"
+            echo "websocket     $ws"; echo "certificate   $days days left"; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $fail
+      - name: Server status (needs the ssh secrets)
+        if: always() && env.STAGING_SSH_KEY != '' && env.STAGING_HOST != '' && env.STAGING_USER != ''
+        run: |
+          bash ops/ci/ssh-setup.sh
+          bash ops/ci/remote.sh ops status
+      - name: Clean up key
+        if: always()
+        run: rm -f ~/.ssh/staging_key

@@ -1,0 +1,42 @@
+# Postgres 16 for Blindrise staging. Bound to 127.0.0.1 only (Docker's published ports bypass ufw, so never bind
+# 0.0.0.0 here). Credentials come from the env file bootstrap.sh generated (mode 600, never printed).
+# Started by ops/postgres.sh:  docker compose -p blindrise -f /srv/blindrise/ops/compose.postgres.yml up -d
+# The ${...} defaults are the production-of-staging values; ops/test/local-e2e.sh overrides them for a throwaway run.
+services:
+  postgres:
+    image: ${PG_IMAGE:-postgres:16}
+    container_name: ${PG_CONTAINER:-blindrise-postgres}
+    restart: unless-stopped
+    env_file: ${PG_ENV_FILE:-/srv/blindrise/shared/pg.env}
+    ports:
+      - "127.0.0.1:${PG_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    shm_size: 256mb
+    # sized for a 4 GB box that also runs the app
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - max_connections=40
+      - -c
+      - wal_compression=on
+      - -c
+      - log_min_duration_statement=500
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: local
+      options:
+        max-size: 20m
+        max-file: "3"
+volumes:
+  pgdata:
+    name: ${PG_VOLUME:-blindrise-pgdata}

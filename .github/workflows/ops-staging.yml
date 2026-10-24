@@ -1,0 +1,78 @@
+# Staging server tasks other than deploy: preflight, bootstrap, postgres, backup, restore-rehearsal, monitoring,
+# alert-test, status. Runs ONLY on a push to branch ops-staging that changes ops/run.txt (the task is the first
+# non-comment line there), or by hand (workflow_dispatch). Never on pull requests.
+# The repository is public, so the logs are public: nothing here prints a secret; the box prints summaries only.
+name: staging ops
+
+on:
+  push:
+    branches: [ops-staging]
+    paths: [ops/run.txt]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Task to run on the staging server
+        required: true
+        type: choice
+        options: [preflight, bootstrap, postgres, backup, restore-rehearsal, monitoring, alert-test, status]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      task: ${{ steps.t.outputs.task }}
+      arg: ${{ steps.t.outputs.arg }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: ops
+      - id: t
+        env:
+          DISPATCH_TASK: ${{ inputs.task }}
+        run: bash ops/ci/read-task.sh ops/run.txt "$DISPATCH_TASK"
+
+  run:
+    needs: gate
+    if: contains(fromJSON('["preflight","bootstrap","postgres","backup","restore-rehearsal","monitoring","alert-test","status"]'), needs.gate.outputs.task)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: staging-server
+      cancel-in-progress: false
+    env:
+      STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+      STAGING_HOST: ${{ secrets.STAGING_HOST }}
+      STAGING_USER: ${{ secrets.STAGING_USER }}
+      STAGING_DOMAIN: ${{ secrets.STAGING_DOMAIN }}
+      STAGING_HOST_KEY: ${{ secrets.STAGING_HOST_KEY }}
+      STAGING_SMTP_URL: ${{ secrets.STAGING_SMTP_URL }}
+      STAGING_ALERT_TO: ${{ secrets.STAGING_ALERT_TO }}
+      STAGING_ALERT_FROM: ${{ secrets.STAGING_ALERT_FROM }}
+      STAGING_ALERT_WEBHOOK: ${{ secrets.STAGING_ALERT_WEBHOOK }}
+      TASK: ${{ needs.gate.outputs.task }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: ops
+      - name: Check secrets
+        run: bash ops/ci/require-secrets.sh STAGING_SSH_KEY STAGING_HOST STAGING_USER STAGING_DOMAIN
+      - name: Alert channels
+        if: env.TASK == 'monitoring' || env.TASK == 'alert-test'
+        run: |
+          ch=""
+          [ -n "$STAGING_SMTP_URL" ] && [ -n "$STAGING_ALERT_TO" ] && ch="$ch email"
+          [ -n "$STAGING_ALERT_WEBHOOK" ] && ch="$ch webhook"
+          if [ -z "$ch" ]; then
+            echo "::warning title=No alert channel::Neither STAGING_SMTP_URL+STAGING_ALERT_TO nor STAGING_ALERT_WEBHOOK is set: alerts are only logged on the box."
+            echo "**Alert channels: none configured, alerts are logged on the box only.**" >> "$GITHUB_STEP_SUMMARY"
+          else echo "alert channels configured:$ch"; fi
+      - name: SSH setup
+        run: bash ops/ci/ssh-setup.sh
+      - name: Run ${{ needs.gate.outputs.task }} on the server
+        run: bash ops/ci/remote.sh ops "$TASK"
+      - name: Clean up key
+        if: always()
+        run: rm -f ~/.ssh/staging_key
