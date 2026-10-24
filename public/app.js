@@ -2353,10 +2353,25 @@ function potToWinners(d, handKey, LY){
     // the seat or your cards behind that spot)
     const grow = Math.max(0, el.offsetHeight / 2 - 11), gl = Math.hypot(px - bx, py - by) || 1;
     bx += (px - bx) / gl * grow; by += (py - by) / gl * grow;
-    // (the board: the seat's status line says "Winner" under its plate; the pile keeps clear of it, a little further in)
+    // (the board: the seat's status line says "Winner" under its plate; the pile keeps clear of it, and of the result
+    // line, the board's row (its box: the cards may still be flying in) and the seats: the nearest clean place,
+    // further in towards the pot or to either side)
     const pill = BOARD && $('seats').querySelector(`.seat[data-uid="${CSS.escape(p.uid)}"] .badge.b-st`);
-    if(pill){ const r = pill.getBoundingClientRect(), hw = el.offsetWidth / 2, hh = el.offsetHeight / 2, L = r.left - ar.left, T = r.top - ar.top, R = r.right - ar.left, B = r.bottom - ar.top;
-      for(let k = 0; k < 24 && bx - hw < R + 2 && bx + hw > L - 2 && by - hh < B + 2 && by + hh > T - 2; k++){ bx += (px - bx) / gl * 4; by += (py - by) / gl * 4; } }
+    if(pill){ const box = e => { const r = e.getBoundingClientRect(); return [r.left - ar.left, r.top - ar.top, r.right - ar.left, r.bottom - ar.top]; };
+      const msg = $('msg'), words = msg && msg.textContent.trim() ? [...msg.querySelectorAll('*')].filter(e => !e.children.length && e.textContent.trim()) : [];
+      const obst = [pill, ...(words.length ? words : msg && msg.textContent.trim() ? [msg] : []), $('board'), ...$('seats').querySelectorAll('.seat .plate, .seat .badge.b-st, .seat .av, .seat .hole')]
+        .map(box).filter(b => b[2] > b[0]);
+      const hw = el.offsetWidth / 2, hh = el.offsetHeight / 2, ux = (px - bx) / gl, uy = (py - by) / gl;
+      const clear = (x, y) => !obst.some(([L, T, R, B]) => x - hw < R + 2 && x + hw > L - 2 && y - hh < B + 2 && y + hh > T - 2);
+      let best = null;
+      const W = area.clientWidth, H = area.clientHeight;
+      for(let k = -4; k <= 24; k++) for(let j = -12; j <= 12; j++){
+        const x = bx + ux * 4 * k - uy * 8 * j, y = by + uy * 4 * k + ux * 8 * j, c = Math.hypot(4 * k, 8 * j);
+        if((!best || c < best[2]) && x - hw >= 2 && x + hw <= W - 2 && y - hh >= 2 && y + hh <= H - 2 && clear(x, y)) best = [x, y, c]; }
+      // (with no clean place, clear of its own status line at least, as before)
+      const [L, T, R, B] = box(pill);
+      if(best){ bx = best[0]; by = best[1]; }
+      else for(let k = 0; k < 24 && bx - hw < R + 2 && bx + hw > L - 2 && by - hh < B + 2 && by + hh > T - 2; k++){ bx += ux * 4; by += uy * 4; } }
     el.style.cssText = `left:${bx}px;top:${by}px`;
     if(still){ el.classList.add('settled'); return; }
     const dx = px - bx, dy = py - by, lift = Math.min(60, Math.hypot(dx, dy) * .18);

@@ -95,6 +95,16 @@ async function names(browser, TOK){
         `${tag} preflop: the blinds keep their names ("${by(7).nm}", "${by(8).nm}"), "SB" and "BB" in their status lines, the folded seat "Fold"`);
       if(kind === 'flop') check(/^Check$/i.test(by(3).st) && /^Bet$/i.test(by(4).st) && /^Call$/i.test(by(5).st) && !by(6).st, `${tag} flop: Check, Bet, Call in the status lines after acting, the seat to act none (${[3, 4, 5, 6].map(s => by(s).st || '-').join(', ')})`);
       if(kind === 'river') check(/^Winner$/i.test(by(4).st) && /^Three of a kind$/.test(by(5).st) && /^Test/.test(by(4).nm), `${tag} river: "Winner" and the hand in the status lines, the winner's name kept ("${by(4).nm}")`);
+      // (the winner's chips, once they have come to the seat: clear of its "Winner" line, the result line, the board's
+      // row and every seat)
+      if(kind === 'river'){ await sleep(2600);
+        const pile = await pg.evaluate(() => { const R = e => e.getBoundingClientRect(), p = document.querySelector('.winpile'); if(!p) return null; const P = R(p);
+          const hit = b => P.left < b.right - 1 && b.left < P.right - 1 && P.top < b.bottom - 1 && b.top < P.bottom - 1;
+          const msg = document.getElementById('msg'), words = [...msg.querySelectorAll('*')].filter(e => !e.children.length && e.textContent.trim());
+          return [...(words.length ? words : [msg]).map(e => ['the result line', e]), ...document.querySelectorAll('#board .card')].map(x => Array.isArray(x) ? x : ['the board', x])
+            .concat([...document.querySelectorAll('#seats .seat .plate, #seats .seat .badge.b-st, #seats .seat .av, #seats .seat .hole .card')].map(e => [(e.closest('.seat').querySelector('.nm') || {}).textContent + ' ' + e.className.split(' ')[0], e]))
+            .filter(([k, e]) => R(e).width && hit(R(e))).map(([k]) => k); });
+        check(pile && !pile.length, `${tag} river: the winner's chips clear of its "Winner" line, the result line, the board and every seat${pile && pile.length ? ': over ' + [...new Set(pile)].join(', ') : ''}`); }
       // the geometry: every plate where it was before anyone acted
       check(L.every(q => { const b = before.find(x => x.uid === q.uid); return b && q.plate.every((v, i) => Math.abs(v - b.plate[i]) <= 1); }), `${tag} ${kind}: every plate in the same place and size as before anyone acted`);
       if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `fix7-${kind}-${tag}.png`) });
