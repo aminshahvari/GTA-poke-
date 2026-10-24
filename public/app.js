@@ -14,7 +14,13 @@ const local = {
   set(k, v){ try{ localStorage.setItem('stacked:' + k, JSON.stringify(v)); }catch(e){} },
   del(k){ try{ localStorage.removeItem('stacked:' + k); }catch(e){} }
 };
-const showScreen = id => { ['auth','lobby','game'].forEach(s => $(s).hidden = s !== id); keepAwake(id === 'game'); if(id !== 'lobby') document.querySelector('.app').classList.remove('wide'); };
+const showScreen = id => { ['auth','lobby','game'].forEach(s => $(s).hidden = s !== id); keepAwake(id === 'game'); if(id !== 'lobby') document.querySelector('.app').classList.remove('wide'); LAYV++; };
+// The table's measurements (2026-10-24, measured: every update read the table's sizes right after writing its styles,
+// forcing the phone to lay the page out several times per update, and the clock did it five times a second).
+// LAYV counts the changes that can move the table's boxes (a resize or turn, the page or the table area changing size,
+// a new hand's held height, the screen shown); a size measured since the last such change is used again (AREA, SCR,
+// LOCK.room) instead of being read again. RAFT: the one table render waiting for the next frame (renderSoon).
+let LAYV = 0, RAFT = 0, AREA = null, SCR = null, bHudW = 0;
 // keep the phone screen on while a table is open, so it doesn't lock and sit you out between hands.
 // The Wake Lock API first; where it is missing or refused (Instagram's in-app browser, older iOS, Low Power Mode)
 // a muted, invisible, looping 16x16 video does the same job (the NoSleep.js trick). iOS often grants either only
@@ -236,7 +242,7 @@ function connect(){
   live = false; wantConn = true; dialAt = Date.now(); hbAt = 0;
   const sock = ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   // (the hello is answered at once with 'auth': until then it counts as an unanswered heartbeat)
-  sock.onopen = () => { retry = 0; heardAt = hbAt = Date.now(); hbWait = HB_WAIT; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } sock.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined, spectate: watching() || undefined })); };
+  sock.onopen = () => { retry = 0; heardAt = hbAt = Date.now(); hbWait = HB_WAIT; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } sock.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined, spectate: watching() || undefined, delta: 1 })); };
   sock.onmessage = ev => {
     if(sock !== ws) return;   // (a socket already let go)
     heardAt = Date.now();
@@ -244,14 +250,18 @@ function connect(){
     if(m.t === 'hb'){ if(m.n === hbN && hbAt){ hbRtt = Date.now() - hbAt; hbAt = 0; } return; }
     if(m.t === 'auth'){ if(hbAt) hbRtt = Date.now() - hbAt; hbAt = 0; live = !!m.ok; if(!m.ok){ wantConn = false; outbox = null; local.del('token'); ws = null; sock.onclose = null; sock.close(); connLost(false); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; connLost(false); resync = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
     if(m.t === 'club'){
+      // (d: only the parts of the view that changed, by key, over the view this socket has had: see server/index.js
+      // sendClub; the first view after the hello is always whole)
+      const c = m.d && club ? Object.assign({}, club, m.club) : m.club, changed = m.d && club ? Object.keys(m.club).concat(m.gone || []) : null;
+      if(changed) (m.gone || []).forEach(k => delete c[k]);
       // the first club state after a (re)connect is the whole truth: tables that closed meanwhile are forgotten
-      if(resync){ resync = false; const open = new Set((m.club.tables || []).map(x => x.tid)); for(const tid of [...tables.keys()]) if(tid !== 'demo' && !open.has(tid) && tid !== m.club.myTable){ tables.delete(tid); myCards.delete(tid); } }
-      if(outbox && m.club.myTable !== outbox.tid) outboxDrop();
-      onClub(m.club); return;
+      if(resync){ resync = false; const open = new Set((c.tables || []).map(x => x.tid)); for(const tid of [...tables.keys()]) if(tid !== 'demo' && !open.has(tid) && tid !== c.myTable){ tables.delete(tid); myCards.delete(tid); } }
+      if(outbox && c.myTable !== outbox.tid) outboxDrop();
+      onClub(c, changed); return;
     }
     if(m.t === 'domino'){ window.Domino.onState(m.v); return; }
     if(m.t === 'table'){ if(m.field){ field = m.field; if(m.field.watchers != null) watchBy.set(m.table.tid, m.field.watchers); } tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); outboxCheck(m.table); onTable(m.table); return; }
-    if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
+    if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderSoon(); return; }
     if(m.t === 'invite'){ showInvite(m.code, m.group, m.max); return; }
     if(m.t === 'skillq'){ askSkill(m.rid, m.q); return; }
     if(m.t === 'claimed'){ modal('<h2>Prize claimed 🎉</h2><p>The organizer has been told and will get it to you. You can follow it under Prizes.</p>', [{ label: 'Great', value: 1, primary: true }]); return; }
@@ -305,15 +315,26 @@ function connLost(on){
 }
 
 const signOut = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
-function onClub(c){
-  club = c; clockSkew = c.now - Date.now();
+let meChipHTML = null, tableKeyWas = null, membersGen = 0;
+// what the table shows of the club view: an update that changes none of it leaves the table as it is (a hand ending at
+// another table moves the places and the players left, which the clock and the field tiles show: those follow at once)
+function tableKey(c){
+  const T = c.tourney, me = c.me || {};
+  return JSON.stringify([me, c.myTable, c.spectate, c.suspended, c.features, c.chatOff, c.muted, c.home, membersGen,
+    T && { ...T, regs: null, regCount: null, remaining: null, places: (T.places || []).filter(r => r.uid === me.id) }]);
+}
+function onClub(c, changed){
+  if(!changed || changed.includes('members')) membersGen++;
+  club = c; if(c.now) clockSkew = c.now - Date.now();
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   if(c.clubSwitching) clubSwitching(c);
   // the Lounge's Exchange cards: start the feed now, not only when Home renders
   if(!c.suspended && !c.spectate && !c.events && (c.features && c.features.clubs || c.me.owner)) window.BizClub.prefetch();
   $('chatBtn').hidden = !!c.spectate; // watchers from another club never see a table's chat
-  $('meChip').innerHTML = c.spectate ? `<button class="club-btn" data-live="home" aria-label="Back to ${esc(c.home.name)}">← ${esc(c.home.name)}</button>` : BOARD ? bTopHTML(c) : `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
-  if(!c.spectate && !BOARD){
+  const chip = c.spectate ? `<button class="club-btn" data-live="home" aria-label="Back to ${esc(c.home.name)}">← ${esc(c.home.name)}</button>` : BOARD ? bTopHTML(c) : `${c.clubSwitching && c.clubs.length > 1 ? `<button class="club-btn" id="clubBtn" aria-label="Switch club">${esc(c.club.name)}</button>` : ''}<button class="me-btn" id="meBtn">${avHTML(c.me.id, c.me.name, 'sm')}<span>${esc(c.me.name.replace(/ \([^()]*\)$/, ''))}</span></button><button class="back" id="outBtn">Sign out</button>`;
+  // (drawn again only when it changed: the same buttons keep their handlers)
+  const redraw = chip !== meChipHTML; if(redraw){ meChipHTML = chip; $('meChip').innerHTML = chip; }
+  if(redraw && !c.spectate && !BOARD){
     $('meBtn').onclick = () => openProfile(c.me.id);
     if($('clubBtn')) $('clubBtn').onclick = pickClub;
     $('outBtn').onclick = signOut;
@@ -331,7 +352,13 @@ function onClub(c){
     leftForSponsor = null;
   }
   const typing = document.activeElement && $('lobbyBody').contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
-  if(view === 'lobby'){ showScreen('lobby'); if(tab !== 'learn' && tab !== 'biz' && !typing) renderLobby(); } else renderTable();
+  if(view === 'lobby'){ showScreen('lobby'); if(tab !== 'learn' && tab !== 'biz' && !typing) renderLobby(); }
+  else {
+    // the table is drawn again (once, on the next frame) only when something it shows changed
+    const k = tableKey(c);
+    if(!changed || k !== tableKeyWas){ tableKeyWas = k; renderSoon(); }
+    else if(changed.includes('tourney')) fieldUI();
+  }
 }
 // club switching: remember which club this is; a signed-in member who opens another club's invite link joins it
 let joinTried = false;
@@ -444,7 +471,9 @@ const odo = (k, v) => `<span class="odo" data-odo="${k}">${v}</span>`;
 function odoPlay(root){
   root.querySelectorAll('[data-odo]').forEach(x => { const k = x.dataset.odo, v = x.textContent, was = odoLast.get(k); odoLast.set(k, v); if(was != null && was !== v && !reducedMotion()) x.classList.add('odo-in'); });
 }
-function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)) renderTable(); }
+// (the table's state is kept as each message comes, in order; the drawing waits for the next frame, once for all the
+// messages of that frame)
+function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)) renderSoon(); }
 
 // ---------- lobby ----------
 $('lobbyBody').addEventListener('click', e => {
@@ -1642,7 +1671,7 @@ function seatSizes(area, look, bet){
   });
   // (nothing to measure while the table is off screen, so don't keep that)
   if(SIZES.size > 40) SIZES.clear();
-  if(area.clientWidth) SIZES.set(key, S);
+  if(areaSize().w) SIZES.set(key, S);
   return S;
 }
 // Table geometry, in pixels of the table area: an oval felt (straight sides, round ends) inside a padded
@@ -1663,7 +1692,7 @@ const STADIUM_SEATS = {
   9: [[0, -.88], [-.44, -.58], [-.5, -.2], [-.5, .2], [-.3, .79], [.3, .79], [.5, .2], [.5, -.2], [.44, -.58]]
 };
 function tableGeo(n, bet = '8,888'){
-  const a = $('tableArea'), W = a.clientWidth || 360, H = a.clientHeight || 520, pot = $('pot'), msg = $('msg');
+  const a = $('tableArea'), W = areaSize().w || 360, H = areaSize().h || 520, pot = $('pot'), msg = $('msg');
   // the pot and the message line get a fixed room (a six-digit pot, one line of text), whatever they say right
   // now, so the layout is the same for the whole hand and nothing moves when the result is written under the board
   const DB = $('game').classList.contains('wpt') && DOCKBOX, key = `${n}:${W}:${H}:${bet}:${landKey()}:${DB || ''}`;
@@ -1702,7 +1731,7 @@ function tableGeo(n, bet = '8,888'){
   if(best.cost) best = layout(best.look, best.sq, true, best.k, best.inset, best.g, best.nar);
   GEO = { ...best, key, W, H, betAt: k => best.bets[k], dealerAt: k => best.dealers[k] };
   if(GEOS.size > 12) GEOS.delete(GEOS.keys().next().value);
-  if(a.clientWidth) GEOS.set(key, GEO);
+  if(areaSize().w) GEOS.set(key, GEO);
   return GEO;
 
   function layout(look, sq, thorough, k, inset, g, nar){
@@ -1975,7 +2004,7 @@ const inStadium = (x, y, cx, cy, a, b, m = 0) => { const r = Math.min(a, b), sx 
 let BSIZE = null;
 // the pot and a bet as drawn (the widest they get: "Pot 888,888", "88.8K"), measured once per size class
 function boardSizes(area, cls){
-  if(BSIZE && BSIZE.cls === cls && BSIZE.w === area.clientWidth) return BSIZE;
+  if(BSIZE && BSIZE.cls === cls && BSIZE.w === areaSize().w) return BSIZE;
   const p = document.createElement('div');
   p.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;pointer-events:none';
   p.innerHTML = `<div class="pot num">${chipsIcon(3)}Pot 888,888</div><div class="bet num" style="left:0;top:0">${chipsIcon(3)}88.8K</div>`;
@@ -2003,7 +2032,7 @@ function boardSizes(area, cls){
 // (`watch`: nobody at this table is you, so the seat at the foot is drawn as any other seat, its avatar where your plate
 // would be, and its D button goes by that avatar)
 function boardGeo(n, empty = [], watch = false){
-  const a = $('tableArea'), W = a.clientWidth || 360, H = a.clientHeight || 520, cls = boardClass(), C = BCLS[cls];
+  const a = $('tableArea'), W = areaSize().w || 360, H = areaSize().h || 520, cls = boardClass(), C = BCLS[cls];
   const vw = scr().w, key = `b:${n}:${W}:${H}:${cls}:${vw}:${empty.join('.')}${watch ? ':w' : ''}`;
   if(GEO && GEO.key === key) return GEO;
   if(GEOS.has(key)) return GEO = GEOS.get(key);
@@ -2310,7 +2339,7 @@ function boardGeo(n, empty = [], watch = false){
   const geo = { key, W, H, cls, land, look: '', sq: 1, k: 0, inset: 7, wmX: wm ? wm[0] : null, wmY: wm ? wm[1] : null, wmMsg, g: 0, nar: 0, compact: false, mini: false, tight: false, potSide: false, rail: R, cx, cy, tall: !land, fw, fh, top, left,
     seats, bw: mid.bw, by: mid.by, bx: cx, msgW: mid.msgW, mline: mid.bh / 2 + 6, av: AV, cost, bets, dealers, betAt: k => bets[k], dealerAt: k => dealers[k] };
   GEO = geo; if(GEOS.size > 12) GEOS.delete(GEOS.keys().next().value);
-  if(a.clientWidth) GEOS.set(key, geo);
+  if(areaSize().w) GEOS.set(key, geo);
   return geo;
 }
 // A seat on the board (§3.3): the avatar (the initials disc: "Show my photo" is off until a member turns it on, Muse's
@@ -2483,7 +2512,7 @@ function patchKids(box, parts){
 // an amount on the felt, short from `from` up (12.5K, 125K, 1.25M), so a label never outgrows the room the layout keeps
 const chipFmt = (n, from) => n < from ? fmt(n) : n < 1e5 ? (Math.floor(n / 100) / 10).toFixed(1).replace(/\.0$/, '') + 'K'
   : n < 1e6 ? Math.floor(n / 1000) + 'K' : (Math.floor(n / 1e4) / 100).toFixed(2).replace(/\.?0+$/, '') + 'M';
-const pctToPx = ([x, y]) => { const a = $('tableArea'); return [a.clientWidth * x / 100, a.clientHeight * y / 100]; };
+const pctToPx = ([x, y]) => { const a = areaSize(); return [a.w * x / 100, a.h * y / 100]; };
 const cs = s => E.parse(s)[0];
 function cardHTML(c, cls = '', extra = ''){
   if(c == null) return `<div class="card back ${cls}" ${extra}></div>`;
@@ -2682,7 +2711,7 @@ let DOCKH = 0, DOCKBOX = null;
 function reserveDock(seated){
   const g = $('game'), dock = $('dock');
   // (the board: the dock is one info line over one action row, the same height in every state, set in board.css)
-  if(BOARD){ g.classList.toggle('seated', seated); g.classList.remove('ovl', 'helpmin', 'wpt'); g.dataset.bcls = boardClass();
+  if(BOARD){ g.classList.toggle('seated', seated); g.classList.remove('ovl', 'helpmin', 'wpt'); { const bc = boardClass(); if(g.dataset.bcls !== bc) g.dataset.bcls = bc; }
     if(dock.style.cssText){ dock.style.cssText = ''; dock.dataset.css = ''; } DOCKH = dock.offsetHeight; return; }
   g.classList.toggle('seated', seated); g.classList.toggle('ovl', ovalScreen()); g.classList.toggle('helpmin', seated && hMin());
   const key = `${seated}:${hMin()}:${g.clientWidth}:${g.className}`;
@@ -2801,11 +2830,21 @@ let LOCK = null, SVH = null;
 // The board takes the page's own size then (the root's), so it is laid out for the screen it is really on. (Today's
 // table reads innerWidth and innerHeight as before.)
 function scr(){
+  if(SCR && SCR.v === LAYV) return SCR.r;
   const w = window.innerWidth, h = window.innerHeight;
-  if(!BOARD) return { w, h };
+  if(!BOARD) return (SCR = { v: LAYV, r: { w, h } }).r;
   const de = document.documentElement, cw = de.clientWidth, ch = de.clientHeight;
-  return cw && ch && Math.abs(cw - w) > 24 ? { w: cw, h: ch } : { w, h };
+  return (SCR = { v: LAYV, r: cw && ch && Math.abs(cw - w) > 24 ? { w: cw, h: ch } : { w, h } }).r;
 }
+// the table area's size, read again only after something that can change it (LAYV); never kept while it is off screen
+function areaSize(){
+  if(!AREA || AREA.v !== LAYV || !AREA.w || !AREA.h){ const a = $('tableArea'); AREA = { v: LAYV, w: a.clientWidth, h: a.clientHeight }; }
+  return AREA;
+}
+// a style written only when it changes (an unchanged write still makes the browser look at the layout again)
+function setCss(el, css){ if(el._css !== css){ el._css = css; el.style.cssText = css; } }
+function setProp(el, k, v){ if(el.style.getPropertyValue(k) !== v) el.style.setProperty(k, v); }
+function setText(id, v){ const e = $(id); if(e && e.textContent !== String(v)) e.textContent = v; }
 function svhPx(){
   if(!SVH){ SVH = document.createElement('div'); SVH.setAttribute('aria-hidden', 'true');
     SVH.style.cssText = 'position:fixed;left:0;top:0;width:0;height:100vh;height:100svh;visibility:hidden;pointer-events:none'; document.body.appendChild(SVH); }
@@ -2842,24 +2881,32 @@ function newLock(d){
   if(ql && (row1 ? ql.parentNode !== qhome : ql.previousElementSibling !== qhome)) row1 ? qhome.prepend(ql) : qhome.after(ql);
   hudPlace();
   LOCK = { w: g.clientWidth, hand, h: 0, iw: IW, ih: H, wide: g.clientWidth > g.clientHeight };
+  LAYV++;
   return true;
 }
 function lockArea(){
   const g = $('game'), area = $('tableArea');
-  // the room the area has right now
-  const was = area.style.cssText; area.style.height = ''; area.style.flex = ''; area.style.marginBottom = '';
-  const room = Math.floor(area.getBoundingClientRect().height); area.style.cssText = was;
   // what sits around the table (the header above, the dock below): when that changes (the web fonts arriving
   // after the first hand was drawn, the helper folded small) the table is laid out again for the room left
   const frame = Math.round(area.offsetTop + (g.classList.contains('wpt') ? DOCKH : $('dock').offsetHeight));
   if(LOCK.frame !== frame){ LOCK.frame = frame; LOCK.h = 0; LOCK.box = null; }
+  // the room the area has right now (measured with its held height let go for a moment; again only when the screen,
+  // the page or what sits around the table changed since: LAYV, the frame)
+  if(LOCK.rv !== LAYV || !LOCK.h){
+    const was = area.style.cssText; area.style.height = ''; area.style.flex = ''; area.style.marginBottom = '';
+    LOCK.room = Math.floor(area.getBoundingClientRect().height); area.style.cssText = was; area._css = null; LOCK.rv = LAYV;
+  }
+  const room = LOCK.room;
   if(!LOCK.h){
     // with the browser's bars showing the screen is (at most) this much shorter
     const h = Math.max(120, room - Math.max(0, g.clientHeight - svhPx()));
     LOCK.h = h;
   }
   const over = Math.max(0, LOCK.h - room);
-  area.style.flex = 'none'; area.style.height = LOCK.h + 'px'; area.style.marginBottom = (2 - over) + 'px';
+  // (compared with what was written last, as the browser reads 'flex: none' back as '0 0 auto')
+  const held = LOCK.h + ':' + over;
+  if(area._held !== held || area.style.height !== LOCK.h + 'px'){
+    area.style.flex = 'none'; area.style.height = LOCK.h + 'px'; area.style.marginBottom = (2 - over) + 'px'; area._held = held; LAYV++; LOCK.rv = LAYV; }
   // the WPT column's box in the table area (its reserved height, from where it stands at the bottom right)
   // (decided with the table area's height, for the whole hand: the toolbar or the keyboard moving the column mid-hand
   // doesn't lay the table out again)
@@ -2871,6 +2918,7 @@ function lockArea(){
 }
 let handOnFelt = false; // the winning hand's name is on the felt (the pot's place or the result line)
 function renderTable(){
+  if(RAFT){ cancelAnimationFrame(RAFT); RAFT = 0; }   // (drawn now: the frame's render is not needed)
   if(view !== 'table' || !club) return;
   const tid = watchTid || club.myTable, d = tables.get(tid);
   const area = $('tableArea');
@@ -2885,7 +2933,7 @@ function renderTable(){
   newLock(d);
   reserveDock(mySeat >= 0);
   lockArea();
-  area.style.setProperty('--cw', Math.max(30, Math.min(46, area.clientWidth * .1)) + 'px');
+  setProp(area, '--cw', Math.max(30, Math.min(46, areaSize().w * .1)) + 'px');
   const res = d.result, winCards = new Set((res && res.showdown ? res.winCards : []).map(cs));
   const handKey = d.tid + ':' + d.handNo;
   area.dataset.state = handKey + ':' + d.seq;   // which state the table shows (table, hand, turn), for checking it is the live one
@@ -2917,16 +2965,16 @@ function renderTable(){
   const short = l => (l.match(/^.*? (?:wins|split) [\d,]+/) || [l])[0];
   $('msg').innerHTML = lines.map(l => `<div>${esc(res ? short(l) : l)}</div>`).join(''); $('msg').title = lines.join('\n');
   const LY = layoutOf(d), posOf = LY.posOf, G = LY.G;
-  area.style.setProperty('--bw', G.bw + 'px');
+  setProp(area, '--bw', G.bw + 'px');
   const felt = area.querySelector('.felt');
   // (on the oval the felt's name sits on the message line under the board, which the layout keeps clear of chips)
   const wm = G.inset === 6 ? `;--wm:${(G.by + G.mline - (G.cy - G.fh / 2)) / G.fh * 100}%` : '';
-  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px${wm}${BOARD && G.wmY != null ? `;--wm-x:${G.wmX - (G.cx - G.fw / 2)}px;--wm-y:${G.wmY - (G.cy - G.fh / 2)}px` : ''}`;
+  setCss(felt, `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px${wm}${BOARD && G.wmY != null ? `;--wm-x:${G.wmX - (G.cx - G.fw / 2)}px;--wm-y:${G.wmY - (G.cy - G.fh / 2)}px` : ''}`);
   // (the board: the felt's name is an element of its own, champagne gold, placed by the layout; Issue #32 item 9)
   if(BOARD){ let m = felt.querySelector('.b-wm'); if(!m){ m = document.createElement('i'); m.className = 'b-wm'; m.setAttribute('aria-hidden', 'true'); m.textContent = 'BLINDRISE'; felt.appendChild(m); }
     m.classList.toggle('on-msg', !!G.wmMsg); m.hidden = G.wmY == null; }
-  area.querySelector('.center').style.cssText = `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
-  $('msg').style.maxWidth = G.msgW + 'px';
+  setCss(area.querySelector('.center'), `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`);
+  if($('msg').style.maxWidth !== G.msgW + 'px') $('msg').style.maxWidth = G.msgW + 'px';
   // a split or several pots can be longer than the felt's one line: then the same result in shorter words, until it
   // fits whole (short names, without the pot labels and the uncalled bets, then only who won); the bar under the
   // table and the title keep the full text
@@ -2943,7 +2991,8 @@ function renderTable(){
   area.classList.toggle('msg-on', !!$('msg').textContent.trim());
   // (the board: its size class and seat unit sizes, for board.css)
   if(BOARD){ const C = BCLS[G.cls], h = G.seats[0];
-    area.dataset.bcls = G.cls; area.style.cssText += `;--av:${C.av}px;--pw:${C.pw}px;--ph:${C.ph}px;--cwb:${C.cw}px;--hw:${h.hw}px;--hph:${C.hph}px;--hpw:${h.hpw}px`; }
+    if(area.dataset.bcls !== G.cls) area.dataset.bcls = G.cls;
+    for(const [k, v] of [['--av', C.av], ['--pw', C.pw], ['--ph', C.ph], ['--cwb', C.cw], ['--hw', h.hw], ['--hph', C.hph], ['--hpw', h.hpw]]) setProp(area, k, v + 'px'); }
   area.classList.toggle('tall', G.tall); area.classList.toggle('oval', G.inset === 6); area.classList.toggle('stad', G.inset === 2 || G.inset === 3 || G.inset === 6); area.classList.toggle('tight', G.tight); area.classList.toggle('compact', G.compact); area.classList.toggle('mini', G.mini); area.classList.toggle('micro', G.look === 'micro'); area.classList.toggle('pot-side', !!G.potSide);
   if(!d.result) $('fx').querySelectorAll('.winpile').forEach(e => { if(e.dataset.hand !== d.tid + ':' + d.handNo){ e.classList.add('gone'); setTimeout(() => e.remove(), 400); } });
   const mc = myCards.get(d.tid), mine = mc && mc.hand === d.handNo ? mc.cards.map(cs) : null;
@@ -3437,7 +3486,7 @@ function boardTop(T, d, me, brk){
   const wn = f.watchers == null ? null : f.watchers;
   bSet('bhWn', wn == null ? '' : wn); bSet('bWatch', wn == null ? '' : `${wn} watching`);
   $('bhWt').hidden = wn == null; $('bWatch').hidden = wn == null;
-  const key = [T.level, sb, bb, an, f.players, f.total, rank, wn, brk ? 1 : 0, $('cTime').textContent.length, $('bHud').clientWidth, $('game').dataset.bcls, $('game').classList.contains('land')].join('|');
+  const key = [T.level, sb, bb, an, f.players, f.total, rank, wn, brk ? 1 : 0, $('cTime').textContent.length, bHudW, $('game').dataset.bcls, $('game').classList.contains('land')].join('|');
   if(key === bTopKey) return;
   bTopKey = key;
   $('bHud').setAttribute('aria-label', `Level ${T.level + 1}, blinds ${fmt(sb)}/${fmt(bb)}${an ? ', ante ' + fmt(an) : ''}. ${f.players} of ${f.total} players left.${rank ? ' Your rank ' + ord(rank) + '.' : ''}${wn != null ? ` ${wn} watching.` : ''} ${brk ? 'On a break' : 'Time left'} ${$('cTime').textContent}. Opens the tournament details.`);
@@ -3745,27 +3794,27 @@ function tickClock(){
   musicUI(T, now);
   if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(T, now, false); if(QUIET) $('qline').hidden = true; if(BOARD) boardTop(null); return; }
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
-  $('cLevel').textContent = T.level + 1;
+  setText('cLevel', T.level + 1);
   // in the one-row header of the shortest screens the ante takes the second line, in place of the next level
   // (and wherever the chat and Lobby buttons stand beside the clock: the tournament HUD upright on a phone)
   const one = $('game').classList.contains('row1') || QUIET || $('game').classList.contains('hud-in');   // the quiet design always keeps the clock row short
-  $('cBlinds').textContent = `${fmt(sb)}/${fmt(bb)}${an && !one ? ' · ante ' + fmt(an) : ''}`;
+  setText('cBlinds', `${fmt(sb)}/${fmt(bb)}${an && !one ? ' · ante ' + fmt(an) : ''}`);
   // (quiet, sideways: the clock has no second line, so the level the line's cell replaced is written here)
   const qLand = QUIET && $('game').classList.contains('row1') && $('game').classList.contains('land');
-  $('cNext').textContent = qLand ? `Level ${T.level + 1}${an ? ' · Ante ' + fmt(an) : ''}` : one && an ? `Ante ${fmt(an)}` : `Next: ${fmt(nsb)}/${fmt(nbb)}${nan ? ' · ante ' + fmt(nan) : ''}`;
+  setText('cNext', qLand ? `Level ${T.level + 1}${an ? ' · Ante ' + fmt(an) : ''}` : one && an ? `Ante ${fmt(an)}` : `Next: ${fmt(nsb)}/${fmt(nbb)}${nan ? ' · ante ' + fmt(nan) : ''}`);
   const brk = !T.paused && T.breakUntil ? Math.max(0, T.breakUntil - now) : 0;
   const ms = T.paused ? T.pausedLeft : brk || Math.max(0, T.levelEndsAt - now);
-  $('cTime').textContent = T.paused ? 'Paused' : T.breakPending ? 'Break' : mmss(ms);
-  $('cTimeLbl').textContent = brk ? 'Break' : T.breakPending ? 'After this hand' : !T.paused && ms <= 0 ? 'Blinds up next hand' : QUIET && $('game').classList.contains('row1') ? `Level ${T.level + 1}` : 'Time left';
+  setText('cTime', T.paused ? 'Paused' : T.breakPending ? 'Break' : mmss(ms));
+  setText('cTimeLbl', brk ? 'Break' : T.breakPending ? 'After this hand' : !T.paused && ms <= 0 ? 'Blinds up next hand' : QUIET && $('game').classList.contains('row1') ? `Level ${T.level + 1}` : 'Time left');
   breakUI(T, tables.get(watchTid || club.myTable), now); sponsorUI(T, now, true); fitSide();
-  $('sAvg').textContent = fmt(T.entrants * T.stack / Math.max(1, T.remaining));
+  setText('sAvg', fmt(T.entrants * T.stack / Math.max(1, T.remaining)));
   const d = tables.get(watchTid || club.myTable);
   const all = [...tables.values()].flatMap(t => t.seats.filter(Boolean));
   const me = all.find(p => p.uid === club.me.id);
   // with the tournament HUD on, your rank is in it: the header shows your own stack instead (no number twice)
   const hud = !!(field && field.rank && me);
-  $('sPosL').textContent = hud ? 'Your stack' : 'Your rank';
-  $('sPos').textContent = hud ? fmt(me.stack) : me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching';
+  setText('sPosL', hud ? 'Your stack' : 'Your rank');
+  setText('sPos', hud ? fmt(me.stack) : me ? `${ord(1 + all.filter(p => p.stack > me.stack).length)} at table` : 'Watching');
   if(QUIET) qLine(T, d, me);
   if(BOARD) boardTop(T, d, me, brk);
   const bar = document.querySelector('.shotBar');
@@ -3776,13 +3825,12 @@ function tickClock(){
   if(BOARD){ const tb = document.querySelector('#controls .turnbar'); if(tb && d && d.deadline) tb.classList.toggle('late', d.deadline - now <= 10000);
     document.querySelectorAll('[data-bmore]').forEach(m => m.classList.toggle('unread', !$('chatDot').hidden)); }
   const tbar = $('turnBar');
-  if(tbar && d && d.deadline){ const left = Math.max(0, d.deadline - now), f = Math.min(1, left / d.bank); tbar.style.transform = `scaleX(${f})`; tbar.classList.toggle('low', !d.usingBank && left < 5000); tbar.classList.toggle('bank', !!d.usingBank); const ts = $('turnSecs'); if(ts) ts.textContent = (d.usingBank ? 'Extra time · ' : '') + Math.ceil(left / 1000) + 's'; }
+  if(tbar && d && d.deadline){ const left = Math.max(0, d.deadline - now), f = Math.min(1, left / d.bank); tbar.style.transform = `scaleX(${f})`; tbar.classList.toggle('low', !d.usingBank && left < 5000); tbar.classList.toggle('bank', !!d.usingBank); setText('turnSecs', (d.usingBank ? 'Extra time · ' : '') + Math.ceil(left / 1000) + 's'); }
 }
 setInterval(tickClock, 200);
-// (the board: one layout a frame, however many resize events a turn brings, before the frame is drawn)
-let RAFT = 0;
-const renderSoon = () => { if(!RAFT) RAFT = requestAnimationFrame(() => { RAFT = 0; if(view === 'table') renderTable(); }); };
-window.addEventListener('resize', () => { if(view === 'table') BOARD ? renderSoon() : renderTable(); });
+// one table render a frame, however many updates or resize events come before it is drawn (RAFT is declared at the top)
+function renderSoon(){ if(!RAFT) RAFT = requestAnimationFrame(() => { RAFT = 0; if(view === 'table') renderTable(); }); }
+window.addEventListener('resize', () => { LAYV++; if(view === 'table') BOARD ? renderSoon() : renderTable(); });
 // iPhone Safari reports a turned screen's new size late (after the resize/orientationchange events have fired), so
 // the table was laid out for the old shape and kept it: look again a few times while the turn settles (for a few
 // seconds: a busy phone can be slow to report it). A screen
@@ -3792,6 +3840,7 @@ let TURN = [], TURNW = scr().w;
 function settleTurn(){
   TURN.forEach(clearTimeout);
   TURN = [60, 200, 450, 900, 1600, 2600].map((ms, i, all) => setTimeout(() => {
+    LAYV++;   // (Safari reports a turn's size late: look again each time)
     const { w, h } = scr();
     if(view === 'table'){
       // the screen really turned (its width is not the one it settled at last time): while the turn settles, a
@@ -3804,19 +3853,27 @@ function settleTurn(){
 }
 window.addEventListener('orientationchange', settleTurn);
 if(screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', settleTurn);
-window.addEventListener('resize', () => { if(scr().w !== TURNW) settleTurn(); });
+window.addEventListener('resize', () => { LAYV++; if(scr().w !== TURNW) settleTurn(); });
 // (the board: whenever the page itself takes a new width or turns, after the events and the timers above too, as
 // Safari may lay the page out for the turned screen later still, the table is laid out again for it)
 if(BOARD && window.ResizeObserver) new ResizeObserver(() => {
+  LAYV++;
   const g = $('game'); if(view !== 'table' || !LOCK || !g.clientWidth) return;
   if(g.clientWidth !== LOCK.w || (g.clientWidth > g.clientHeight) !== LOCK.wide){ LOCK = null; renderSoon(); }
 }).observe($('game'));
-if(BOARD && window.visualViewport) window.visualViewport.addEventListener('resize', () => { if(scr().w !== TURNW) settleTurn(); });
+if(BOARD && window.visualViewport) window.visualViewport.addEventListener('resize', () => { LAYV++; if(scr().w !== TURNW) settleTurn(); });
 // the layout measures text, so measure again once the web fonts have arrived (the table keeps its held height)
-if(document.fonts) document.fonts.addEventListener('loadingdone', () => { SIZES.clear(); GEOS.clear(); DOCKS.clear(); GEO = null; if(view === 'table') renderTable(); });
+if(document.fonts) document.fonts.addEventListener('loadingdone', () => { LAYV++; SIZES.clear(); GEOS.clear(); DOCKS.clear(); GEO = null; if(view === 'table') renderTable(); });
 // the table area also changes size without the window doing so (the action bar, the raise panel or the hand
 // helper opening and closing): lay the seats and chips out again for the room that's really there
-if(window.ResizeObserver) new ResizeObserver(() => { const a = $('tableArea'); if(view === 'table' && GEO && (GEO.W !== a.clientWidth || GEO.H !== a.clientHeight)) renderTable(); }).observe($('tableArea'));
+if(window.ResizeObserver) new ResizeObserver(() => { const a = $('tableArea'); if(AREA && (AREA.w !== a.clientWidth || AREA.h !== a.clientHeight)) LAYV++; if(view === 'table' && GEO && (GEO.W !== a.clientWidth || GEO.H !== a.clientHeight)) renderTable(); }).observe($('tableArea'));
+// the board's header card: its width, as laid out (boardTop fits the card's text to it; read here, after the layout, not
+// by the clock five times a second)
+// A dealt card settles into its seat's resting tilt once its deal has played. (Before 2026-10-24 the next update re-drew
+// the table and so dropped the deal from it within a second or two; a hand ending at another table no longer re-draws
+// this one, so the card does it itself: the deal's last frame, transform none, would otherwise hold the tilt off.)
+$('seats').addEventListener('animationend', e => { if(e.animationName === 'deal' && e.target.classList.contains('dl')) e.target.classList.remove('dl'); });
+if(BOARD && window.ResizeObserver && $('bHud')) new ResizeObserver(es => { const w = Math.round(es[es.length - 1].contentRect.width); if(w !== bHudW){ bHudW = w; if(view === 'table') tickClock(); } }).observe($('bHud'));
 
 function celebrate(){
   if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;

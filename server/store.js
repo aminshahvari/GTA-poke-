@@ -37,14 +37,14 @@ async function init(){
     await pool.query('insert into kv (k, v) values ($1, $2) on conflict (k) do nothing', [LEASE, JSON.stringify({ epoch: 0 })]);
     await tx(async c => { const cur = await leaseRow(c); epoch = (+cur.epoch || 0) + 1; await c.query(UPSERT, [LEASE, JSON.stringify({ epoch, instance: INSTANCE, at: Date.now() })]); });
     const { rows } = await pool.query('select k, v from kv');
-    rows.forEach(r => { if(r.k !== LEASE) cache.set(r.k, r.v); });
+    rows.forEach(r => { if(r.k !== LEASE) cache.set(r.k, r.v); }); kver++;
     console.log(`store: postgres, ${cache.size} keys, lease epoch ${epoch} (${INSTANCE})`);
     // heartbeat: also notices a lost lease while nothing is dirty
     setInterval(() => { beat = true; schedule(); }, BEAT_MS).unref();
   } else {
     file = process.env.DATA_FILE || path.join(__dirname, '..', 'data', 'club.json');
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    if(fs.existsSync(file)){ const obj = JSON.parse(fs.readFileSync(file, 'utf8')); Object.entries(obj).forEach(([k, v]) => cache.set(k, v)); }
+    if(fs.existsSync(file)){ const obj = JSON.parse(fs.readFileSync(file, 'utf8')); Object.entries(obj).forEach(([k, v]) => cache.set(k, v)); kver++; }
     console.log(`store: file ${file}, ${cache.size} keys`);
   }
 }
@@ -89,9 +89,17 @@ async function flush(){
 }
 
 const get = k => cache.get(k);
-function set(k, v){ if(frozen) return v; cache.set(k, v); dirty.add(k); schedule(); return v; }
-function del(k){ if(frozen) return; cache.delete(k); dirty.add(k); schedule(); }
-const keys = prefix => [...cache.keys()].filter(k => k.startsWith(prefix));
+// (the keys under a prefix are looked up again only after a key was added or removed: a club update reads the same few
+// lists for every member's socket, and each look used to walk every key in the store, hand records included)
+let kver = 0;
+const kcache = new Map();
+function set(k, v){ if(frozen) return v; if(!cache.has(k)) kver++; cache.set(k, v); dirty.add(k); schedule(); return v; }
+function del(k){ if(frozen) return; if(cache.has(k)) kver++; cache.delete(k); dirty.add(k); schedule(); }
+const keys = prefix => {
+  let e = kcache.get(prefix);
+  if(!e || e.v !== kver){ if(kcache.size > 400) kcache.clear(); e = { v: kver, ks: [...cache.keys()].filter(k => k.startsWith(prefix)) }; kcache.set(prefix, e); }
+  return e.ks.slice();
+};
 const values = prefix => keys(prefix).map(k => cache.get(k));
 // freeze(): ignore all later changes, so the final flush saves the state as of shutdown
 const freeze = () => { frozen = true; };

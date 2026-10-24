@@ -611,7 +611,9 @@ async function navPage(browser, tok, w, h, sa){
         c.blindrise = [{ title: 'A note from the founder', body: 'Welcome to the board design.', kind: 'post' }];
         c.tourney = { id: 'tnav', name: 'Friday Night', status: 'registering', regs: [], stack: 30000, levelMin: 20, tableSize: 9, lateLevels: 4, repeat: 'none', startAt: null };
         c.history = [{ id: 'hnav', name: 'Last Friday', entrants: 2, endedAt: Date.now() - 86400000, results: [{ uid: 'x1', name: 'Test Player 02', place: 1, pts: 10 }, { uid: 'x2', name: 'Test Player 03', place: 2, pts: 5 }], payouts: [] }];
-        c.clubSwitching = true; c.clubs = [c.club, { id: 'cnav', name: 'Harbour Test Club' }];
+        // (an update carries only what changed since the last one: its own club comes in the first, whole view)
+        if(c.club) ws.club0 = c.club;
+        c.clubSwitching = true; c.clubs = [c.club || ws.club0, { id: 'cnav', name: 'Harbour Test Club' }];
         c.openClub = { rules: { v: 1, text: 'Rules' } }; }
       ws.send(JSON.stringify(j)); });
   });
