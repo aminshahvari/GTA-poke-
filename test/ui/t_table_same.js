@@ -93,7 +93,8 @@ async function open(browser, S, [w, h]){
     server.onMessage(m => {
       let j; try{ j = JSON.parse(m); }catch(e){ return ws.send(m); }
       if(j.t === 'table' || j.t === 'closed') return;
-      if(j.t === 'club'){ st.me = j.club.me; if(j.club.myTable) st.tid = j.club.myTable; st.sock = ws; }
+      if(j.t === 'club'){ if(j.club.me) st.me = j.club.me; // (an update carries only what changed: me comes in the first, whole view)
+        if(j.club.myTable) st.tid = j.club.myTable; st.sock = ws; }
       ws.send(m);
     });
   });

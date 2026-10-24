@@ -180,7 +180,7 @@ function sheet(title, body, onClose){
   const f = wrap.querySelector('textarea, input'); if(f) setTimeout(() => f.focus({ preventScroll: true }), 50);
   return close;
 }
-function contactSheet(x){
+function contactSheet(x, after){
   const ta = h('textarea', { rows: 5, maxlength: 500, placeholder: x.type === 'need' ? 'Hi! I can help with this. I have…' : "Hi! I'm interested. I'm looking for…" });
   const err = h('div', { class: 'bz-err', role: 'alert' });
   const send = h('button', { class: 'btn bz-gold big', type: 'submit' }, 'Send request');
@@ -192,7 +192,7 @@ function contactSheet(x){
   const close = sheet(x.type === 'need' ? 'Offer to help' : 'Show interest', form);
   form.addEventListener('submit', async e => {
     e.preventDefault(); err.textContent = ''; send.disabled = true;
-    try{ await api('oppRequest', { id: x.id, message: ta.value }); close(); C.toast('Request sent to ' + x.member + '.'); O.list = null; O.mine = null; if(O.detail) O.detail.data = null; B.rerender(); }
+    try{ await api('oppRequest', { id: x.id, message: ta.value }); close(); C.toast('Request sent to ' + x.member + '.'); O.list = null; O.mine = null; if(O.detail) O.detail.data = null; if(after) after(); else B.rerender(); }
     catch(z){ fail(err, z.message, send); }
   });
 }
@@ -399,10 +399,18 @@ function mountHome(sec, playing){
 
 window.OppClub = {
   mountHome,
-  // the board's Home (Community Activity): the newest open listings, loaded as the Home section loads them
+  // the board's Home (Community Activity): open listings, loaded as the Home section loads them. The owner's rule
+  // (B6): "Offering help" stays easy to find on Home, so up to three offers come first, then the two newest asks
   highlights(done){
     if(Date.now() - homeAt > 30000){ homeAt = Date.now(); api('oppList').then(r => { homeData = r; O.cats = r.categories; O.badge = r.pending; if(done) done(); }).catch(() => { homeAt = 0; }); }
-    return homeData ? homeData.items.slice(0, 2) : [];
+    const items = homeData ? homeData.items : [];
+    return [...items.filter(x => x.type === 'offer').slice(0, 3), ...items.filter(x => x.type === 'need').slice(0, 2)];
+  },
+  // the board's Home: a listing's page (who posted it, their business, the request button), or the request sheet itself
+  openListing(id){ openDetail(id, 'feed'); },
+  request(id, done){
+    const x = homeData && homeData.items.find(i => i.id === id); if(!x) return openDetail(id, 'feed');
+    contactSheet(x, () => { x.myRequest = { status: 'sent' }; homeAt = 0; if(done) done(); });
   },
   init(ctx){ C = ctx.C; h = ctx.h; B = ctx; },
   render, topBar, badge, newListing,
