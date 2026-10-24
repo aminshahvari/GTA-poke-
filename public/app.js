@@ -208,14 +208,15 @@ function connect(){
   if(!token && location.pathname.startsWith('/join/')) return welcomeScreen();
   if(!token){ return post('/api/status', {}).then(s => s.hasOwner ? welcomeScreen() : authScreen('setup')).catch(() => welcomeScreen()); }
   if(ws) try{ ws.close(); }catch(e){}
+  live = false;
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined, spectate: watching() || undefined })); };
   ws.onmessage = ev => {
     const m = JSON.parse(ev.data);
-    if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
-    if(m.t === 'club'){ onClub(m.club); return; }
+    if(m.t === 'auth'){ live = !!m.ok; if(!m.ok){ outbox = null; local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
+    if(m.t === 'club'){ if(outbox && m.club.myTable !== outbox.tid) outbox = null; onClub(m.club); return; }
     if(m.t === 'domino'){ window.Domino.onState(m.v); return; }
-    if(m.t === 'table'){ if(m.field) field = m.field; tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
+    if(m.t === 'table'){ if(m.field) field = m.field; tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); outboxCheck(m.table); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
     if(m.t === 'invite'){ showInvite(m.code, m.group, m.max); return; }
     if(m.t === 'skillq'){ askSkill(m.rid, m.q); return; }
@@ -231,7 +232,7 @@ function connect(){
     if(m.t === 'error'){ modal(`<h2>That didn't work</h2><p>${esc(m.error)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
   };
   // 4001: the server handed over to a new instance (deploy), so come back fast instead of backing off
-  ws.onclose = e => { $('offline').hidden = false; setTimeout(connect, e.code === 4001 ? 250 + Math.random() * 750 : Math.min(8000, 500 * 2 ** retry++)); };
+  ws.onclose = e => { $('offline').hidden = false; outboxDown(); setTimeout(connect, e.code === 4001 ? 250 + Math.random() * 750 : Math.min(8000, 500 * 2 ** retry++)); };
 }
 const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
 
@@ -2923,26 +2924,66 @@ function renderControls(d, mySeat, mine){
 // One action per turn: the first tap locks the buttons (a second tap, or a pre-action racing the button, sends
 // nothing) until the table moves on. If nothing has moved after a few seconds (a lost message), the buttons come
 // back so the action can be sent again; the server takes only the first action for a turn.
-let actLockTimer = 0;
+// Disconnects (Issue #34): while the connection is down the tap waits in the outbox (one action per turn; a newer tap
+// replaces it) and the controls say so, never "sending…". After the reconnect, once the fresh table state is in, it is
+// sent only if that state is still the same hand, the same seq and this player's turn; otherwise it is dropped quietly
+// and the controls show the new state. An action sent just before the connection fell goes back to the outbox: the
+// server takes an act only for the current hand and seq, so sending it again can never count twice.
+let actLockTimer = 0, live = false, outbox = null;   // outbox: this turn's action { key, tid, a, sent } until the server's state moves on
+const actWords = a => ({ fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' }[a.t] || '') + (a.t === 'raise' ? ' to ' + fmt(a.to) : '');
 function sendAction(d, a){
   const key = d.tid + ':' + d.handNo + ':' + d.seq;
   if(lastSent === key) return;
+  if(d.tid !== 'demo' && !(live && ws && ws.readyState === 1)){
+    outbox = { key, tid: d.tid, a, sent: false }; offlineNote();
+    if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){}
+    return drawQueued(d);
+  }
   lastSent = key;
   $('controls').querySelectorAll('button').forEach(b => { b.disabled = true; });
   clearTimeout(actLockTimer);
   actLockTimer = setTimeout(() => {
     const t = tables.get(d.tid);
     if(lastSent !== key || !t || t.tid + ':' + t.handNo + ':' + t.seq !== key || t.actUid !== club.me.id) return;
-    lastSent = null; $('controls').dataset.turn = ''; if(view === 'table' && watchTid === d.tid) renderTable();
+    lastSent = null; outbox = null; $('controls').dataset.turn = ''; if(view === 'table' && watchTid === d.tid) renderTable();
   }, 4000);
   // (quiet design: the free-play notice steps aside at my first action, so it never sits on the helper while I play,
   // Muse on Issue #31 from the owner's iPhone; the board, spec §3.4, the same)
   if(QUIET || BOARD) hidePlayNote();
   if(d.tid === 'demo' && demo){ if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){} $('controls').innerHTML = '<div class="info-line">…</div>'; return demo.answer(a); }
-  const words = { fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' };
-  $('controls').innerHTML = `<div class="info-line">${words[a.t] || ''}${a.t === 'raise' ? ' to ' + fmt(a.to) : ''} · sending…</div>`;
+  $('controls').innerHTML = `<div class="info-line">${actWords(a)} · sending…</div>`;
   if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){}
+  outbox = { key, tid: d.tid, a, sent: true };
   send({ t: 'act', tid: d.tid, hand: d.handNo, seq: d.seq, a });
+}
+// the action buttons stay live while an action waits (a newer tap replaces it); the line over them says what waits
+function drawQueued(d){
+  if(!outbox || view !== 'table' || d.tid !== (watchTid || club.myTable) || d.tid + ':' + d.handNo + ':' + d.seq !== outbox.key) return;
+  const me = d.seats.find(p => p && p.uid === club.me.id); if(!me || !d.legal) return;
+  $('controls').dataset.turn = outbox.key; drawActions(d, me); queuedNote(d);
+}
+function queuedNote(d){
+  if(!outbox || outbox.sent || d.tid + ':' + d.handNo + ':' + d.seq !== outbox.key) return;
+  const row = $('controls').querySelector('.turnrow');
+  if(row) row.outerHTML = `<div class="info-line">Reconnecting… ${actWords(outbox.a)} will be sent when you're back.</div>`;
+  if(BOARD && row) $('helper').hidden = true;   // (the board's top band shows one line: this one, not the hand helper)
+}
+// the "Reconnecting…" pill says the same, so it shows wherever the controls are
+const offlineNote = () => { $('offline').textContent = outbox && !outbox.sent ? `Reconnecting… ${actWords(outbox.a)} will be sent when you're back.` : 'Reconnecting…'; };
+// the connection fell: an action not yet answered by the server waits again (it may never have arrived)
+function outboxDown(){
+  live = false;
+  if(!outbox || !outbox.sent) return offlineNote();
+  outbox.sent = false; clearTimeout(actLockTimer); offlineNote();
+  if(lastSent === outbox.key) lastSent = null;
+  const d = tables.get(outbox.tid); if(d) drawQueued(d);
+}
+// a table state from the server: the turn moved on (the echo of the action, or the hand went on without it) → the
+// outbox empties; still this turn, back online and not yet sent → it goes now
+function outboxCheck(d){
+  if(!outbox || outbox.tid !== d.tid) return;
+  if(d.tid + ':' + d.handNo + ':' + d.seq !== outbox.key || d.actUid !== club.me.id || !d.legal || d.phase !== 'hand'){ outbox = null; return; }
+  if(!outbox.sent && live) sendAction(d, outbox.a);
 }
 // the action clock, plus the extra-time button: 3 cards a tournament (5 more at the final table), +30 seconds each
 function turnBarHTML(d){
@@ -3008,10 +3049,10 @@ function drawSizing(d, meSeat){
   $('minus').onclick = () => set(v - stepAmt);
   $('plus').onclick = () => set(v + stepAmt);
   c.querySelectorAll('[data-to]').forEach(btn => btn.onclick = () => set(+btn.dataset.to));
-  $('szBack').onclick = () => drawActions(d, meSeat);
+  $('szBack').onclick = () => { drawActions(d, meSeat); queuedNote(d); };
   $('szGo').onclick = () => sendAction(d, { t: 'raise', to: v });
   set(d.street === 0 && presets.length > 2 ? presets[1][1] : presets[0][1]);
-  tickClock();
+  tickClock(); queuedNote(d);
 }
 // ---------- the board's action row (UI_BOARD, Step-0 spec §3.5) ----------
 // Fold red, Call blue with the amount, Raise gold "Raise to N" (the sizing it would open on), and "⋯" for the rest.
@@ -3070,10 +3111,10 @@ function boardSizing(d, meSeat){
   $('minus').onclick = () => set(v - stepAmt);
   $('plus').onclick = () => set(v + stepAmt);
   c.querySelectorAll('[data-to]').forEach(btn => btn.onclick = () => set(+btn.dataset.to));
-  $('szBack').onclick = () => drawActions(d, meSeat);
+  $('szBack').onclick = () => { drawActions(d, meSeat); queuedNote(d); };
   $('szGo').onclick = () => sendAction(d, { t: 'raise', to: v });
   set(first);
-  tickClock();
+  tickClock(); queuedNote(d);
 }
 // "⋯": the table menu (§3.5): Chat (its unread dot shows on "⋯" too), extra time on your turn, the hand helper on or off,
 // your hand history, leave the table. (Sit out next hand and Sound are on the spec's list but the app has neither yet.)
