@@ -838,3 +838,55 @@
 [data-ui="board"] #lobby .b-feed-row .b-feed-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 [data-ui="board"] #lobby .b-feed-prize{color:var(--b-gold-text);font-weight:600}
 [data-ui="board"] #lobby .b-feed-none{margin:0;color:var(--b-text-2);font-size:var(--b-t-14)}
+
+/* ---------- B5: the Poker tab (§6, the board's "Tournament Lobby") ---------- */
+/* segments: Live / Upcoming / My Tournaments, the lit one gold-filled */
+[data-ui="board"] #lobby .b-seg{display:flex;gap:var(--b-s1);padding:var(--b-s1);background:var(--b-surface);border:1px solid var(--b-hair);border-radius:var(--b-r-pill)}
+[data-ui="board"] #lobby .b-seg button{flex:1 1 auto;min-width:0;white-space:nowrap;min-height:var(--b-tap);padding:0 var(--b-s2);border:0;border-radius:var(--b-r-pill);background:transparent;color:var(--b-text-2);
+  font-size:var(--b-t-14);font-weight:600;line-height:1.15;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-align:center}
+[data-ui="board"] #lobby .b-seg button[aria-selected="true"]{background:var(--b-gold);color:var(--b-raise-label)}
+[data-ui="board"] #lobby .b-seg button:active{transform:scale(var(--b-press-scale))}
+[data-ui="board"] #lobby .b-seg button:focus-visible{outline:2px solid var(--b-gold);outline-offset:2px}
+[data-ui="board"] #lobby .b-seg-n{font-style:normal;font-variant-numeric:tabular-nums;min-width:18px;height:18px;padding:0 5px;border-radius:var(--b-r-pill);background:var(--b-live);color:var(--b-fold-label);font-size:var(--b-t-11);line-height:18px}
+@media (max-width:359px){[data-ui="board"] #lobby .b-seg button{font-size:var(--b-t-13);padding:0 6px}}
+[data-ui="board"] #lobby .b-pseg{display:flex;flex-direction:column;gap:var(--b-s3)}
+/* the hero card */
+[data-ui="board"] #lobby .b-hero{position:relative;display:grid;gap:var(--b-s3);min-width:0;padding:var(--b-s5);background:var(--b-surface-2);border:1px solid var(--b-hair-gold);border-radius:var(--b-r-hero);overflow:hidden}
+[data-ui="board"] #lobby .b-hero-art{position:absolute;top:var(--b-s4);right:var(--b-s4);width:64px;height:64px;fill:none;stroke:var(--b-gold);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;opacity:.9;pointer-events:none}
+[data-ui="board"] #lobby .b-hero-art .b-hero-art-s{fill:var(--b-gold);stroke:none}
+[data-ui="board"] #lobby .b-hero-top{display:grid;gap:var(--b-s1);padding-right:72px;min-width:0}
+[data-ui="board"] #lobby .b-hero-k{display:inline-flex;align-items:center;gap:6px;font-size:var(--b-t-11);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--b-text-2)}
+[data-ui="board"] #lobby .b-hero-k.live{color:var(--b-text)}
+[data-ui="board"] #lobby .b-hero h3{margin:0;font-size:var(--b-t-22);font-weight:700;line-height:1.2;color:var(--b-text);overflow-wrap:anywhere}
+[data-ui="board"] #lobby .b-hero-prize{margin:0;font-size:var(--b-t-28);font-weight:700;line-height:1.15;color:var(--b-gold-text);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+[data-ui="board"] #lobby .b-hero-sp{display:flex;align-items:center;gap:var(--b-s3);min-height:var(--b-tap);padding:var(--b-s2) var(--b-s3);margin:0;width:100%;border-radius:var(--b-r-btn);background:var(--b-surface);border:1px solid var(--b-hair);color:var(--b-text);text-align:left}
+[data-ui="board"] #lobby .b-hero-logo{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:var(--b-r-chip);overflow:hidden}
+[data-ui="board"] #lobby .b-hero-logo>*{width:28px !important;height:28px !important;min-width:0;font-size:12px;border-radius:var(--b-r-chip)}
+[data-ui="board"] #lobby .b-hero-sp-t{flex:1;min-width:0;display:grid;gap:1px}
+[data-ui="board"] #lobby .b-hero-sp-t small{font-size:var(--b-t-11);font-weight:500;color:var(--b-text-2)}
+[data-ui="board"] #lobby .b-hero-sp-t b{font-size:var(--b-t-15);font-weight:600;overflow-wrap:anywhere}
+[data-ui="board"] #lobby .b-hero-meta{margin:0;font-size:var(--b-t-13);font-weight:600;color:var(--b-text-2);font-variant-numeric:tabular-nums}
+[data-ui="board"] #lobby .b-hero-acts{display:flex;flex-wrap:wrap;align-items:center;gap:var(--b-s2)}
+[data-ui="board"] #lobby .b-hero-acts .btn{flex:1 1 140px;min-width:0;min-height:52px;margin:0;border-radius:var(--b-r-btn);font-size:var(--b-t-17);font-weight:600}
+[data-ui="board"] #lobby .btn.b-gold{background:var(--b-raise);border:0;color:var(--b-raise-label)}
+[data-ui="board"] #lobby .btn.b-gold:active{transform:scale(var(--b-press-scale))}
+[data-ui="board"] #lobby .b-hero-reg{flex:1;display:inline-flex;align-items:center;gap:6px;min-height:52px;font-size:var(--b-t-17);font-weight:600;color:var(--b-online)}
+[data-ui="board"] #lobby .b-hero-reg .b-ic{width:20px;height:20px;stroke-width:2.4}
+[data-ui="board"] #lobby .b-textbtn{min-height:var(--b-tap);padding:0 var(--b-s3);border:0;background:transparent;color:var(--b-text-2);font-size:var(--b-t-15);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+[data-ui="board"] #lobby .b-textbtn:focus-visible,[data-ui="board"] #lobby .b-hero-sp:focus-visible,[data-ui="board"] #lobby .b-hero-more summary:focus-visible{outline:2px solid var(--b-gold);outline-offset:2px}
+[data-ui="board"] #lobby .b-hero-note{margin:0;font-size:var(--b-t-14);color:var(--b-text-2)}
+[data-ui="board"] #lobby .b-hero .btn-row{margin:0}
+[data-ui="board"] #lobby .b-hero-more{display:block;border-top:1px solid var(--b-hair);padding-top:var(--b-s1)}
+[data-ui="board"] #lobby .b-hero-more summary{display:flex;align-items:center;min-height:var(--b-tap);font-size:var(--b-t-15);font-weight:600;color:var(--b-gold-text);cursor:pointer}
+[data-ui="board"] #lobby .b-hero-more[open]>summary{margin-bottom:var(--b-s2)}
+[data-ui="board"] #lobby .b-hero-more>:not(summary)+:not(summary){margin-top:var(--b-s3)}
+[data-ui="board"] #lobby .b-hero .kv{background:var(--b-surface);border:1px solid var(--b-hair);border-radius:var(--b-r-btn);padding:10px 12px}
+/* rows under the hero: name, prize, when and how many */
+[data-ui="board"] #lobby .b-trow-ic{flex:none;display:grid;place-items:center;width:36px;height:36px;border-radius:var(--b-r-btn);background:var(--b-gold-fill);color:var(--b-gold)}
+[data-ui="board"] #lobby .b-trow-ic .b-ic{width:20px;height:20px}
+[data-ui="board"] #lobby .b-trow-ic.b-place{font-size:var(--b-t-15);font-weight:700;font-variant-numeric:tabular-nums}
+[data-ui="board"] #lobby .b-trow .b-row-t b{overflow-wrap:anywhere}
+[data-ui="board"] #lobby .b-trow-prize{color:var(--b-gold-text) !important;font-weight:600}
+[data-ui="board"] #lobby .b-pempty h3{margin:0;font-size:var(--b-t-17);font-weight:600;color:var(--b-text)}
+[data-ui="board"] #lobby .b-pempty p{margin:0}
+@media (prefers-reduced-motion: reduce){[data-ui="board"] #lobby :is(.b-seg button,.btn.b-gold):active{transform:none}}
