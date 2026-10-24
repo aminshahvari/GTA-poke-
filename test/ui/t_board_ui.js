@@ -849,8 +849,8 @@ async function navSuite(browser){
   await navSuite(browser);
   await navWideSuite(browser);
   await browser.close();
-  for(const p of ['B8 reduced motion on the sheets and seats'])
-    console.log(`PENDING B8 (not run) ${p}`);
+  // (B8, reduced motion on the sheets and seats, measured contrast, the D class: test/ui/t_board_a11y.js)
+  console.log('     B8 reduced motion on the sheets and seats: run in test/ui/t_board_a11y.js');
   console.log(`\n${oks} ok, ${fails.length} failed`);
   srv.kill(); fs.rmSync(DATA, { force: true });
   process.exit(fails.length ? 1 : 0);
