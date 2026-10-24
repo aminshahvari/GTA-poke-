@@ -329,6 +329,7 @@ function onClub(c, changed){
   if(BOARD && local.get('askRemind', 0) && c.tourney && (c.tourney.regs || []).includes(c.me.id)) local.set('onbInv', c.tourney.id);   // (the board's Next game card says so)
   if(local.get('askRemind', 0)){ local.del('askRemind'); if(c.tourney && c.tourney.status === 'registering' && c.tourney.regs.includes(c.me.id)){ setTimeout(() => toast(`You're signed up for ${c.tourney.name}.`), 300); setTimeout(offerReminder, 1500); } }
   if(c.clubSwitching) clubSwitching(c);
+  if(BOARD && !c.spectate) bConnCheck();   // (a new connection request: its notice, never during your turn; B7)
   // the Lounge's Exchange cards: start the feed now, not only when Home renders
   if(!c.suspended && !c.spectate && !c.events && (c.features && c.features.clubs || c.me.owner)) window.BizClub.prefetch();
   $('chatBtn').hidden = !!c.spectate; // watchers from another club never see a table's chat
@@ -479,7 +480,8 @@ function onTable(d){ if(view === 'table' && d.tid === (watchTid || club.myTable)
 // ---------- lobby ----------
 $('lobbyBody').addEventListener('click', e => {
   if(e.target.closest('[data-kick]')) return;
-  const t = e.target.closest('[data-prof]'); if(t) openProfile(t.dataset.prof);
+  // (the board: a member's picture opens their profile sheet; B7)
+  const t = e.target.closest('[data-prof]'); if(t) BOARD ? bProfile(t.dataset.prof) : openProfile(t.dataset.prof);
 });
 $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if(!b) return; tab = b.dataset.tab; if(tab === 'learn'){ openHand = null; send({ t: 'hands' }); } if(tab === 'biz'){ if(BOARD){ bFrom = null; window.BizClub.show('biz'); } else window.BizClub.open('list'); } renderLobby(); $('lobbyBody').scrollTop = 0; });
 const nameOf = uid => { const m = club.members.find(x => x.id === uid); if(m) return m.name; for(const h of club.history) for(const r of h.results) if(r.uid === uid) return r.name; return 'Former member'; };
@@ -574,6 +576,8 @@ if(BOARD){
     const r = e.target.closest('[data-bgo]'); if(r) return bGo(r.dataset.bgo, r.dataset.seg);
     if(e.target.closest('[data-bact="profile"]')) return openProfile(club.me.id);
     if(e.target.closest('[data-bact="pic"]')) return pickAvatar();
+    if(e.target.closest('[data-bact="prefs"]')) return bPrefs();
+    if(e.target.closest('[data-bact="conns"]')) return bConnList();
     if(e.target.closest('[data-bact="club"]')) return pickClub();
     if(e.target.closest('[data-bact="out"]')) return signOut();
   });
@@ -624,6 +628,9 @@ function boardLobby(body, clubsOn, clubsVisible){
       + picNudgeHTML() + bRows('Profile', [
       bRow('data-bact="profile"', 'stats', 'My profile and stats', 'Tournaments, how you play, results'),
       bRow('data-bact="pic"', 'pic', 'Change picture', 'A photo or an avatar'),
+      // (B7: what members see when they tap your seat, and the requests to answer)
+      club.me.pro ? bRow('data-bact="prefs"', 'profile', 'What members see', esc(bProSummary(club.me.pro))) : '',
+      club.conn ? bRow('data-bact="conns"', 'invite', 'Connection requests', bConnIn().length ? `${bConnIn().length} waiting for your answer` : 'Requests you sent and received') : '',
       clubsVisible && !club.events ? bRow('data-bgo="mine"', 'biz', 'My business', 'Your card in the Exchange') : '',
       clubsVisible && !club.events ? bRow('data-bgo="scan"', 'scan', 'Business Card Scanner', 'Turn a business card into your profile') : '',
       bRow('data-bbell', 'bell', 'Notifications', club.pushOn ? 'On for tournament reminders' : 'Off'),
@@ -950,7 +957,7 @@ if(BOARD) document.addEventListener('click', e => {
   const c = e.target.closest('[data-bfcat]'); if(c){ bFeedCat = c.dataset.bfcat; renderLobby(); return; }
   const o = e.target.closest('[data-bopp]'); if(o) return window.OppClub.openListing(o.dataset.bopp);
   const q = e.target.closest('[data-boppreq]'); if(q) return window.OppClub.request(q.dataset.boppreq, () => { if(view === 'lobby' && tab === 'home') renderLobby(); });
-  const m = e.target.closest('[data-bprof]'); if(m) return openProfile(m.dataset.bprof);
+  const m = e.target.closest('[data-bprof]'); if(m) return bProfile(m.dataset.bprof);
 });
 // every second on Home: the live tables' clocks, and the winner's day starting or ending while Home is open
 if(BOARD) setInterval(() => {
@@ -959,6 +966,176 @@ if(BOARD) setInterval(() => {
   const typing = document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(!typing && !$('bOnb') && !!bWin() !== !!document.querySelector('#lobbyBody .b-win')) renderLobby();
 }, 1000);
+// ---------- the player profile sheet (UI_BOARD, Step-0 spec §8, phase B7: the board's "Player Profile (Optional)") ----------
+// A tap on a seat (or on a member's picture on Home, the leaderboard and the lists) opens a sheet: the picture (64) with
+// the presence dot, the name, the chips at the table and "View Profile" (today's full profile). Under it, only what the
+// member chose to show (server/connect.js decides; nothing else reaches this phone): About | Business with "Show About
+// and Business at tables", "Open to Connect" and the gold Send Connection Request with "Open to Connect". The member's
+// own choices are under Profile, "What members see"; requests to answer under Profile, "Connection requests". A new
+// request's notice never shows while it is your turn at the table: it waits until your decision is made.
+// Photos: fetched with the member's token (the server serves one only with its owner's "Show my photo"), shown from a blob.
+const avUrls = new Map();   // 'uid:v' -> blob URL, '' while loading or refused
+function avSrc(uid, v){
+  const k = uid + ':' + v;
+  if(avUrls.has(k)) return avUrls.get(k);
+  avUrls.set(k, '');
+  fetch('/avatar/' + encodeURIComponent(uid) + '?v=' + encodeURIComponent(v), { headers: { authorization: 'Bearer ' + (local.get('token', '') || '') } })
+    .then(r => r.ok ? r.blob() : null).then(b => {
+      if(!b || b.type !== 'image/jpeg') return;
+      const u = URL.createObjectURL(b); avUrls.set(k, u);
+      document.querySelectorAll(`img[data-avk="${CSS.escape(k)}"]`).forEach(i => { i.src = u; i.hidden = false; const s = i.previousElementSibling; if(s && s.classList.contains('b-ini')) s.remove(); });
+    }).catch(() => {});
+  return '';
+}
+// a photo where the member shows one: their initials until it has come
+const avPhoto = (uid, v, name) => { const u = avSrc(uid, v); return u ? `<img src="${u}" alt="">` : `<span class="b-ini">${esc(initials(name))}</span><img data-avk="${esc(uid + ':' + v)}" alt="" hidden>`; };
+let bpUid = null, bpData = null, bpSeg = 'about', bpBack = null;
+// where this member sits at a table this phone has (the one shown first)
+function bSeatOf(uid){
+  const first = tables.get(curTid());
+  for(const d of [first, ...tables.values()]){ const p = d && d.seats.find(x => x && x.uid === uid); if(p) return { d, p }; }
+  return null;
+}
+async function bProfile(uid){
+  if(!uid || !club || club.spectate) return;
+  bpBack = document.activeElement; bpUid = uid; bpData = null; bpSeg = 'about'; bpDraw();
+  try{ const r = await post('/api/memberCard', { uid }); if(bpUid === uid){ bpData = r; bpDraw(); } }
+  catch(e){ if(bpUid === uid){ bpData = { error: e.message }; bpDraw(); } }
+}
+function bpClose(){
+  const sh = $('bProf'); if(!sh || sh.hidden) return;
+  sh.hidden = true; bpUid = null; document.documentElement.classList.remove('b-psheet-open');
+  if(bpBack && bpBack.isConnected) bpBack.focus({ preventScroll: true });
+}
+const bpRow = (k, v) => v ? `<div class="bp-kv"><small>${k}</small><b>${esc(v)}</b></div>` : '';
+function bpContact(s){
+  if(!s) return '';
+  return `<div class="bp-shared">${s.email ? `<a class="bp-link" href="mailto:${esc(s.email)}">${esc(s.email)}</a>` : ''}${s.phone ? `<a class="bp-link" href="tel:${esc(s.phone.replace(/[^\d+]/g, ''))}">${esc(s.phone)}</a>` : ''}${s.note ? `<p>${esc(s.note)}</p>` : ''}</div>`;
+}
+function bpDraw(){
+  let sh = $('bProf');
+  if(!sh){
+    sh = document.createElement('div'); sh.id = 'bProf'; sh.className = 'b-psheet'; sh.hidden = true; document.body.appendChild(sh);
+    sh.addEventListener('click', bpClick);
+  }
+  const uid = bpUid, r = bpData || {}, m = memberOf(uid) || {}, seat = bSeatOf(uid);
+  const name = r.name || m.name || (seat && seat.p.name) || '';
+  const av = 'av' in r ? r.av : m.av || null, g = av && av.startsWith('g:') && GALLERY[av.slice(2)];
+  const pic = av && av.startsWith('p:') ? avPhoto(uid, av.slice(2), name) : g ? `<span class="emo">${g[0]}</span>` : esc(initials(name));
+  const dc = seat && seat.d.actUid === uid && seat.d.dcProtect, away = seat && seat.p.away;
+  const dot = seat ? `<i class="bp-dot${dc ? ' dc' : away ? ' away' : ''}" role="img" aria-label="${dc ? 'Disconnected' : away ? 'Away' : 'At the table'}"></i>` : '';
+  const chips = seat ? (seat.p.allIn && !seat.p.stack ? 'All-in' : `${fmt(seat.p.stack)} chips`) : '';
+  let body = '';
+  if(!bpData) body = '<p class="bp-note" aria-live="polite">Opening…</p>';
+  else if(r.error) body = `<p class="bp-note">${esc(r.error)}</p>`;
+  else {
+    const open = r.connect ? '<div class="bp-open"><i aria-hidden="true"></i>Open to Connect</div>' : '';
+    if(r.about){
+      const a = r.about, about = bpRow('Area', a.area) + bpRow('Job title', a.job) + open;
+      const biz = r.business ? '<div class="bp-biz" data-bpbiz></div>' : '<p class="bp-note">No card in the Exchange yet.</p>';
+      body += `<div class="bp-seg" role="tablist" aria-label="${esc(name)}"><button type="button" role="tab" id="bpTabA" aria-controls="bpPane" aria-selected="${bpSeg === 'about'}" data-bpseg="about">About</button><button type="button" role="tab" id="bpTabB" aria-controls="bpPane" aria-selected="${bpSeg === 'biz'}" data-bpseg="biz">Business</button></div>`
+        + `<div class="bp-pane" id="bpPane" role="tabpanel" aria-labelledby="${bpSeg === 'about' ? 'bpTabA' : 'bpTabB'}">${bpSeg === 'about' ? about || '<p class="bp-note">Nothing added yet.</p>' : biz}</div>`;
+    } else if(open) body += `<div class="bp-pane">${open}</div>`;
+    const q = r.request;
+    if(r.self) body += '<p class="bp-note">This is what other members see when they tap your seat.</p><button type="button" class="bp-btn" data-bpprefs>Choose what members see</button>';
+    else if(q && q.dir === 'in' && q.status === 'sent') body += `<p class="bp-note">${esc(name)} asked to connect with you.</p><button type="button" class="bp-btn bp-gold" data-bpanswer>Answer the request</button>`;
+    else if(q && q.status === 'accepted') body += `<div class="bp-state"><b>Connected</b>${q.dir === 'out' ? bpContact(q.shared) : ''}</div>`;
+    else if(q && q.dir === 'out') body += `<div class="bp-state"><b>${q.status === 'sent' ? 'Request sent' : 'Request not accepted'}</b>${q.status === 'sent' ? '<button type="button" class="bp-text" data-bpwithdraw>Withdraw</button>' : ''}</div>`;
+    else if(q) body += `<div class="bp-state"><b>You declined their request</b></div>`;
+    else if(r.connect) body += '<button type="button" class="bp-btn bp-gold" data-bpsend>Send Connection Request</button><small class="bp-foot">Only visible with member consent</small>';
+  }
+  const focused = !sh.hidden && sh.contains(document.activeElement);
+  sh.innerHTML = `<div class="bp-in" role="dialog" aria-modal="true" aria-labelledby="bpName">
+    <div class="bp-head"><div class="bp-avw"><div class="av b-av bp-av">${pic}</div>${dot}</div>
+      <div class="bp-id"><h2 id="bpName">${esc(name)}</h2>${chips ? `<span class="bp-chips num">${chips}</span>` : ''}</div>
+      <button type="button" class="bp-view" data-bpview>View Profile</button></div>
+    ${body}
+    <button type="button" class="bp-btn bp-done" data-bpclose>Done</button></div>`;
+  if(r.business && bpSeg === 'biz'){ const el = sh.querySelector('[data-bpbiz]'); if(el) el.replaceWith(window.BizClub.sheetEl(r.business, () => { bpClose(); bFrom = view === 'lobby' ? tab : null; if(view === 'table'){ view = 'lobby'; showScreen('lobby'); } window.BizClub.openBiz(r.business.uid); tab = 'biz'; renderLobby(); })); }
+  const wasOpen = !sh.hidden;
+  sh.hidden = false; document.documentElement.classList.add('b-psheet-open');
+  if(!wasOpen || focused) sh.querySelector('[data-bpclose]').focus({ preventScroll: true });   // (the filled sheet keeps the focus where it was: Done)
+}
+async function bpClick(e){
+  const sh = $('bProf'), uid = bpUid;
+  if(e.target === sh || e.target.closest('[data-bpclose]')) return bpClose();
+  const s = e.target.closest('[data-bpseg]'); if(s){ bpSeg = s.dataset.bpseg; bpDraw(); const t = $('bProf').querySelector(`[data-bpseg="${bpSeg}"]`); if(t) t.focus({ preventScroll: true }); return; }
+  if(e.target.closest('[data-bpview]')){ bpClose(); return openProfile(uid); }
+  if(e.target.closest('[data-bpprefs]')){ bpClose(); return bPrefs(); }
+  if(e.target.closest('[data-bpanswer]')){ bpClose(); return bConnList(); }
+  const send1 = e.target.closest('[data-bpsend]');
+  if(send1){ send1.disabled = true;
+    try{ const r = await post('/api/connSend', { uid }); if(bpUid === uid && bpData){ bpData.request = r.request; bpDraw(); } toast('Request sent.'); }
+    catch(err){ send1.disabled = false; toast(err.message); } return; }
+  if(e.target.closest('[data-bpwithdraw]') && bpData && bpData.request){
+    try{ await post('/api/connWithdraw', { id: bpData.request.id }); if(bpUid === uid){ delete bpData.request; bpDraw(); } toast('Request withdrawn.'); }
+    catch(err){ toast(err.message); } }
+}
+if(BOARD){
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') bpClose(); });
+}
+// Profile, "What members see": the member's own choices, all off until they turn them on
+const bProSummary = p => !p ? '' : [p.photo ? 'Photo on' : 'Photo off', p.table ? 'About and Business on' : 'About and Business off', p.connect ? 'Open to Connect' : 'Not open to connect'].join(' · ');
+async function bPrefs(){
+  const p = { ...(club.me.pro || {}) }, tog = (k, t, sub) => `<label class="bp-tog"><input type="checkbox" data-pk="${k}"${p[k] ? ' checked' : ''}><span><b>${t}</b><small>${sub}</small></span></label>`;
+  const done = modal(`<div class="bp-prefs"><h2>What members see</h2><p>When a member taps your seat or your picture. Everything here is off until you turn it on.</p>
+    ${tog('photo', 'Show my photo', 'Off: your initials show instead of your photo.')}
+    ${tog('table', 'Show About and Business at tables', 'Your area and job title, and your card from the Exchange.')}
+    <div class="bp-fields"><label>Area<input data-pk="area" maxlength="60" autocomplete="off" value="${esc(p.area || '')}" placeholder="Like Midtown Toronto"></label>
+      <label>Job title<input data-pk="job" maxlength="60" autocomplete="off" value="${esc(p.job || '')}" placeholder="Like Interior designer"></label></div>
+    ${tog('connect', 'Open to Connect', 'Members can send you a connection request. You choose what to share when you accept.')}</div>`,
+    [{ label: 'Cancel', value: null }, { label: 'Save', value: 1, primary: true }]);
+  $('modalRoot').querySelectorAll('[data-pk]').forEach(i => i.addEventListener(i.type === 'checkbox' ? 'change' : 'input', () => { p[i.dataset.pk] = i.type === 'checkbox' ? i.checked : i.value; }));
+  if(!await done) return;
+  try{ await post('/api/profilePrefs', { photo: !!p.photo, table: !!p.table, connect: !!p.connect, area: p.area || '', job: p.job || '' }); toast('Saved.'); }
+  catch(err){ toast(err.message); }
+}
+// Profile, "Connection requests": requests to answer, then the ones sent and answered
+const bConnIn = () => ((club && club.conn && club.conn.list) || []).filter(r => r.dir === 'in' && r.status === 'sent');
+async function bConnList(){
+  const list = (club.conn && club.conn.list) || [], waiting = list.filter(r => r.dir === 'in' && r.status === 'sent'), rest = list.filter(r => !waiting.includes(r));
+  const st = r => r.dir === 'out' ? (r.status === 'sent' ? 'Waiting for an answer' : r.status === 'accepted' ? 'Accepted' : 'Not accepted') : r.status === 'accepted' ? 'You accepted' : 'You declined';
+  const v = await modal(`<div class="bp-conns"><h2>Connection requests</h2>
+    ${waiting.length ? waiting.map(r => `<div class="bp-creq"><b>${esc(r.name)}</b><small>asked to connect with you</small><div class="bp-cacts"><button type="button" class="btn-ghost" data-v="d:${esc(r.id)}">Decline</button><button type="button" class="btn-red" data-v="a:${esc(r.id)}">Accept</button></div></div>`).join('') : '<p class="note">No requests waiting for you.</p>'}
+    ${rest.length ? `<div class="eyebrow">Earlier</div>${rest.map(r => `<div class="bp-creq"><b>${esc(r.name)}</b><small>${st(r)}</small>${r.dir === 'out' && r.status === 'accepted' ? bpContact(r.shared) : ''}</div>`).join('')}` : ''}</div>`,
+    [{ label: 'Close', value: null }]);
+  if(!v) return;
+  const id = v.slice(2);
+  if(v[0] === 'd'){ try{ await post('/api/connReply', { id, action: 'decline' }); toast('Declined.'); }catch(err){ toast(err.message); } return; }
+  const r = waiting.find(x => x.id === id), sg = club.conn.suggest || {}, f = { email: sg.email || '', phone: sg.phone || '', note: '' };
+  const ok = modal(`<div class="bp-prefs"><h2>Accept ${esc(r ? r.name : '')}'s request</h2><p>Choose what to share. Only ${esc(r ? r.name : 'this member')} sees it, and only now that you accept.</p>
+    <div class="bp-fields"><label>Email<input data-cf="email" type="email" maxlength="120" autocomplete="off" value="${esc(f.email)}"></label><label>Phone<input data-cf="phone" type="tel" maxlength="24" autocomplete="off" value="${esc(f.phone)}"></label>
+    <label>A short note (optional)<input data-cf="note" maxlength="200" autocomplete="off"></label></div></div>`, [{ label: 'Cancel', value: null }, { label: 'Share and accept', value: 1, primary: true }]);
+  $('modalRoot').querySelectorAll('[data-cf]').forEach(i => i.addEventListener('input', () => { f[i.dataset.cf] = i.value; }));
+  if(!await ok) return;
+  try{ await post('/api/connReply', { id, action: 'accept', ...f }); toast('Accepted. Your contact is shared.'); }catch(err){ toast(err.message); }
+}
+// a new request's notice: once per request, never while it is your turn at the table (it waits for the turn to end)
+let bConnSeenIds = null, bConnQ = [];
+const bMyTurn = () => { const d = club && club.myTable && tables.get(club.myTable); return !!(d && d.actUid === club.me.id && !d.result); };
+function bConnCheck(){
+  if(!club || !club.conn) return;
+  const key = 'connSeen:' + club.me.id;
+  if(!bConnSeenIds) bConnSeenIds = new Set(local.get(key, []));
+  const fresh = bConnIn().filter(r => !bConnSeenIds.has(r.id));
+  if(fresh.length){ fresh.forEach(r => { bConnSeenIds.add(r.id); bConnQ.push(r); }); local.set(key, [...bConnSeenIds].slice(-200)); }
+  bConnShow();
+}
+function bConnShow(){
+  if(!bConnQ.length || bMyTurn()) return;
+  const q = bConnQ, r = q.length > 1 ? null : q[0], n = q.length; bConnQ = [];
+  let el = $('bConnNote');
+  if(!el){ el = document.createElement('div'); el.id = 'bConnNote'; el.className = 'b-cnote'; el.setAttribute('role', 'status'); document.body.appendChild(el);
+    el.addEventListener('click', e => { if(e.target.closest('[data-cnview]')){ el.hidden = true; bConnList(); } else if(e.target.closest('[data-cnx]')) el.hidden = true; }); }
+  el.innerHTML = `<span class="b-cnote-t">${r ? `<b>${esc(r.name)}</b> asked to connect with you` : `<b>${n} members</b> asked to connect with you`}</span><button type="button" class="b-cnote-v" data-cnview>View</button><button type="button" class="b-cnote-x" data-cnx aria-label="Dismiss">${bIc('close')}</button>`;
+  el.q = q; el.hidden = false; clearTimeout(el.t); el.t = setTimeout(() => { el.hidden = true; }, 12000);
+}
+// the table drew: your turn came (the notice steps back and waits) or ended (what waited shows now)
+function bConnTurn(){
+  const el = $('bConnNote');
+  if(bMyTurn()){ if(el && !el.hidden){ el.hidden = true; clearTimeout(el.t); bConnQ.unshift(...(el.q || [])); } return; }
+  bConnShow();
+}
 // the welcome: three cards over Home, skippable at any card (Skip, Escape); the last one leads to the next game
 const ONB_TABS = [['home', 'Home', "What's next for you, like your next game."], ['poker', 'Poker', 'Club games, a practice table, and short lessons.'], ['biz', 'Exchange', 'Member businesses. Find services, exchange referrals, and get found.'], ['club', 'Club', 'The people in your club. Invite friends from here.'], ['profile', 'Profile', 'Your picture, your business, and your settings.']];
 function onbCardHTML(i){
@@ -2550,7 +2727,8 @@ function boardGeo(n, empty = [], watch = false){
 // Your own seat: your cards over the bottom rail and your plate, "You" and your stack, under it.
 function boardAvHTML(uid, name){
   const m = memberOf(uid), av = m && m.av, g = av && av.startsWith('g:') && GALLERY[av.slice(2)];
-  return `<div class="av b-av">${g ? `<span class="emo">${g[0]}</span>` : esc(initials(name))}</div>`;
+  // (a photo only where its member turned on "Show my photo": the server sends no address otherwise; B7)
+  return `<div class="av b-av">${av && av.startsWith('p:') ? avPhoto(uid, av.slice(2), name) : g ? `<span class="emo">${g[0]}</span>` : esc(initials(name))}</div>`;
 }
 function boardSeatHTML(d, p, s, o){
   const { isMe, acting, res, hole, pos, oq, stackTxt, winStyle, nick } = o;
@@ -2804,13 +2982,15 @@ const GALLERY = {
 const TIER_ICON = { shark: '🦈', pro: '💎' };
 const TIER_INFO = [['pro', 'Pro', '#b57cff', 'Rating 82+, at least 150 hands and 3 tournaments'], ['shark', 'Shark', '#f2a93b', 'Rating 70+, at least 80 hands and 2 tournaments'],
   ['solid', 'Solid', '#4a90f5', 'Rating 56+'], ['regular', 'Regular', '#38b2ac', 'Rating 40+'], ['rookie', 'Rookie', '#8b95a8', 'Still learning'], ['new', 'New', '#6b7385', 'Fewer than 30 hands so far']];
-const memberOf = uid => club && club.members.find(m => m.id === uid);
+const memberOf = uid => { const m = club && club.members.find(x => x.id === uid);
+  // (the board: the shared list carries a photo only where its member shows it; your own picture comes in me.av, B7)
+  return BOARD && m && uid === club.me.id && 'av' in club.me && m.av !== club.me.av ? { ...m, av: club.me.av } : m; };
 // A player's picture: their photo, a gallery avatar, or their initials. The ring shows their skill tier.
 function avHTML(uid, name, cls = ''){
   const m = memberOf(uid), av = m && m.av, ring = m && m.tier && m.tier !== 'new' ? `--ring:${m.color};` : '';
   const icon = m && TIER_ICON[m.tier] ? `<i class="tier-ic" title="${esc(m.tier)}">${TIER_ICON[m.tier]}</i>` : '';
   let inner = esc(initials(name)), bg = colorOf(uid);
-  if(av && av.startsWith('p:')) inner = `<img src="/avatar/${esc(uid)}?v=${esc(av.slice(2))}" alt="" loading="lazy">`;
+  if(av && av.startsWith('p:')) inner = BOARD ? avPhoto(uid, av.slice(2), name) : `<img src="/avatar/${esc(uid)}?v=${esc(av.slice(2))}" alt="" loading="lazy">`;
   else if(av && av.startsWith('g:') && GALLERY[av.slice(2)]){ inner = `<span class="emo">${GALLERY[av.slice(2)][0]}</span>`; bg = GALLERY[av.slice(2)][1]; }
   return `<div class="av ${ring ? 'tiered' : ''} ${cls}" style="--c:${bg};${ring}">${inner}${icon}</div>`;
 }
@@ -2851,7 +3031,8 @@ async function showProfile(p){
 }
 async function pickAvatar(){
   const cur = (memberOf(club.me.id) || {}).av || '';
-  const v = await modal(`<h2>Your picture</h2><p>Players see it at the table, so they know who they're playing.</p>
+  // (the board, B7: a photo shows to other members only with "Show my photo"; until then they see your initials)
+  const v = await modal(`<h2>Your picture</h2><p>${BOARD ? 'Members see your photo only if you turn on Show my photo under Profile, What members see. Until then they see your initials. An avatar from the list always shows.' : "Players see it at the table, so they know who they're playing."}</p>
     <label class="btn-red upload">📷 Upload a photo<input type="file" accept="image/*" id="avFile" hidden></label>
     <div class="eyebrow">Or pick an avatar</div>
     <div class="av-grid">${Object.entries(GALLERY).map(([k, [e, c]]) => `<button data-v="g:${k}" style="--c:${c}" aria-pressed="${cur === 'g:' + k}">${e}</button>`).join('')}</div>`,
@@ -3292,6 +3473,8 @@ function renderTable(){
   if(d.actUid === club.me.id && !d.result && !$('coachTip').hidden){ $('coachTip').hidden = true; clearTimeout(tipTimer); }
   // (the board: a tip that came while it was your turn waits for your turn to end; Issue #32 item 14)
   else if(BOARD && tipWait && !(d.actUid === club.me.id && !d.result)){ const w = tipWait; tipWait = null; showTip(...w); }
+  // (the board: a connection request's notice goes away when your turn comes, and waits for it to end; B7)
+  if(BOARD) bConnTurn();
   renderPlayNote(d);
   tickClock();
 }
@@ -4287,7 +4470,7 @@ $('seats').addEventListener('click', e => {
   const seat = e.target.closest('.seat[data-uid]'); if(!seat) return;
   const uid = seat.dataset.uid;
   if(uid === club.me.id) return toast('Tap another player to throw something at them.');
-  if(memberOf(uid)) return openProfile(uid);
+  if(memberOf(uid)) return BOARD ? bProfile(uid) : openProfile(uid);   // (the board: the profile sheet, B7)
   const why = throwBlock(); if(why) return toast(why);
   pickThrow(uid);
 });

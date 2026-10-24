@@ -941,3 +941,88 @@
 [data-ui="board"] #lobby .b-pempty h3{margin:0;font-size:var(--b-t-17);font-weight:600;color:var(--b-text)}
 [data-ui="board"] #lobby .b-pempty p{margin:0}
 @media (prefers-reduced-motion: reduce){[data-ui="board"] #lobby :is(.b-seg button,.btn.b-gold):active{transform:none}}
+
+/* ---------- B7: the player profile sheet (§8, the board's "Player Profile (Optional)") ----------
+   Over every screen (a seat, or a picture on Home and the lists): the picture 64 with its presence dot, the name and
+   the chips at the table, "View Profile"; About | Business and the gold Send Connection Request only where the member
+   turned them on (the server leaves the rest out). No backdrop blur (it can open at the table). Every tap 44 or more. */
+[data-ui="board"].b-psheet-open body{overflow:hidden}
+[data-ui="board"] .b-psheet{position:fixed;inset:0;z-index:55;display:flex;align-items:flex-end;justify-content:center;background:var(--b-scrim);font-family:var(--b-font);color:var(--b-text)}
+[data-ui="board"] .b-psheet[hidden]{display:none}
+[data-ui="board"] .b-psheet .bp-in{width:100%;max-width:560px;box-sizing:border-box;display:grid;gap:var(--b-s3);padding:var(--b-s4) var(--b-s4) calc(var(--b-s3) + var(--sa-b,0px));background:var(--b-surface-2);border-top:1px solid var(--b-hair-gold);border-radius:var(--b-r-sheet) var(--b-r-sheet) 0 0;
+  max-height:min(92dvh,100%);overflow-y:auto;overscroll-behavior:contain;animation:b-up var(--b-sheet-dur) var(--b-sheet-ease) both}
+[data-ui="board"] .b-psheet .bp-in>*{min-width:0}
+[data-ui="board"] .b-psheet .bp-head{display:grid;grid-template-columns:64px minmax(0,1fr) auto;align-items:center;gap:var(--b-s3)}
+[data-ui="board"] .b-psheet .bp-avw{position:relative;width:64px;height:64px}
+[data-ui="board"] .b-psheet .bp-av{width:64px;height:64px;box-sizing:border-box;border:2px solid var(--b-ring);background:radial-gradient(circle at 34% 28%,var(--b-av-hi),transparent 60%),var(--b-surface);color:var(--b-text);font-size:var(--b-t-20);font-weight:600;box-shadow:none;overflow:hidden}
+[data-ui="board"] .b-psheet .bp-av .emo{font-size:30px}
+[data-ui="board"] .b-psheet .bp-dot{position:absolute;left:4px;bottom:5px;width:12px;height:12px;border-radius:50%;background:var(--b-online);box-shadow:0 0 0 2px var(--b-surface-2);z-index:3}
+[data-ui="board"] .b-psheet .bp-dot.away{background:var(--b-away)}
+[data-ui="board"] .b-psheet .bp-dot.dc{background:var(--b-warn)}
+[data-ui="board"] .b-psheet .bp-id{display:grid;gap:2px;min-width:0}
+[data-ui="board"] .b-psheet .bp-id h2{margin:0;font-size:var(--b-t-20);font-weight:600;line-height:1.2;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+[data-ui="board"] .b-psheet .bp-chips{font-size:var(--b-t-13);font-weight:600;color:var(--b-gold-text);font-variant-numeric:tabular-nums}
+[data-ui="board"] .b-psheet .bp-view{min-height:var(--b-tap);padding:0 var(--b-s3);border-radius:var(--b-r-pill);border:1px solid var(--b-hair-gold);background:transparent;color:var(--b-gold-text);font:600 var(--b-t-13)/1 var(--b-font);white-space:nowrap}
+[data-ui="board"] .b-psheet .bp-seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:var(--b-r-btn);background:var(--b-bg)}
+[data-ui="board"] .b-psheet .bp-seg button{min-height:var(--b-tap);border:0;border-radius:var(--b-r-chip);background:transparent;color:var(--b-text-2);font:600 var(--b-t-15)/1 var(--b-font)}
+[data-ui="board"] .b-psheet .bp-seg button[aria-selected="true"]{background:var(--b-gold-fill);color:var(--b-gold-text);box-shadow:inset 0 0 0 1px var(--b-hair-gold)}
+[data-ui="board"] .b-psheet .bp-pane{display:grid;gap:var(--b-s2)}
+[data-ui="board"] .b-psheet .bp-kv{display:grid;gap:2px;padding:var(--b-s2) var(--b-s3);border-radius:var(--b-r-btn);background:var(--b-surface);border:1px solid var(--b-hair)}
+[data-ui="board"] .b-psheet .bp-kv small{font-size:var(--b-t-11);font-weight:500;color:var(--b-text-2);letter-spacing:.04em;text-transform:uppercase}
+[data-ui="board"] .b-psheet .bp-kv b{font-size:var(--b-t-15);font-weight:600;overflow-wrap:anywhere}
+[data-ui="board"] .b-psheet .bp-open{display:flex;align-items:center;gap:var(--b-s2);min-height:var(--b-tap);font-size:var(--b-t-15);font-weight:600}
+[data-ui="board"] .b-psheet .bp-open i{width:10px;height:10px;border-radius:50%;background:var(--b-online);flex:none}
+[data-ui="board"] .b-psheet .bp-note{margin:0;font-size:var(--b-t-14);color:var(--b-text-2);line-height:1.4}
+[data-ui="board"] .b-psheet .bp-btn{width:100%;min-height:52px;border-radius:var(--b-r-btn);border:1px solid var(--b-hair);background:var(--b-surface);color:var(--b-text);font:600 var(--b-t-15)/1.2 var(--b-font)}
+[data-ui="board"] .b-psheet .bp-btn.bp-gold{background:var(--b-raise);border:0;color:var(--b-raise-label);font-size:var(--b-t-17)}
+[data-ui="board"] .b-psheet .bp-btn.bp-done{background:transparent;min-height:var(--b-tap)}
+[data-ui="board"] .b-psheet .bp-btn:active,[data-ui="board"] .b-psheet .bp-view:active{transform:scale(var(--b-press-scale))}
+[data-ui="board"] .b-psheet .bp-btn:disabled{opacity:.6}
+[data-ui="board"] .b-psheet .bp-foot{display:block;margin-top:calc(var(--b-s2) * -1);text-align:center;font-size:var(--b-t-11);font-weight:500;color:var(--b-text-2)}
+[data-ui="board"] .b-psheet .bp-state{display:grid;gap:var(--b-s1);padding:var(--b-s2) var(--b-s3);border-radius:var(--b-r-btn);background:var(--b-surface);border:1px solid var(--b-hair)}
+[data-ui="board"] .b-psheet .bp-state>b{font-size:var(--b-t-15);font-weight:600;color:var(--b-gold-text);min-height:24px;display:flex;align-items:center}
+[data-ui="board"] :is(.b-psheet,.modal) .bp-text{min-height:var(--b-tap);padding:0;border:0;background:transparent;color:var(--b-text-2);font:600 var(--b-t-14)/1 var(--b-font);text-decoration:underline;text-underline-offset:3px;justify-self:start}
+[data-ui="board"] :is(.b-psheet,.modal) .bp-shared{display:grid;gap:2px}
+[data-ui="board"] :is(.b-psheet,.modal) .bp-shared p{margin:0;font-size:var(--b-t-14);color:var(--b-text-2)}
+[data-ui="board"] :is(.b-psheet,.modal) .bp-link{display:flex;align-items:center;min-height:var(--b-tap);color:var(--b-gold-text);font-size:var(--b-t-15);font-weight:600;overflow-wrap:anywhere}
+/* the Business segment: the member's Exchange card, compact */
+[data-ui="board"] .b-psheet .bz-sheet{display:grid;gap:var(--b-s2);padding:var(--b-s3);border-radius:var(--b-r-card);background:var(--b-surface);border:1px solid var(--b-hair-gold)}
+[data-ui="board"] .b-psheet .bz-sheet-h{display:grid;grid-template-columns:44px minmax(0,1fr);gap:var(--b-s3);align-items:center}
+[data-ui="board"] .b-psheet .bz-sheet-logo{width:44px;height:44px;border-radius:var(--b-r-btn);overflow:hidden;display:grid;place-items:center;font-size:var(--b-t-15);font-weight:700}
+[data-ui="board"] .b-psheet .bz-sheet-logo img{width:100%;height:100%;object-fit:cover}
+[data-ui="board"] .b-psheet .bz-sheet-t{display:grid;gap:2px;min-width:0}
+[data-ui="board"] .b-psheet .bz-sheet-t b{font-size:var(--b-t-15);font-weight:600;overflow-wrap:anywhere}
+[data-ui="board"] .b-psheet .bz-sheet-t small{font-size:var(--b-t-13);color:var(--b-text-2);overflow-wrap:anywhere}
+[data-ui="board"] .b-psheet .bz-sheet-d{margin:0;font-size:var(--b-t-14);line-height:1.4;color:var(--b-text-2);overflow-wrap:anywhere}
+[data-ui="board"] .b-psheet .bz-sheet-acts{display:flex;flex-wrap:wrap;gap:var(--b-s2)}
+[data-ui="board"] .b-psheet .bz-sheet-acts .bz-act{display:inline-flex;align-items:center;gap:6px;min-height:var(--b-tap);max-width:100%;box-sizing:border-box;padding:0 var(--b-s3);border-radius:var(--b-r-pill);border:1px solid var(--b-hair);color:var(--b-text);font-size:var(--b-t-14);font-weight:600;text-decoration:none;overflow-wrap:anywhere}
+[data-ui="board"] .b-psheet .bz-sheet-acts .bz-act svg{width:18px;height:18px;flex:none}
+[data-ui="board"] .b-psheet :is(button,a):focus-visible{outline:2px solid var(--b-gold);outline-offset:2px}
+/* Profile, "What members see" and "Connection requests" (in the app's dialog) */
+[data-ui="board"] .modal .bp-prefs,[data-ui="board"] .modal .bp-conns{display:grid;gap:var(--b-s3);text-align:left}
+[data-ui="board"] .modal :is(.bp-prefs,.bp-conns) h2{margin:0}
+[data-ui="board"] .modal .bp-prefs>p{margin:0;font-size:var(--b-t-14);color:var(--b-text-2)}
+[data-ui="board"] .modal .bp-tog{display:grid;grid-template-columns:24px minmax(0,1fr);gap:var(--b-s3);align-items:start;min-height:var(--b-tap);padding:var(--b-s2) 0;cursor:pointer}
+[data-ui="board"] .modal .bp-tog input{width:24px;height:24px;margin:2px 0 0;accent-color:var(--b-gold)}
+[data-ui="board"] .modal .bp-tog span{display:grid;gap:2px}
+[data-ui="board"] .modal .bp-tog b{font-size:var(--b-t-15);font-weight:600}
+[data-ui="board"] .modal .bp-tog small{font-size:var(--b-t-13);color:var(--b-text-2);line-height:1.35}
+[data-ui="board"] .modal .bp-fields{display:grid;gap:var(--b-s2);padding-left:36px}
+[data-ui="board"] .modal .bp-fields label{display:grid;gap:4px;font-size:var(--b-t-13);color:var(--b-text-2)}
+[data-ui="board"] .modal .bp-fields input{min-height:var(--b-tap);box-sizing:border-box;width:100%;padding:0 var(--b-s3);border-radius:var(--b-r-btn);border:1px solid var(--b-hair);background:var(--b-bg);color:var(--b-text);font:400 16px/1.2 var(--b-font)}
+[data-ui="board"] .modal .bp-creq{display:grid;gap:4px;padding:var(--b-s3);border-radius:var(--b-r-btn);background:var(--b-surface);border:1px solid var(--b-hair)}
+[data-ui="board"] .modal .bp-creq>b{font-size:var(--b-t-15)}
+[data-ui="board"] .modal .bp-creq>small{font-size:var(--b-t-13);color:var(--b-text-2)}
+[data-ui="board"] .modal .bp-cacts{display:flex;gap:var(--b-s2);margin-top:4px}
+[data-ui="board"] .modal .bp-cacts button{flex:1;min-height:var(--b-tap)}
+/* a new connection request's notice (never during your turn) */
+[data-ui="board"] .b-cnote{position:fixed;z-index:70;left:var(--b-s4);right:var(--b-s4);top:calc(var(--b-s2) + env(safe-area-inset-top,0px));max-width:520px;margin:0 auto;display:flex;align-items:center;gap:var(--b-s1);padding:2px 2px 2px var(--b-s4);box-sizing:border-box;
+  background:var(--b-surface-2);border:1px solid var(--b-hair-gold);border-radius:var(--b-r-card);box-shadow:0 8px 24px var(--b-shadow);color:var(--b-text);font-family:var(--b-font)}
+[data-ui="board"] .b-cnote[hidden]{display:none}
+[data-ui="board"] .b-cnote-t{flex:1;min-width:0;font-size:var(--b-t-14);line-height:1.3;padding:var(--b-s2) 0}
+[data-ui="board"] .b-cnote-v{min-height:var(--b-tap);padding:0 var(--b-s3);border:0;border-radius:var(--b-r-btn);background:var(--b-gold-fill);color:var(--b-gold-text);font:600 var(--b-t-14)/1 var(--b-font)}
+[data-ui="board"] .b-cnote-x{display:grid;place-items:center;width:var(--b-tap);height:var(--b-tap);border:0;background:transparent;color:var(--b-text-2)}
+[data-ui="board"] .b-cnote-x .b-ic{width:18px;height:18px}
+/* a member's photo at a seat and in the lists: shown from the blob once it has come (initials until then) */
+[data-ui="board"] .av img[data-avk][hidden]{display:none}
+@media (prefers-reduced-motion: reduce){[data-ui="board"] .b-psheet :is(.bp-btn,.bp-view):active{transform:none}}
