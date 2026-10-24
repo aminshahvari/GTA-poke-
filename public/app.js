@@ -2350,13 +2350,17 @@ const BCLS = {
   'P-L': { width: .86, max: 1.58, min: 1.50, av: 40, pw: 88, ph: 40, cw: 18, hw: .15, bw: .125, band: 12, hph: 40 },
   'P-M': { width: .86, max: 1.58, min: 1.30, av: 36, pw: 86, ph: 40, cw: 16, hw: .14, bw: .12, band: 12, hph: 38 },
   'P-S': { width: .90, max: 1.58, min: 1.25, av: 32, pw: 84, ph: 37, cw: 15, hw: .13, bw: .115, band: 10, hph: 34 },
-  'L':   { wh: 1.98, maxW: .70, av: 36, pw: 88, ph: 37, cw: 16, hw: .054, bw: .056, band: 12, hph: 36 } };
+  'L':   { wh: 1.98, maxW: .70, av: 36, pw: 88, ph: 37, cw: 16, hw: .054, bw: .056, band: 12, hph: 36 },
+  // (B8, the D class: a tablet or a computer, 900 px wide or more and not a phone held sideways. The table lies wide,
+  // as the board draws it: 1.98 times as wide as tall, min(760, 0.62 of the width) across, centred; the seats a size up)
+  'D':   { wh: 1.98, maxW: .62, cap: 760, av: 44, pw: 100, ph: 44, cw: 20, hw: .05, bw: .045, band: 14, hph: 44 } };
 // The seats' spacing (§3.2): equal arc length round the middle of the rail, the long sides counted at BARC of their
 // length (the board's ring is rounder than the felt), and your own place BGAP seats wide. These two numbers put a full
 // table of 9 within ±2% of the spec's 9-max slot table (t_board_layout checks ±4%) at every upright size class.
 const BARC = .65, BGAP = 2.5;
 function boardClass(){
   const g = $('game'); if(g.classList.contains('land')) return 'L';
+  if(g.classList.contains('b-d')) return 'D';
   const { w, h } = scr(); return w < 360 ? 'P-S' : (LOCK && LOCK.ih || h) >= 740 ? 'P-L' : 'P-M';
 }
 // the middle of the rail as a stadium (straight sides, round ends) centred on cx, cy with half sizes a, b: a point
@@ -2425,14 +2429,20 @@ function boardGeo(n, empty = [], watch = false){
   const vw = scr().w, key = `b:${n}:${W}:${H}:${cls}:${vw}:${empty.join('.')}${watch ? ':w' : ''}`;
   if(GEO && GEO.key === key) return GEO;
   if(GEOS.has(key)) return GEO = GEOS.get(key);
-  const land = cls === 'L', AV = C.av, R = C.band, S = boardSizes(a, cls);
+  const land = cls === 'L', desk = cls === 'D', AV = C.av, R = C.band, S = boardSizes(a, cls);
   // ---- the rail box (§3.1) ----
   // (upright: 0.86 of the screen wide (0.90 on the smallest), as tall as 1.58 times that, centred in the height left;
   // the top seats' avatars reach half out of it, your plate hangs under it. Sideways: 1.98 times as wide as tall, as
   // tall as the area allows with the top seats and your seat 8 px clear of its edges, at most 0.70 of the screen wide)
   let fw, fh, top, left;
   const heroPh = C.hph, heroOver = land ? heroPh + 2 : 8;
-  if(!land){
+  if(desk){
+    // (the D class: wide, centred; the top seats' cards face up stay inside the area, your plate hangs under the rail)
+    const SH = S.shownT != null ? S.shownT : -AV / 2 - 2.2 * C.cw, tp = Math.max(2, Math.ceil(2 - SH - R / 2)), bp = heroPh - heroOver + 2;
+    fw = Math.min(C.cap, Math.round(vw * C.maxW), W - 2 * (C.pw / 2 + 8)); fh = Math.round(fw / C.wh);
+    if(fh > H - tp - bp){ fh = H - tp - bp; fw = Math.round(fh * C.wh); }
+    top = tp + Math.max(0, (H - tp - bp - fh) / 2); left = (W - fw) / 2;
+  } else if(!land){
     fw = Math.min(W - 4, Math.round(vw * C.width));
     const tp = Math.max(2, AV / 2 + 2 - R / 2), bp = heroPh - heroOver + 2;
     fh = Math.min(Math.round(fw * C.max), H - tp - bp);
@@ -2491,7 +2501,7 @@ function boardGeo(n, empty = [], watch = false){
     // the cards: behind the avatar, peeking out at its top on the outer side (inside the screen)
     // (the two backs as drawn, fanned: about 2.3 card widths across and 1.56 tall, centred on hx)
     // (a seat on the upper curve: its cards beside the avatar on the outer side, so they don't rise towards the top row)
-    const curve = !short && !pl && q.ny >= -.8 && q.ny < (land ? .5 : -.2) && Math.abs(q.nx) > .3;
+    const curve = !short && !pl && q.ny >= -.8 && q.ny < (land || desk ? .5 : -.2) && Math.abs(q.nx) > .3;
     const K = S.cards || { l: -1.15 * C.cw, r: 1.15 * C.cw, t: -AV / 2 + 8 - 1.4 * C.cw, b: -AV / 2 + 8 + .16 * C.cw }, ox = (K.l + K.r) / 2, oy = (K.t + K.b) / 2;
     const gw = K.r - K.l, ch = K.b - K.t, sgn = pl ? (pl === 'l' ? 1 : -1) : curve ? (x < cx ? -1 : 1) : short && Math.abs(q.nx) > .3 ? (x < cx ? -1 : 1) : force || side || (i < m / 2 ? -1 : 1);
     // (where the area's top leaves them no room above the avatar, they come down beside it, `cy0` px, on the outer side)
@@ -2659,10 +2669,10 @@ function boardGeo(n, empty = [], watch = false){
     return { bets, dealers, miss };
   }
   let best = null;
-  const bw0 = Math.min(C.bw * vw, (innerW - 40) / 5.6, land ? fh * .16 : 99), potH = S.pot[1], mh = 34;
+  const bw0 = Math.min(C.bw * vw, (innerW - 40) / 5.6, land ? fh * .16 : desk ? fh * .2 : 99), potH = S.pot[1], mh = 34;
   search: for(const f of [1, .94, .88, .82, .76, .7]){ const bw = Math.round(bw0 * f), bh = Math.round(bw * 1.4), boardW = 5 * bw + 4 * 6, msgW = Math.min(innerW - 2 * AV, Math.max(boardW + 40, 220));
     for(const dy of [0, -8, 8, -16, 16, -24, 24, -32, 32, -40, 40, -50, 50, -60, 60, -72, 72, -84, 84]){
-      const by = Math.round((land ? cy - fh * .06 : top + fh * .43) + dy);
+      const by = Math.round((land || desk ? cy - fh * .06 : top + fh * .43) + dy);
       if(!inStadium(cx, by - bh / 2 - 6 - potH, cx, cy, fa, fb, 2) || !inStadium(cx, by + bh / 2 + 6 + mh, cx, cy, fa, fb, 2)) continue;
       const stack = [[cx, by, boardW / 2, bh / 2], [cx, by - bh / 2 - 6 - potH / 2, S.pot[0] / 2, potH / 2], [cx, by + bh / 2 + 6 + mh / 2, msgW / 2, mh / 2]];
       if(stack.some(b => hitAny(b, flat, 4)) || stack.slice(0, 2).some(b => hitAny(b, unions, 1))) continue;
@@ -2674,7 +2684,7 @@ function boardGeo(n, empty = [], watch = false){
   // of 9. Then the place where they touch the fewest, and the chips and buttons still keep off the board and the pot)
   if(!best || best.miss >= 25) for(const f of [1, .88, .76, .7, .64, .58]){ const bw = Math.round(bw0 * f), bh = Math.round(bw * 1.4), boardW = 5 * bw + 4 * 6, msgW = Math.min(innerW - 2 * AV, Math.max(boardW + 40, 220));
     for(const dy of [0, -8, 8, -16, 16, -24, 24, -32, 32, -40, 40, -50, 50, -60, 60]){
-      const by = Math.round((land ? cy - fh * .06 : top + fh * .43) + dy);
+      const by = Math.round((land || desk ? cy - fh * .06 : top + fh * .43) + dy);
       const stack = [[cx, by, boardW / 2, bh / 2], [cx, by - bh / 2 - 6 - potH / 2, S.pot[0] / 2, potH / 2], [cx, by + bh / 2 + 6 + mh / 2, msgW / 2, mh / 2]];
       // (the board and the pot over a plate weigh most; the winner line, there only after a hand, less; then the chips)
       const touch = cores.filter(b => hitAny(b, stack.slice(0, 2), 2)).length * 100 + unions.filter(b => hitAny(b, stack.slice(0, 2), 2)).length * 60 + cores.filter(b => hitAny(b, [stack[2]], 2)).length * 20;
@@ -2725,7 +2735,7 @@ function boardGeo(n, empty = [], watch = false){
       const d = u * 1e4 + Math.abs(x - cx) * 1.5 + Math.abs(y - mBot - WMH - 6); if(d < bd){ bd = d; wm = [x, y]; } } }
     if(wm){ wmMsg = !msg && hitAny(wmBox(...wm), [mid.stack[2]], 2); break; }
   }
-  const geo = { key, W, H, cls, land, look: '', sq: 1, k: 0, inset: 7, wmX: wm ? wm[0] : null, wmY: wm ? wm[1] : null, wmMsg, g: 0, nar: 0, compact: false, mini: false, tight: false, potSide: false, rail: R, cx, cy, tall: !land, fw, fh, top, left,
+  const geo = { key, W, H, cls, land, look: '', sq: 1, k: 0, inset: 7, wmX: wm ? wm[0] : null, wmY: wm ? wm[1] : null, wmMsg, g: 0, nar: 0, compact: false, mini: false, tight: false, potSide: false, rail: R, cx, cy, tall: !land && !desk, fw, fh, top, left,
     seats, bw: mid.bw, by: mid.by, bx: cx, msgW: mid.msgW, mline: mid.bh / 2 + 6, av: AV, cost, bets, dealers, betAt: k => bets[k], dealerAt: k => dealers[k] };
   GEO = geo; if(GEOS.size > 12) GEOS.delete(GEOS.keys().next().value);
   if(areaSize().w) GEOS.set(key, geo);
@@ -2762,7 +2772,9 @@ function boardSeatHTML(d, p, s, o){
   const shot = acting ? `<div class="shot"><i class="shotBar${dc ? ' dc' : ''}"></i></div>` : '';
   const at = `data-uid="${esc(p.uid)}" aria-label="${esc(label)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}`;
   if(isMe) return `<div class="${cls}" ${at}"><div class="hole">${hole}</div><div class="plate">${boardAvHTML(p.uid, p.name)}<div class="pl-txt">${nm}${st}</div>${shot}</div>${status}</div>`;
-  return `<div class="${cls}" ${at};--sx:${oq.sx || 0}px;--stx:${oq.stx || 0}px;--hx:${oq.hx || 0}px;--hy:${oq.hy || 0}px${oq.hys != null ? `;--hys:${oq.hys}px` : ''}${oq.pwx ? `;--pw:${oq.pwx}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${boardAvHTML(p.uid, p.name)}${shot}`
+  // (another player's seat is a button: a tap, or Enter or Space, opens their profile sheet, B7; B8 made it reachable
+  // from the keyboard, its name, chips and status read as its label)
+  return `<div class="${cls}" role="button" tabindex="0" ${at};--sx:${oq.sx || 0}px;--stx:${oq.stx || 0}px;--hx:${oq.hx || 0}px;--hy:${oq.hy || 0}px${oq.hys != null ? `;--hys:${oq.hys}px` : ''}${oq.pwx ? `;--pw:${oq.pwx}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${boardAvHTML(p.uid, p.name)}${shot}`
     + `<i class="b-dot${dc ? ' dc' : away ? ' away' : ''}" aria-hidden="true"></i><div class="plate">${nm}${st}</div>${status}</div>`;
 }
 const pxToPct = ([x, y]) => [x / GEO.W * 100, y / GEO.H * 100];
@@ -3252,6 +3264,9 @@ function newLock(d){
   // a phone held sideways: the table takes the full width on the left and the action bar stands beside it
   const land = IW > H && H <= 600 && IW >= 560;
   if(g.classList.contains('land') !== land){ g.classList.toggle('land', land); LOCK = null; }
+  // (the board on a tablet or a computer, 900 px wide or more, not sideways: the D class, the table wide, B8)
+  const dsk = BOARD && !land && IW >= 900;
+  if(g.classList.contains('b-d') !== dsk){ g.classList.toggle('b-d', dsk); LOCK = null; GEO = null; }
   if(BOARD) boardCol();
   // the smallest phones sideways (iPhone SE): your cards go back above your plate, smaller, so the bottom row of
   // a full table has the width it needs
@@ -3941,6 +3956,16 @@ function boardSheet(){
 }
 function closeSheet(){ const sh = $('bHudSheet'); if(sh && !sh.hidden){ sh.hidden = true; $('game').classList.remove('b-menu'); const c = $('bHud'); if(c) c.focus({ preventScroll: true }); unscroll(); } }
 if(BOARD) document.addEventListener('keydown', e => { if(e.key === 'Escape') closeSheet(); });
+// (the board's sheets, B8: Tab and Shift+Tab stay inside the open one, the profile sheet first, then the tournament
+// sheet and the table menu; Escape closes each, above, and gives the focus back to what opened it)
+if(BOARD) document.addEventListener('keydown', e => {
+  if(e.key !== 'Tab') return;
+  const dlg = ['#bProf', '#bHudSheet', '#bSheet'].map(q => document.querySelector(q + ':not([hidden]) [role="dialog"]')).find(Boolean); if(!dlg) return;
+  const f = [...dlg.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select, textarea, [tabindex]:not([tabindex="-1"])')].filter(x => x.getClientRects().length);
+  if(!f.length) return;
+  const i = f.indexOf(document.activeElement), j = !dlg.contains(document.activeElement) ? (e.shiftKey ? f.length - 1 : 0) : e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i + 1) % f.length;
+  if(i < 0 || (e.shiftKey ? i === 0 : i === f.length - 1) || !dlg.contains(document.activeElement)){ e.preventDefault(); f[j].focus({ preventScroll: true }); }
+});
 const mmss = ms => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 // The tournament break card (every 10 levels, server/club.js): over the middle of the felt once this table's hand is over,
 // with the time left and the sponsor if there is one. A hand still being played is never covered.
@@ -4485,6 +4510,8 @@ $('seats').addEventListener('click', e => {
   const why = throwBlock(); if(why) return toast(why);
   pickThrow(uid);
 });
+// (the board: a seat is a button, so Enter and Space work it as a tap does)
+if(BOARD) $('seats').addEventListener('keydown', e => { if((e.key === 'Enter' || e.key === ' ') && e.target.matches('.seat[role="button"][data-uid]')){ e.preventDefault(); e.target.click(); } });
 
 
 // ---------- coach: a private tip after each hand, tilt and patience coaching, report cards ----------

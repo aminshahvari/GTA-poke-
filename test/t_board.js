@@ -121,7 +121,7 @@ const mid = (a, b) => a.map((x, i) => (x + b[i]) / 2);
     '--b-gold': '#d9a651', '--b-gold-text': '#ebe1b9', '--b-live': '#e5484d', '--b-online': '#3fcf6e', '--b-away': '#8a93a3', '--b-warn': '#f0a24a',
     '--b-fold-top': '#bc2c34', '--b-fold-bot': '#85131b', '--b-fold-label': '#fff', '--b-call-top': '#206ab6', '--b-call-bot': '#0b3063', '--b-call-label': '#fff',
     '--b-raise-top': '#ca9a4d', '--b-raise-bot': '#855c2f', '--b-raise-label': '#1a1206',
-    '--b-fold': 'linear-gradient(180deg,var(--b-fold-top),var(--b-fold-bot))', '--b-call': 'linear-gradient(180deg,var(--b-call-top),var(--b-call-bot))', '--b-raise': 'linear-gradient(180deg,var(--b-raise-top),var(--b-raise-bot))',
+    '--b-fold': 'linear-gradient(180deg,var(--b-fold-top),var(--b-fold-bot))', '--b-call': 'linear-gradient(180deg,var(--b-call-top),var(--b-call-bot))', '--b-raise': 'linear-gradient(180deg,var(--b-raise-top),var(--b-raise-foot))', '--b-raise-foot': 'color-mix(in oklab,var(--b-raise-bot),var(--b-raise-top) 30%)' /* B8: the gradient ends at --b-raise-foot, measured contrast */,
     '--b-more': 'var(--b-surface)', '--b-more-line': 'var(--b-hair)', '--b-more-icon': 'var(--b-text-2)',
     '--b-font': '-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"IBM Plex Sans",sans-serif',
     '--b-t-11': '11px', '--b-t-13': '13px', '--b-t-14': '14px', '--b-t-15': '15px', '--b-t-17': '17px', '--b-t-20': '20px', '--b-t-22': '22px', '--b-t-28': '28px',
@@ -212,7 +212,8 @@ const mid = (a, b) => a.map((x, i) => (x + b[i]) / 2);
     ['a sizing preset, chosen (--b-gold-text) on --b-gold-fill over --b-surface', T('--b-gold-text'), over(T('--b-gold-fill'), T('--b-surface'))],
     ['the table menu: a row (--b-text) on --b-surface-2', T('--b-text'), T('--b-surface-2')], ['the table menu: a note (--b-text-2) on --b-surface-2', T('--b-text-2'), T('--b-surface-2')],
     ['the table menu: unread (--b-gold-text) on --b-surface-2', T('--b-gold-text'), T('--b-surface-2')], ['the table menu: its title (--b-text-2) on --b-surface', T('--b-text-2'), T('--b-surface')],
-    ['"Back" in the sizing (--b-text) on --b-surface', T('--b-text'), T('--b-surface')]);
+    ['"Back" in the sizing (--b-text) on --b-surface', T('--b-text'), T('--b-surface')],
+    ['B8: the dark label 80% down the gold gradient (--b-raise-label; where a two-line button\'s second line ends, t_board_a11y measures it in place)', T('--b-raise-label'), T('--b-raise-top').map((x, i) => i < 3 ? x * .2 + T('--b-raise-foot')[i] * .8 : 1)]);
   console.log('     B2 contrast (AA needs 4.5:1):');
   for(const [name, fg, bg] of B2) console.log(`       ${ratio(fg, bg).toFixed(2).padStart(5)}:1  ${name}`);
   const weak = B2.filter(([, fg, bg]) => ratio(fg, bg) < 4.5).map(([name, fg, bg]) => `${ratio(fg, bg).toFixed(2)}:1 ${name}`);
