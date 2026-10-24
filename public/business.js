@@ -6,7 +6,7 @@
 const S = { view: 'list', detail: null, list: null, feed: null, feedAt: 0, mine: undefined, cats: [], canModerate: false,
   q: '', cat: '', prefill: null, fromScan: false, scan: null, railX: 0, pendingLogo: undefined, back: 'list', seg: 'biz' };
 let C = null;
-const logos = new Map();
+const logos = new Map(), cards = new Map();
 const NEW_MS = 30 * 864e5;
 
 // ---------- tiny DOM helper: strings always become text nodes ----------
@@ -539,6 +539,25 @@ window.BizClub = {
   prefetch(){ freshFeed(); },
   // the sponsor's logo (or monogram) for the poker table's sponsor card
   logo: (b, cls) => logoEl(b, cls),
+  // the board's Home (UI_BOARD, spec §7): the Home feed as it was last loaded (published businesses only), starting a
+  // fresh one when it is due; done() runs when a new one arrives
+  feed(done){ const p = freshFeed(); if(p && done) p.then(() => done()); return S.feed; },
+  // one member's published card for the board's Home (the winner's, for a day): from the Home feed, else asked for once
+  // with the directory's own bizGet (the same check: published and not hidden). undefined while it is not known yet,
+  // null when there is none
+  cardOf(uid, done){
+    const f = this.feed(done), hit = f && f.items.find(b => b.uid === uid);
+    if(hit) return hit;
+    if(!f) return undefined;
+    if(f.total <= f.items.length) return null;
+    const k = cards.get(uid);
+    if(k && Date.now() - k.at < 300000) return k.card;
+    if(!k || !k.p){ cards.set(uid, { at: k ? k.at : 0, card: k ? k.card : undefined, p: api('bizGet', { uid }).then(r => { const b = r.business; return { uid: b.uid, member: b.member, name: b.name, categoryLabel: b.categoryLabel, area: b.area, logoV: b.logoV, publishedAt: b.publishedAt }; }, () => null)
+      .then(card => { cards.set(uid, { at: Date.now(), card }); if(done) done(); }) }); }
+    return k ? k.card : undefined;
+  },
+  // a business card as the Exchange's rails draw it; a tap opens its page (back: Home)
+  cardEl: b => bizCard(b, { from: 'home' }),
   // the poker table's sponsor card (during a break): open that business's page
   openBiz: uid => openDetail(uid, 'list'),
   open(view){ S.view = view || 'list'; S.listStale = true; if(view === 'mine'){ S.mine = undefined; S.seg = 'biz'; } if(S.seg === 'opp') window.OppClub.open('feed'); },
@@ -546,6 +565,6 @@ window.BizClub = {
   myStatus: () => S.mine ? (S.mine.published && !S.mine.modHidden ? 'published' : S.mine.published ? 'hidden' : 'draft') : S.mine === null ? 'none' : S.feed ? S.feed.mine : null,
   // Member Home cards: open the Business tab on one section ('biz' or 'opp') or straight on the card scanner
   show(seg){ if(seg === 'scan'){ S.view = 'scan'; S.scan = null; S.seg = 'biz'; return; } S.view = 'list'; S.seg = seg; S.listStale = true; if(seg === 'opp') window.OppClub.open('feed'); },
-  reset(){ window.OppClub.reset(); S.seg = 'biz'; S.list = null; S.feed = null; S.feedAt = 0; feedP = null; S.mine = undefined; S.view = 'list'; logos.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); logos.clear(); }
+  reset(){ window.OppClub.reset(); S.seg = 'biz'; S.list = null; S.feed = null; S.feedAt = 0; feedP = null; S.mine = undefined; S.view = 'list'; logos.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); logos.clear(); cards.clear(); }
 };
 })();

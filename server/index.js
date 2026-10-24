@@ -534,6 +534,10 @@ const tourneyOf = (c, t) => { const club = c.club; return { id: t.id, status: t.
       ...(club.gp() ? { showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0 } : {}),
       startedAt: t.startedAt || null, breaks: club.breaksOn(), breakEvery: club.BREAK_EVERY, breakMin: t.breakMin || 5, breakUntil: club.onBreak(t) ? t.breakUntil : null, breakAt: club.onBreak(t) ? t.breakAt || null : null, breakPending: !!t.breakPending && !t.paused,
       pausedBreakLeft: t.paused ? t.pausedBreakLeft || 0 : 0, sponsor: c.business.sponsorCard(t.sponsor), sponsorSec: t.sponsorSec || 8, prize: t.prize || '' }; };
+// The board's Home (UI_BOARD only, Step-0 spec §7, phase B6): who sits in each seat of this club's tables, so a live
+// table's mini felt shows its seated avatars. Seat order, null for an empty seat. A member of this club gets it (the
+// same seats any member sees when they tap Watch); a spectator from another club never does (spectatorView).
+const seatsOf = club => Object.fromEntries([...club.tables.values()].filter(x => !x.broken).map(x => [x.tid, x.g.seats.map(p => p ? p.uid : null)]));
 // S: what one club update shares between its sockets (built for the first socket that needs it, then reused, so the
 // same object goes into every view and is turned into JSON once; see clubOut)
 const once = (S, k, f) => k in S ? S[k] : (S[k] = f());
@@ -547,7 +551,7 @@ function clubView(c, u, S = {}){
     me: { id: u.id, name: u.name, owner: isOwner(u), ...(boardUI() && u.onb ? { onb: u.onb } : {}) },
     tourney: t ? once(S, 'tourney', () => tourneyOf(c, t)) : null,
     ...(isOwner(u) && hosts(c) ? { sponsors: once(S, 'sponsors', () => c.business.sponsorOptions()) } : {}), hosts: hosts(c),
-    tables: once(S, 'tables', () => club.tablesSummary()), myTable: club.tableOf(u.id),
+    tables: once(S, 'tables', () => club.tablesSummary()), myTable: club.tableOf(u.id), ...(boardUI() ? { seats: once(S, 'seats', () => seatsOf(club)) } : {}),
     // who invited whom is for the owner only: a member's payload carries no inviter for anyone (Muse P10)
     members: isOwner(u) ? members : once(S, 'mmembers', () => members.map(m => m.invitedBy ? { ...m, invitedBy: null } : m)),
     history, now: Date.now(), shop: c.id === clubs.EVENTS ? null : rewards.view(u.id, isOwner(u)), // no rewards shop in the Blindrise Open
@@ -740,7 +744,7 @@ function playView(c, ws, S){
   const club = c.club, t = club.T(), u = ws.user;
   if(ws.spectator) return { tourney: t ? once(S, 'stourney', () => spectatorTourney(c, t)) : null, tables: once(S, 'tables', () => club.tablesSummary()), now: Date.now() };
   return { tourney: t ? once(S, 'tourney', () => tourneyOf(c, t)) : null, tables: once(S, 'tables', () => club.tablesSummary()), myTable: club.tableOf(u.id),
-    ...(isOwner(u) ? { conflicts: once(S, 'conflicts', () => conflictPairs(c)) } : {}), now: Date.now() };
+    ...(boardUI() ? { seats: once(S, 'seats', () => seatsOf(club)) } : {}), ...(isOwner(u) ? { conflicts: once(S, 'conflicts', () => conflictPairs(c)) } : {}), now: Date.now() };
 }
 // One club view to one socket. json: this update's JSON of the objects the views share (each turned into JSON once).
 // part: the view holds some keys only (a hand ended): the others stay as the app has them.
