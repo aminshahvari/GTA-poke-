@@ -330,7 +330,10 @@ function tableIO(tb){
       if(!running) return;
       const h = tb.g.hand;
       if(type === 'showdown' && h && h.result){ resultExtras(tb, h); tb.resultAt = Date.now(); }
-      publish(tb);
+      // (not on 'turn': the table then is the one already sent after the last action, deal or street, and the decision
+      // that follows, ask(), sends the turn itself with its clock as soon as it starts; a third copy cost every phone a
+      // render for nothing)
+      if(type !== 'turn') publish(tb);
       // Pacing close to the big online rooms: quick between actions, a beat longer on an all-in run-out.
       const runout = h && h.players.filter(E.canAct).length < 2;
       const wait = { deal: 900, action: 250, collect: 300, board: runout ? 1100 : 650, showdown: h && h.result && h.result.showdown ? 4500 : 1800 }[type] || 0;
@@ -531,7 +534,9 @@ function afterHand(tb, out){
   balance(tb);
   publish(tb);
   saveLive();
-  hooks.onClub();
+  // (a hand ended: the club's screens get what play changes, the places, players left and tables, gathered for a few
+  // seconds; the players dealt in are named, as their stats moved; see broadcastClub in server/index.js)
+  hooks.onClub('hand', Object.keys(tb.handStart || {}));
 }
 function seatInto(dest, p, mode){
   const g = dest.g, free = allowedSeats().filter(i => !g.seats[i]);
