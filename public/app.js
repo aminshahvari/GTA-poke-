@@ -327,7 +327,7 @@ function onClub(c){
   if(c.myTable && c.myTable !== lastMyTable && st === 'running'){ watchTid = c.myTable; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid: watchTid }); }
   lastMyTable = c.myTable;
   // back from the sponsor's page: the break is over, so the player goes back to their seat
-  if(leftForSponsor && !(c.tourney && c.tourney.id === leftForSponsor && c.tourney.status === 'running' && (c.tourney.breakUntil || c.tourney.paused))){
+  if(leftForSponsor && !(c.tourney && c.tourney.id === leftForSponsor && c.tourney.status === 'running' && (c.tourney.breakUntil || c.tourney.breakPending || c.tourney.paused))){
     if(view === 'lobby' && c.myTable && st === 'running') openTable(c.myTable);
     leftForSponsor = null;
   }
@@ -2410,7 +2410,9 @@ function potToWinners(d, handKey, LY){
   fx.querySelectorAll('.winpile').forEach(e => e.remove());
   // start where the pot sits, just above the board
   const area = $('tableArea'), ar = area.getBoundingClientRect(), br = $('board').getBoundingClientRect();
-  const [px, py] = br.width ? [br.left + br.width / 2 - ar.left, br.top - ar.top - 12] : centerPx(), still = reducedMotion(), bb = (d.blinds && d.blinds[1]) || 1;
+  // (the winner beat: the hand's name holds the pot's place, so the chips come out from behind the board's cards instead)
+  const fromCards = !!(d.result && d.result.hand && br.width);
+  const [px, py] = br.width ? [br.left + br.width / 2 - ar.left, fromCards ? br.top + br.height / 2 - ar.top : br.top - ar.top - 12] : centerPx(), still = reducedMotion(), bb = (d.blinds && d.blinds[1]) || 1;
   d.seats.forEach((p, s) => {
     if(!p || !(p.won > 0)) return;
     let [bx, by] = LY.betOf(s); const el = document.createElement('div');
@@ -2856,6 +2858,7 @@ function lockArea(){
     DOCKBOX = [Math.round(dr.right - dr.width - ar.left), Math.round(dr.bottom - up - DOCKH - ar.top), Math.round(dr.right - ar.left), Math.round(dr.bottom - up - ar.top)]; LOCK.box = DOCKBOX; }
   else DOCKBOX = LOCK.box;
 }
+let handOnFelt = false; // the winning hand's name is on the felt (the pot's place or the result line)
 function renderTable(){
   if(view !== 'table' || !club) return;
   const tid = watchTid || club.myTable, d = tables.get(tid);
@@ -2878,7 +2881,12 @@ function renderTable(){
   // the whole live pot: what's in the middle plus this street's bets still in front of the seats (the coach's pot
   // odds count the same total; when the bets are swept in they leave the seats as they join d.pot, so nothing counts twice)
   const potAll = (d.pot || 0) + d.seats.reduce((t, p) => t + (p && p.inHand ? p.bet || 0 : 0), 0);
-  $('pot').innerHTML = !res && potAll > 0 ? `${chipsIcon(3)}Pot ${chipFmt(potAll, 1e6)}` : '';
+  // (the winner beat, Issue #34: while the server holds the result, the winning hand sits where the pot was, the winner and
+  // the amount on the line under the board; it goes when the server moves the table on, never on a client timer)
+  $('pot').innerHTML = res && res.hand ? `<span class="win-hand">${esc(res.hand)}</span>` : !res && potAll > 0 ? `${chipsIcon(3)}Pot ${chipFmt(potAll, 1e6)}` : '';
+  $('pot').classList.toggle('beat', !!(res && res.hand)); area.classList.toggle('win-beat', !!res);
+  // (a long hand name that does not fit keeps its first part: "Two Pair", not "Two Pair, Jacks and Ei…")
+  const wh = res && res.hand && $('pot').querySelector('.win-hand'); if(wh && wh.scrollWidth > wh.clientWidth + 1) wh.textContent = res.hand.split(',')[0];
   $('pot').style.visibility = $('pot').innerHTML ? 'visible' : 'hidden';
   let b = '';
   for(let i = 0; i < 5; i++){
@@ -2997,6 +3005,21 @@ function renderTable(){
   const ml = $('msg'); ml.classList.remove('up');
   if(res && G.cost){ const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom, mr = ml.getBoundingClientRect();
     if([...$('seats').querySelectorAll('.av, .plate, .hole .card')].some(e => hit(e.getBoundingClientRect(), mr))) ml.classList.add('up'); }
+  // (the winner beat: when the result line goes up into the pot's place, the hand's name leaves that place and joins the
+  // line, "Ana wins 1,200 · Two Pair", when it fits whole; else it stays in the bar under the table)
+  handOnFelt = !!(res && res.hand);
+  if(res && res.hand && ml.classList.contains('up')){
+    const P = $('pot'); P.innerHTML = ''; P.classList.remove('beat'); P.style.visibility = 'hidden';
+    // (in shorter words until it fits: the hand's kind only, "Two Pair", then the players' short names)
+    const was = ml.innerHTML, L0 = res.lines[0], won = (L0.match(/^.*? (?:wins|split) [\d,]+/) || [L0])[0], kind = res.hand.split(',')[0];
+    const names = d.seats.filter(Boolean).map(p => p.name).sort((a, b) => b.length - a.length), nk = seatNicks(names), nicks = l => names.reduce((t, n) => t.split(n).join(nk(n)), l);
+    const fits = () => ml.scrollHeight <= ml.clientHeight + 1 && ml.scrollWidth <= ml.clientWidth + 1;
+    // (more pots: the others follow as who won how much, and go last of all; the bar under the table lists them all)
+    const more = res.lines.slice(1).filter(l => / (?:wins|split) [\d,]+/.test(l)).map(l => nicks((l.match(/^.*? (?:wins|split) [\d,]+/) || [l])[0]));
+    handOnFelt = [[L0, ...more], [won + ' · ' + kind, ...more], [nicks(won) + ' · ' + kind, ...more], [nicks(won) + ' · ' + kind]]
+      .some(f => { ml.innerHTML = f.map(x => `<div>${esc(x)}</div>`).join(''); return fits(); });
+    if(!handOnFelt) ml.innerHTML = was;
+  }
   if(res) try{ potToWinners(d, handKey, LY); }catch(e){}
   clearShown();
   $('tName').textContent = `Table ${d.n}`;
@@ -3069,7 +3092,7 @@ function renderControls(d, mySeat, mine){
     }
   }
   else if(meSeat.inHand && meSeat.folded) line = 'You folded. Next hand coming up…';
-  else line = d.phase === 'hand' ? 'You play from the next hand.' : 'Shuffling up…';
+  else line = d.phase === 'hand' ? 'You play from the next hand.' : T && T.status === 'running' && (T.breakUntil || T.breakPending) && !T.paused ? 'On break. Play resumes by itself.' : 'Shuffling up…';
   // a finished hand: the whole result in the bar (the felt shows its first line)
   const R = d.result && d.result.lines;
   // (while my show offer is up, the bar asks about my cards instead; the felt still shows the result)
@@ -3078,7 +3101,8 @@ function renderControls(d, mySeat, mine){
     // the felt already says who won how much: the bar adds only what the felt leaves out (the winning hand, the
     // other pots), so the same words never show twice
     const rest = R.map(l => l.slice((l.match(/^.*? (?:wins|split) [\d,]+/) || [''])[0].length).replace(/^\s*·\s*/, ''));
-    line = rest.every(x => !x) ? 'Next hand coming up…' : R.length === 1 ? `Winning hand: <b>${esc(rest[0])}</b>` : R.map(esc).join('<br>');
+    // (one pot: its winning hand is on the felt now, in the pot's place, Issue #34)
+    line = rest.every(x => !x) || R.length === 1 && d.result.hand && handOnFelt ? 'Next hand coming up…' : R.length === 1 ? `Winning hand: <b>${esc(rest[0])}</b>` : R.map(esc).join('<br>');
   }
   // (the board: the quick actions, or nothing, with "⋯" at the end of the row, which keeps its height, §3.5)
   // (the board, sitting out: the words on the info line, "I'm back" in the action row's empty place before "⋯". In the
@@ -3307,7 +3331,8 @@ function boardSizing(d, meSeat){
   tickClock(); queuedNote(d);
 }
 // "⋯": the table menu (§3.5): Chat (its unread dot shows on "⋯" too), extra time on your turn, the hand helper on or off,
-// your hand history, leave the table. (Sit out next hand and Sound are on the spec's list but the app has neither yet.)
+// Sound (the break music, Issue #34), your hand history, leave the table. (Sit out next hand is on the spec's list but the
+// app does not have it yet.)
 let bHelperOff = false; try{ bHelperOff = localStorage.getItem('stacked:helper-board') === 'off'; }catch(e){}
 function boardMenu(){
   if(!BOARD) return;
@@ -3320,6 +3345,7 @@ function boardMenu(){
     ${row('chat', 'Chat', chatUnread ? 'New messages' : '', chatUnread ? ' data-unread' : '')}
     ${mineT && !demo ? row('time', 'Add 30 seconds', `${x} left`, x ? '' : ' disabled') : ''}
     ${row('helper', 'Hand helper', bHelperOff ? 'Off' : 'On', ` role="switch" aria-checked="${!bHelperOff}"`)}
+    ${row('sound', 'Sound', SND.on() ? 'On · music on breaks' : 'Off', ` role="switch" aria-checked="${SND.on()}"`)}
     ${demo ? '' : row('hands', 'Hand history', 'Opens your hands in the lobby')}
     ${row('leave', 'Leave table', 'Back to the lobby')}
     <button type="button" class="b-row b-close" data-bm="close"><span>Close</span></button></div>`;
@@ -3329,6 +3355,7 @@ function boardMenu(){
     const k = b.dataset.bm; closeMenu();
     if(k === 'chat') openChat(true);
     else if(k === 'time') send({ t: 'extend' });
+    else if(k === 'sound'){ SND.set(!SND.on()); tickClock(); }
     else if(k === 'helper'){ bHelperOff = !bHelperOff; try{ localStorage.setItem('stacked:helper-board', bHelperOff ? 'off' : ''); }catch(e){} renderTable(); }
     else if(k === 'hands'){ $('lobbyBtn').click(); tab = 'learn'; learnSeg = 'hands'; openHand = null; send({ t: 'hands' }); renderLobby(); }
     else if(k === 'leave') $('lobbyBtn').click();
@@ -3475,7 +3502,7 @@ function sponsorHTML(sp, big, prize){
 function wireSponsor(el, T){
   const b = el.querySelector('[data-spbiz]'); if(!b) return;
   const go = async () => {
-    const t = club.tourney && club.tourney.id === T.id ? club.tourney : T, brk = t.paused || t.breakUntil && t.breakUntil > Date.now() + clockSkew, d = tables.get(club.myTable);
+    const t = club.tourney && club.tourney.id === T.id ? club.tourney : T, brk = t.paused || t.breakPending || t.breakUntil && t.breakUntil > Date.now() + clockSkew, d = tables.get(club.myTable);
     if(!brk && d && d.phase === 'hand' && d.seats.some(p => p && p.uid === club.me.id && p.inHand && !p.folded)
       && !await modal(`<h2>Open ${esc(T.sponsor.name)}'s page?</h2><p>Your hand plays on while you look: when it is your turn you check or fold. Come back with Go to my table.</p>`, [{ label: 'Stay here', value: false }, { label: 'Open their page', value: true, primary: true }])) return;
     if(brk) leftForSponsor = t.id;
@@ -3487,17 +3514,23 @@ function fillLogo(el, sp){
   const slot = el.querySelector('[data-splogo]');
   if(slot && window.BizClub && window.BizClub.logo) slot.replaceChildren(window.BizClub.logo({ uid: sp.uid, name: sp.name, logoV: sp.logoV }, 'sp'));
 }
+// (Issue #34: drawn from the server's break state alone, on every 'club' update and every clock tick, so it shows the moment
+// the break begins for everyone, a fresh join or a reconnect included. It also shows at a table whose hand is over while
+// the break waits for the last hand at another table: before, that table sat empty and looked frozen.)
 function breakUI(T, d, now){
   const el = $('brk'); if(!el) return;
-  const paused = T && T.paused && T.pausedBreakLeft > 0;
-  const on = T && T.status === 'running' && (paused || T.breakUntil && T.breakUntil > now);
+  const paused = T && T.paused && T.pausedBreakLeft > 0, pend = !!(T && T.breakPending && !T.breakUntil);
+  const on = T && T.status === 'running' && (paused || pend || T.breakUntil && T.breakUntil > now);
   if(!on || (d && d.phase === 'hand')){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; brkKey = ''; $('tableArea').classList.remove('on-break'); } return; }
   $('tableArea').classList.add('on-break');
-  const key = T.id + ':' + (T.breakUntil || 'p') + ':' + (T.sponsor ? T.sponsor.uid : '') + ':' + (T.prize || '');
+  const key = T.id + ':' + (pend ? 'w' : T.breakUntil || 'p') + ':' + (T.sponsor ? T.sponsor.uid : '') + ':' + (T.prize || '');
   if(key !== brkKey){
+    const again = brkKey.startsWith(T.id + ':w:'); // the waiting card turning into the countdown: no second fade-in
     brkKey = key;
     const [sb, bb, an] = E.levelFor(T.level, T.anteMode);
-    el.innerHTML = `<div class="brk-card"><span class="brk-eye">Tournament break</span><b class="brk-time num" id="brkTime"></b>
+    el.innerHTML = `<div class="brk-card${again ? ' still' : ''}"><span class="brk-eye"><i class="brk-dot" aria-hidden="true"></i>Tournament break</span>
+      ${pend ? '<b class="brk-time brk-wait"><small class="brk-lead">On break</small>Starts when the last hand ends</b>'
+        : '<b class="brk-time num"><small class="brk-lead">On break — back in</small> <span id="brkTime"></span></b>'}
       <small class="brk-sub">Play resumes by itself · Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}</small>
       ${T.sponsor ? sponsorHTML(T.sponsor, true, T.prize) : T.prize ? `<small class="brk-prize">Prize: ${esc(T.prize)}</small>` : ''}</div>`;
     if(T.sponsor) fillLogo(el, T.sponsor);
@@ -3508,7 +3541,7 @@ function breakUI(T, d, now){
   const sig = [...document.querySelectorAll('#seats .seat')].map(q => q.offsetLeft + ',' + q.offsetTop).join(' ') + '|' + $('tableArea').clientWidth + 'x' + $('tableArea').clientHeight;
   if(el.dataset.sig !== sig){ el.dataset.sig = sig; fitBreak(el); }
   else if(el.dataset.fit === 'ok'){ const r = el.getBoundingClientRect(); if(brkSeats().some(q => r.left < q.right && q.left < r.right && r.top < q.bottom && q.top < r.bottom)) fitBreak(el); }
-  $('brkTime').textContent = paused ? 'Paused · ' + mmss(T.pausedBreakLeft) : mmss(T.breakUntil - now);
+  if($('brkTime')) $('brkTime').textContent = paused ? 'Paused · ' + mmss(T.pausedBreakLeft) : mmss(T.breakUntil - now);
 }
 // Place the break card where it clears every player's seat: try a few heights on the felt, narrowing it between the seats
 // on either side. On a felt too small for that it stays compact in the middle (there is no hand being played under it).
@@ -3554,6 +3587,101 @@ function sponsorUI(T, now, onTable){
   const key = T.id + ':' + sp.uid + ':' + (T.prize || '');
   if(key !== spnKey){ spnKey = key; el.innerHTML = sponsorHTML(sp, false, T.prize); fillLogo(el, sp); el.hidden = false; }
   el.classList.toggle('out', left < 600);
+}
+// ---------- break music (Issue #34, owner-approved) ----------
+// A short sting as the break begins, then a quiet lounge loop until play resumes, both played by the phone itself with
+// WebAudio from the notes below: no audio file, nothing streamed (the code is cached with the app). Started and stopped
+// only by the server's break state (tickClock), never by a game action, and nothing in the game waits for it. An
+// enhancement only: browsers allow sound after the member's first tap, so the first tap anywhere unlocks it; where the
+// phone mutes web audio (an iPhone on silent) there is simply no music. Sound in the table "⋯" menu turns it off, per
+// member on this phone, on by default.
+const SND = (() => {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let ctx = null, out = null, timer = null, key = '', bar = 0, barAt = 0;
+  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  const pref = () => 'sound:' + (club && club.me ? club.me.id : '');
+  const on = () => local.get(pref(), 1) !== 0;
+  // the first tap (or key) anywhere: create the context inside it and play one silent sample, which is what iOS needs
+  const unlock = () => {
+    if(!AC) return;
+    try{
+      if(!ctx){ ctx = new AC(); const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); }
+      if(ctx.state === 'suspended') ctx.resume();
+    }catch(e){ ctx = null; }
+    if(ctx && ctx.state === 'running') ['pointerdown', 'keydown', 'touchend'].forEach(t => document.removeEventListener(t, unlock, true));
+  };
+  ['pointerdown', 'keydown', 'touchend'].forEach(t => document.addEventListener(t, unlock, { capture: true, passive: true }));
+  // one soft electric-piano-like note: a sine with a quiet octave above, quick attack, long decay
+  function note(m, t, dur, vel, dest){
+    for(const [mul, g0] of [[1, 1], [2, .18], [3, .05]]){
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = mul === 1 ? 'triangle' : 'sine'; o.frequency.value = hz(m) * mul; o.detune.value = (mul === 1 ? 3 : -4);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel * g0, t + .012); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + .05);
+    }
+  }
+  function bass(m, t, dur, vel, dest){
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = hz(m);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + .05);
+  }
+  // a soft brush on the off-beats: a short burst of filtered noise
+  let noise = null;
+  function brush(t, vel, dest){
+    if(!noise){ noise = ctx.createBuffer(1, ctx.sampleRate * .25, ctx.sampleRate); const d = noise.getChannelData(0); for(let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = noise;
+    f.type = 'bandpass'; f.frequency.value = 6000; f.Q.value = .7;
+    g.gain.setValueAtTime(vel, t); g.gain.exponentialRampToValueAtTime(.0001, t + .18);
+    s.connect(f); f.connect(g); g.connect(dest); s.start(t); s.stop(t + .25);
+  }
+  // the sting, about 3 seconds: a rising D major ninth, then the chord held and let go
+  function sting(t, dest){
+    [62, 69, 74, 78, 81].forEach((m, i) => note(m, t + i * .11, 1.6, .22, dest));
+    [50, 57, 64, 66, 69, 74].forEach(m => note(m, t + .62, 2.6, .12, dest));
+    bass(38, t + .62, 2.4, .3, dest);
+    return t + 3.1;
+  }
+  // the loop: 84 beats a minute, four bars (Dmaj9, Bm9, Em9, A13), piano on 1 and the and of 2, bass on 1 and 3
+  const BEAT = 60 / 84, CHORDS = [[38, [54, 57, 61, 64]], [47, [50, 54, 57, 61]], [40, [55, 59, 62, 66]], [45, [55, 59, 61, 66]]];
+  function scheduleBar(t, i, dest){
+    const [root, v] = CHORDS[i % 4];
+    v.forEach(m => note(m, t, BEAT * 2.6, .1, dest)); v.slice(1).forEach(m => note(m, t + BEAT * 1.5, BEAT * 2.2, .06, dest));
+    bass(root, t, BEAT * 1.8, .22, dest); bass(root + (i % 2 ? 5 : 7), t + BEAT * 2, BEAT * 1.6, .16, dest);
+    brush(t + BEAT, .05, dest); brush(t + BEAT * 3, .05, dest);
+  }
+  function stop(){
+    clearInterval(timer); timer = null; key = '';
+    if(out && ctx){ const g = out; try{ g.gain.setTargetAtTime(0, ctx.currentTime, .04); }catch(e){} setTimeout(() => { try{ g.disconnect(); }catch(e){} }, 400); }
+    out = null; $('game').dataset.music = '';
+  }
+  // k: this break; withSting: the break has only just begun (a member who opens the table later gets the loop only)
+  function start(k, withSting){
+    if(key === k) return true;
+    if(!ctx || ctx.state !== 'running') return false; // not unlocked yet (no tap): tried again on the next tick
+    stop(); key = k;
+    out = ctx.createGain(); out.gain.value = .55; out.connect(ctx.destination);
+    const sOut = ctx.createGain(); sOut.gain.value = .9; sOut.connect(out);
+    const lOut = ctx.createGain(); lOut.gain.value = .3; lOut.connect(out); // the loop sits low, under any conversation
+    let t = ctx.currentTime + .05;
+    if(withSting) t = sting(t, sOut);
+    const loopAt = t; bar = 0; barAt = t;
+    // (the game's root says what is playing, for tests: sting, then loop)
+    const pump = () => {
+      if(!out) return;
+      $('game').dataset.music = ctx.currentTime < loopAt ? 'sting' : 'loop';
+      while(barAt < ctx.currentTime + 1.2){ scheduleBar(barAt, bar++, lOut); barAt += BEAT * 4; }
+    };
+    pump(); timer = setInterval(pump, 250);
+    return true;
+  }
+  return { on, set(v){ local.set(pref(), v ? 1 : 0); if(!v) stop(); }, start, stop, unlock, playing: () => key };
+})();
+// called with every clock tick: music while this member's tournament is on a break (at the table, or on the sponsor's
+// page from the break card), silence the moment it is not
+function musicUI(T, now){
+  const brk = BOARD && !demo && T && T.status === 'running' && !T.paused && T.breakUntil && T.breakUntil > now && !document.hidden && (view === 'table' || leftForSponsor === T.id);
+  if(!brk || !SND.on()){ if(SND.playing()) SND.stop(); return; }
+  SND.start(T.id + ':' + T.breakUntil, now - (T.breakAt || now) < 10000);
 }
 // ---------- quiet design: the whole tournament in one line, the details one tap away ----------
 // Players still playing, the chip leader of all tables and your place among everyone (players' feedback, 2026-10-21),
@@ -3603,6 +3731,7 @@ function qSheet(){
 function tickClock(){
   const T = demo ? demo.T : club && club.tourney;
   const now = Date.now() + clockSkew;
+  musicUI(T, now);
   if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(T, now, false); if(QUIET) $('qline').hidden = true; if(BOARD) boardTop(null); return; }
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;

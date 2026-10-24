@@ -571,6 +571,10 @@
 [data-ui="board"] #game .brk-eye{font-size:var(--b-t-11);font-weight:600;color:var(--b-gold-text)}
 [data-ui="board"] #game .brk-time{font-family:var(--b-font);font-weight:600;color:var(--b-text);font-variant-numeric:tabular-nums}
 [data-ui="board"] #game .brk-sub{font-size:12px;color:var(--b-text-2)}
+[data-ui="board"] #game .brk-lead{font-family:var(--b-font);color:var(--b-gold-text)}
+[data-ui="board"] #game .pot.beat{color:var(--b-gold-text);font-weight:700;font-size:var(--b-t-15);padding:3px 12px;background:var(--b-surface)}
+[data-ui="board"] #game #tableArea.win-beat .center .msg.up{background:var(--b-surface)}
+[data-ui="board"] #game #tableArea.win-beat .center .msg{color:var(--b-gold-text)}
 [data-ui="board"] #game .brk .sp-card{border-top-color:var(--b-hair)}
 [data-ui="board"] #game .brk .sp-txt small{color:var(--b-gold-text)}
 [data-ui="board"] #game .brk .sp-txt small.sp-cat{color:var(--b-text-2)}
