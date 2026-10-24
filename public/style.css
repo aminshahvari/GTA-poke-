@@ -299,6 +299,13 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .copy-row{display:flex;gap:8px;align-items:center}
 .copy-row input{flex:1;min-width:0;font:inherit;font-size:13px;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#141113;color:var(--text)}
 .offline{position:fixed;left:50%;top:8px;transform:translateX(-50%);background:var(--red);color:#fff;padding:6px 14px;border-radius:99px;font-size:13px;font-weight:600;z-index:80}
+/* the connection lost (closed, or found dead by the app's watchdog): the table dims and says so, so an old table never
+   passes for the live one; it takes no taps (the action buttons below stay usable) and leaves with the reconnect */
+.connlost{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:16px;background:rgba(8,10,16,.66);color:#fff;text-align:center;pointer-events:none;border-radius:18px}
+.connlost[hidden]{display:none}
+.connlost b{font-size:20px;font-weight:700}
+.connlost span{font-size:14px;opacity:.85}
+#game.conn-lost #tableArea>:not(.connlost){filter:grayscale(.9)}
 .share-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
 .share-row a{display:flex;align-items:center;justify-content:center;text-decoration:none;padding:10px 6px;font-size:14px}
 /* learn */

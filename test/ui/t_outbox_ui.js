@@ -6,7 +6,7 @@
 //  (A) the socket is killed on the player's turn, they tap Fold, the socket comes back: exactly one fold reaches the
 //      server, nothing before the reconnect, and the seat is folded on the server
 //  (B) the hand goes on without them before the reconnect: the queued action is dropped, nothing is sent, no error,
-//      and the controls show the new state
+//      a short notice says the fold was not sent, and the controls show the new state
 //  (C) taps during the reconnect backoff (a retry has already failed): Call, then Fold replaces it; one fold reaches the
 //      server after the reconnect
 //  (D) an action sent into a connection that is already dead (nothing gets through), then the socket closes: it waits
@@ -220,6 +220,9 @@ async function run(board){
     check(!!await until(() => d.states.some(st => st.tid === u.tid && st.handNo > u.hand), 30000), TAG + 'B: the hand ended while the player was away');
     const t0 = Date.now(); R.restore();
     check(!!await backOnline(), TAG + 'B: the app reconnects');
+    // the dropped action is not dropped silently: a short notice says so at that moment
+    const note = await until(() => pg.evaluate(() => [...document.querySelectorAll('.toast')].map(t => t.textContent).find(t => /wasn't sent/.test(t)) || ''), 3000);
+    check(note === "Fold wasn't sent — the hand moved on.", TAG + 'B: a notice says the fold was not sent: ' + note);
     await sleep(1500);
     const x = await ui();
     check(actsFor(u).filter(a => a.through).length === 0, TAG + 'B: the stale fold was never sent');

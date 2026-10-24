@@ -58,7 +58,11 @@ document.addEventListener('visibilitychange', () => {
   if(wantAwake) keepAwake(true);
   // coming back to the app counts as being back at the table
   if(club) send({ t: 'back' });
+  // and the connection is checked at once: after a lock or time in the background it may be dead though still "open"
+  watchdog(true);
 });
+window.addEventListener('pageshow', () => watchdog(true));
+window.addEventListener('online', () => watchdog(true));
 
 function modal(html, buttons){
   return new Promise(res => {
@@ -202,19 +206,49 @@ window.Domino.init({ post, toast, modal, me: () => club.me, on: () => !!(club &&
 window.BizClub.init({ post, toast, token: () => local.get('token', ''), clubHeader, me: () => club.me, tab: () => tab,
   openTab: t => { if(BOARD){ bFrom = t === 'biz' ? (tab === 'biz' ? bFrom : tab) : null; if(t === 'event') t = 'home'; } tab = t; view = 'lobby'; showScreen('lobby'); renderLobby(); $('lobbyBody').scrollTop = 0; },
   confirm: (title, text, ok) => modal(`<h2>${esc(title)}</h2><p>${esc(text)}</p>`, [{ label: 'Cancel', value: false }, { label: esc(ok), value: true, primary: true }]) });
+// The connection watchdog (2026-10-24: two players' screens froze at a live game, each showing an old table with their
+// own seat Disconnected, until they left the page and came back). After a phone sleeps, changes network or sits in the
+// background, its socket can stay "open" while nothing goes through either way (half-open): the browser fires no
+// close, sends go nowhere, and the app used to wait for a close that never came. So the app checks for itself:
+// - after HB_IDLE with nothing from the server it sends a tiny 'hb' that the server echoes at once; no echo within
+//   HB_WAIT means the connection is dead (a page cannot see the protocol's own pings, so this is the app's own);
+// - back from the lock screen or the background (visible, pageshow, online, or its timers having slept) it asks at
+//   once and allows HB_WAKE, so a dead socket is found in about two seconds, not after the full wait;
+// - a connection that has not opened, or not been answered, within CONNECT_WAIT is given up the same way.
+// A dead connection is closed by the app, the table says plainly that the connection is lost, and the app dials again
+// (at once, then with the usual backoff). The server's answer to the new hello is the whole state again (the club, then
+// the table with this player's cards), which replaces what the app showed: no tap needed to be back in the live hand.
+// Timings: the server counts a seat Disconnected after 5 s without a pong, so the app looks within about the same time
+// (3 s idle + 4 s wait at worst, about 7 s); on a working phone connection the echo comes back in well under a second,
+// and a false alarm only costs one quick reconnect. The heartbeat goes only when the server has been quiet: during a
+// hand the table's own updates prove the connection, so it adds little traffic.
+const HB_IDLE = 3000, HB_WAIT = 4000, HB_WAKE = 2500, CONNECT_WAIT = 8000;
+let wantConn = false, dialAt = 0, heardAt = 0, hbAt = 0, hbWait = HB_WAIT, hbN = 0, hbRtt = 0, tickAt = Date.now(), redial = 0;
+const actRtts = [];   // how long my acts took to come back as the next table state (for the server's connection log)
 function connect(){
   const token = local.get('token', null);
   if(joinSlug) return clubJoinScreen();
   if(!token && location.pathname.startsWith('/join/')) return welcomeScreen();
   if(!token){ return post('/api/status', {}).then(s => s.hasOwner ? welcomeScreen() : authScreen('setup')).catch(() => welcomeScreen()); }
-  if(ws) try{ ws.close(); }catch(e){}
-  live = false;
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-  ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined, spectate: watching() || undefined })); };
-  ws.onmessage = ev => {
+  // an old socket is let go without its handlers: its late close must not dial again over this new one
+  if(ws){ const o = ws; ws = null; o.onopen = o.onmessage = o.onclose = o.onerror = null; try{ o.close(); }catch(e){} }
+  clearTimeout(redial); redial = 0;
+  live = false; wantConn = true; dialAt = Date.now(); hbAt = 0;
+  const sock = ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  // (the hello is answered at once with 'auth': until then it counts as an unanswered heartbeat)
+  sock.onopen = () => { retry = 0; heardAt = hbAt = Date.now(); hbWait = HB_WAIT; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } sock.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined, spectate: watching() || undefined })); };
+  sock.onmessage = ev => {
+    if(sock !== ws) return;   // (a socket already let go)
+    heardAt = Date.now();
     const m = JSON.parse(ev.data);
-    if(m.t === 'auth'){ live = !!m.ok; if(!m.ok){ outbox = null; local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
-    if(m.t === 'club'){ if(outbox && m.club.myTable !== outbox.tid) outbox = null; onClub(m.club); return; }
+    if(m.t === 'hb'){ if(m.n === hbN && hbAt){ hbRtt = Date.now() - hbAt; hbAt = 0; } return; }
+    if(m.t === 'auth'){ if(hbAt) hbRtt = Date.now() - hbAt; hbAt = 0; live = !!m.ok; if(!m.ok){ wantConn = false; outbox = null; local.del('token'); ws = null; sock.onclose = null; sock.close(); connLost(false); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; connLost(false); resync = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
+    if(m.t === 'club'){
+      // the first club state after a (re)connect is the whole truth: tables that closed meanwhile are forgotten
+      if(resync){ resync = false; const open = new Set((m.club.tables || []).map(x => x.tid)); for(const tid of [...tables.keys()]) if(tid !== 'demo' && !open.has(tid) && tid !== m.club.myTable){ tables.delete(tid); myCards.delete(tid); } }
+      if(outbox && m.club.myTable !== outbox.tid) outboxDrop();
+      onClub(m.club); return;
+    }
     if(m.t === 'domino'){ window.Domino.onState(m.v); return; }
     if(m.t === 'table'){ if(m.field) field = m.field; tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); outboxCheck(m.table); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
@@ -232,9 +266,43 @@ function connect(){
     if(m.t === 'error'){ modal(`<h2>That didn't work</h2><p>${esc(m.error)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
   };
   // 4001: the server handed over to a new instance (deploy), so come back fast instead of backing off
-  ws.onclose = e => { $('offline').hidden = false; outboxDown(); setTimeout(connect, e.code === 4001 ? 250 + Math.random() * 750 : Math.min(8000, 500 * 2 ** retry++)); };
+  sock.onclose = e => { if(sock === ws) dropped(e.code === 4001 ? 250 + Math.random() * 750 : Math.min(8000, 500 * 2 ** retry++)); };
 }
+let resync = false;
 const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
+// the connection is gone (closed, or found dead by the watchdog): let the socket go, say so, dial again after `wait`
+function dropped(wait){
+  if(ws){ const o = ws; ws = null; o.onopen = o.onmessage = o.onclose = o.onerror = null; try{ o.close(4000, 'no answer'); }catch(e){} }
+  $('offline').hidden = false; outboxDown(); connLost(true);
+  clearTimeout(redial); redial = setTimeout(connect, wait);
+}
+// the watchdog's look at the connection: every second, and at once (wake) when the app comes back to the front
+function watchdog(wake){
+  const now = Date.now(), slept = now - tickAt > 5000; tickAt = now;
+  if(!wantConn) return;
+  // waiting out the backoff: coming back to the app (or the network coming back) dials now
+  if(!ws){ if(wake || slept){ retry = 0; connect(); } return; }
+  if(ws.readyState === 0){ if(now - dialAt > CONNECT_WAIT) dropped(Math.min(8000, 500 * 2 ** retry++)); return; }
+  if(ws.readyState !== 1) return dropped(Math.min(8000, 500 * 2 ** retry++));
+  // back at the front, or our own timers were asleep: whatever was asked before does not count, ask again now
+  if(wake || slept) return heartbeat(HB_WAKE);
+  if(hbAt && now - hbAt > hbWait) return dropped(0);   // asked and no answer: dead, though the socket still says open
+  if(!hbAt && now - heardAt >= HB_IDLE) heartbeat(HB_WAIT);
+}
+function heartbeat(wait){
+  hbAt = Date.now(); hbWait = wait; hbN++;
+  send({ t: 'hb', n: hbN, ...(hbRtt ? { rtt: hbRtt } : {}), ...(actRtts.length ? { art: actRtts.splice(0) } : {}) });
+}
+setInterval(() => watchdog(false), 1000);
+// the connection-lost state over the table: the felt dims and says so in words, so an old table never passes for the
+// live one. The action buttons stay usable (a tap waits in the outbox and goes when the connection is back).
+function connLost(on){
+  const g = $('game'), area = $('tableArea');
+  let el = $('connLost');
+  if(on && !el){ el = document.createElement('div'); el.id = 'connLost'; el.className = 'connlost'; el.setAttribute('role', 'alert'); el.innerHTML = '<b>Connection lost</b><span>Reconnecting…</span>'; area.appendChild(el); }
+  g.classList.toggle('conn-lost', !!on);
+  if(el) el.hidden = !on;
+}
 
 const signOut = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
 function onClub(c){
@@ -2700,6 +2768,7 @@ function renderTable(){
   area.style.setProperty('--cw', Math.max(30, Math.min(46, area.clientWidth * .1)) + 'px');
   const res = d.result, winCards = new Set((res && res.showdown ? res.winCards : []).map(cs));
   const handKey = d.tid + ':' + d.handNo;
+  area.dataset.state = handKey + ':' + d.seq;   // which state the table shows (table, hand, turn), for checking it is the live one
   // the whole live pot: what's in the middle plus this street's bets still in front of the seats (the coach's pot
   // odds count the same total; when the bets are swept in they leave the seats as they join d.pot, so nothing counts twice)
   const potAll = (d.pot || 0) + d.seats.reduce((t, p) => t + (p && p.inHand ? p.bet || 0 : 0), 0);
@@ -2926,9 +2995,10 @@ function renderControls(d, mySeat, mine){
 // back so the action can be sent again; the server takes only the first action for a turn.
 // Disconnects (Issue #34): while the connection is down the tap waits in the outbox (one action per turn; a newer tap
 // replaces it) and the controls say so, never "sending…". After the reconnect, once the fresh table state is in, it is
-// sent only if that state is still the same hand, the same seq and this player's turn; otherwise it is dropped quietly
-// and the controls show the new state. An action sent just before the connection fell goes back to the outbox: the
-// server takes an act only for the current hand and seq, so sending it again can never count twice.
+// sent only if that state is still the same hand, the same seq and this player's turn; otherwise it is dropped, a short
+// notice says so at that moment ("Call wasn't sent — the hand moved on."), and the controls show the new state. An
+// action sent just before the connection fell (or found dead by the watchdog) goes back to the outbox: the server takes
+// an act only for the current hand and seq, so sending it again can never count twice.
 let actLockTimer = 0, live = false, outbox = null;   // outbox: this turn's action { key, tid, a, sent } until the server's state moves on
 const actWords = a => ({ fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' }[a.t] || '') + (a.t === 'raise' ? ' to ' + fmt(a.to) : '');
 function sendAction(d, a){
@@ -2953,7 +3023,7 @@ function sendAction(d, a){
   if(d.tid === 'demo' && demo){ if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){} $('controls').innerHTML = '<div class="info-line">…</div>'; return demo.answer(a); }
   $('controls').innerHTML = `<div class="info-line">${actWords(a)} · sending…</div>`;
   if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){}
-  outbox = { key, tid: d.tid, a, sent: true };
+  outbox = { key, tid: d.tid, a, sent: true, at: Date.now() };
   send({ t: 'act', tid: d.tid, hand: d.handNo, seq: d.seq, a });
 }
 // the action buttons stay live while an action waits (a newer tap replaces it); the line over them says what waits
@@ -2967,6 +3037,12 @@ function queuedNote(d){
   const row = $('controls').querySelector('.turnrow');
   if(row) row.outerHTML = `<div class="info-line">Reconnecting… ${actWords(outbox.a)} will be sent when you're back.</div>`;
   if(BOARD && row) $('helper').hidden = true;   // (the board's top band shows one line: this one, not the hand helper)
+}
+// a waiting action the fresh state no longer fits (the hand moved on while the connection was down): it is dropped,
+// and the player is told at that moment, so a tap never just vanishes
+function outboxDrop(){
+  const o = outbox; outbox = null;
+  if(o && !o.sent) toast(`${actWords(o.a)} wasn't sent — the hand moved on.`, 4000);
 }
 // the "Reconnecting…" pill says the same, so it shows wherever the controls are
 const offlineNote = () => { $('offline').textContent = outbox && !outbox.sent ? `Reconnecting… ${actWords(outbox.a)} will be sent when you're back.` : 'Reconnecting…'; };
@@ -2982,7 +3058,10 @@ function outboxDown(){
 // outbox empties; still this turn, back online and not yet sent → it goes now
 function outboxCheck(d){
   if(!outbox || outbox.tid !== d.tid) return;
-  if(d.tid + ':' + d.handNo + ':' + d.seq !== outbox.key || d.actUid !== club.me.id || !d.legal || d.phase !== 'hand'){ outbox = null; return; }
+  if(d.tid + ':' + d.handNo + ':' + d.seq !== outbox.key || d.actUid !== club.me.id || !d.legal || d.phase !== 'hand'){
+    if(outbox.sent && outbox.at && actRtts.length < 20) actRtts.push(Date.now() - outbox.at);
+    return outboxDrop();
+  }
   if(!outbox.sent && live) sendAction(d, outbox.a);
 }
 // the action clock, plus the extra-time button: 3 cards a tournament (5 more at the final table), +30 seconds each
@@ -3490,9 +3569,9 @@ function celebrate(){
 
 
 const on2 = (id, f) => { const el = $(id); if(el) el.onclick = f; };
-function toast(text){
+function toast(text, ms){
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = text;
-  document.body.appendChild(t); setTimeout(() => t.remove(), 2600);
+  document.body.appendChild(t); setTimeout(() => t.remove(), ms || 2600);
 }
 
 // ---------- fair deal ----------
