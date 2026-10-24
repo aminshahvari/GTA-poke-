@@ -3042,7 +3042,7 @@ function queuedNote(d){
 // and the player is told at that moment, so a tap never just vanishes
 function outboxDrop(){
   const o = outbox; outbox = null;
-  if(o && !o.sent) toast(`${actWords(o.a)} wasn't sent — the hand moved on.`, 4000);
+  if(o && !o.sent) toast(`${actWords(o.a)} wasn't sent — the hand moved on.`, 4000, true);
 }
 // the "Reconnecting…" pill says the same, so it shows wherever the controls are
 const offlineNote = () => { $('offline').textContent = outbox && !outbox.sent ? `Reconnecting… ${actWords(outbox.a)} will be sent when you're back.` : 'Reconnecting…'; };
@@ -3569,8 +3569,11 @@ function celebrate(){
 
 
 const on2 = (id, f) => { const el = $(id); if(el) el.onclick = f; };
-function toast(text, ms){
+function toast(text, ms, onTable){
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = text;
+  // (about the table, while it shows: on the felt's open middle, below the board, above your own cards)
+  const area = onTable && !$('game').hidden && $('tableArea').getBoundingClientRect();
+  if(area && area.height){ t.classList.add('on-table'); t.style.top = Math.round(area.top + area.height * .62) + 'px'; }
   document.body.appendChild(t); setTimeout(() => t.remove(), ms || 2600);
 }
 
