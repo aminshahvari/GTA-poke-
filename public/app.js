@@ -1988,6 +1988,9 @@ function boardGeo(n, empty = [], watch = false){
     if(land && (py + C.ph + pill > H - 8 || (short && Math.abs(q.nx) > .5 && fits(out)))){ const d = fits(out) ? out : -out;
       pwx = Math.floor(room(d)); if(pwx >= C.pw) pwx = 0; half = (pwx || C.pw) / 2;
       pl = d < 0 ? 'l' : 'r'; sx = 0; px = x + d * (AV / 2 + 4 + half); py = y - C.ph / 2; }
+    // (a plate beside its avatar low on the table: where its status line would go below the area, it stands over the
+    // plate instead, so the seat stays whole inside the area: Issue #32 item 12)
+    const stUp = !!pl && py + C.ph + pill > H - 2;
     // the cards: behind the avatar, peeking out at its top on the outer side (inside the screen)
     // (the two backs as drawn, fanned: about 2.3 card widths across and 1.56 tall, centred on hx)
     // (a seat on the upper curve: its cards beside the avatar on the outer side, so they don't rise towards the top row)
@@ -2005,7 +2008,7 @@ function boardGeo(n, empty = [], watch = false){
     // (upright, a seat along the top: its cards face up come down just enough to stay 2 px inside the area, on their own)
     const hys = !land && !beside && q.ny < -.8 && S.shownT != null ? Math.max(0, Math.round(2 - (y + S.shownT))) : null;
     return { x, y, nx: q.nx, ny: q.ny, side: sgn < 0 ? 'l' : 'r', pl, pwx, sx: Math.round(sx), hx: Math.round(hx - ox), hy: cy0, hys, core: [px, py + C.ph / 2, half, C.ph / 2],
-      boxes: [[x, y, AV / 2, AV / 2], [px, py + (C.ph + pill) / 2, half, (C.ph + pill) / 2], [x + Math.round(hx - ox) + ox, y + cy0 + oy, gw / 2, ch / 2]] };
+      stUp, boxes: [[x, y, AV / 2, AV / 2], [px, py + (C.ph + pill) / 2 - (stUp ? pill : 0), half, (C.ph + pill) / 2], [x + Math.round(hx - ox) + ox, y + cy0 + oy, gw / 2, ch / 2]] };
   };
   const seats = [null];
   const qs = [null];
@@ -2034,6 +2037,16 @@ function boardGeo(n, empty = [], watch = false){
   const hgap = Math.round(hw * .16 + 4), hpx = hside ? Math.round(cx - (hpw + hgap + 2 * hw) / 2 + hpw / 2) : cx, hcx = hside ? hpx + hpw / 2 + hgap + hw : cx, hcBot = hside ? hpTop + heroPh - R - 2 : hpTop - 1;
   seats[0] = { x: hpx, y: hpTop + heroPh / 2, nx: 0, ny: 1, hero: true, hw, hpw, hside,
     boxes: [[hcx, hcBot - hh / 2 - hw * .05, hw + 4, hh / 2 + hw * .05], [hpx, hpTop + heroPh / 2, hpw / 2, heroPh / 2]] };
+  // (watching, nobody here is you: the seat at the foot is a seat like the others, on the rail at the bottom, no hero
+  // slot. It rises just enough that its avatar, its plate and its status line stay inside the table area (sideways it
+  // sits as low as the area allows, its plate beside it, where your plate was, so the middle keeps its size), so the line
+  // under the table ("You finished 16th. Watching Table 2.") has its own room: before, the foot seat took your plate's
+  // place and its plate hung below the area, over that line (owner, Issue #32 items 12 and 13))
+  if(watch){
+    const q = ring.at(0), lowest = H - 2 - Math.max(AV / 2, land ? 0 : plateY + C.ph + pill);
+    seats[0] = seatAt({ ...q, x: cx, nx: 0, ny: 1, y: land ? lowest : Math.min(q.y, lowest) }, 0);
+    if(empty.includes(0)){ const a = [seats[0].x, seats[0].y, AV / 2, AV / 2]; seats[0] = { ...seats[0], core: a, boxes: [a, a, a] }; }
+  }
   // ---- the middle (§3.4): the pot over the board, the winner line under it; and the chips and the dealer button
   // (§3.3) on one ring, 78% of the felt, in front of each seat. The first place for the middle (the board's size, a
   // little higher or lower) where nothing touches a seat and every seat's chips and button find a clean spot wins. ----
@@ -2064,7 +2077,7 @@ function boardGeo(n, empty = [], watch = false){
   // (the seats take their spots one by one, round the table; where that leaves one without a clean spot at the middle's
   // chosen place, the other way round, and the side seats first, are tried too, and the order with the least miss kept)
   // (an empty seat has no chips and no button to place: it is left out, and given a spot on the 70% ring at the end)
-  const ORDERS = [Array.from({ length: m }, (_, i) => i + 1).filter(i => !empty.includes(i))];
+  const ORDERS = [Array.from({ length: m + 1 }, (_, i) => i).filter(i => (i || watch) && !empty.includes(i))];
   ORDERS.push([...ORDERS[0]].reverse(), [...ORDERS[0]].sort((a, b) => Math.abs(seats[b].nx) - Math.abs(seats[a].nx)));
   // (`bound`: the miss the caller already has in hand. A try that reaches it can't be chosen, so it stops there, and its
   // miss, at least the bound, says so: the same layout as trying it to the end, found in a fraction of the time)
@@ -2137,10 +2150,12 @@ function boardGeo(n, empty = [], watch = false){
       miss += 25; return [...onRing(q.x, q.y, rings[0])];
     };
     // your chips: just over your cards, to the right; your button: left of your cards
+    if(!watch){
     let p = null; for(const dx of [0, 24, -24, 48, -48]){ const x = hcx + hw * .6 + bW / 2 + dx, y = hcBot - hh - bH / 2 - 4; if(clear(x, y, bW / 2, bH / 2, 0)){ p = [x, y]; break; } }
     if(!p) miss++;
     bets[0] = p || [hcx, hcBot - hh - bH / 2 - 4]; placed.push([...bets[0], bW / 2, bH / 2]);
     dealers[0] = hside ? [hpx - hpw / 2 - DB - 6, hpTop + heroPh / 2] : [cx - hw - DB - 6, hcBot - hh * .35]; placed.push([...dealers[0], DB, DB]);
+    }
     if(miss >= bound) return { bets, dealers, miss };
     for(const i of order){ bets[i] = spot(seats[i], i, bW / 2, bH / 2, [.78, .7, .86, .62, .5, .4]); placed.push([...bets[i], bW / 2, bH / 2]); if(miss >= bound) return { bets, dealers, miss }; }
     for(const i of order){ dealers[i] = spot(seats[i], i, DB, DB, [.9, .84, .7, .62, .5]); placed.push([...dealers[i], DB, DB]); if(miss >= bound) return { bets, dealers, miss }; }
@@ -2193,7 +2208,7 @@ function boardGeo(n, empty = [], watch = false){
   // (the status line under a plate, where a seat's last action now shows (Issue #32 item 7): where its middle would lie
   // under someone's chips or a D, it slides along under its plate, at most to the plate's ends, to a clean place)
   const chipBoxes = chipsAt(-1);
-  for(let k = 1; k <= m; k++){ const q = seats[k]; if(!q || q.pl || empty.includes(k)) continue;
+  for(let k = watch ? 0 : 1; k <= m; k++){ const q = seats[k]; if(!q || q.hero || q.pl || empty.includes(k)) continue;
     const half = C.pw / 2, pyl = q.core[1] + C.ph / 2 + 10, px0 = q.core[0];
     for(const dx of [0, -4, 4, -8, 8, -12, 12, -16, 16, -20, 20, -24, 24]){ if(Math.abs(dx) > half - 16) continue; if(!hitAny([px0 + dx, pyl, 20, 8], chipBoxes, 0)){ seats[k] = { ...q, stx: dx }; break; } } }
   const WMW = 48, WMH = 7, mBot = mid.by + mid.bh / 2 + 6 + mh, rowTop = mid.by - mid.bh / 2 - 6 - potH;
@@ -2243,7 +2258,7 @@ function boardSeatHTML(d, p, s, o){
   const status = dc ? '<span class="badge b-st dc" title="Disconnected · protection time">Disconnected</span>'
     : word && (won || !away) ? `<span class="badge b-st b-act ${wcls}" data-act="${esc(word)}">${esc(word)}</span>` : away ? '<span class="badge b-st away">Away</span>' : '';
   const label = `${p.name}, ${stackTxt === 'All-in' ? 'all-in' : stackTxt + ' chips'}${dc ? ', disconnected' : away ? ', away' : ''}${word ? ', ' + word : ''}${acting ? ', to act' : ''}`;
-  const cls = `seat b-seat ${isMe ? 'hero' : ''} ${isMe && oq.hside ? 'hside' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${won ? 'win' : ''} ${p.allIn && !res ? 'allin' : ''} ${oq.pl ? 'pl-' + oq.pl : ''}`;
+  const cls = `seat b-seat ${isMe ? 'hero' : ''} ${isMe && oq.hside ? 'hside' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${won ? 'win' : ''} ${p.allIn && !res ? 'allin' : ''} ${oq.pl ? 'pl-' + oq.pl : ''}${oq.stUp ? ' st-up' : ''}`;
   const nm = `<div class="nm" title="${esc(p.name)}">${esc(isMe ? 'You' : nick(p.name))}</div>`;
   const st = `<div class="st num${stackTxt === 'All-in' ? ' allin' : ''}">${stackTxt}</div>`;
   const shot = acting ? `<div class="shot"><i class="shotBar${dc ? ' dc' : ''}"></i></div>` : '';
@@ -2262,7 +2277,7 @@ function layoutOf(d){
   const mySeat = d.seats.findIndex(p => p && club && p.uid === club.me.id), base = Math.max(0, allowed.indexOf(mySeat));
   const rel = s => (allowed.indexOf(s) - base + n) % n;
   // (the board's layout knows which seats are empty, by their place round the table)
-  const G = BOARD ? boardGeo(n, allowed.filter(s => !d.seats[s]).map(rel).filter(Boolean).sort((x, y) => x - y), mySeat < 0) : tableGeo(n, bet);
+  const G = BOARD ? boardGeo(n, allowed.filter(s => !d.seats[s]).map(rel).filter(k => k || mySeat < 0).sort((x, y) => x - y), mySeat < 0) : tableGeo(n, bet);
   return { allowed, rel, G, posOf: s => pxToPct([G.seats[rel(s)].x, G.seats[rel(s)].y]), betOf: s => G.betAt(rel(s)), dealerOf: s => G.dealerAt(rel(s)) };
 }
 const centerPx = () => GEO ? [GEO.bx, GEO.by] : pctToPx([50, 45]);
@@ -2907,6 +2922,8 @@ function renderTable(){
   renderHelper(d, mySeat >= 0 ? d.seats[mySeat] : null, mine);
   // last hand's coach tip floats over the table; it gets out of the way when it's your turn to act
   if(d.actUid === club.me.id && !d.result && !$('coachTip').hidden){ $('coachTip').hidden = true; clearTimeout(tipTimer); }
+  // (the board: a tip that came while it was your turn waits for your turn to end; Issue #32 item 14)
+  else if(BOARD && tipWait && !(d.actUid === club.me.id && !d.result)){ const w = tipWait; tipWait = null; showTip(...w); }
   renderPlayNote(d);
   tickClock();
 }
@@ -3795,13 +3812,32 @@ function onCoach(h){
   if(h.weakFold){ weakStreak++; if(weakStreak % 5 === 0) showTip('good', 'Patience', `You've folded ${weakStreak} weak hands in a row. Waiting for good spots is exactly what pros do.`); }
   else if(h.played) weakStreak = 0;
 }
+// The board (Issue #32 item 14, owner): a coach tip never covers your cards, the board, the pot or the action buttons.
+// It is a slim one-line banner in the dock's own band, where the helper's line and the "Free social play" notice
+// stand (the dock's height is kept for them, so it sits over no seat, card, chip or button). One line: its title and
+// the start of its text; a tap opens the whole tip in the band, a second tap puts it away; it goes by itself after 6 s
+// (8 s for a mindset tip), or as soon as it is your turn. A tip that comes while it is your turn waits until your
+// turn is over: nothing new appears while you decide.
+let tipWait = null;
 function showTip(kind, title, text){
   const el = $('coachTip'); clearTimeout(tipTimer);
+  if(BOARD){
+    const d = tables.get(watchTid || (club && club.myTable));
+    if(d && d.actUid === club.me.id && !d.result){ tipWait = [kind, title, text]; return; }
+    el.className = 'coachtip b-tip ' + kind; el.hidden = false; el.setAttribute('role', 'status');
+    el.setAttribute('aria-label', `Coach: ${title}. ${text}`);
+    el.innerHTML = `<span class="ct-ic" aria-hidden="true">${NOTE_ICON[kind] || '💡'}</span><span class="ct-tx"><b>${esc(title)}</b> <span>${esc(text)}</span></span>`;
+    tipTimer = setTimeout(() => { el.hidden = true; }, kind === 'mind' ? 8000 : 6000);
+    return;
+  }
   el.className = 'coachtip ' + kind; el.hidden = false;
   el.innerHTML = `<span class="ct-ic">${NOTE_ICON[kind] || '💡'}</span><div><b>${esc(title)}</b><p>${esc(text)}</p></div><button aria-label="Close">×</button>`;
   tipTimer = setTimeout(() => { el.hidden = true; }, kind === 'mind' ? 14000 : 10000);
 }
-$('coachTip').onclick = () => { $('coachTip').hidden = true; clearTimeout(tipTimer); };
+$('coachTip').onclick = () => { const el = $('coachTip');
+  // (the board: the first tap opens the whole tip, for a little longer; the second puts it away)
+  if(BOARD && !el.classList.contains('open')){ el.classList.add('open'); clearTimeout(tipTimer); tipTimer = setTimeout(() => { el.hidden = true; }, 10000); return; }
+  el.hidden = true; clearTimeout(tipTimer); };
 // the coach's tips show in the bar under the table (where the helper and the action buttons are), never over the
 // cards and seats; a tip is put away when it's your turn
 $('dock').appendChild($('coachTip'));

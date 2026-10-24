@@ -12,6 +12,12 @@
 //     seat (a dead button), the first hand after an elimination and after a move to another seat, and watching
 // 11. "N watching" in the collapsed top bar, one line, whole, at 320-390 upright and the short phones sideways, the same
 //     count as the details sheet, and live: a new count is shown when it changes
+// 12. finished and watching (you are not at this table): every seat, its cards, plate and status line, stays inside the
+//     table area and clear of the line under the table ("You finished 16th. Watching Table 2."), 9-, 7- and 6-handed,
+//     upright and sideways
+// 13. watching, no seat is drawn as yours: no hero slot or hero cards, no "You", every seat drawn alike
+// 14. a coach tip never covers your cards, the board, the pot or the action buttons: a one-line banner in the dock's
+//     band, gone by itself in a few seconds, opened by a tap; one that comes on your turn waits until your turn is over
 // PLAYWRIGHT=/path/to/playwright-core CHROMIUM=/path/to/chromium node test/ui/t_board_fixes.js   SHOTS=<dir> screenshots
 const { spawn } = require('child_process');
 const fs = require('fs'), path = require('path');
@@ -43,7 +49,7 @@ function tableOf(me, { allowed = spread(9), gone = [], mine = 0, btn = 6, kind =
     t.result = { lines: [name(4) + ' wins 4,200 with a Straight'], winCards: ['Ah', 'Kd', 'Ts', 'Jh', 'Qc'], showdown: true }; }
   return t;
 }
-async function page(browser, TOK, w, h, { rootFont = 0 } = {}){
+async function page(browser, TOK, w, h, { rootFont = 0, out = false } = {}){
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const pg = await ctx.newPage();
   await pg.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
@@ -56,14 +62,17 @@ async function page(browser, TOK, w, h, { rootFont = 0 } = {}){
       if(j.t === 'table' || j.t === 'closed') return;
       if(j.t === 'club' && sock === 'table'){ me = j.club.me; j.club.tourney = { ...j.club.tourney, status: 'running', name: 'Friday Night', stack: 30000, anteMode: 'bb', regs: [me.id], level: 2, levelEndsAt: Date.now() + 600000, paused: false, places: [], lateOpen: false, helper: true,
           id: 'tbfx', entrants: 48, remaining: 32, sponsor: { uid: 'u00000000005a', name: 'Aurora Test Roasters', categoryLabel: 'Food & drink', area: 'Toronto', logoV: null }, sponsorSec: 1, prize: 'Coffee for a month' };
-        j.club.myTable = 'bfx'; j.club.tables = [{ tid: 'bfx', n: 1, players: 9 }]; sock = ws; }
+        if(out) j.club.tourney.places = [{ uid: me.id, name: me.name, place: 16 }];
+        j.club.myTable = out ? null : 'bfx'; j.club.tables = [{ tid: 'bfx', n: 1, players: 9 }]; sock = ws; }
       ws.send(JSON.stringify(j)); });
   });
   await pg.goto(BASE + '/'); await pg.evaluate(t => localStorage.setItem('stacked:token', JSON.stringify(t)), TOK);
   sock = 'table'; await pg.reload();
   for(let k = 0; k < 100 && (!sock || sock === 'table'); k++) await sleep(100);
+  // (finished: open the table from the lobby's list, as a member watching it)
+  if(out){ await pg.waitForSelector('[data-watch="bfx"]', { timeout: 8000 }); await pg.click('[data-watch="bfx"]'); }
   const send = (t, field = FIELD, you = { hand: t.handNo, cards: ['Ah', 'Qd'] }) => sock.send(JSON.stringify({ t: 'table', table: t, you: t.seats.some(p => p && p.uid === me.id) ? you : null, field }));
-  return { ctx, pg, me, send };
+  return { ctx, pg, me, send, coach: note => sock.send(JSON.stringify({ t: 'coach', hand: { no: 2, net: -4000, bb: 200, cards: ['9c', '4d'], weakFold: false, played: true, notes: [note] } })) };
 }
 const settle = async pg => { await pg.waitForFunction(() => document.getElementById('spn').hidden, null, { timeout: 8000 }).catch(() => {}); await sleep(700); };
 
@@ -232,6 +241,92 @@ async function watching(browser, TOK){
   }
 }
 
+// ---------- 12 and 13: finished, watching another table ----------
+async function finished(browser, TOK){
+  for(const [w, h] of [[390, 844], [320, 568], [430, 932], [844, 390], [667, 375], [568, 320]]) for(const k of [9, 7, 6]){
+    const { ctx, pg, me, send } = await page(browser, TOK, w, h, { out: true }), tag = `${w}x${h} ${k}-handed`;
+    const allowed = spread(k), t = tableOf(me, { mine: -1, btn: allowed[1], kind: 'flop' });
+    // (the flop's actions, on the seats this table has)
+    t.seats = t.seats.map((p, s) => allowed.includes(s) ? p : null); t.allowed = allowed; t.size = k;
+    t.n = 2; t.acting = allowed[2]; t.actUid = 'p' + allowed[2];
+    send(t); await settle(pg);
+    const m = await pg.evaluate(() => {
+      const R = e => e.getBoundingClientRect(), A = R(document.getElementById('tableArea')), il = document.querySelector('#controls .info-line'), I = il && R(il);
+      const hit = (a, b) => a.left < b.right - .5 && b.left < a.right - .5 && a.top < b.bottom - .5 && b.top < a.bottom - .5;
+      const out = [], over = [];
+      for(const s of document.querySelectorAll('#seats .seat')){
+        for(const e of s.querySelectorAll('.av, .plate, .badge, .hole .card, .b-dot')){ const r = R(e); if(!r.width) continue;
+          const nm = (s.querySelector('.nm') || {}).textContent + ' ' + e.className.split(' ')[0];
+          if(r.left < A.left - .5 || r.right > A.right + .5 || r.top < A.top - .5 || r.bottom > A.bottom + .5) out.push(`${nm} ${Math.round(r.top)}-${Math.round(r.bottom)} (area ${Math.round(A.top)}-${Math.round(A.bottom)})`);
+          if(I && hit(r, I)) over.push(nm); }
+      }
+      const seats = [...document.querySelectorAll('#seats .seat')];
+      return { line: il ? il.textContent : '', lineSeen: !!I && (e => e && il.contains(e))(document.elementFromPoint((I.left + I.right) / 2, (I.top + I.bottom) / 2)), out, over,
+        hero: document.querySelectorAll('#seats .hero, #seats .card.hero, #seats .hside').length, you: seats.filter(s => /^(You|Me)$/.test((s.querySelector('.nm') || {}).textContent)).length,
+        alike: seats.every(s => s.querySelector(':scope > .av.b-av') && s.querySelector(':scope > .plate') && !s.querySelector('.plate .av')),
+        avs: [...new Set(seats.map(s => Math.round(R(s.querySelector('.av')).width)))], cards: [...new Set([...document.querySelectorAll('#seats .hole .card')].map(c => Math.round(R(c).width)))], n: seats.length };
+    });
+    check(/You finished 16th\. Watching Table 2\./.test(m.line) && m.lineSeen, `${tag}: the line under the table reads "${m.line}" and nothing is over it`);
+    check(m.n === k && !m.out.length && !m.over.length, `${tag}: all ${m.n} seats, their cards, plates and status lines inside the table area and clear of that line${m.out.length ? ': out ' + m.out.join('; ') : ''}${m.over.length ? ': over the line ' + m.over.join('; ') : ''}`);
+    check(!m.hero && !m.you && m.alike && m.avs.length === 1 && m.cards.length <= 1, `${tag}: no seat drawn as yours (hero marks ${m.hero}, "You" ${m.you}, every seat alike ${m.alike}, avatar sizes ${m.avs}, card sizes ${m.cards})`);
+    if(SHOTS && (w === 390 || w === 844)) await pg.screenshot({ path: path.join(SHOTS, `fix12-watch-${k}max-${w}x${h}.png`) });
+    await ctx.close();
+  }
+}
+
+// ---------- 14: the coach's tip ----------
+async function coachTip(browser, TOK){
+  const TILT = { kind: 'mind', title: 'Tilt check', text: "Last hand you lost a big pot, and right after that: you called a big bet with a weak hand. That's how tilt starts: a loss pushes you into a play you'd normally skip. Pros let the last hand go." };
+  const LIMP = { kind: 'mistake', title: 'Limped in', text: 'You just called the big blind before the flop. Never just call the big blind. Raise or fold.' };
+  for(const [w, h] of [[320, 568], [375, 667], [390, 844], [430, 932], [844, 390], [667, 375], [568, 320]]){
+    const { ctx, pg, me, send, coach } = await page(browser, TOK, w, h), tag = `${w}x${h}`;
+    const turn = { ...tableOf(me, { kind: 'flop' }), acting: 0, actUid: me.id, legal: { canCheck: false, toCall: 600, canRaise: true, minTo: 1200, maxTo: 30000, isBet: false, cur: 600, pot: 3000, bb: 200 }, seq: 40 };
+    const look = () => pg.evaluate(() => {
+      const R = e => e.getBoundingClientRect(), tip = document.getElementById('coachTip'), vis = tip && !tip.hidden && R(tip).height > 0;
+      const hit = (a, b) => a.left < b.right - .5 && b.left < a.right - .5 && a.top < b.bottom - .5 && b.top < a.bottom - .5;
+      const parts = { 'your cards': [...document.querySelectorAll('#seats .seat.hero .hole .card')], board: [...document.querySelectorAll('#board .card, #board > *')], pot: [...document.querySelectorAll('#pot, .pot')].filter(e => R(e).width),
+        'action buttons': [...document.querySelectorAll('#controls button')].filter(e => R(e).width) };
+      const T = vis && R(tip), W = document.documentElement.clientWidth, dock = R(document.getElementById('dock'));
+      const covered = !T ? [] : Object.entries(parts).filter(([k, es]) => es.some(e => hit(R(e), T))).map(([k]) => k);
+      // (each still seen: the point at its middle is itself)
+      const hidden = Object.entries(parts).filter(([k, es]) => es.some(e => { const r = R(e); const x = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2); return x && !e.contains(x) && !x.contains(e) && tip.contains(x); })).map(([k]) => k);
+      const tx = tip && tip.querySelector('.ct-tx'), lh = tx && parseFloat(getComputedStyle(tx).lineHeight);
+      return { vis, covered, hidden, n: Object.fromEntries(Object.entries(parts).map(([k, es]) => [k, es.length])), inDock: !T || (T.top >= dock.top - .5 && T.bottom <= dock.bottom + .5), inW: !T || (T.left >= 0 && T.right <= W),
+        oneLine: !tx || R(tx).height <= (lh || 18) * 1.4, h: T ? Math.round(T.height) : 0, text: tip ? tip.textContent : '', open: tip && tip.classList.contains('open'), x: !!(tip && tip.querySelector('button')) };
+    });
+    // a tip between turns (the "Limped in" note after a hand): one line in the dock, over none of the table
+    send({ ...tableOf(me, { kind: 'flop' }), seq: 30 }); await settle(pg);
+    await coach(LIMP); await sleep(500);
+    const a = await look();
+    check(a.vis && !a.covered.length && !a.hidden.length && a.inDock && a.inW && a.oneLine && !a.x, `${tag}: "Limped in" shows as one line in the dock (${a.h}px), over none of your cards, the board, the pot or the buttons${a.covered.length ? ': covers ' + a.covered : ''}, no ✕ to find`);
+    if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `fix14-limped-${tag}.png`) });
+    // a tap opens it, in the band; it goes by itself
+    await pg.click('#coachTip'); await sleep(300);
+    const b = await look();
+    check(b.vis && b.open && !b.covered.length && b.inDock, `${tag}: a tap opens the whole tip, still in the dock`);
+    if(SHOTS && w === 390) await pg.screenshot({ path: path.join(SHOTS, `fix14-limped-open-${tag}.png`) });
+    await pg.click('#coachTip'); await sleep(200);
+    check(!(await look()).vis, `${tag}: a second tap puts it away`);
+    // "Tilt check" coming on your turn: nothing appears while you decide; it shows once your turn is over
+    send(turn); await sleep(700);
+    await coach(TILT); await sleep(500);
+    const c = await look();
+    check(!c.vis && c.n['your cards'] === 2 && c.n['action buttons'] >= 2 && !c.hidden.length, `${tag}: "Tilt check" on your turn waits: your cards, the board, the pot and the ${c.n['action buttons']} buttons all in view`);
+    if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `fix14-tilt-on-turn-${tag}.png`) });
+    send({ ...tableOf(me, { kind: 'flop' }), acting: 2, actUid: 'p2', seq: 41 }); await sleep(700);
+    const d = await look();
+    check(d.vis && /Tilt check/.test(d.text) && !d.covered.length && d.inDock && d.oneLine, `${tag}: after your turn the waiting tip shows, one line in the dock`);
+    if(SHOTS) await pg.screenshot({ path: path.join(SHOTS, `fix14-tilt-after-${tag}.png`) });
+    // your turn comes while it shows: it goes at once
+    send({ ...turn, seq: 42 }); await sleep(500);
+    check(!(await look()).vis, `${tag}: your turn puts a showing tip away`);
+    // it goes by itself (a mistake tip after 6 s)
+    send({ ...tableOf(me, { kind: 'flop' }), seq: 43 }); await sleep(300); await coach(LIMP); await sleep(6500);
+    check(!(await look()).vis, `${tag}: a tip goes by itself within 6.5 s`);
+    await ctx.close();
+  }
+}
+
 (async () => {
   for(let i = 0; i < 60; i++){ try{ await fetch(BASE + '/health'); break; }catch(e){ await sleep(150); } }
   await sleep(400);
@@ -244,6 +339,8 @@ async function watching(browser, TOK){
   if(run('9')) await wordmark(browser, TOK);
   if(run('10')) await dealer(browser, TOK);
   if(run('11')) await watching(browser, TOK);
+  if(run('12') || run('13')) await finished(browser, TOK);
+  if(run('14')) await coachTip(browser, TOK);
   await browser.close();
   console.log(`\n${oks} ok, ${fails.length} failed`);
   srv.kill(); fs.rmSync(DATA, { force: true });

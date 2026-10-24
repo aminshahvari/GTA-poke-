@@ -202,6 +202,8 @@
 [data-ui="board"] #game #seats .seat.b-seat .badge.b-st.b-act.won{background:var(--b-gold);color:var(--b-raise-label);box-shadow:none}
 [data-ui="board"] #game #seats .seat.b-seat.pl-l .badge.b-st{top:calc(var(--ph) / 2 + 2px);transform:translateX(calc(-50% - var(--av) / 2 - 4px - var(--pw) / 2))}
 [data-ui="board"] #game #seats .seat.b-seat.pl-r .badge.b-st{top:calc(var(--ph) / 2 + 2px);transform:translateX(calc(-50% + var(--av) / 2 + 4px + var(--pw) / 2))}
+/* a plate beside its avatar low on the table: its status line over the plate, inside the area (Issue #32 item 12) */
+[data-ui="board"] #game #seats .seat.b-seat.st-up .badge.b-st{top:calc(var(--ph) / -2 - 18px)}
 /* the two cards, tucked behind the avatar at its top, on the outer side (--hx); face up at a showdown */
 [data-ui="board"] #game #seats .seat.b-seat:not(.hero)>.hole{position:absolute;left:calc(var(--hx,0px) - var(--cwb) * 1.15);top:calc(var(--av) / -2 + 8px - var(--cwb) * 1.4 + var(--hy,0px));bottom:auto;right:auto;
   transform:none;margin:0;width:auto;min-height:0;display:flex;z-index:1}
@@ -245,7 +247,7 @@
 [data-ui="board"] #game[data-bcls="P-S"]{--bd-pad:6px; --bd-band:44px; --bd-gap:6px; --bd-row:52px}
 [data-ui="board"] #game[data-bcls="P-S"] .dock #helper.b-info{font-size:12px;line-height:14px}
 /* the info line's place: the hand helper; else the table's news (whose turn, the result) over the free-play line */
-[data-ui="board"] #game .dock :is(#helper,.info-line,#playLine,#playNote){position:absolute;left:12px;right:12px;top:var(--bd-pad);margin:0;box-sizing:border-box;text-align:center;background:none;border:0;border-radius:0;box-shadow:none}
+[data-ui="board"] #game .dock :is(#helper,.info-line,#playLine,#playNote,#coachTip){position:absolute;left:12px;right:12px;top:var(--bd-pad);margin:0;box-sizing:border-box;text-align:center;background:none;border:0;border-radius:0;box-shadow:none}
 [data-ui="board"] #game .dock #helper.b-info{height:var(--bd-band);display:flex;align-items:center;justify-content:center;flex-wrap:wrap;align-content:center;column-gap:5px;padding:0 4px;
   font-size:var(--b-t-13);font-weight:500;line-height:15px;color:var(--b-text-2);cursor:default;overflow:hidden}
 [data-ui="board"] #game .dock #helper.b-info[hidden]{display:none}
@@ -269,7 +271,7 @@
 [data-ui="board"] #game .dock .info-line b{color:var(--b-text);font-weight:600}
 [data-ui="board"] #game .dock .info-line .btn{min-height:40px}
 [data-ui="board"] #game .dock #playLine{top:calc(var(--bd-pad) + var(--bd-band) - 15px);height:15px;padding:0;font-size:11px;line-height:15px;color:var(--b-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:1}
-[data-ui="board"] #game .dock:has(#helper:not([hidden])) :is(.info-line:not(#controls>:only-child),#playLine),[data-ui="board"] #game .dock:has(.sizing) :is(#helper,.info-line,#playLine,#playNote){display:none}
+[data-ui="board"] #game .dock:has(#helper:not([hidden])) :is(.info-line:not(#controls>:only-child),#playLine),[data-ui="board"] #game .dock:has(.sizing) :is(#helper,.info-line,#playLine,#playNote,#coachTip){display:none}
 /* the free-play notice at the start of a game (§3.4): on the info line, one line (two at most), over the helper for its
    four seconds or until your first action (app.js placePlayNote); no box, no × */
 [data-ui="board"] #game .dock #playNote{z-index:3;height:var(--bd-band);flex-direction:row;flex-wrap:wrap;align-content:center;column-gap:.4em;padding:0 4px;background:var(--b-bg);font-size:var(--b-t-13);font-weight:500;line-height:1.3}
@@ -285,7 +287,7 @@
 [data-ui="board"] #game .dock .turnrow .xtime small{font-size:10px;font-weight:500;color:var(--b-text-2)}
 [data-ui="board"] #game .dock .turnrow .xtime:disabled{display:none}
 [data-ui="board"] #game .dock .turnrow .xtime::after{display:none}
-[data-ui="board"] #game .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote){right:80px}
+[data-ui="board"] #game .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote,#coachTip){right:80px}
 [data-ui="board"] #game .dock .turnrow .turnbar{position:absolute;left:0;right:0;top:calc(var(--bd-band) + var(--bd-gap) / 2 - 1px);height:2px;margin:0;border-radius:1px;background:none;opacity:0;transition:opacity .2s}
 [data-ui="board"] #game .dock .turnrow .turnbar.late{opacity:1}
 [data-ui="board"] #game .dock .turnrow .turnbar i,[data-ui="board"] #game .dock .turnrow .turnbar i.low,[data-ui="board"] #game .dock .turnrow .turnbar i.bank{background:var(--b-gold);border-radius:1px}
@@ -351,7 +353,18 @@
 @keyframes b-up{from{transform:translateY(calc(100% * var(--b-slide)))}}
 
 /* ---------- the coach's tip floats just over the dock ---------- */
-[data-ui="board"] #game .dock>.coachtip{top:auto;bottom:calc(100% + 6px)}
+/* the coach's tip (Issue #32 item 14): a slim one-line banner in the dock's band, over the helper's line and the play
+   line as the "Free social play" notice is, never over the table or the action buttons; a tap opens the whole tip */
+[data-ui="board"] #game .dock>#coachTip.b-tip{bottom:auto;z-index:4;height:var(--bd-band);display:flex;align-items:center;justify-content:center;gap:6px;padding:0 4px;
+  background:var(--b-bg);font-size:var(--b-t-13);line-height:1.3;color:var(--b-text-2);cursor:pointer;overflow:hidden}
+[data-ui="board"] #game .dock>#coachTip.b-tip[hidden]{display:none}
+[data-ui="board"] #game .dock>#coachTip.b-tip .ct-ic{font-size:13px;line-height:1;flex:none}
+[data-ui="board"] #game .dock>#coachTip.b-tip .ct-tx{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+[data-ui="board"] #game .dock>#coachTip.b-tip b{font-size:inherit;font-weight:600;color:var(--b-gold-text)}
+[data-ui="board"] #game .dock>#coachTip.b-tip.mistake b{color:var(--b-text)}
+[data-ui="board"] #game .dock>#coachTip.b-tip.open .ct-tx{white-space:normal;font-size:12px;line-height:15px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;max-height:45px}
+[data-ui="board"] #game.land .dock>#coachTip.b-tip{height:var(--bd-land-row)}
+[data-ui="board"] #game.land.b-col .dock>#coachTip.b-tip{height:var(--bd-band)}
 
 /* ---------- sideways (§3.1 L, §9.10): the table in the middle, the action row under it, the info line beside the buttons ---------- */
 [data-ui="board"] #game.land{display:flex;flex-direction:column;padding:0 var(--sa-r) var(--sa-b) var(--sa-l)}
@@ -359,7 +372,7 @@
 [data-ui="board"] #game.land .dock{height:calc(6px * 2 + var(--bd-land-row));padding:0 12px;align-self:stretch}
 [data-ui="board"] #game.land .dock .controls{margin:6px 0 0 auto;width:min(520px,58%)}
 [data-ui="board"] #game.land .dock .b-acts{height:var(--bd-land-row)}
-[data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine,#playNote){top:6px;right:auto;width:calc(42% - 24px);left:12px}
+[data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine,#playNote,#coachTip){top:6px;right:auto;width:calc(42% - 24px);left:12px}
 [data-ui="board"] #game.land .dock #helper.b-info{height:var(--bd-land-row);justify-content:center;text-align:center;font-size:12px;line-height:14px}
 [data-ui="board"] #game.land .dock .info-line{height:calc(var(--bd-land-row) - 15px);justify-content:center;text-align:center;font-size:12px}
 [data-ui="board"] #game.land .dock #playLine{top:calc(6px + var(--bd-land-row) - 15px);text-align:center}
@@ -371,7 +384,7 @@
 [data-ui="board"] #game.land .dock .turnrow{display:contents}
 [data-ui="board"] #game.land .dock .turnrow .xtime{top:6px;right:calc(12px + min(520px,(100% - 24px) * .58) + 8px);width:64px;min-width:0;height:var(--bd-land-row)}
 [data-ui="board"] #game.land .dock .turnrow .turnbar{left:auto;right:12px;width:min(520px,(100% - 24px) * .58);top:3px}
-[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote){width:calc(42% - 100px)}
+[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote,#coachTip){width:calc(42% - 100px)}
 [data-ui="board"] #game.land .dock .sizing.b-sizing{left:12px;right:auto;width:calc(42% - 24px);top:6px;height:var(--bd-land-row)}
 [data-ui="board"] #game.land .dock .sizing.b-sizing .sz-presets{gap:4px}
 [data-ui="board"] #game.land .dock .sizing.b-sizing .sz-presets button{font-size:12px}
@@ -381,7 +394,7 @@
    the buttons read on two lines, as upright */
 @media (max-width:759px){
   [data-ui="board"] #game.land .dock .controls{width:62%}
-  [data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine,#playNote),[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote),[data-ui="board"] #game.land .dock .sizing.b-sizing{width:calc(38% - 24px)}
+  [data-ui="board"] #game.land .dock :is(#helper,.info-line,#playLine,#playNote,#coachTip),[data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote,#coachTip),[data-ui="board"] #game.land .dock .sizing.b-sizing{width:calc(38% - 24px)}
   [data-ui="board"] #game.land .dock .turnrow .xtime{right:64px;width:56px;padding:0 2px}
   [data-ui="board"] #game.land .dock .turnrow .turnbar{width:calc((100% - 24px) * .62)}
   [data-ui="board"] #game.land .dock:has(.xtime:not(:disabled)) .b-acts:not(.b-sz){grid-template-columns:repeat(var(--n,3),minmax(0,1fr)) 56px 44px}
@@ -596,12 +609,12 @@
 [data-ui="board"] #game.land.b-col>.dock{grid-column:2;grid-row:4;align-self:end;padding:0;margin:0 8px 0 4px;height:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap) + var(--bd-row) + var(--bd-pad))}
 [data-ui="board"] #game.land.b-col .dock .controls{margin:calc(var(--bd-pad) + var(--bd-band) + var(--bd-gap)) 0 0;width:auto;padding:0 0 var(--bd-pad)}
 /* (the home-screen inset is the screen's own padding sideways, #game.land: counted once, not again in the dock; Issue #19's class) */
-[data-ui="board"] #game.land.b-col .dock :is(#helper,.info-line,#playLine,#playNote),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote),[data-ui="board"] #game.land.b-col .dock .sizing.b-sizing{left:0;right:0;width:auto;top:var(--bd-pad)}
+[data-ui="board"] #game.land.b-col .dock :is(#helper,.info-line,#playLine,#playNote,#coachTip),[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote,#coachTip),[data-ui="board"] #game.land.b-col .dock .sizing.b-sizing{left:0;right:0;width:auto;top:var(--bd-pad)}
 [data-ui="board"] #game.land.b-col .dock #helper.b-info{height:var(--bd-band);justify-content:center;text-align:center}
 [data-ui="board"] #game.land.b-col .dock .info-line{height:calc(var(--bd-band) - 15px);text-align:center}
 [data-ui="board"] #game.land.b-col .dock #playLine{top:calc(var(--bd-pad) + var(--bd-band) - 15px);text-align:center}
 [data-ui="board"] #game.land.b-col .dock #playNote{height:var(--bd-band);justify-content:center;text-align:center}
-[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote){right:64px}
+[data-ui="board"] #game.land.b-col .dock:has(.xtime:not(:disabled)) :is(#helper.b-info,#playNote,#coachTip){right:64px}
 [data-ui="board"] #game.land.b-col .dock .turnrow{display:block;position:absolute;left:0;right:0;top:var(--bd-pad);height:var(--bd-band);margin:0;pointer-events:none;z-index:2}
 [data-ui="board"] #game.land.b-col .dock .turnrow .xtime{top:0;right:0;width:58px;height:var(--bd-band);min-height:44px;padding:0 2px}
 [data-ui="board"] #game.land.b-col .dock .turnrow .turnbar{left:0;right:0;width:auto;top:calc(var(--bd-band) + var(--bd-gap) / 2 - 1px)}
