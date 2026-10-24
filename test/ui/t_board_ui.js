@@ -126,7 +126,7 @@ async function b3(pg, tag, sock, me, w, h){
     const top = document.getElementById('bTop'), card = document.getElementById('bHud');
     const vis = e => e && e.getClientRects().length > 0;
     const words = [...document.querySelectorAll('#game *')].filter(e => vis(e) && !e.children.length && getComputedStyle(e).visibility !== 'hidden').map(e => e.textContent).join(' ');
-    return { top: r(top), card: r(card), cardText: card ? card.innerText.replace(/\s+/g, ' ').trim() : '', lobby: r(document.getElementById('lobbyBtn')), chat: r(document.getElementById('chatBtn')),
+    return { watch: (e => e && e.getClientRects().length ? e.textContent : '')(document.getElementById('bWatch')), top: r(top), card: r(card), cardText: card ? card.innerText.replace(/\s+/g, ' ').trim() : '', lobby: r(document.getElementById('lobbyBtn')), chat: r(document.getElementById('chatBtn')),
       inTop: document.getElementById('lobbyBtn').closest('#bTop') === top, popup: card && card.getAttribute('aria-haspopup'), label: card && card.getAttribute('aria-label'),
       oldHdr: shown('#game>.clock') || shown('#game>.stats'), field: r(document.getElementById('fieldBar')), side: r(document.getElementById('sidePanel')), sideText: document.getElementById('sidePanel').textContent,
       area: r(document.getElementById('tableArea')), ctl: r(document.getElementById('controls')), W: innerWidth, H: innerHeight, col: document.getElementById('game').classList.contains('b-col'), row1: document.getElementById('game').classList.contains('row1'),
@@ -137,9 +137,10 @@ async function b3(pg, tag, sock, me, w, h){
       ringAct: [...document.querySelectorAll('#seats .seat.b-seat.acting .av.b-av')].map(a => [getComputedStyle(a).borderTopWidth, getComputedStyle(a).borderTopColor]) };
   });
   check(m.top && m.card && m.inTop && m.popup === 'dialog' && !m.oldHdr, `${tag} B3: the header is the board's: ${land ? 'one pill' : 'one card'} that opens the tournament sheet, the Lobby pill in the same row; today's clock and stats rows are not drawn`);
-  check(!land ? Math.abs(m.card.h - (m.row1 ? 44 : 56)) <= 1 && m.lobby.l >= m.card.r && m.lobby.h >= 44 : Math.abs(m.card.h - 30) <= 1 && Math.abs(m.top.h - 35) <= 1, `${tag} B3: ${land ? 'the pill 30 tall, the header 35 (today\'s room: the table keeps its room)' : `the card ${m.row1 ? 44 : 56} tall (${Math.round(m.card.h)}), Lobby to its right, at least 44 tall`}`);
+  check(!land ? Math.abs(m.card.h - (m.row1 ? 44 : 56)) <= 1 && m.lobby.l >= m.card.r && m.lobby.h >= (m.row1 ? 32 : 44) : Math.abs(m.card.h - 30) <= 1 && Math.abs(m.top.h - 35) <= 1, `${tag} B3: ${land ? 'the pill 30 tall, the header 35 (today\'s room: the table keeps its room)' : `the card ${m.row1 ? 44 : 56} tall (${Math.round(m.card.h)}), Lobby to its right, at least ${m.row1 ? '32 tall (its hit area 44: "N watching" under it, Issue #32 item 11)' : '44 tall'}`}`);
   check(/Level\s*3/.test(m.cardText) && /200\/400/.test(m.cardText) && /32\/48( players)?/.test(m.cardText) && /3rd/.test(m.cardText) && /\d+:\d\d/.test(m.cardText), `${tag} B3: the collapsed bar: level, blinds, the clock, players left and your rank: "${m.cardText}"`);
-  check(!/leader|Avg|watching|tables|Aurora/i.test(m.cardText), `${tag} B3: and nothing else of the HUD (players left and your rank only: owner's GO)`);
+  check(!/leader|Avg|tables|Aurora/i.test(m.cardText), `${tag} B3: and nothing else of the HUD (players left, your rank and, owner's ruling of Issue #32 item 11, "N watching")`);
+  check(land ? /12 watching/.test(m.cardText) : m.watch === '12 watching', `${tag} B3: "12 watching" ${land ? 'in the pill' : 'under Lobby'} (${land ? m.cardText : m.watch})`);
   check(/32 of 48 players left/.test(m.label) && /Your rank 3rd/.test(m.label), `${tag} B3: the card reads out what it shows: "${m.label}"`);
   // (owner, 2026-10-23: nothing said the card could be tapped) a quiet gold "›" at its right edge, whole inside it, past
   // the clock, hidden from screen readers (the card's label says it opens the tournament details)

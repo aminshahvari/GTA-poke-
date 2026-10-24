@@ -696,22 +696,39 @@ const broadcastAll = () => clubs.all().forEach(broadcastClub);
 function pushTable(c, tid){
   const club = c.club;
   const tb = club.tables.get(tid); if(!tb || clubs.suspended(c.id)) return; // suspended: no table data at all
-  const snap = club.snapshot(tb), uids = new Set(snap.seats.filter(Boolean).map(s => s.uid)), field = fieldOf(c);
+  const snap = club.snapshot(tb), uids = new Set(snap.seats.filter(Boolean).map(s => s.uid)), field = fieldOf(c), watchers = watchersOf(c, tid).size;
   for(const ws of sockets){
     if(!ws.user || ws.ctx !== c) continue;
     const seatedHere = !ws.spectator && uids.has(ws.user.id);
     if(!seatedHere && ws.watch !== tid) continue;
     // a seated player also gets their place among everyone still playing (1 = chip leader)
     const mine = ws.spectator ? null : field.chips.get(ws.user.id);
-    sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null, field: { ...field.shown, rank: mine == null ? null : 1 + field.stacks.filter(x => x > mine).length } });
+    sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null, field: { ...field.shown, watchers, rank: mine == null ? null : 1 + field.stacks.filter(x => x > mine).length } });
   }
   // (the connection log: how long an applied act took to come back out as this table's next update)
   const h = handling.get(tid); if(h){ handling.delete(tid); sample(CS.handle, Date.now() - h.at); }
   if(c.id === clubs.MAIN) liveChanged(); // the chip leaders on the other clubs' live card
 }
 // the whole tournament as every table shows it (players' feedback, 2026-10-21): how many are still playing and at how
-// many tables, each player's place among all of them, the chip leader of all tables (the same name and chip count their seat shows), and how many people are watching: everyone looking at a table who is not seated in the tournament, and
-// everyone watching from another club. A count only, never who.
+// many tables, each player's place among all of them, the chip leader of all tables (the same name and chip count their
+// seat shows), and how many people are watching. A count only, never who.
+// Who is watching a table (Issue #32 item 11): every account with a socket on that table (a member, or a member of
+// another club watching the Blindrise game) that is not seated at it. Counted from the sockets as they are now, each time
+// a table is sent; a player seated at one table who looks at another counts there (before, anyone seated anywhere in the
+// tournament was left out, so the owner watching a table while seated at his own read "0 watching"). Each table's update
+// carries its own count; the whole tournament's (the live card) is everyone watching some table.
+function watchersOf(c, tid){
+  const who = new Set();
+  for(const ws of sockets) if(ws.user && ws.ctx === c && ws.watch === tid && (ws.spectator || c.club.tableOf(ws.user.id) !== tid)) who.add(ws.user.id);
+  return who;
+}
+// a socket started or stopped watching a table (or closed): that table's watchers get the new count straight away
+// (gathered for a moment, so a crowd arriving sends one update)
+const watchTimers = new Map();
+function watchersChanged(c, tid){
+  if(!c || !tid || watchTimers.has(c.id + ':' + tid)) return;
+  watchTimers.set(c.id + ':' + tid, setTimeout(() => { watchTimers.delete(c.id + ':' + tid); if(c.club.tables.has(tid)) pushTable(c, tid); }, 150));
+}
 function fieldOf(c){
   let players = 0, tables = 0, leader = null;
   const chips = new Map(), tableList = [];
@@ -730,7 +747,7 @@ function fieldOf(c){
     tableList.push({ n: tb.n, seated, leader: top });
   }
   const watching = new Set();
-  for(const ws of sockets) if(ws.user && ws.ctx === c && (ws.spectator || (ws.watch && !c.club.tableOf(ws.user.id)))) watching.add(ws.user.id);
+  for(const tb of c.club.tables.values()) if(!tb.broken) for(const u of watchersOf(c, tb.tid)) watching.add(u);
   return { shown: { players, tables, leader, watchers: watching.size }, chips, stacks: [...chips.values()], tableList: tableList.sort((a, b) => a.n - b.n) };
 }
 const clock = ms => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: process.env.CLUB_TZ || 'America/Toronto' });
@@ -826,6 +843,7 @@ wss.on('connection', (ws, req) => {
     sockets.delete(ws);
     if(ws.user){ CS.drops++; clog(`ws out ${sockTag(ws)} code=${code} dur_s=${Math.round((Date.now() - ws.born) / 1000)} quiet_ms=${Date.now() - ws.heard}${ws.spectator ? ' spectator' : ''}`); }
     if(ws.user && ws.ctx && !ws.spectator) ws.ctx.club.offline(ws.user.id);
+    if(ws.user && ws.ctx && ws.watch) watchersChanged(ws.ctx, ws.watch);
   });
   ws.on('message', raw => {
     ws.heard = Date.now();
@@ -872,7 +890,7 @@ wss.on('connection', (ws, req) => {
       // still signed in, and still a member of some club; then only 'watch', of a table that is playing
       const x = ws.user && store.get('session:' + ws.sess) && store.get('user:' + ws.user.id);
       if(!x || x.removed || !clubs.memberships(x).length){ ws.user = null; return sendWS(ws, { t: 'auth', ok: false }); }
-      if(m.t === 'watch'){ const tb = typeof m.tid === 'string' && ws.ctx.club.tables.get(m.tid); ws.watch = tb && !tb.broken ? m.tid : null; if(ws.watch) pushTable(ws.ctx, ws.watch); }
+      if(m.t === 'watch'){ const tb = typeof m.tid === 'string' && ws.ctx.club.tables.get(m.tid), was = ws.watch; ws.watch = tb && !tb.broken ? m.tid : null; if(ws.watch) pushTable(ws.ctx, ws.watch); if(was && was !== ws.watch) watchersChanged(ws.ctx, was); }
       return;
     }
     const c = ws.ctx, { club, rewards, players, fair, business, opportunity } = c || {};
@@ -883,7 +901,7 @@ wss.on('connection', (ws, req) => {
     try{
       if(c.id === clubs.EVENTS && ['skillq', 'claim', 'addReward', 'removeReward', 'redeemStatus'].includes(m.t)) throw new Error('The Blindrise Open has no rewards.');
       switch(m.t){
-        case 'watch': ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(c, ws.watch); chatLogFor(c, ws, ws.watch); } break;
+        case 'watch': { const was = ws.watch; ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(c, ws.watch); chatLogFor(c, ws, ws.watch); } if(was && was !== ws.watch) watchersChanged(c, was); } break;
         case 'act': {
           const t0 = process.hrtime.bigint(), a = m.a && typeof m.a === 'object' ? m.a : {};
           const res = !['fold', 'check', 'call', 'raise'].includes(a.t) ? 'rejected' : club.act(u.id, m) ? 'applied' : 'stale';
