@@ -29,7 +29,7 @@ function fresh(file, overrides){
   return m.exports;
 }
 function build(id){
-  if(!ON()) return { id: MAIN, store, club: require('./club'), rewards: require('./rewards'), business: require('./business'), opportunity: require('./opportunity'), players: require('./players'), fair: require('./fair'), domino: makeDomino(store) };
+  if(!ON()) return { id: MAIN, store, club: require('./club'), rewards: require('./rewards'), business: require('./business'), opportunity: require('./opportunity'), players: require('./players'), fair: require('./fair'), domino: makeDomino(store), connect: require('./connect') };
   const s = id === EVENTS ? aliasStore(store.scoped(id)) : store.scoped(id);
   const fair = fresh('fair.js', { './store': s });
   const players = fresh('players.js', { './store': s });
@@ -37,7 +37,8 @@ function build(id){
   const business = fresh('business.js', { './store': s });
   const opportunity = fresh('opportunity.js', { './store': s, './business': business });
   const club = fresh('club.js', { './store': s, './fair': fair, './players': players });
-  return { id, store: s, club, rewards, business, opportunity, players, fair, domino: makeDomino(s) };
+  const connect = fresh('connect.js', { './store': s, './business': business }); // the board's profile sheet (UI_BOARD only)
+  return { id, store: s, club, rewards, business, opportunity, players, fair, domino: makeDomino(s), connect };
 }
 // Names in the Blindrise Open: every name the events context reads (seats, chat, standings, results, members) comes
 // through here. Account names are unique, but two can still look alike (Ali and AIi, J.Doe and JDoe): those get a short

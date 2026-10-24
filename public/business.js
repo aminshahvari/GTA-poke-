@@ -556,6 +556,23 @@ window.BizClub = {
       .then(card => { cards.set(uid, { at: Date.now(), card }); if(done) done(); }) }); }
     return k ? k.card : undefined;
   },
+  // the board's profile sheet (UI_BOARD, spec §8, B7): a member's card as the server sent it (its show{} contact rules
+  // already applied), compact; onOpen opens its page in the Exchange
+  sheetEl(b, onOpen){
+    const c = b.contacts || {}, links = [];
+    if(c.website) links.push(ext(c.website, 'Website', 'bz-act', I('globe')));
+    if(c.instagram) links.push(ext(c.instagram.url, '@' + c.instagram.handle, 'bz-act', I('insta')));
+    if(c.email) links.push(ext('mailto:' + c.email, 'Email', 'bz-act', I('mail')));
+    if(c.phone) links.push(ext('tel:' + c.phone.tel, 'Call ' + c.phone.text, 'bz-act', I('phone')));
+    return h('div', { class: 'bz-sheet' },
+      h('div', { class: 'bz-sheet-h' }, logoEl(b, 'bz-sheet-logo'),
+        h('div', { class: 'bz-sheet-t' }, h('b', null, b.name), h('small', null, b.categoryLabel + (b.area ? ' · ' + b.area : '')),
+          b.fullName ? h('small', null, b.fullName + (b.jobTitle ? ', ' + b.jobTitle : '')) : null)),
+      b.description ? h('p', { class: 'bz-sheet-d' }, b.description) : null,
+      c.address ? h('p', { class: 'bz-sheet-d' }, c.address) : null,
+      links.length ? h('div', { class: 'bz-sheet-acts' }, links.filter(Boolean)) : null,
+      h('button', { type: 'button', class: 'bp-text', onclick: onOpen }, 'See their page in the Exchange'));
+  },
   // a business card as the Exchange's rails draw it; a tap opens its page (back: Home)
   cardEl: b => bizCard(b, { from: 'home' }),
   // the poker table's sponsor card (during a break): open that business's page

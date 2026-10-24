@@ -197,6 +197,26 @@ const api = {
     broadcastAll();
     return { ok: true };
   },
+  // ---------- the board's player profile sheet (UI_BOARD only, Step-0 spec §8, phase B7): see server/connect.js ----------
+  // With the board off every one of these answers 404, as an unknown call does.
+  // the member's own choices (account-level: one set for every club): Show my photo, Show About and Business at tables,
+  // Open to Connect, and the About fields. All off until the member turns them on.
+  profilePrefs(d, u){
+    boardOnly();
+    if(!u) throw Object.assign(new Error('Sign in first.'), { status: 401 });
+    const x = store.get('user:' + u.id), pro = clubs.get(clubs.MAIN).connect.cleanPrefs(d, x);
+    store.set('user:' + u.id, { ...x, pro });
+    broadcastAll(); // (the members list carries the picture each member may see)
+    return { ok: true, pro };
+  },
+  // one member as the caller may see them: what the member chose to show, and nothing else
+  memberCard(d, u, c){
+    boardOnly();
+    return c.connect.card(d, u, { exchange: c.id !== clubs.EVENTS && !clubsClosedFor(c, u), events: c.id === clubs.EVENTS });
+  },
+  connSend(d, u, c){ return connCall('connSend', d, u, c); },
+  connReply(d, u, c){ return connCall('connReply', d, u, c); },
+  connWithdraw(d, u, c){ return connCall('connWithdraw', d, u, c); },
   // club join page and QR code (/join/<club-slug>): see server/joinqr.js. Account-level: a lead is kept per club id.
   ...joinqr.api,
   // ---------- Blindrise platform (founder only, club switching only): see server/platform.js ----------
@@ -251,6 +271,16 @@ const api = {
   platformPost(data, u){ founderOnly(u); const p = platform.post(data || {}); broadcastAll(); return { id: p.id }; },
   platformUnpost(data, u){ founderOnly(u); platform.unpost(data || {}); broadcastAll(); return { ok: true }; }
 };
+const boardOnly = () => { if(!boardUI()) throw Object.assign(new Error('Not found'), { status: 404 }); };
+// connection requests: board only, and never in the Blindrise Open (members of every club, no Exchange); both members
+// get their new club view
+function connCall(name, d, u, c){
+  boardOnly();
+  if(c.id === clubs.EVENTS) throw Object.assign(new Error('Not found'), { status: 404 });
+  const out = c.connect.api[name](d, u);
+  broadcastClub(c);
+  return out;
+}
 const PLATFORM_API = ['clubModerate', 'platformPost', 'platformUnpost', 'eventsOpen', 'eventJoin', 'eventLeave'];
 // end a Blindrise Open membership (never the founder's)
 function dropEvent(uid){
@@ -266,7 +296,7 @@ const DOMINO = () => process.env.DOMINO === '1';
 const DOMINO_API = new Set(Object.keys(clubs.get(clubs.MAIN).domino.api));
 const clubApi = (name, c) => DOMINO_API.has(name) ? c.domino.api[name] : Object.hasOwn(c.opportunity.api, name) ? c.opportunity.api[name] : c.business.api[name];
 // calls that act on the shared account, not on a club
-const ACCOUNT_API = ['avatar', 'push', 'unpush', 'joinInvite', 'createClub', 'joinInfo', 'joinClub', 'clubModerate', 'platformPost', 'platformUnpost', 'eventsOpen', 'eventLeave'];
+const ACCOUNT_API = ['avatar', 'profilePrefs', 'push', 'unpush', 'joinInvite', 'createClub', 'joinInfo', 'joinClub', 'clubModerate', 'platformPost', 'platformUnpost', 'eventsOpen', 'eventLeave'];
 // which club an invite code belongs to (main when club switching is off)
 function inviteClub(code){
   if(clubs.ON() && typeof code === 'string') for(const c of clubs.all()) if(c.store.get('invite:' + code)) return c;
@@ -411,6 +441,15 @@ const server = http.createServer((req, res) => {
   }
   if(req.method !== 'GET') return send(res, 405, { error: 'Method not allowed' });
   const av = /^\/avatar\/(u[0-9a-f]{12})$/.exec(url.pathname);
+  // the board (UI_BOARD only, spec §8, Muse condition 1): a photo needs a signed-in member's token (sent by fetch, as the
+  // Exchange's logos are), and goes to another member only if its owner turned on "Show my photo". Off, as before.
+  if(av && boardUI()){
+    const vr = userByToken(req.headers.authorization?.replace(/^Bearer /, ''));
+    if(!vr) return send(res, 401, 'Not found', 'text/plain', NOINDEX);
+    const x = store.get('user:' + av[1]), may = !!x && !x.removed && (x.id === vr.id || clubs.get(clubs.MAIN).connect.prefsOf(x).photo);
+    const buf = may && clubs.get(clubs.MAIN).players.photo(av[1]); if(!buf) return send(res, 404, 'Not found', 'text/plain', NOINDEX);
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400', Vary: 'Authorization', ...SECURITY, ...NOINDEX }); return res.end(buf);
+  }
   if(av){
     const buf = clubs.get(clubs.MAIN).players.photo(av[1]); if(!buf) return send(res, 404, 'Not found', 'text/plain');
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=604800, immutable', ...SECURITY }); return res.end(buf);
@@ -530,7 +569,8 @@ function membersView(c){
   const history = store.values('history:').sort((a, b) => b.endedAt - a.endedAt);
   const members = store.values('user:').filter(x => !x.removed).map(x => {
     const pr = players.profile(x.id, history);
-    return { id: x.id, name: x.name, role: x.role, createdAt: x.createdAt, invitedBy: x.invitedBy || null, av: x.av || null, tier: pr.tier, color: pr.color, score: pr.score };
+    // (the board: a photo only if its member turned on "Show my photo"; their own comes to them in me.av)
+    return { id: x.id, name: x.name, role: x.role, createdAt: x.createdAt, invitedBy: x.invitedBy || null, av: boardUI() ? c.connect.shownAv(x) : x.av || null, tier: pr.tier, color: pr.color, score: pr.score };
   });
   c.memo = { at: Date.now(), members, history: history.slice(0, 200), all: history };
   return c.memo;
@@ -564,7 +604,7 @@ function clubView(c, u, S = {}){
   const { members, history } = once(S, 'mv', () => membersView(c));
   const invites = once(S, 'invs', () => store.values('invite:')), users = once(S, 'users', () => store.values('user:'));
   const view = {
-    me: { id: u.id, name: u.name, owner: isOwner(u), ...(boardUI() && u.onb ? { onb: u.onb } : {}), ...(boardUI() && t && u.invReg === c.id + '/' + t.id && t.regs.includes(u.id) ? { byInvite: true } : {}) },
+    me: { id: u.id, name: u.name, owner: isOwner(u), ...(boardUI() && u.onb ? { onb: u.onb } : {}), ...(boardUI() && t && u.invReg === c.id + '/' + t.id && t.regs.includes(u.id) ? { byInvite: true } : {}), ...(boardUI() ? boardMe(u) : {}) },
     tourney: t ? once(S, 'tourney', () => tourneyOf(c, t)) : null,
     ...(isOwner(u) && hosts(c) ? { sponsors: once(S, 'sponsors', () => c.business.sponsorOptions()) } : {}), hosts: hosts(c),
     tables: once(S, 'tables', () => club.tablesSummary()), myTable: club.tableOf(u.id), ...(boardUI() ? { seats: once(S, 'seats', () => seatsOf(club)) } : {}),
@@ -576,6 +616,8 @@ function clubView(c, u, S = {}){
     invitedCount: once(S, 'invited', () => { const n = new Map(); users.forEach(x => { if(!x.removed && x.invitedBy) n.set(x.invitedBy, (n.get(x.invitedBy) || 0) + 1); }); return n; }).get(u.id) || 0,
     myInvite: (() => { const i = invites.find(x => x.by === u.id && x.multi && openInvite(x)); return i ? { used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt } : null; })()
   };
+  // the board's connection requests (B7): this member's own, built for them alone (never one object for everyone)
+  if(boardUI() && c.id !== clubs.EVENTS) view.conn = c.connect.view(u.id, once(S, 'conns', () => c.connect.all()));
   if(isOwner(u)){
     view.invites = invites.filter(openInvite)
       .map(i => ({ code: i.code, createdAt: i.createdAt, multi: !!i.multi, used: (i.uses || []).length, max: i.max, expiresAt: i.expiresAt, by: i.by }));
@@ -611,6 +653,12 @@ function clubView(c, u, S = {}){
   if(jq.length) view.joinQr = jq;
   if(DOMINO()) view.domino = true; // dominoes are on: the app shows them (their state comes in 'domino' messages)
   return view;
+}
+// the board (B7): the member's own picture and choices, read from the account as it is now (the socket's copy can be
+// older than a change made since), for this member only
+function boardMe(u){
+  const x = rootStore.get('user:' + u.id) || u;
+  return { av: x.av || null, pro: clubs.get(clubs.MAIN).connect.prefsOf(x) };
 }
 // The Blindrise Open as every other club shows it: what it is, when, how many have registered, and whether this member
 // is in it. Never who registered: the registration list belongs to Blindrise (owner decision, Issue #10).
@@ -1021,7 +1069,7 @@ wss.on('connection', (ws, req) => {
           const me = h.results.find(r => r.uid === u.id);
           const hands = club.handsFor(u.id).filter(x => x.ts >= (h.startedAt || 0) - 60000 && x.ts <= h.endedAt + 60000);
           sendWS(ws, { t: 'report', report: { id: h.id, name: h.name, at: h.endedAt, entrants: h.entrants, place: me ? me.place : null, pts: me ? me.pts : 0, ...(coach.reportCard(hands) || { hands: 0 }) } }); } break;
-        case 'profile': { const x = c.store.get('user:' + m.uid); if(x && !x.removed) sendWS(ws, { t: 'profile', profile: { ...players.profile(x.id, membersView(c).all), name: x.name, av: x.av || null, since: x.createdAt, perks: players.perksFor(players.profile(x.id, membersView(c).all).tier) } }); } break;
+        case 'profile': { const x = c.store.get('user:' + m.uid); if(x && !x.removed) sendWS(ws, { t: 'profile', profile: { ...players.profile(x.id, membersView(c).all), name: x.name, av: boardUI() && x.id !== u.id ? c.connect.shownAv(x) : x.av || null, since: x.createdAt, perks: players.perksFor(players.profile(x.id, membersView(c).all).tier) } }); } break;
         // a picture belongs to the shared account, so only the main organizer can clear one
         case 'avatarClear': own(u); if(c.id !== clubs.MAIN) throw new Error('Only the Blindrise organizer can remove a picture.'); { const x = c.store.get('user:' + m.uid); if(x){ c.store.set('user:' + x.id, players.setAvatar(x, { kind: 'none' })); c.memo = null; broadcastAll(); } } break;
         case 'leave': club.leave(u.id); if(u.invReg && !((club.T() || {}).regs || []).includes(u.id)){ const x = rootStore.get('user:' + u.id); if(x){ const { invReg, ...rest } = x; rootStore.set('user:' + u.id, rest); } } break;
@@ -1057,7 +1105,7 @@ wss.on('connection', (ws, req) => {
         case 'revoke': own(u); { const inv = c.store.get('invite:' + m.code); if(inv) c.store.set('invite:' + m.code, { ...inv, revoked: true }); broadcastClub(c); } break;
         // removing someone from the main club closes their account (as before); removing them from another club only ends
         // that membership: their name, PIN and other clubs stay, and only this club's open screens are closed
-        case 'remove': own(u); { const store = c.store, x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); if(c.id === clubs.MAIN){ store.del('name:' + x.name.toLowerCase()); revokeSessions(x.id); } else leaveClub(c, x.id); club.leave(x.id); business.removeUser(x.id); opportunity.removeUser(x.id); } broadcastClub(c); } break;
+        case 'remove': own(u); { const store = c.store, x = store.get('user:' + m.uid); if(x && x.role !== 'owner'){ store.set('user:' + x.id, { ...x, removed: true }); if(c.id === clubs.MAIN){ store.del('name:' + x.name.toLowerCase()); revokeSessions(x.id); } else leaveClub(c, x.id); club.leave(x.id); business.removeUser(x.id); opportunity.removeUser(x.id); c.connect.removeUser(x.id); } broadcastClub(c); } break;
       }
     }catch(e){ sendWS(ws, { t: 'error', error: e.message }); }
   });
