@@ -14,6 +14,7 @@ const clubs = require('./clubs');
 const rootStore = store; // the plain store, for shared accounts, inside functions that work on a club's own store
 clubs.onNew(wire);
 const joinqr = require('./joinqr');
+const { linkReason, linkPairs } = require('./links'); // (who must not share a table, and why; see server/links.js)
 const platform = require('./platform'); // Club Rules, suspend/cancel, Blindrise broadcast (club switching only)
 
 const PORT = +process.env.PORT || 3000;
@@ -484,23 +485,6 @@ function remember(u, ip, dev){
   if(dev) seen.devs = keep({ ...seen.devs, [dev]: now });
   store.set('user:' + u.id, { ...x, seen });
 }
-function linkReason(cx, a, b){
-  if(a === b) return null;
-  const linkCache = cx.linkCache;
-  const k = a < b ? a + '|' + b : b + '|' + a, c = linkCache.get(k);
-  if(c && Date.now() - c.at < 5000) return c.r;
-  const ua = cx.store.get('user:' + a), ub = cx.store.get('user:' + b);
-  let r = null;
-  if(ua && ub){
-    const now = Date.now(), recent = (o, days) => Object.entries(o || {}).filter(([, t]) => now - t < days * 864e5).map(([v]) => v);
-    const share = (x, y) => x.some(v => y.includes(v));
-    if(ua.household && ua.household === ub.household) r = 'same household';
-    else if(share(recent(ua.seen && ua.seen.devs, 60), recent(ub.seen && ub.seen.devs, 60))) r = 'same device';
-    else if(share(recent(ua.seen && ua.seen.ips, 14), recent(ub.seen && ub.seen.ips, 14))) r = 'same internet';
-  }
-  linkCache.set(k, { r, at: Date.now() });
-  return r;
-}
 function conflictPairs(c){
   const club = c.club, t = club.T(), out = [], pairs = groups => groups.forEach(([where, us]) => { for(let i = 0; i < us.length; i++) for(let j = i + 1; j < us.length; j++){ const r = linkReason(c, us[i], us[j]); if(r) out.push({ a: us[i], b: us[j], reason: r, where }); } });
   if(t && t.status === 'registering') pairs([['registered', t.regs]]);
@@ -896,7 +880,7 @@ setInterval(() => { if(DOMINO()) for(const c of clubs.all()) if(!clubs.suspended
 // every club context (only 'main' with club switching off) gets its own live state and hooks
 function wire(c){
   c.memo = null; c.clubTimer = null; c.playTimer = null; c.playAt = 0; c.playUids = new Set(); c.sentMembers = null; c.chatLogs = new Map(); c.linkCache = new Map();
-  c.club.setLinker((a, b) => linkReason(c, a, b));
+  c.club.setLinker((a, b) => linkReason(c, a, b), uids => linkPairs(c, uids));
   c.domino.setHooks({ isOwner, canHost: () => hosts(c), changed: () => dominoPush(c) });
   const halted = () => { const d = clubs.ON() && c.id !== clubs.MAIN ? rootStore.get('clubdef:' + c.id) : null; return d && (d.removed || d.suspended) ? (d.removed ? 'This club was cancelled by Blindrise.' : 'This club is suspended by Blindrise.') : null; };
   c.club.setHooks({ halted, hosts: () => hosts(c), isConnected: uid => online(c, uid), onNotice: (kind, t) => notice(c, kind, t), onCoach: (uid, h) => { if(halted()) return; const msg = { t: 'coach', hand: { no: h.no, net: h.net, bb: h.bb, cards: h.cards, weakFold: coach.weakHand(h) && !coach.voluntary(h), played: coach.voluntary(h), notes: h.notes.filter(n => n.kind !== 'info') } }; for(const ws of sockets) if(ws.user && ws.ctx === c && !ws.spectator && ws.user.id === uid) sendWS(ws, msg); }, onClub: (kind, uids) => { if(c.id === clubs.EVENTS) return eventsChanged(c, kind, uids); if(kind === 'hand') playClub(c, uids); else broadcastClub(c); if(c.id === clubs.MAIN) liveChanged(); }, onTable: tid => pushTable(c, tid), onTableClosed: tid => { c.chatLogs.delete(tid); for(const ws of sockets) if(ws.user && ws.ctx === c) sendWS(ws, { t: 'closed', tid }); broadcastClub(c); } });

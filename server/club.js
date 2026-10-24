@@ -85,14 +85,21 @@ let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(
 const tables = new Map();   // tid -> live table
 const waiters = new Map();  // uid -> pending decision
 let running = false, clockTimer = null;
-let linker = () => null; // (uidA, uidB) -> reason they must not share a table, or null
-function setLinker(f){ linker = f; }
+let linker = () => null, linkIndex = null; // (uidA, uidB) -> reason they must not share a table, or null
+// pairs(uids), when the linker has one: every linked pair among uids as [a, b, reason], found through the linker's own index
+// (shared household / device / address, server/links.js) instead of asking about every pair. The linker is symmetric.
+function setLinker(f, pairs){ linker = f; linkIndex = pairs || null; }
+function linksOf(uids){
+  if(linkIndex) return linkIndex(uids);
+  const out = []; for(let i = 0; i < uids.length; i++) for(let j = i + 1; j < uids.length; j++){ const r = linker(uids[i], uids[j]); if(r) out.push([uids[i], uids[j], r]); }
+  return out;
+}
 // Linked players form clusters (connected over any link): A–B same household and B–C same internet put A, B and C in one
-// cluster, and seating spreads the whole cluster, not only the linked pairs. uid -> cluster id
+// cluster, and seating spreads the whole cluster, not only the linked pairs. uid -> cluster id (union-find over the linked pairs)
 function clustersOf(uids){
   uids = [...new Set(uids)];
-  const up = new Map(uids.map(u => [u, u])), find = u => up.get(u) === u ? u : find(up.get(u));
-  for(let i = 0; i < uids.length; i++) for(let j = i + 1; j < uids.length; j++) if(linker(uids[i], uids[j])) up.set(find(uids[i]), find(uids[j]));
+  const up = new Map(uids.map(u => [u, u])), find = u => { while(up.get(u) !== u){ up.set(u, up.get(up.get(u))); u = up.get(u); } return u; };
+  for(const [a, b] of linksOf(uids)) if(up.has(a) && up.has(b)) up.set(find(a), find(b));
   return new Map(uids.map(u => [u, find(u)]));
 }
 // cost of two players at one table: household (set by the director) far worst, then device, then internet, then same cluster only;
@@ -181,6 +188,52 @@ function newTable(tid, n){
   const t = { tid, n, g, seq: 0, broken: false, inHand: false, acting: null, handStart: {}, note: '' };
   tables.set(tid, t); return t;
 }
+// The seating at the start: the most-linked players first, each to the open table with the lightest links to it (then the
+// fewest players), then a repair pass swaps players between tables while that lowers the weight of linked (and same-cluster)
+// pairs sitting together. The weights are pairW's; they are kept per player and table (cw: same-cluster players there, xw:
+// what u's direct links there add on top), so a table's weight for a player, and a swap, cost O(1) instead of recounting both
+// tables. The weights are whole numbers, so every sum is exact and every comparison (and so the seating) is the one
+// recounting gives (test/t_seat_fast.js checks it against the old code). With no links at all every weight is 0 and no
+// swap can lower anything, so the repair pass is skipped.
+function seatGroups(regs, nT, cap){
+  const n = regs.length, groups = Array.from({ length: nT }, () => []), ix = new Map(regs.map((u, i) => [u, i]));
+  const pairs = linksOf(regs), up = Int32Array.from(regs.keys()), find = i => { while(up[i] !== i){ up[i] = up[up[i]]; i = up[i]; } return i; };
+  const adj = regs.map(() => []), xpair = new Map();
+  for(const [a, b, r] of pairs){
+    const i = ix.get(a), j = ix.get(b); if(i === undefined || j === undefined || i === j || xpair.has(i * n + j)) continue;
+    const e = (LINK_W[r] || 1e6) - 1; // (a linked pair is always in one cluster: its weight is 1 for the cluster plus e)
+    adj[i].push(j, e); adj[j].push(i, e); xpair.set(i * n + j, e); xpair.set(j * n + i, e); up[find(i)] = find(j);
+  }
+  const ci = Int32Array.from(regs.keys(), find), csize = new Int32Array(n); ci.forEach(c => csize[c]++);
+  const heavy = regs.map((u, i) => { let h = csize[ci[i]] - 1; for(let k = 1; k < adj[i].length; k += 2) h += adj[i][k]; return h; });
+  const cw = new Float64Array(n * nT), xw = new Float64Array(n * nT), gx = groups.map(() => []);
+  const conf = (g, i) => cw[ci[i] * nT + g] + xw[i * nT + g]; // (i not at g)
+  const put = (i, g, s) => { cw[ci[i] * nT + g] += s; for(let k = 0; k < adj[i].length; k += 2) xw[adj[i][k] * nT + g] += s * adj[i][k + 1]; };
+  const order = regs.slice().sort((a, b) => heavy[ix.get(b)] - heavy[ix.get(a)]), gs = groups.map((_, g) => g);
+  order.forEach(u => {
+    const i = ix.get(u), best = gs.filter(g => groups[g].length < cap).sort((a, b) => conf(a, i) - conf(b, i) || groups[a].length - groups[b].length)[0];
+    groups[best].push(u); gx[best].push(i); put(i, best, 1);
+  });
+  if(!xpair.size) return groups;
+  // repair pass: swap players between tables while that lowers the weight of linked (and same-cluster) pairs sitting together
+  const w = (i, j) => (ci[i] === ci[j] ? 1 : 0) + (xpair.get(i * n + j) || 0);
+  for(let pass = 0, improved = true; improved && pass < 50; pass++){
+    improved = false;
+    for(let a = 0; a < nT; a++) for(let b = a + 1; b < nT; b++){
+      for(let i = 0; i < gx[a].length; i++) for(let j = 0; j < gx[b].length; j++){
+        const u = gx[a][i], v = gx[b][j];
+        if(!adj[u].length && !adj[v].length) continue; // (two unlinked players: every weight 0, the swap changes nothing)
+        // (the change in a's weight plus b's when u and v trade places; below 0 is "lower")
+        const wuv = w(u, v), d = conf(a, v) - wuv - (conf(a, u) - 1) + conf(b, u) - wuv - (conf(b, v) - 1);
+        if(d >= 0) continue;
+        put(u, a, -1); put(v, b, -1); put(u, b, 1); put(v, a, 1);
+        [gx[a][i], gx[b][j]] = [v, u]; [groups[a][i], groups[b][j]] = [groups[b][j], groups[a][i]];
+        improved = true;
+      }
+    }
+  }
+  return groups;
+}
 function start(){
   const t = T();
   const halt = hooks.halted(); if(halt) throw new Error(halt);
@@ -188,27 +241,9 @@ function start(){
   const regs = t.regs.filter(u => { const us = store.get('user:' + u); return us && !us.removed; });
   if(regs.length < 2) throw new Error('At least 2 players need to join.');
   for(let i = regs.length - 1; i > 0; i--){ const j = crypto.randomInt(i + 1); [regs[i], regs[j]] = [regs[j], regs[i]]; }
-  const nT = Math.ceil(regs.length / size()), groups = Array.from({ length: nT }, () => []), cap = Math.ceil(regs.length / nT);
+  const nT = Math.ceil(regs.length / size()), cap = Math.ceil(regs.length / nT);
   // random seating, but players from the same household / internet / device (and their whole cluster) go to different tables when possible
-  const cl = clustersOf(regs), conflicts = (grp, u) => grp.reduce((n, v) => n + pairW(u, v, cl), 0), heavy = new Map(regs.map(u => [u, conflicts(regs, u)]));
-  const order = regs.slice().sort((a, b) => heavy.get(b) - heavy.get(a));
-  order.forEach(u => {
-    const best = groups.filter(gp => gp.length < cap).sort((a, b) => conflicts(a, u) - conflicts(b, u) || a.length - b.length)[0];
-    best.push(u);
-  });
-  // repair pass: swap players between tables while that lowers the weight of linked (and same-cluster) pairs sitting together
-  const cost = grp => grp.reduce((a, u, i) => a + conflicts(grp.slice(i + 1), u), 0);
-  for(let pass = 0, improved = true; improved && pass < 50; pass++){
-    improved = false;
-    for(let a = 0; a < groups.length; a++) for(let b = a + 1; b < groups.length; b++){
-      for(let i = 0; i < groups[a].length; i++) for(let j = 0; j < groups[b].length; j++){
-        const before = cost(groups[a]) + cost(groups[b]);
-        [groups[a][i], groups[b][j]] = [groups[b][j], groups[a][i]];
-        if(cost(groups[a]) + cost(groups[b]) < before) improved = true;
-        else [groups[a][i], groups[b][j]] = [groups[b][j], groups[a][i]];
-      }
-    }
-  }
+  const groups = seatGroups(regs, nT, cap);
   tables.clear();
   groups.forEach((grp, i) => {
     const tb = newTable(t.id + '-' + (i + 1), i + 1);
@@ -721,4 +756,4 @@ function totalChips(){
 }
 
 module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, edit, join, leave, cancel, start, resume, pause, unpause, act, extend, back, offline,
-  snapshot, cardsFor, show, gp: GP, onBreak, WIN_BEAT_MS, breaksOn, BREAK_EVERY, _extras: { resultMs, rabbitCards, resultExtras }, _seat: { breakTable, newTable }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };
+  snapshot, cardsFor, show, gp: GP, onBreak, WIN_BEAT_MS, breaksOn, BREAK_EVERY, _extras: { resultMs, rabbitCards, resultExtras }, _seat: { breakTable, newTable, seatGroups, clustersOf }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };
