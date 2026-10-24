@@ -40,6 +40,8 @@ function bot(port, tok){
 // arrived, and when the winner beat showed and went (the felt's win-beat mark)
 const PROBE = () => {
   window.__t = { brk: 0, club: 0, beats: [], music: [] };
+  // where the hand's name is drawn: in the pot's place, or (sideways, where the result line takes that place) on that line
+  window.__hold = () => document.querySelector('#pot.beat .win-hand') || (/ · \S/.test(document.getElementById('msg').textContent) ? document.querySelector('#msg div') : null);
   const WS = window.WebSocket;
   window.WebSocket = class extends WS { constructor(...a){ super(...a); window.__ws = this; this.addEventListener('message', e => { try{ const m = JSON.parse(e.data); if(m.t === 'club' && m.club.tourney && m.club.tourney.breakUntil && !window.__t.club) window.__t.club = Date.now(); }catch(x){} }); } };
   const watch = () => {
@@ -67,7 +69,7 @@ const PROBE = () => {
   }));
   process.on('exit', () => { try{ fs.unlinkSync(DATA); }catch(e){} });
   const env = { ...process.env, PORT: String(port), NO_BEACON: '1', NO_PUSH: '1', OWNER_CODE: 'secret', DATA_FILE: DATA, DATABASE_URL: '', STAGING: '1', FAST: '1',
-    LEVEL_MS: '2500', BREAK_MS: String(BREAK_MS), TIME_BANK_MS: '4000', WIN_BEAT_MS: String(BEAT) };
+    LEVEL_MS: '4000', BREAK_MS: String(BREAK_MS), TIME_BANK_MS: '4000', WIN_BEAT_MS: String(BEAT) };
   delete env.GAMEPLAY_OPTIONS; delete env.CLUB_SWITCHING; delete env.BREAKS;
   srvs.push(spawn('node', ['server/index.js'], { cwd: ROOT, env, stdio: ['ignore', 'ignore', 'inherit'] }));
   for(let i = 0; i < 100; i++){ try{ if((await fetch(base + '/healthz')).ok) break; }catch(x){} await sleep(100); }
@@ -102,14 +104,29 @@ const PROBE = () => {
   if(beat){
     check(beat.every(b => b.ms >= BEAT - 150), `the result stays on the felt for the whole beat: ${beat.map(b => b.ms).join(', ')} ms (beat ${BEAT} ms)`);
     check(beat.every(b => / (wins|split) [\d,]+/.test(b.msg)), `the winner and the amount on the felt: "${beat[0].msg}"`);
-    check(beat.every(b => b.pot.trim()), `the winning hand where the pot was: "${beat[0].pot}"`);
+    check(beat.every(b => b.pot.trim() || / · \S/.test(b.msg)), `the winning hand on the felt (in the pot's place, or on the result line where that line sits there): ${beat.map(b => '"' + (b.pot || b.msg) + '"').join(', ')}`);
   }
-  // a screenshot in the middle of a beat, with its sizes for a phone
-  await until(() => pg.evaluate(() => document.getElementById('tableArea').classList.contains('win-beat') && !!document.querySelector('#pot.beat')), 15000);
+  const beatOn = () => pg.evaluate(() => document.getElementById('tableArea').classList.contains('win-beat') && !!window.__hold());
+  // the winning hand stays readable for the whole beat: nothing (the winner's chips gliding out from the pot's place
+  // included) is ever drawn over it. Sampled every 100 ms across one beat, at 14 points over it.
+  await until(beatOn, 15000);
+  const covered = await pg.evaluate(async () => { const out = [];
+    // (the chips take no taps, so elementFromPoint would look through them: let them be hit while this looks)
+    const st = document.createElement('style'); st.textContent = '#fx .winpile,#fx .winpile *{pointer-events:auto!important}'; document.head.appendChild(st);
+    for(let i = 0, p; i < 28 && (p = window.__hold()); i++){
+      const r = p.getBoundingClientRect();
+      for(const y of [r.top + r.height * .3, r.top + r.height * .7]) for(let k = 0; k < 7; k++){ const x = r.left + 2 + (r.width - 4) * k / 6, e = document.elementFromPoint(x, y); if(!e || !p.closest('#pot,#msg').contains(e)) out.push((!e ? 'nothing' : e.closest('.winpile') ? 'chips' : e.id || String(e.className) || e.tagName) + '@' + i); }
+      await new Promise(r => setTimeout(r, 100)); }
+    st.remove(); return out; });
+  check(!covered.length, `the winning hand is never covered during the beat${covered.length ? ': ' + covered.slice(0, 6).join(', ') : ''}`);
+  // (the next beat from its start, for the screenshot)
+  await until(() => pg.evaluate(() => !document.getElementById('tableArea').classList.contains('win-beat')), 8000);
+  await until(beatOn, 15000);
   await sleep(500);
-  const look = await pg.evaluate(() => { const m = document.getElementById('msg'), p = document.querySelector('#pot.beat'), r = p && p.getBoundingClientRect(), A = document.getElementById('tableArea').getBoundingClientRect();
-    return { msg: m.textContent, msgPx: parseFloat(getComputedStyle(m).fontSize), pot: p && p.textContent, potPx: p && parseFloat(getComputedStyle(p).fontSize), inside: !!r && r.left >= A.left && r.right <= A.right, cut: !!p && p.querySelector('.win-hand').scrollWidth > p.querySelector('.win-hand').clientWidth + 1 }; });
-  check(look.pot && look.inside && look.potPx >= 13 && look.msgPx >= 12, `beat on a phone: "${look.msg}" (${look.msgPx}px) and "${look.pot}" (${look.potPx}px), on the felt`);
+  const look = await pg.evaluate(() => { const m = document.getElementById('msg'), p = window.__hold(), r = p && p.getBoundingClientRect(), A = document.getElementById('tableArea').getBoundingClientRect(), q = document.getElementById('pot').getBoundingClientRect(), n = m.getBoundingClientRect();
+    return { msg: m.textContent, msgPx: parseFloat(getComputedStyle(m).fontSize), hand: p && p.textContent, px: p && parseFloat(getComputedStyle(p).fontSize), inside: !!r && r.left >= A.left && r.right <= A.right,
+      clash: !!q.width && getComputedStyle(document.getElementById('pot')).visibility !== 'hidden' && !!document.getElementById('pot').textContent.trim() && q.left < n.right && n.left < q.right && q.top < n.bottom && n.top < q.bottom }; });
+  check(look.hand && look.inside && look.px >= 13 && look.msgPx >= 12 && !look.clash, `beat on a phone: "${look.msg}" (${look.msgPx}px), the hand "${look.hand}" (${look.px}px), on the felt, the two never on top of each other`);
   await shot(pg, 'winner-beat');
 
   // ---- break: the seated phone ----

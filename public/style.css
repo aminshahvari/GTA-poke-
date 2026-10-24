@@ -2102,9 +2102,14 @@ body{background:var(--lx-ink)}
 .brk-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px;background:currentColor;animation:brkDot 1.6s ease-in-out infinite}
 @keyframes brkDot{50%{opacity:.25}}
 /* the winner beat: the winning hand in the pot's place for as long as the server holds the result */
-.pot.beat{padding:3px 12px;font-size:15px;max-width:min(92vw,calc(var(--bw,40px) * 5 + 40px))}
+.pot.beat{padding:3px 12px;font-size:15px;max-width:min(92vw,calc(var(--bw,40px) * 5 + 40px));background:var(--lx-navy,#111a2e)}
+#tableArea.win-beat .center .msg.up{background:var(--lx-navy,#111a2e);border-radius:99px;padding:2px 12px}
 .pot.beat .win-hand{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #tableArea.win-beat .center .msg{color:var(--lx-gold-hi,#f1dfb0)}
+/* the winner's chips leave from the pot's place, where the hand's name now is: while the result shows, the middle of the
+   table (the hand's name, the board, the result line) sits over the chips, so they come out from under it and never
+   cover it (the free-play notice stays on top) */
+#tableArea.win-beat .center{z-index:21}#tableArea.win-beat .playnote{z-index:22}
 .brk .sp-card{margin-top:8px;padding-top:10px;border-top:1px solid var(--lx-hair,rgba(241,223,176,.13));width:100%;justify-content:center}
 .sp-card{display:flex;align-items:center;gap:10px;min-width:0}
 .sp-txt{display:grid;min-width:0;text-align:left}

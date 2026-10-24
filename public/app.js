@@ -2255,7 +2255,9 @@ function potToWinners(d, handKey, LY){
   fx.querySelectorAll('.winpile').forEach(e => e.remove());
   // start where the pot sits, just above the board
   const area = $('tableArea'), ar = area.getBoundingClientRect(), br = $('board').getBoundingClientRect();
-  const [px, py] = br.width ? [br.left + br.width / 2 - ar.left, br.top - ar.top - 12] : centerPx(), still = reducedMotion(), bb = (d.blinds && d.blinds[1]) || 1;
+  // (the winner beat: the hand's name holds the pot's place, so the chips come out from behind the board's cards instead)
+  const fromCards = !!(d.result && d.result.hand && br.width);
+  const [px, py] = br.width ? [br.left + br.width / 2 - ar.left, fromCards ? br.top + br.height / 2 - ar.top : br.top - ar.top - 12] : centerPx(), still = reducedMotion(), bb = (d.blinds && d.blinds[1]) || 1;
   d.seats.forEach((p, s) => {
     if(!p || !(p.won > 0)) return;
     let [bx, by] = LY.betOf(s); const el = document.createElement('div');
@@ -2682,6 +2684,7 @@ function lockArea(){
     DOCKBOX = [Math.round(dr.right - dr.width - ar.left), Math.round(dr.bottom - up - DOCKH - ar.top), Math.round(dr.right - ar.left), Math.round(dr.bottom - up - ar.top)]; LOCK.box = DOCKBOX; }
   else DOCKBOX = LOCK.box;
 }
+let handOnFelt = false; // the winning hand's name is on the felt (the pot's place or the result line)
 function renderTable(){
   if(view !== 'table' || !club) return;
   const tid = watchTid || club.myTable, d = tables.get(tid);
@@ -2824,6 +2827,21 @@ function renderTable(){
   const ml = $('msg'); ml.classList.remove('up');
   if(res && G.cost){ const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom, mr = ml.getBoundingClientRect();
     if([...$('seats').querySelectorAll('.av, .plate, .hole .card')].some(e => hit(e.getBoundingClientRect(), mr))) ml.classList.add('up'); }
+  // (the winner beat: when the result line goes up into the pot's place, the hand's name leaves that place and joins the
+  // line, "Ana wins 1,200 · Two Pair", when it fits whole; else it stays in the bar under the table)
+  handOnFelt = !!(res && res.hand);
+  if(res && res.hand && ml.classList.contains('up')){
+    const P = $('pot'); P.innerHTML = ''; P.classList.remove('beat'); P.style.visibility = 'hidden';
+    // (in shorter words until it fits: the hand's kind only, "Two Pair", then the players' short names)
+    const was = ml.innerHTML, L0 = res.lines[0], won = (L0.match(/^.*? (?:wins|split) [\d,]+/) || [L0])[0], kind = res.hand.split(',')[0];
+    const names = d.seats.filter(Boolean).map(p => p.name).sort((a, b) => b.length - a.length), nk = seatNicks(names), nicks = l => names.reduce((t, n) => t.split(n).join(nk(n)), l);
+    const fits = () => ml.scrollHeight <= ml.clientHeight + 1 && ml.scrollWidth <= ml.clientWidth + 1;
+    // (more pots: the others follow as who won how much, and go last of all; the bar under the table lists them all)
+    const more = res.lines.slice(1).filter(l => / (?:wins|split) [\d,]+/.test(l)).map(l => nicks((l.match(/^.*? (?:wins|split) [\d,]+/) || [l])[0]));
+    handOnFelt = [[L0, ...more], [won + ' · ' + kind, ...more], [nicks(won) + ' · ' + kind, ...more], [nicks(won) + ' · ' + kind]]
+      .some(f => { ml.innerHTML = f.map(x => `<div>${esc(x)}</div>`).join(''); return fits(); });
+    if(!handOnFelt) ml.innerHTML = was;
+  }
   if(res) try{ potToWinners(d, handKey, LY); }catch(e){}
   clearShown();
   $('tName').textContent = `Table ${d.n}`;
@@ -2904,7 +2922,7 @@ function renderControls(d, mySeat, mine){
     // other pots), so the same words never show twice
     const rest = R.map(l => l.slice((l.match(/^.*? (?:wins|split) [\d,]+/) || [''])[0].length).replace(/^\s*·\s*/, ''));
     // (one pot: its winning hand is on the felt now, in the pot's place, Issue #34)
-    line = rest.every(x => !x) || R.length === 1 && d.result.hand ? 'Next hand coming up…' : R.length === 1 ? `Winning hand: <b>${esc(rest[0])}</b>` : R.map(esc).join('<br>');
+    line = rest.every(x => !x) || R.length === 1 && d.result.hand && handOnFelt ? 'Next hand coming up…' : R.length === 1 ? `Winning hand: <b>${esc(rest[0])}</b>` : R.map(esc).join('<br>');
   }
   // (the board: the quick actions, or nothing, with "⋯" at the end of the row, which keeps its height, §3.5)
   // (the board, sitting out: the words on the info line, "I'm back" in the action row's empty place before "⋯". In the
