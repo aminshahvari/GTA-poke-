@@ -461,6 +461,33 @@ const server = http.createServer((req, res) => {
 // ---------- realtime ----------
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
 const sockets = new Set();
+// ---------- the connection log (2026-10-24: two players' screens froze at a live game and nothing on the server said
+// when their connections went quiet, closed or came back). One short line per socket in (signed in), socket out (with
+// its close code and how long it lasted), ping left unanswered (the seat shows Disconnected), socket ended by the
+// server, and act received with what became of it; plus one summary line a minute while anyone is connected.
+// Account ids, club ids, tables and hand numbers only: never names, PINs, tokens or IP addresses. CONN_LOG=0 turns it off.
+// About 40 players: a few hundred act lines and one summary a minute; the app's heartbeat ('hb') is never logged.
+const CONN_LOG = process.env.CONN_LOG !== '0';
+const clog = line => { if(CONN_LOG) console.log(line); };
+let sockSeq = 0;
+const cstat = () => ({ conns: 0, drops: 0, gone: 0, kills: 0, acts: 0, applied: 0, stale: 0, rejected: 0, handle: [], rtt: [], art: [] });
+let CS = cstat();
+const handling = new Map();   // tid -> { at, s }: an act that was applied, until that table's next update goes out
+const sample = (a, v) => { if(Number.isFinite(v) && v >= 0 && v < 120000 && a.length < 5000) a.push(Math.round(v)); };
+const pct = (a, q) => { if(!a.length) return '-'; const b = [...a].sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(q * b.length))]; };
+const sockTag = ws => `s=${ws.sid} uid=${ws.user ? ws.user.id : '-'} club=${ws.ctx ? ws.ctx.id : '-'}`;
+// where a player is right now: table, hand and the turn's seq ('-' when not seated)
+function spotOf(c, uid){
+  const tid = c && c.club.tableOf(uid), tb = tid && c.club.tables.get(tid);
+  return tb ? `tid=${tid} hand=${tb.g.hand ? tb.g.hand.no : tb.g.handNo} seq=${tb.acting ? tb.acting.seq : tb.seq}` : 'tid=-';
+}
+setInterval(() => {
+  const open = [...sockets].filter(ws => ws.user).length, x = CS;
+  CS = cstat();
+  if(!open && !x.conns && !x.drops && !x.acts) return;
+  clog(`ws min open=${open} in=${x.conns} out=${x.drops} gone=${x.gone} kill=${x.kills} acts=${x.acts} applied=${x.applied} stale=${x.stale} rejected=${x.rejected}`
+    + ` handle_ms_p50=${pct(x.handle, .5)} p95=${pct(x.handle, .95)} hb_rtt_ms_p50=${pct(x.rtt, .5)} p95=${pct(x.rtt, .95)} act_rtt_ms_p50=${pct(x.art, .5)} p95=${pct(x.art, .95)}`);
+}, process.env.FAST === '1' && +process.env.CONN_SUMMARY_MS || 60000).unref();
 function sendWS(ws, msg){ if(ws.readyState === 1) ws.send(JSON.stringify(msg)); }
 
 // ---------- keeping players who share a home, internet connection or device apart ----------
@@ -521,7 +548,7 @@ const tourneyOf = (c, t) => { const club = c.club; return { id: t.id, status: t.
       level: t.level, levelEndsAt: t.levelEndsAt, paused: t.paused, pausedLeft: t.pausedLeft, entrants: t.entrants, remaining: t.remaining,
       places: t.places, note: t.note, anteMode: t.anteMode || 'bb', actSec: t.actSec || 20, tableSize: t.tableSize || 9, helper: t.helper !== false, lateLevels: t.lateLevels || 0, lateOpen: club.lateOpen(), payouts: t.entrants ? club.payoutPcts(t.entrants) : null, seal: t.fairSeal || null,
       ...(club.gp() ? { showMuck: t.showMuck === true, rabbit: t.rabbit === true, handPause: t.handPause || 0 } : {}),
-      startedAt: t.startedAt || null, breaks: club.breaksOn(), breakEvery: club.BREAK_EVERY, breakMin: t.breakMin || 5, breakUntil: club.onBreak(t) ? t.breakUntil : null, breakPending: !!t.breakPending && !t.paused,
+      startedAt: t.startedAt || null, breaks: club.breaksOn(), breakEvery: club.BREAK_EVERY, breakMin: t.breakMin || 5, breakUntil: club.onBreak(t) ? t.breakUntil : null, breakAt: club.onBreak(t) ? t.breakAt || null : null, breakPending: !!t.breakPending && !t.paused,
       pausedBreakLeft: t.paused ? t.pausedBreakLeft || 0 : 0, sponsor: c.business.sponsorCard(t.sponsor), sponsorSec: t.sponsorSec || 8, prize: t.prize || '' }; };
 function clubView(c, u){
   if(clubs.ON() && clubs.suspended(c.id)) return suspendedView(c, u);
@@ -687,20 +714,39 @@ const broadcastAll = () => clubs.all().forEach(broadcastClub);
 function pushTable(c, tid){
   const club = c.club;
   const tb = club.tables.get(tid); if(!tb || clubs.suspended(c.id)) return; // suspended: no table data at all
-  const snap = club.snapshot(tb), uids = new Set(snap.seats.filter(Boolean).map(s => s.uid)), field = fieldOf(c);
+  const snap = club.snapshot(tb), uids = new Set(snap.seats.filter(Boolean).map(s => s.uid)), field = fieldOf(c), watchers = watchersOf(c, tid).size;
   for(const ws of sockets){
     if(!ws.user || ws.ctx !== c) continue;
     const seatedHere = !ws.spectator && uids.has(ws.user.id);
     if(!seatedHere && ws.watch !== tid) continue;
     // a seated player also gets their place among everyone still playing (1 = chip leader)
     const mine = ws.spectator ? null : field.chips.get(ws.user.id);
-    sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null, field: { ...field.shown, rank: mine == null ? null : 1 + field.stacks.filter(x => x > mine).length } });
+    sendWS(ws, { t: 'table', table: snap, you: seatedHere ? club.cardsFor(tid, ws.user.id) : null, field: { ...field.shown, watchers, rank: mine == null ? null : 1 + field.stacks.filter(x => x > mine).length } });
   }
+  // (the connection log: how long an applied act took to come back out as this table's next update)
+  const h = handling.get(tid); if(h){ handling.delete(tid); sample(CS.handle, Date.now() - h.at); }
   if(c.id === clubs.MAIN) liveChanged(); // the chip leaders on the other clubs' live card
 }
 // the whole tournament as every table shows it (players' feedback, 2026-10-21): how many are still playing and at how
-// many tables, each player's place among all of them, the chip leader of all tables (the same name and chip count their seat shows), and how many people are watching: everyone looking at a table who is not seated in the tournament, and
-// everyone watching from another club. A count only, never who.
+// many tables, each player's place among all of them, the chip leader of all tables (the same name and chip count their
+// seat shows), and how many people are watching. A count only, never who.
+// Who is watching a table (Issue #32 item 11): every account with a socket on that table (a member, or a member of
+// another club watching the Blindrise game) that is not seated at it. Counted from the sockets as they are now, each time
+// a table is sent; a player seated at one table who looks at another counts there (before, anyone seated anywhere in the
+// tournament was left out, so the owner watching a table while seated at his own read "0 watching"). Each table's update
+// carries its own count; the whole tournament's (the live card) is everyone watching some table.
+function watchersOf(c, tid){
+  const who = new Set();
+  for(const ws of sockets) if(ws.user && ws.ctx === c && ws.watch === tid && (ws.spectator || c.club.tableOf(ws.user.id) !== tid)) who.add(ws.user.id);
+  return who;
+}
+// a socket started or stopped watching a table (or closed): that table's watchers get the new count straight away
+// (gathered for a moment, so a crowd arriving sends one update)
+const watchTimers = new Map();
+function watchersChanged(c, tid){
+  if(!c || !tid || watchTimers.has(c.id + ':' + tid)) return;
+  watchTimers.set(c.id + ':' + tid, setTimeout(() => { watchTimers.delete(c.id + ':' + tid); if(c.club.tables.has(tid)) pushTable(c, tid); }, 150));
+}
 function fieldOf(c){
   let players = 0, tables = 0, leader = null;
   const chips = new Map(), tableList = [];
@@ -719,7 +765,7 @@ function fieldOf(c){
     tableList.push({ n: tb.n, seated, leader: top });
   }
   const watching = new Set();
-  for(const ws of sockets) if(ws.user && ws.ctx === c && (ws.spectator || (ws.watch && !c.club.tableOf(ws.user.id)))) watching.add(ws.user.id);
+  for(const tb of c.club.tables.values()) if(!tb.broken) for(const u of watchersOf(c, tb.tid)) watching.add(u);
   return { shown: { players, tables, leader, watchers: watching.size }, chips, stacks: [...chips.values()], tableList: tableList.sort((a, b) => a.n - b.n) };
 }
 const clock = ms => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: process.env.CLUB_TZ || 'America/Toronto' });
@@ -766,6 +812,7 @@ function online(c, uid){
     if(!ws.user || ws.ctx !== c || ws.spectator || ws.user.id !== uid || ws.readyState !== 1) continue;
     if(!(ws.probed > ws.heard) && now - ws.heard > QUIET_MS){ ws.probed = now; try{ ws.ping(); }catch(e){} }
     if(!(ws.probed > ws.heard) || now - ws.probed < GONE_MS) return true;
+    if(ws.goneLogged !== ws.probed){ ws.goneLogged = ws.probed; CS.gone++; clog(`ws gone ${sockTag(ws)} quiet_ms=${now - ws.heard} ${spotOf(c, uid)}`); }
   }
   return false;
 }
@@ -807,15 +854,27 @@ wss.on('connection', (ws, req) => {
   if(origin && originHost !== req.headers.host){ ws.close(1008, 'origin'); return; }
   sockets.add(ws);
   ws.ip = ipOf(req);
-  ws.isAlive = true; ws.heard = Date.now();
+  ws.isAlive = true; ws.heard = Date.now(); ws.sid = ++sockSeq; ws.born = ws.heard;
   ws.on('pong', () => { ws.isAlive = true; ws.heard = Date.now(); });
   // a closing socket of the player to act gives them their disconnect protection straight away (Issue #9)
-  ws.on('close', () => { sockets.delete(ws); if(ws.user && ws.ctx && !ws.spectator) ws.ctx.club.offline(ws.user.id); });
+  ws.on('close', code => {
+    sockets.delete(ws);
+    if(ws.user){ CS.drops++; clog(`ws out ${sockTag(ws)} code=${code} dur_s=${Math.round((Date.now() - ws.born) / 1000)} quiet_ms=${Date.now() - ws.heard}${ws.spectator ? ' spectator' : ''}`); }
+    if(ws.user && ws.ctx && !ws.spectator) ws.ctx.club.offline(ws.user.id);
+    if(ws.user && ws.ctx && ws.watch) watchersChanged(ws.ctx, ws.watch);
+  });
   ws.on('message', raw => {
     ws.heard = Date.now();
     if(stopping) return; // shutting down: no more actions
     let m; try{ m = JSON.parse(raw); }catch(e){ return; }
     if(!m || typeof m !== 'object') return;
+    // the app's heartbeat (its connection watchdog): echoed at once, so the app knows this socket still carries messages
+    // both ways. It may carry the app's own timings for the connection log (round trips in ms, clamped).
+    if(m.t === 'hb'){
+      sendWS(ws, { t: 'hb', n: Number(m.n) || 0 });
+      if(ws.user){ sample(CS.rtt, Number(m.rtt)); if(Array.isArray(m.art)) m.art.slice(0, 20).forEach(v => sample(CS.art, Number(v))); }
+      return;
+    }
     if(m.t === 'hello'){
       const ur = userByToken(m.token);
       if(!ur) return sendWS(ws, { t: 'auth', ok: false });
@@ -826,6 +885,7 @@ wss.on('connection', (ws, req) => {
           const c = clubs.get(m.spectate);
           ws.ctx = c; ws.spectator = true; ws.home = home.id; ws.user = { id: ur.id, name: ur.name, role: 'spectator' }; ws.sess = sha(m.token); ws.watch = null;
           sendWS(ws, { t: 'auth', ok: true });
+          if(!ws.logged){ ws.logged = true; CS.conns++; clog(`ws in ${sockTag(ws)} spectator`); }
           sendWS(ws, { t: 'club', club: spectatorView(c, ws.user, ws.home) });
           if(DOMINO() && c.id === clubs.MAIN) sendWS(ws, { t: 'domino', v: dominoBoard(c) });
           return;
@@ -837,6 +897,7 @@ wss.on('connection', (ws, req) => {
       // signed in, but in no club any more (the only club was cancelled): say so, so the app can explain
       if(!u) return sendWS(ws, { t: 'auth', ok: false, ...(clubs.ON() && !c ? { reason: 'noclub' } : {}) });
       ws.ctx = c; ws.user = u; ws.sess = sha(m.token); remember(ur, ws.ip, typeof m.device === 'string' ? m.device.slice(0, 40) : ''); funnel.back(rootStore.get('user:' + ur.id)); sendWS(ws, { t: 'auth', ok: true });
+      if(!ws.logged){ ws.logged = true; CS.conns++; clog(`ws in ${sockTag(ws)} ${spotOf(c, u.id)}`); }
       sendWS(ws, { t: 'club', club: clubView(c, u) });
       if(clubs.suspended(c.id)) return;
       const mine = c.club.tableOf(u.id); if(mine){ pushTable(c, mine); chatLogFor(c, ws, mine); }
@@ -847,7 +908,7 @@ wss.on('connection', (ws, req) => {
       // still signed in, and still a member of some club; then only 'watch', of a table that is playing
       const x = ws.user && store.get('session:' + ws.sess) && store.get('user:' + ws.user.id);
       if(!x || x.removed || !clubs.memberships(x).length){ ws.user = null; return sendWS(ws, { t: 'auth', ok: false }); }
-      if(m.t === 'watch'){ const tb = typeof m.tid === 'string' && ws.ctx.club.tables.get(m.tid); ws.watch = tb && !tb.broken ? m.tid : null; if(ws.watch) pushTable(ws.ctx, ws.watch); }
+      if(m.t === 'watch'){ const tb = typeof m.tid === 'string' && ws.ctx.club.tables.get(m.tid), was = ws.watch; ws.watch = tb && !tb.broken ? m.tid : null; if(ws.watch) pushTable(ws.ctx, ws.watch); if(was && was !== ws.watch) watchersChanged(ws.ctx, was); }
       return;
     }
     const c = ws.ctx, { club, rewards, players, fair, business, opportunity } = c || {};
@@ -858,8 +919,14 @@ wss.on('connection', (ws, req) => {
     try{
       if(c.id === clubs.EVENTS && ['skillq', 'claim', 'addReward', 'removeReward', 'redeemStatus'].includes(m.t)) throw new Error('The Blindrise Open has no rewards.');
       switch(m.t){
-        case 'watch': ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(c, ws.watch); chatLogFor(c, ws, ws.watch); } break;
-        case 'act': club.act(u.id, m); break;
+        case 'watch': { const was = ws.watch; ws.watch = typeof m.tid === 'string' ? m.tid : null; if(ws.watch){ pushTable(c, ws.watch); chatLogFor(c, ws, ws.watch); } if(was && was !== ws.watch) watchersChanged(c, was); } break;
+        case 'act': {
+          const t0 = process.hrtime.bigint(), a = m.a && typeof m.a === 'object' ? m.a : {};
+          const res = !['fold', 'check', 'call', 'raise'].includes(a.t) ? 'rejected' : club.act(u.id, m) ? 'applied' : 'stale';
+          CS.acts++; CS[res]++;
+          if(res === 'applied' && typeof m.tid === 'string') handling.set(m.tid, { at: Date.now() });
+          clog(`act ${sockTag(ws)} tid=${String(m.tid).slice(0, 24)} hand=${Number(m.hand)} seq=${Number(m.seq)} a=${String(a.t).slice(0, 8)} res=${res} ms=${(Number(process.hrtime.bigint() - t0) / 1e6).toFixed(1)}${res === 'applied' ? '' : ' now=' + spotOf(c, u.id).replace(/ /g, ',')}`);
+        } break;
         case 'extend': club.extend(u.id); break;
         case 'show': club.show(u.id, m); break;
         case 'chat': case 'throw': chat(c, ws, u, m); break;
@@ -920,7 +987,7 @@ wss.on('connection', (ws, req) => {
 function own(u){ if(!isOwner(u)) throw new Error('Only the club owner can do that.'); }
 // uid left out: everyone in that club (it was cancelled)
 function leaveClub(c, uid){ for(const ws of sockets) if(ws.user && ws.ctx === c && (uid === undefined || ws.user.id === uid)){ ws.user = null; try{ ws.close(4004, 'removed from club'); }catch(e){} } }
-setInterval(() => { for(const ws of sockets){ if(!ws.isAlive){ ws.terminate(); continue; } ws.isAlive = false; ws.ping(); } }, 30000);
+setInterval(() => { for(const ws of sockets){ if(!ws.isAlive){ if(ws.user){ CS.kills++; clog(`ws kill ${sockTag(ws)} quiet_ms=${Date.now() - ws.heard}`); } ws.terminate(); continue; } ws.isAlive = false; ws.ping(); } }, 30000);
 
 // Staging must never point at the production database: refuse to start if it does.
 const PROD_DB_HOST = 'dpg-db81kuom7kps73cmh9dg-a';

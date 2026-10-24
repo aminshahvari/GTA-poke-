@@ -58,7 +58,11 @@ document.addEventListener('visibilitychange', () => {
   if(wantAwake) keepAwake(true);
   // coming back to the app counts as being back at the table
   if(club) send({ t: 'back' });
+  // and the connection is checked at once: after a lock or time in the background it may be dead though still "open"
+  watchdog(true);
 });
+window.addEventListener('pageshow', () => watchdog(true));
+window.addEventListener('online', () => watchdog(true));
 
 function modal(html, buttons){
   return new Promise(res => {
@@ -202,20 +206,51 @@ window.Domino.init({ post, toast, modal, me: () => club.me, on: () => !!(club &&
 window.BizClub.init({ post, toast, token: () => local.get('token', ''), clubHeader, me: () => club.me, tab: () => tab,
   openTab: t => { if(BOARD){ bFrom = t === 'biz' ? (tab === 'biz' ? bFrom : tab) : null; if(t === 'event') t = 'home'; } tab = t; view = 'lobby'; showScreen('lobby'); renderLobby(); $('lobbyBody').scrollTop = 0; },
   confirm: (title, text, ok) => modal(`<h2>${esc(title)}</h2><p>${esc(text)}</p>`, [{ label: 'Cancel', value: false }, { label: esc(ok), value: true, primary: true }]) });
+// The connection watchdog (2026-10-24: two players' screens froze at a live game, each showing an old table with their
+// own seat Disconnected, until they left the page and came back). After a phone sleeps, changes network or sits in the
+// background, its socket can stay "open" while nothing goes through either way (half-open): the browser fires no
+// close, sends go nowhere, and the app used to wait for a close that never came. So the app checks for itself:
+// - after HB_IDLE with nothing from the server it sends a tiny 'hb' that the server echoes at once; no echo within
+//   HB_WAIT means the connection is dead (a page cannot see the protocol's own pings, so this is the app's own);
+// - back from the lock screen or the background (visible, pageshow, online, or its timers having slept) it asks at
+//   once and allows HB_WAKE, so a dead socket is found in about two seconds, not after the full wait;
+// - a connection that has not opened, or not been answered, within CONNECT_WAIT is given up the same way.
+// A dead connection is closed by the app, the table says plainly that the connection is lost, and the app dials again
+// (at once, then with the usual backoff). The server's answer to the new hello is the whole state again (the club, then
+// the table with this player's cards), which replaces what the app showed: no tap needed to be back in the live hand.
+// Timings: the server counts a seat Disconnected after 5 s without a pong, so the app looks within about the same time
+// (3 s idle + 4 s wait at worst, about 7 s); on a working phone connection the echo comes back in well under a second,
+// and a false alarm only costs one quick reconnect. The heartbeat goes only when the server has been quiet: during a
+// hand the table's own updates prove the connection, so it adds little traffic.
+const HB_IDLE = 3000, HB_WAIT = 4000, HB_WAKE = 2500, CONNECT_WAIT = 8000;
+let wantConn = false, dialAt = 0, heardAt = 0, hbAt = 0, hbWait = HB_WAIT, hbN = 0, hbRtt = 0, tickAt = Date.now(), redial = 0;
+const actRtts = [];   // how long my acts took to come back as the next table state (for the server's connection log)
 function connect(){
   const token = local.get('token', null);
   if(joinSlug) return clubJoinScreen();
   if(!token && location.pathname.startsWith('/join/')) return welcomeScreen();
   if(!token){ return post('/api/status', {}).then(s => s.hasOwner ? welcomeScreen() : authScreen('setup')).catch(() => welcomeScreen()); }
-  if(ws) try{ ws.close(); }catch(e){}
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-  ws.onopen = () => { retry = 0; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } ws.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined, spectate: watching() || undefined })); };
-  ws.onmessage = ev => {
+  // an old socket is let go without its handlers: its late close must not dial again over this new one
+  if(ws){ const o = ws; ws = null; o.onopen = o.onmessage = o.onclose = o.onerror = null; try{ o.close(); }catch(e){} }
+  clearTimeout(redial); redial = 0;
+  live = false; wantConn = true; dialAt = Date.now(); hbAt = 0;
+  const sock = ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  // (the hello is answered at once with 'auth': until then it counts as an unanswered heartbeat)
+  sock.onopen = () => { retry = 0; heardAt = hbAt = Date.now(); hbWait = HB_WAIT; let dev = local.get('device', null); if(!dev){ dev = Math.random().toString(36).slice(2) + Date.now().toString(36); local.set('device', dev); } sock.send(JSON.stringify({ t: 'hello', token, device: dev, club: local.get('club', null) || undefined, spectate: watching() || undefined })); };
+  sock.onmessage = ev => {
+    if(sock !== ws) return;   // (a socket already let go)
+    heardAt = Date.now();
     const m = JSON.parse(ev.data);
-    if(m.t === 'auth'){ if(!m.ok){ local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
-    if(m.t === 'club'){ onClub(m.club); return; }
+    if(m.t === 'hb'){ if(m.n === hbN && hbAt){ hbRtt = Date.now() - hbAt; hbAt = 0; } return; }
+    if(m.t === 'auth'){ if(hbAt) hbRtt = Date.now() - hbAt; hbAt = 0; live = !!m.ok; if(!m.ok){ wantConn = false; outbox = null; local.del('token'); ws = null; sock.onclose = null; sock.close(); connLost(false); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; connLost(false); resync = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
+    if(m.t === 'club'){
+      // the first club state after a (re)connect is the whole truth: tables that closed meanwhile are forgotten
+      if(resync){ resync = false; const open = new Set((m.club.tables || []).map(x => x.tid)); for(const tid of [...tables.keys()]) if(tid !== 'demo' && !open.has(tid) && tid !== m.club.myTable){ tables.delete(tid); myCards.delete(tid); } }
+      if(outbox && m.club.myTable !== outbox.tid) outboxDrop();
+      onClub(m.club); return;
+    }
     if(m.t === 'domino'){ window.Domino.onState(m.v); return; }
-    if(m.t === 'table'){ if(m.field) field = m.field; tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); onTable(m.table); return; }
+    if(m.t === 'table'){ if(m.field){ field = m.field; if(m.field.watchers != null) watchBy.set(m.table.tid, m.field.watchers); } tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); outboxCheck(m.table); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
     if(m.t === 'invite'){ showInvite(m.code, m.group, m.max); return; }
     if(m.t === 'skillq'){ askSkill(m.rid, m.q); return; }
@@ -231,9 +266,43 @@ function connect(){
     if(m.t === 'error'){ modal(`<h2>That didn't work</h2><p>${esc(m.error)}</p>`, [{ label: 'OK', value: 1, primary: true }]); }
   };
   // 4001: the server handed over to a new instance (deploy), so come back fast instead of backing off
-  ws.onclose = e => { $('offline').hidden = false; setTimeout(connect, e.code === 4001 ? 250 + Math.random() * 750 : Math.min(8000, 500 * 2 ** retry++)); };
+  sock.onclose = e => { if(sock === ws) dropped(e.code === 4001 ? 250 + Math.random() * 750 : Math.min(8000, 500 * 2 ** retry++)); };
 }
+let resync = false;
 const send = m => { if(ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
+// the connection is gone (closed, or found dead by the watchdog): let the socket go, say so, dial again after `wait`
+function dropped(wait){
+  if(ws){ const o = ws; ws = null; o.onopen = o.onmessage = o.onclose = o.onerror = null; try{ o.close(4000, 'no answer'); }catch(e){} }
+  $('offline').hidden = false; outboxDown(); connLost(true);
+  clearTimeout(redial); redial = setTimeout(connect, wait);
+}
+// the watchdog's look at the connection: every second, and at once (wake) when the app comes back to the front
+function watchdog(wake){
+  const now = Date.now(), slept = now - tickAt > 5000; tickAt = now;
+  if(!wantConn) return;
+  // waiting out the backoff: coming back to the app (or the network coming back) dials now
+  if(!ws){ if(wake || slept){ retry = 0; connect(); } return; }
+  if(ws.readyState === 0){ if(now - dialAt > CONNECT_WAIT) dropped(Math.min(8000, 500 * 2 ** retry++)); return; }
+  if(ws.readyState !== 1) return dropped(Math.min(8000, 500 * 2 ** retry++));
+  // back at the front, or our own timers were asleep: whatever was asked before does not count, ask again now
+  if(wake || slept) return heartbeat(HB_WAKE);
+  if(hbAt && now - hbAt > hbWait) return dropped(0);   // asked and no answer: dead, though the socket still says open
+  if(!hbAt && now - heardAt >= HB_IDLE) heartbeat(HB_WAIT);
+}
+function heartbeat(wait){
+  hbAt = Date.now(); hbWait = wait; hbN++;
+  send({ t: 'hb', n: hbN, ...(hbRtt ? { rtt: hbRtt } : {}), ...(actRtts.length ? { art: actRtts.splice(0) } : {}) });
+}
+setInterval(() => watchdog(false), 1000);
+// the connection-lost state over the table: the felt dims and says so in words, so an old table never passes for the
+// live one. The action buttons stay usable (a tap waits in the outbox and goes when the connection is back).
+function connLost(on){
+  const g = $('game'), area = $('tableArea');
+  let el = $('connLost');
+  if(on && !el){ el = document.createElement('div'); el.id = 'connLost'; el.className = 'connlost'; el.setAttribute('role', 'alert'); el.innerHTML = '<b>Connection lost</b><span>Reconnecting…</span>'; area.appendChild(el); }
+  g.classList.toggle('conn-lost', !!on);
+  if(el) el.hidden = !on;
+}
 
 const signOut = async () => { if(await modal('<h2>Sign out?</h2><p>You can sign back in with your name and PIN.</p>', [{ label:'Stay', value:false }, { label:'Sign out', value:true, primary:true }])){ local.del('token'); location.href = '/'; } };
 function onClub(c){
@@ -257,7 +326,7 @@ function onClub(c){
   if(c.myTable && c.myTable !== lastMyTable && st === 'running'){ watchTid = c.myTable; view = 'table'; seen = new Set(); showScreen('game'); send({ t: 'watch', tid: watchTid }); }
   lastMyTable = c.myTable;
   // back from the sponsor's page: the break is over, so the player goes back to their seat
-  if(leftForSponsor && !(c.tourney && c.tourney.id === leftForSponsor && c.tourney.status === 'running' && (c.tourney.breakUntil || c.tourney.paused))){
+  if(leftForSponsor && !(c.tourney && c.tourney.id === leftForSponsor && c.tourney.status === 'running' && (c.tourney.breakUntil || c.tourney.breakPending || c.tourney.paused))){
     if(view === 'lobby' && c.myTable && st === 'running') openTable(c.myTable);
     leftForSponsor = null;
   }
@@ -283,6 +352,10 @@ async function pickClub(){
 // The whole tournament, like a TV broadcast (players' feedback, 2026-10-21): how many are still playing and at how many
 // tables, the chip leader of every table, and how many are watching. From the server with every table update ('field').
 let field = null;
+// how many are watching each table: the server counts the watchers of the table each update is for, so a player seated
+// at one table and looking at another keeps each table's own count (Issue #32 item 11)
+const watchBy = new Map();
+const watchersOf = d => d && watchBy.has(d.tid) ? watchBy.get(d.tid) : field ? field.watchers : null;
 function fieldUI(){
   const el = $('fieldBar'), T = club && club.tourney;
   el.hidden = !field || !T || T.status !== 'running';
@@ -293,13 +366,13 @@ function fieldUI(){
   // laid out like a broadcast HUD (owner's design brief, 2026-10-21): the field, tables and watchers, the average stack,
   // the chip leader in gold, and your rank as a pill coloured by your stack against the average. Tap a chip count to see
   // it in big blinds (and back).
-  const L = field.leader, meLead = L && field.rank === 1 && L.name === club.me.name, total = T.entrants || field.players;
+  const L = field.leader, meLead = L && field.rank === 1 && L.name === club.me.name, total = T.entrants || field.players, wn = watchersOf(tables.get(curTid())) || 0;
   const bb = E.levelFor(T.level, T.anteMode)[1], out = Math.max(0, Math.min(100, (1 - field.players / Math.max(1, total)) * 100));
   const mine = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id), avg = T.entrants * T.stack / Math.max(1, T.remaining);
   const tone = !mine ? '' : mine.stack >= avg * 1.25 ? ' up' : mine.stack >= avg * .75 ? '' : ' down';
   const vs = mine && Math.abs(mine.stack - avg) > avg * .05 ? (mine.stack > avg ? `<span class="hud-vs up" title="Above the average stack">${Icons.svg('up')}</span>` : `<span class="hud-vs down" title="Below the average stack">${Icons.svg('down')}</span>`) : '';
   el.innerHTML = `<div class="hud-mod hud-field"><span class="hud-ico" aria-hidden="true">${Icons.svg('users')}</span><span class="hud-lbl"><i class="hud-dot" aria-hidden="true"></i>Players</span><b class="hud-val">${odo('players', field.players)}<small>/${total}</small></b><span class="hud-prog" aria-hidden="true"><i style="width:${out.toFixed(1)}%"></i></span></div>`
-    + `<div class="hud-mod hud-badges"><span class="hud-badge hud-tb" title="Tables in play" aria-label="${field.tables} tables">${Icons.svg('table')}<b>${odo('tables', field.tables)}</b></span><span class="hud-badge" title="Watching now" aria-label="${field.watchers} watching">${Icons.svg('eye')}<b>${odo('watch', field.watchers)}</b><small class="hud-wl">watching</small></span></div>`
+    + `<div class="hud-mod hud-badges"><span class="hud-badge hud-tb" title="Tables in play" aria-label="${field.tables} tables">${Icons.svg('table')}<b>${odo('tables', field.tables)}</b></span><span class="hud-badge" title="Watching now" aria-label="${wn} watching">${Icons.svg('eye')}<b>${odo('watch', wn)}</b><small class="hud-wl">watching</small></span></div>`
     + `<button type="button" class="hud-mod hud-avg" data-bbtoggle aria-label="Average stack. Tap to switch chips and big blinds"><span class="hud-lbl">Avg stack</span><b class="hud-val">${stackHTML('avg', avg, bb)}</b></button>`
     + (L ? `<button type="button" class="hud-mod hud-lead${meLead ? ' me' : ''}" data-bbtoggle aria-label="Chip leader ${esc(L.name)}. Tap to switch chips and big blinds">${Icons.svg('crown')}<span class="hud-lt"><span class="hud-lbl">Chip leader</span><b class="hud-name">${meLead ? 'You' : esc(L.name)}</b></span><span class="hud-chips"><b>${stackHTML('lead', L.stack, bb)}</b></span></button>` : '')
     + (field.rank ? `<div class="hud-mod hud-rank${tone}" title="Your place among everyone still playing"><span class="hud-lbl">Your rank</span><b class="hud-val">${vs}${odo('rank', ord(field.rank))}<small>/${field.players}</small></b></div>` : '');
@@ -1927,9 +2000,11 @@ function boardSizes(area, cls){
   return S;
 }
 // The board's layout for n seats in the table area (pixels of the area), in the shape tableGeo returns
-function boardGeo(n, empty = []){
+// (`watch`: nobody at this table is you, so the seat at the foot is drawn as any other seat, its avatar where your plate
+// would be, and its D button goes by that avatar)
+function boardGeo(n, empty = [], watch = false){
   const a = $('tableArea'), W = a.clientWidth || 360, H = a.clientHeight || 520, cls = boardClass(), C = BCLS[cls];
-  const vw = scr().w, key = `b:${n}:${W}:${H}:${cls}:${vw}:${empty.join('.')}`;
+  const vw = scr().w, key = `b:${n}:${W}:${H}:${cls}:${vw}:${empty.join('.')}${watch ? ':w' : ''}`;
   if(GEO && GEO.key === key) return GEO;
   if(GEOS.has(key)) return GEO = GEOS.get(key);
   const land = cls === 'L', AV = C.av, R = C.band, S = boardSizes(a, cls);
@@ -1992,6 +2067,9 @@ function boardGeo(n, empty = []){
     if(land && (py + C.ph + pill > H - 8 || (short && Math.abs(q.nx) > .5 && fits(out)))){ const d = fits(out) ? out : -out;
       pwx = Math.floor(room(d)); if(pwx >= C.pw) pwx = 0; half = (pwx || C.pw) / 2;
       pl = d < 0 ? 'l' : 'r'; sx = 0; px = x + d * (AV / 2 + 4 + half); py = y - C.ph / 2; }
+    // (a plate beside its avatar low on the table: where its status line would go below the area, it stands over the
+    // plate instead, so the seat stays whole inside the area: Issue #32 item 12)
+    const stUp = !!pl && py + C.ph + pill > H - 2;
     // the cards: behind the avatar, peeking out at its top on the outer side (inside the screen)
     // (the two backs as drawn, fanned: about 2.3 card widths across and 1.56 tall, centred on hx)
     // (a seat on the upper curve: its cards beside the avatar on the outer side, so they don't rise towards the top row)
@@ -2009,7 +2087,7 @@ function boardGeo(n, empty = []){
     // (upright, a seat along the top: its cards face up come down just enough to stay 2 px inside the area, on their own)
     const hys = !land && !beside && q.ny < -.8 && S.shownT != null ? Math.max(0, Math.round(2 - (y + S.shownT))) : null;
     return { x, y, nx: q.nx, ny: q.ny, side: sgn < 0 ? 'l' : 'r', pl, pwx, sx: Math.round(sx), hx: Math.round(hx - ox), hy: cy0, hys, core: [px, py + C.ph / 2, half, C.ph / 2],
-      boxes: [[x, y, AV / 2, AV / 2], [px, py + (C.ph + pill) / 2, half, (C.ph + pill) / 2], [x + Math.round(hx - ox) + ox, y + cy0 + oy, gw / 2, ch / 2]] };
+      stUp, boxes: [[x, y, AV / 2, AV / 2], [px, py + (C.ph + pill) / 2 - (stUp ? pill : 0), half, (C.ph + pill) / 2], [x + Math.round(hx - ox) + ox, y + cy0 + oy, gw / 2, ch / 2]] };
   };
   const seats = [null];
   const qs = [null];
@@ -2038,6 +2116,16 @@ function boardGeo(n, empty = []){
   const hgap = Math.round(hw * .16 + 4), hpx = hside ? Math.round(cx - (hpw + hgap + 2 * hw) / 2 + hpw / 2) : cx, hcx = hside ? hpx + hpw / 2 + hgap + hw : cx, hcBot = hside ? hpTop + heroPh - R - 2 : hpTop - 1;
   seats[0] = { x: hpx, y: hpTop + heroPh / 2, nx: 0, ny: 1, hero: true, hw, hpw, hside,
     boxes: [[hcx, hcBot - hh / 2 - hw * .05, hw + 4, hh / 2 + hw * .05], [hpx, hpTop + heroPh / 2, hpw / 2, heroPh / 2]] };
+  // (watching, nobody here is you: the seat at the foot is a seat like the others, on the rail at the bottom, no hero
+  // slot. It rises just enough that its avatar, its plate and its status line stay inside the table area (sideways it
+  // sits as low as the area allows, its plate beside it, where your plate was, so the middle keeps its size), so the line
+  // under the table ("You finished 16th. Watching Table 2.") has its own room: before, the foot seat took your plate's
+  // place and its plate hung below the area, over that line (owner, Issue #32 items 12 and 13))
+  if(watch){
+    const q = ring.at(0), lowest = H - 2 - Math.max(AV / 2, land ? 0 : plateY + C.ph + pill);
+    seats[0] = seatAt({ ...q, x: cx, nx: 0, ny: 1, y: land ? lowest : Math.min(q.y, lowest) }, 0);
+    if(empty.includes(0)){ const a = [seats[0].x, seats[0].y, AV / 2, AV / 2]; seats[0] = { ...seats[0], core: a, boxes: [a, a, a] }; }
+  }
   // ---- the middle (§3.4): the pot over the board, the winner line under it; and the chips and the dealer button
   // (§3.3) on one ring, 78% of the felt, in front of each seat. The first place for the middle (the board's size, a
   // little higher or lower) where nothing touches a seat and every seat's chips and button find a clean spot wins. ----
@@ -2053,7 +2141,13 @@ function boardGeo(n, empty = []){
   // crowded sideways table the search took a third of a second, enough to stall a phone as it turned)
   const memo = f => { const M = new Map(); return (...a) => { const k = a.join(','); let v = M.get(k); if(v === undefined){ v = f(...a); M.set(k, v); } return v; }; };
   // (an empty seat has no chips to be confused with: a spot near its "+" still reads as its neighbour's)
-  const mine = memo((x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || empty.includes(i) || Math.hypot(x - X, y - Y) > d * 1.08 + 2); });
+  const mineC = memo((x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || empty.includes(i) || Math.hypot(x - X, y - Y) > d * 1.08 + 2); });
+  // (the dealer button is different: it may stand on an empty seat (a dead button), so a D near a "+" reads as that
+  // seat's. The D belongs to its seat only where it is nearer it than any other seat, the empty ones too, by a clear
+  // margin: Issue #32 item 10, the D read as the seat beside it on some hands)
+  // (watching, the seat at the foot is drawn as any other: its own point is its avatar)
+  const anchorsD = watch ? anchors.map((p, i) => i ? p : [seats[0].x, seats[0].y]) : anchors;
+  const mineD = memo((x, y, own) => { const d = Math.hypot(x - anchorsD[own][0], y - anchorsD[own][1]); return anchorsD.every(([X, Y], i) => i === own || Math.hypot(x - X, y - Y) > d * 1.12 + 3); });
   // the point of the ring of `f` of the felt on the line from the middle towards (x, y)
   const onRing = memo((x, y, f) => { let lo = 0, hi = 1; for(let k = 0; k < 22; k++){ const t = (lo + hi) / 2; if(inStadium(cx + (x - cx) * t, cy + (y - cy) * t, cx, cy, fa * f, fb * f)) lo = t; else hi = t; } return [cx + (x - cx) * lo, cy + (y - cy) * lo]; });
   // (a box wholly on the felt, its corners 3 px inside)
@@ -2062,7 +2156,7 @@ function boardGeo(n, empty = []){
   // (the seats take their spots one by one, round the table; where that leaves one without a clean spot at the middle's
   // chosen place, the other way round, and the side seats first, are tried too, and the order with the least miss kept)
   // (an empty seat has no chips and no button to place: it is left out, and given a spot on the 70% ring at the end)
-  const ORDERS = [Array.from({ length: m }, (_, i) => i + 1).filter(i => !empty.includes(i))];
+  const ORDERS = [Array.from({ length: m + 1 }, (_, i) => i).filter(i => (i || watch) && !empty.includes(i))];
   ORDERS.push([...ORDERS[0]].reverse(), [...ORDERS[0]].sort((a, b) => Math.abs(seats[b].nx) - Math.abs(seats[a].nx)));
   // (`bound`: the miss the caller already has in hand. A try that reaches it can't be chosen, so it stops there, and its
   // miss, at least the bound, says so: the same layout as trying it to the end, found in a fraction of the time)
@@ -2074,9 +2168,12 @@ function boardGeo(n, empty = []){
   // a seat's places for its chips or its button, in the order they're tried, in steps: the clean spots first, then the
   // fallbacks, each step with what it adds to the miss (each step worked out once per layout, when first needed)
   const SPOTS = new Map(), FALLS = [[solid, true, 1], [cores, true, 5], [solid, false, 8], [cores, false, 12], [[], true, 25], [[], false, 28]];
-  function spotStep(q, own, w, h, rings, i){
-    const key = own + ':' + w + ':' + h + ':' + rings.join(',') + ':' + i;
+  function spotStep(q, own, w, h, rings, i, strict){
+    const key = own + ':' + w + ':' + h + ':' + rings.join(',') + ':' + i + (strict ? ':d' : '');
     let st = SPOTS.get(key); if(st) return st;
+    const mine = strict ? mineD : mineC;
+    // (the button: never a spot that reads as another seat's; where none is left, it stands at its own avatar, below)
+    if(strict && i && !FALLS[i - 1][1]){ st = [[], 0]; SPOTS.set(key, st); return st; }
     const d0 = Math.max(60, Math.hypot(q.x - cx, q.y - cy)), a0 = Math.atan2(q.y - cy, q.x - cx), pts = [];
     if(!i){
       for(const f of rings) for(let s = 0; s <= 96; s += 6) for(const sg of s ? [1, -1] : [1]){
@@ -2102,9 +2199,23 @@ function boardGeo(n, empty = []){
     }
     SPOTS.set(key, st); return st;
   }
+  // the button where no spot on the felt reads as its seat's: right by the seat's own avatar, first on the side towards
+  // the middle, round it until it is nearer this seat than any other, inside the area and off the board, the pot and the
+  // chips (then nearer this seat only). Before, it took the line to the seat, and on a crowded table that could stand
+  // nearer the seat beside it (Issue #32 item 10)
+  function atSeat(q, own, placed = [], stack = [], radii = [AV / 2 + DB + 3, AV / 2 + DB + 9]){
+    const a0 = Math.atan2(cy - q.y, cx - q.x), pts = [];
+    for(const r of radii) for(let k = 0; k < 24; k++){ const a = a0 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 12; pts.push([q.x + Math.cos(a) * r, q.y + Math.sin(a) * r]); }
+    const inA = (x, y) => x - DB >= 2 && x + DB <= W - 2 && y - DB >= 2 && y + DB <= H - 2;
+    // (off every plate and card but its own avatar's first, then off the board, the pot and the chips, then anywhere its own)
+    const others = flat.filter(b => !(b[0] === q.x && b[1] === q.y));
+    return pts.find(([x, y]) => inA(x, y) && mineD(x, y, own) && !hitAny([x, y, DB, DB], stack, 2) && !hitAny([x, y, DB, DB], placed, 2) && !hitAny([x, y, DB, DB], others, 1))
+      || pts.find(([x, y]) => inA(x, y) && mineD(x, y, own) && !hitAny([x, y, DB, DB], stack, 2) && !hitAny([x, y, DB, DB], placed, 2))
+      || pts.find(([x, y]) => inA(x, y) && mineD(x, y, own)) || pts[0];
+  }
   function chipsIn(stack, order, bound = Infinity){
     const placed = [], bets = [], dealers = []; let miss = 0;
-    const clear = (x, y, w, h, own) => { const b = [x, y, w, h]; return !hitAny(b, flat, 3) && !hitAny(b, stack, 3) && !hitAny(b, placed, 2) && mine(x, y, own); };
+    const clear = (x, y, w, h, own) => { const b = [x, y, w, h]; return !hitAny(b, flat, 3) && !hitAny(b, stack, 3) && !hitAny(b, placed, 2) && mineC(x, y, own); };
     // (where a spot may go for the seat alone, kept in order: the board, the pot and the chips already placed are
     // checked against these only, in the same order, so the spot found is the same as checking every point in full)
     const free = (x, y, w, h) => !hitAny([x, y, w, h], stack, 3) && !hitAny([x, y, w, h], placed, 2);
@@ -2118,10 +2229,12 @@ function boardGeo(n, empty = []){
       miss += 25; return [...onRing(q.x, q.y, rings[0])];
     };
     // your chips: just over your cards, to the right; your button: left of your cards
+    if(!watch){
     let p = null; for(const dx of [0, 24, -24, 48, -48]){ const x = hcx + hw * .6 + bW / 2 + dx, y = hcBot - hh - bH / 2 - 4; if(clear(x, y, bW / 2, bH / 2, 0)){ p = [x, y]; break; } }
     if(!p) miss++;
     bets[0] = p || [hcx, hcBot - hh - bH / 2 - 4]; placed.push([...bets[0], bW / 2, bH / 2]);
     dealers[0] = hside ? [hpx - hpw / 2 - DB - 6, hpTop + heroPh / 2] : [cx - hw - DB - 6, hcBot - hh * .35]; placed.push([...dealers[0], DB, DB]);
+    }
     if(miss >= bound) return { bets, dealers, miss };
     for(const i of order){ bets[i] = spot(seats[i], i, bW / 2, bH / 2, [.78, .7, .86, .62, .5, .4]); placed.push([...bets[i], bW / 2, bH / 2]); if(miss >= bound) return { bets, dealers, miss }; }
     for(const i of order){ dealers[i] = spot(seats[i], i, DB, DB, [.9, .84, .7, .62, .5]); placed.push([...dealers[i], DB, DB]); if(miss >= bound) return { bets, dealers, miss }; }
@@ -2153,9 +2266,48 @@ function boardGeo(n, empty = []){
     } }
   const ch0 = best.ch;
   if(ch0.miss){ const ch = chipsFor(best.stack, ORDERS, ch0.miss); if(ch.miss < ch0.miss) best = { ...best, ...ch, miss: best.miss - ch0.miss + ch.miss }; }
-  const mid = best, cost = best.miss, bets = best.bets, dealers = best.dealers;
-  for(const k of empty) if(seats[k] && !bets[k]){ bets[k] = onRing(seats[k].x, seats[k].y, .7); dealers[k] = onRing(seats[k].x, seats[k].y, .84); }
-  const geo = { key, W, H, cls, land, look: '', sq: 1, k: 0, inset: 7, g: 0, nar: 0, compact: false, mini: false, tight: false, potSide: false, rail: R, cx, cy, tall: !land, fw, fh, top, left,
+  const mid = best, cost = best.miss, bets = best.bets, dealers = best.dealers.slice();
+  // (the button, once the middle, the chips and the buttons are placed as before: a D that does not read as its own seat's
+  // (nearer it than any other seat, empty ones too, by a clear margin) is placed again, on a clean spot of its own on the
+  // felt, else right by its avatar. The middle and the chips stay where they were: Issue #32 item 10)
+  const chipsAt = (except) => bets.filter(Boolean).map(p => [...p, bW / 2, bH / 2]).concat(dealers.filter((p, j) => p && j !== except).map(p => [...p, DB, DB]));
+  for(let i = 0; i <= m; i++){
+    if(empty.includes(i) || !dealers[i] || mineD(dealers[i][0], dealers[i][1], i)) continue;
+    const placed = chipsAt(i); let pt = null;
+    if(i) for(let k = 0; k <= 2 && !pt; k++) pt = spotStep(seats[i], i, DB, DB, [.9, .84, .7, .62, .5], k, true)[0].find(([x, y]) => !hitAny([x, y, DB, DB], mid.stack, 3) && !hitAny([x, y, DB, DB], placed, 2)) || null;
+    // (your own seat: round your cards and plate together, the D just clear of them)
+    const hb = !i && !watch && seats[0].boxes, hr = hb && Math.max(...hb.map(b => Math.hypot(Math.abs(b[0] - anchorsD[0][0]) + b[2], Math.abs(b[1] - anchorsD[0][1]) + b[3]))) * .75;
+    dealers[i] = pt || (hb ? atSeat({ x: anchorsD[0][0], y: anchorsD[0][1] }, 0, placed, mid.stack, [hr, hr + 8, hr + 16]) : atSeat(seats[i], i, placed, mid.stack));
+  }
+  for(const k of empty) if(seats[k] && !bets[k]){ bets[k] = onRing(seats[k].x, seats[k].y, .7); const dk = onRing(seats[k].x, seats[k].y, .84); dealers[k] = mineD(...dk, k) ? dk : atSeat(seats[k], k, dealers.filter(Boolean).map(p => [...p, DB, DB]), mid.stack); }
+  // ---- the felt's name (Issue #32 item 9): a clean spot on the felt, off the board's row, the pot, the result line, every
+  // seat's plate and cards, and every seat's chips and D button wherever they may stand this hand. Under the result line
+  // on the middle first (upright, between it and your chips); where that has no room (sideways), the clean spot nearest
+  // it; with none at all, the result line's own place (no card can cover it there), giving way while a result is written ----
+  // (the status line under a plate, where a seat's last action now shows (Issue #32 item 7): where its middle would lie
+  // under someone's chips or a D, it slides along under its plate, at most to the plate's ends, to a clean place)
+  const chipBoxes = chipsAt(-1);
+  for(let k = watch ? 0 : 1; k <= m; k++){ const q = seats[k]; if(!q || q.hero || q.pl || empty.includes(k)) continue;
+    const half = C.pw / 2, pyl = q.core[1] + C.ph / 2 + 10, px0 = q.core[0];
+    for(const dx of [0, -4, 4, -8, 8, -12, 12, -16, 16, -20, 20, -24, 24]){ if(Math.abs(dx) > half - 16) continue; if(!hitAny([px0 + dx, pyl, 20, 8], chipBoxes, 0)){ seats[k] = { ...q, stx: dx }; break; } } }
+  const WMW = 48, WMH = 7, mBot = mid.by + mid.bh / 2 + 6 + mh, rowTop = mid.by - mid.bh / 2 - 6 - potH;
+  // (first clear of the chips and buttons too; on a crowded table, where no such spot is left, clear of the plates, the
+  // cards, the board's row, the pot and every D, over as few seats' chip spots as can be: a seat's chips may then come to
+  // lie over the name while they are out, never a card. Then on the result line's place too, where it gives way while a
+  // result is written. No such spot at all: not drawn)
+  const rowBot = mid.by + mid.bh / 2, wmBox = (x, y) => [x, y, WMW, WMH], betBoxes = bets.filter(Boolean).map(p => [...p, bW / 2, bH / 2]), dBoxes = dealers.filter(Boolean).map(p => [...p, DB, DB]);
+  const wmOk = (x, y, msg) => boxIn(x, y, WMW, WMH) && !(y + WMH + 6 > rowTop && y - WMH - 6 < (msg ? mBot : rowBot)) && !hitAny(wmBox(x, y), flat, 4) && !hitAny(wmBox(x, y), dBoxes, 3)
+    && !hitAny(wmBox(x, y), msg ? mid.stack : mid.stack.slice(0, 2), 4);
+  const under = (x, y) => betBoxes.filter(b => hitAny(wmBox(x, y), [b], 3)).length;
+  let wm = null, wmMsg = false;
+  for(const [chips, msg] of [[true, true], [false, true], [false, false]]){
+    const run = []; for(let y = Math.ceil((msg ? mBot : rowBot) + WMH + 6); y < top + fh; y++){ if(wmOk(cx, y, msg) && !(chips && under(cx, y))) run.push(y); else if(run.length) break; }
+    if(run.length >= 3){ wm = [cx, run[Math.floor(run.length / 2)]]; }
+    else { let bd = Infinity; for(let y = top; y <= top + fh; y += 3) for(let x = left; x <= left + fw; x += 3){ if(!wmOk(x, y, msg)) continue; const u = under(x, y); if(chips && u) continue;
+      const d = u * 1e4 + Math.abs(x - cx) * 1.5 + Math.abs(y - mBot - WMH - 6); if(d < bd){ bd = d; wm = [x, y]; } } }
+    if(wm){ wmMsg = !msg && hitAny(wmBox(...wm), [mid.stack[2]], 2); break; }
+  }
+  const geo = { key, W, H, cls, land, look: '', sq: 1, k: 0, inset: 7, wmX: wm ? wm[0] : null, wmY: wm ? wm[1] : null, wmMsg, g: 0, nar: 0, compact: false, mini: false, tight: false, potSide: false, rail: R, cx, cy, tall: !land, fw, fh, top, left,
     seats, bw: mid.bw, by: mid.by, bx: cx, msgW: mid.msgW, mline: mid.bh / 2 + 6, av: AV, cost, bets, dealers, betAt: k => bets[k], dealerAt: k => dealers[k] };
   GEO = geo; if(GEOS.size > 12) GEOS.delete(GEOS.keys().next().value);
   if(a.clientWidth) GEOS.set(key, geo);
@@ -2173,21 +2325,25 @@ function boardAvHTML(uid, name){
 function boardSeatHTML(d, p, s, o){
   const { isMe, acting, res, hole, pos, oq, stackTxt, winStyle, nick } = o;
   const dc = acting && d.dcProtect, away = !!p.away, won = res && p.won > 0;
-  // the name line: the name, or the seat's last action in its colour, "Winner", or its hand at a showdown
+  // the seat's last action in its colour, "Winner", or its hand at a showdown: in the status line under the plate (the
+  // Away / Disconnected spot), never in place of the name. The name line always shows the name: after acting, and the
+  // blinds before the flop, read "Fold" or "SB" where the player's name was (owner, Issue #32 item 7)
   let word = '', wcls = '';
   if(won){ word = 'Winner'; wcls = 'won'; }
   else if(res && res.showdown && p.cat){ word = p.cat; wcls = 'hand'; }
   else if(p.act && !acting && !res){ word = p.act; wcls = 'act-' + p.act.toLowerCase().replace(/[^a-z]+/g, '-'); }
   if(word === stackTxt) word = '';
-  const status = dc ? '<span class="badge b-st dc" title="Disconnected · protection time">Disconnected</span>' : away ? '<span class="badge b-st away">Away</span>' : '';
-  const label = `${p.name}, ${stackTxt === 'All-in' ? 'all-in' : stackTxt + ' chips'}${dc ? ', disconnected' : away ? ', away' : ''}${acting ? ', to act' : ''}`;
-  const cls = `seat b-seat ${isMe ? 'hero' : ''} ${isMe && oq.hside ? 'hside' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${won ? 'win' : ''} ${p.allIn && !res ? 'allin' : ''} ${oq.pl ? 'pl-' + oq.pl : ''}`;
-  const nm = `<div class="nm${word ? ' nm-act ' + wcls : ''}"${word ? ` data-act="${esc(word)}"` : ''} title="${esc(p.name)}">${esc(word || (isMe ? 'You' : nick(p.name)))}</div>`;
+  // (Disconnected first, then Winner, then Away, then the action: one status at a time, in the one spot)
+  const status = dc ? '<span class="badge b-st dc" title="Disconnected · protection time">Disconnected</span>'
+    : word && (won || !away) ? `<span class="badge b-st b-act ${wcls}" data-act="${esc(word)}">${esc(word)}</span>` : away ? '<span class="badge b-st away">Away</span>' : '';
+  const label = `${p.name}, ${stackTxt === 'All-in' ? 'all-in' : stackTxt + ' chips'}${dc ? ', disconnected' : away ? ', away' : ''}${word ? ', ' + word : ''}${acting ? ', to act' : ''}`;
+  const cls = `seat b-seat ${isMe ? 'hero' : ''} ${isMe && oq.hside ? 'hside' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${won ? 'win' : ''} ${p.allIn && !res ? 'allin' : ''} ${oq.pl ? 'pl-' + oq.pl : ''}${oq.stUp ? ' st-up' : ''}`;
+  const nm = `<div class="nm" title="${esc(p.name)}">${esc(isMe ? 'You' : nick(p.name))}</div>`;
   const st = `<div class="st num${stackTxt === 'All-in' ? ' allin' : ''}">${stackTxt}</div>`;
   const shot = acting ? `<div class="shot"><i class="shotBar${dc ? ' dc' : ''}"></i></div>` : '';
   const at = `data-uid="${esc(p.uid)}" aria-label="${esc(label)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}`;
   if(isMe) return `<div class="${cls}" ${at}"><div class="hole">${hole}</div><div class="plate">${boardAvHTML(p.uid, p.name)}<div class="pl-txt">${nm}${st}</div>${shot}</div>${status}</div>`;
-  return `<div class="${cls}" ${at};--sx:${oq.sx || 0}px;--hx:${oq.hx || 0}px;--hy:${oq.hy || 0}px${oq.hys != null ? `;--hys:${oq.hys}px` : ''}${oq.pwx ? `;--pw:${oq.pwx}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${boardAvHTML(p.uid, p.name)}${shot}`
+  return `<div class="${cls}" ${at};--sx:${oq.sx || 0}px;--stx:${oq.stx || 0}px;--hx:${oq.hx || 0}px;--hy:${oq.hy || 0}px${oq.hys != null ? `;--hys:${oq.hys}px` : ''}${oq.pwx ? `;--pw:${oq.pwx}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${boardAvHTML(p.uid, p.name)}${shot}`
     + `<i class="b-dot${dc ? ' dc' : away ? ' away' : ''}" aria-hidden="true"></i><div class="plate">${nm}${st}</div>${status}</div>`;
 }
 const pxToPct = ([x, y]) => [x / GEO.W * 100, y / GEO.H * 100];
@@ -2200,7 +2356,7 @@ function layoutOf(d){
   const mySeat = d.seats.findIndex(p => p && club && p.uid === club.me.id), base = Math.max(0, allowed.indexOf(mySeat));
   const rel = s => (allowed.indexOf(s) - base + n) % n;
   // (the board's layout knows which seats are empty, by their place round the table)
-  const G = BOARD ? boardGeo(n, allowed.filter(s => !d.seats[s]).map(rel).filter(Boolean).sort((x, y) => x - y)) : tableGeo(n, bet);
+  const G = BOARD ? boardGeo(n, allowed.filter(s => !d.seats[s]).map(rel).filter(k => k || mySeat < 0).sort((x, y) => x - y), mySeat < 0) : tableGeo(n, bet);
   return { allowed, rel, G, posOf: s => pxToPct([G.seats[rel(s)].x, G.seats[rel(s)].y]), betOf: s => G.betAt(rel(s)), dealerOf: s => G.dealerAt(rel(s)) };
 }
 const centerPx = () => GEO ? [GEO.bx, GEO.by] : pctToPx([50, 45]);
@@ -2265,7 +2421,9 @@ function potToWinners(d, handKey, LY){
   fx.querySelectorAll('.winpile').forEach(e => e.remove());
   // start where the pot sits, just above the board
   const area = $('tableArea'), ar = area.getBoundingClientRect(), br = $('board').getBoundingClientRect();
-  const [px, py] = br.width ? [br.left + br.width / 2 - ar.left, br.top - ar.top - 12] : centerPx(), still = reducedMotion(), bb = (d.blinds && d.blinds[1]) || 1;
+  // (the winner beat: the hand's name holds the pot's place, so the chips come out from behind the board's cards instead)
+  const fromCards = !!(d.result && d.result.hand && br.width);
+  const [px, py] = br.width ? [br.left + br.width / 2 - ar.left, fromCards ? br.top + br.height / 2 - ar.top : br.top - ar.top - 12] : centerPx(), still = reducedMotion(), bb = (d.blinds && d.blinds[1]) || 1;
   d.seats.forEach((p, s) => {
     if(!p || !(p.won > 0)) return;
     let [bx, by] = LY.betOf(s); const el = document.createElement('div');
@@ -2276,6 +2434,25 @@ function potToWinners(d, handKey, LY){
     // the seat or your cards behind that spot)
     const grow = Math.max(0, el.offsetHeight / 2 - 11), gl = Math.hypot(px - bx, py - by) || 1;
     bx += (px - bx) / gl * grow; by += (py - by) / gl * grow;
+    // (the board: the seat's status line says "Winner" under its plate; the pile keeps clear of it, and of the result
+    // line, the board's row (its box: the cards may still be flying in) and the seats: the nearest clean place,
+    // further in towards the pot or to either side)
+    const pill = BOARD && $('seats').querySelector(`.seat[data-uid="${CSS.escape(p.uid)}"] .badge.b-st`);
+    if(pill){ const box = e => { const r = e.getBoundingClientRect(); return [r.left - ar.left, r.top - ar.top, r.right - ar.left, r.bottom - ar.top]; };
+      const msg = $('msg'), words = msg && msg.textContent.trim() ? [...msg.querySelectorAll('*')].filter(e => !e.children.length && e.textContent.trim()) : [];
+      const obst = [pill, ...(words.length ? words : msg && msg.textContent.trim() ? [msg] : []), $('board'), ...$('seats').querySelectorAll('.seat .plate, .seat .badge.b-st, .seat .av, .seat .hole')]
+        .map(box).filter(b => b[2] > b[0]);
+      const hw = el.offsetWidth / 2, hh = el.offsetHeight / 2, ux = (px - bx) / gl, uy = (py - by) / gl;
+      const clear = (x, y) => !obst.some(([L, T, R, B]) => x - hw < R + 2 && x + hw > L - 2 && y - hh < B + 2 && y + hh > T - 2);
+      let best = null;
+      const W = area.clientWidth, H = area.clientHeight;
+      for(let k = -4; k <= 24; k++) for(let j = -12; j <= 12; j++){
+        const x = bx + ux * 4 * k - uy * 8 * j, y = by + uy * 4 * k + ux * 8 * j, c = Math.hypot(4 * k, 8 * j);
+        if((!best || c < best[2]) && x - hw >= 2 && x + hw <= W - 2 && y - hh >= 2 && y + hh <= H - 2 && clear(x, y)) best = [x, y, c]; }
+      // (with no clean place, clear of its own status line at least, as before)
+      const [L, T, R, B] = box(pill);
+      if(best){ bx = best[0]; by = best[1]; }
+      else for(let k = 0; k < 24 && bx - hw < R + 2 && bx + hw > L - 2 && by - hh < B + 2 && by + hh > T - 2; k++){ bx += ux * 4; by += uy * 4; } }
     el.style.cssText = `left:${bx}px;top:${by}px`;
     if(still){ el.classList.add('settled'); return; }
     const dx = px - bx, dy = py - by, lift = Math.min(60, Math.hypot(dx, dy) * .18);
@@ -2692,6 +2869,7 @@ function lockArea(){
     DOCKBOX = [Math.round(dr.right - dr.width - ar.left), Math.round(dr.bottom - up - DOCKH - ar.top), Math.round(dr.right - ar.left), Math.round(dr.bottom - up - ar.top)]; LOCK.box = DOCKBOX; }
   else DOCKBOX = LOCK.box;
 }
+let handOnFelt = false; // the winning hand's name is on the felt (the pot's place or the result line)
 function renderTable(){
   if(view !== 'table' || !club) return;
   const tid = watchTid || club.myTable, d = tables.get(tid);
@@ -2710,10 +2888,16 @@ function renderTable(){
   area.style.setProperty('--cw', Math.max(30, Math.min(46, area.clientWidth * .1)) + 'px');
   const res = d.result, winCards = new Set((res && res.showdown ? res.winCards : []).map(cs));
   const handKey = d.tid + ':' + d.handNo;
+  area.dataset.state = handKey + ':' + d.seq;   // which state the table shows (table, hand, turn), for checking it is the live one
   // the whole live pot: what's in the middle plus this street's bets still in front of the seats (the coach's pot
   // odds count the same total; when the bets are swept in they leave the seats as they join d.pot, so nothing counts twice)
   const potAll = (d.pot || 0) + d.seats.reduce((t, p) => t + (p && p.inHand ? p.bet || 0 : 0), 0);
-  $('pot').innerHTML = !res && potAll > 0 ? `${chipsIcon(3)}Pot ${chipFmt(potAll, 1e6)}` : '';
+  // (the winner beat, Issue #34: while the server holds the result, the winning hand sits where the pot was, the winner and
+  // the amount on the line under the board; it goes when the server moves the table on, never on a client timer)
+  $('pot').innerHTML = res && res.hand ? `<span class="win-hand">${esc(res.hand)}</span>` : !res && potAll > 0 ? `${chipsIcon(3)}Pot ${chipFmt(potAll, 1e6)}` : '';
+  $('pot').classList.toggle('beat', !!(res && res.hand)); area.classList.toggle('win-beat', !!res);
+  // (a long hand name that does not fit keeps its first part: "Two Pair", not "Two Pair, Jacks and Ei…")
+  const wh = res && res.hand && $('pot').querySelector('.win-hand'); if(wh && wh.scrollWidth > wh.clientWidth + 1) wh.textContent = res.hand.split(',')[0];
   $('pot').style.visibility = $('pot').innerHTML ? 'visible' : 'hidden';
   let b = '';
   for(let i = 0; i < 5; i++){
@@ -2737,7 +2921,10 @@ function renderTable(){
   const felt = area.querySelector('.felt');
   // (on the oval the felt's name sits on the message line under the board, which the layout keeps clear of chips)
   const wm = G.inset === 6 ? `;--wm:${(G.by + G.mline - (G.cy - G.fh / 2)) / G.fh * 100}%` : '';
-  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px${wm}`;
+  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px${wm}${BOARD && G.wmY != null ? `;--wm-x:${G.wmX - (G.cx - G.fw / 2)}px;--wm-y:${G.wmY - (G.cy - G.fh / 2)}px` : ''}`;
+  // (the board: the felt's name is an element of its own, champagne gold, placed by the layout; Issue #32 item 9)
+  if(BOARD){ let m = felt.querySelector('.b-wm'); if(!m){ m = document.createElement('i'); m.className = 'b-wm'; m.setAttribute('aria-hidden', 'true'); m.textContent = 'BLINDRISE'; felt.appendChild(m); }
+    m.classList.toggle('on-msg', !!G.wmMsg); m.hidden = G.wmY == null; }
   area.querySelector('.center').style.cssText = `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
   $('msg').style.maxWidth = G.msgW + 'px';
   // a split or several pots can be longer than the felt's one line: then the same result in shorter words, until it
@@ -2829,6 +3016,21 @@ function renderTable(){
   const ml = $('msg'); ml.classList.remove('up');
   if(res && G.cost){ const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom, mr = ml.getBoundingClientRect();
     if([...$('seats').querySelectorAll('.av, .plate, .hole .card')].some(e => hit(e.getBoundingClientRect(), mr))) ml.classList.add('up'); }
+  // (the winner beat: when the result line goes up into the pot's place, the hand's name leaves that place and joins the
+  // line, "Ana wins 1,200 · Two Pair", when it fits whole; else it stays in the bar under the table)
+  handOnFelt = !!(res && res.hand);
+  if(res && res.hand && ml.classList.contains('up')){
+    const P = $('pot'); P.innerHTML = ''; P.classList.remove('beat'); P.style.visibility = 'hidden';
+    // (in shorter words until it fits: the hand's kind only, "Two Pair", then the players' short names)
+    const was = ml.innerHTML, L0 = res.lines[0], won = (L0.match(/^.*? (?:wins|split) [\d,]+/) || [L0])[0], kind = res.hand.split(',')[0];
+    const names = d.seats.filter(Boolean).map(p => p.name).sort((a, b) => b.length - a.length), nk = seatNicks(names), nicks = l => names.reduce((t, n) => t.split(n).join(nk(n)), l);
+    const fits = () => ml.scrollHeight <= ml.clientHeight + 1 && ml.scrollWidth <= ml.clientWidth + 1;
+    // (more pots: the others follow as who won how much, and go last of all; the bar under the table lists them all)
+    const more = res.lines.slice(1).filter(l => / (?:wins|split) [\d,]+/.test(l)).map(l => nicks((l.match(/^.*? (?:wins|split) [\d,]+/) || [l])[0]));
+    handOnFelt = [[L0, ...more], [won + ' · ' + kind, ...more], [nicks(won) + ' · ' + kind, ...more], [nicks(won) + ' · ' + kind]]
+      .some(f => { ml.innerHTML = f.map(x => `<div>${esc(x)}</div>`).join(''); return fits(); });
+    if(!handOnFelt) ml.innerHTML = was;
+  }
   if(res) try{ potToWinners(d, handKey, LY); }catch(e){}
   clearShown();
   $('tName').textContent = `Table ${d.n}`;
@@ -2838,6 +3040,8 @@ function renderTable(){
   renderHelper(d, mySeat >= 0 ? d.seats[mySeat] : null, mine);
   // last hand's coach tip floats over the table; it gets out of the way when it's your turn to act
   if(d.actUid === club.me.id && !d.result && !$('coachTip').hidden){ $('coachTip').hidden = true; clearTimeout(tipTimer); }
+  // (the board: a tip that came while it was your turn waits for your turn to end; Issue #32 item 14)
+  else if(BOARD && tipWait && !(d.actUid === club.me.id && !d.result)){ const w = tipWait; tipWait = null; showTip(...w); }
   renderPlayNote(d);
   tickClock();
 }
@@ -2899,7 +3103,7 @@ function renderControls(d, mySeat, mine){
     }
   }
   else if(meSeat.inHand && meSeat.folded) line = 'You folded. Next hand coming up…';
-  else line = d.phase === 'hand' ? 'You play from the next hand.' : 'Shuffling up…';
+  else line = d.phase === 'hand' ? 'You play from the next hand.' : T && T.status === 'running' && (T.breakUntil || T.breakPending) && !T.paused ? 'On break. Play resumes by itself.' : 'Shuffling up…';
   // a finished hand: the whole result in the bar (the felt shows its first line)
   const R = d.result && d.result.lines;
   // (while my show offer is up, the bar asks about my cards instead; the felt still shows the result)
@@ -2908,7 +3112,8 @@ function renderControls(d, mySeat, mine){
     // the felt already says who won how much: the bar adds only what the felt leaves out (the winning hand, the
     // other pots), so the same words never show twice
     const rest = R.map(l => l.slice((l.match(/^.*? (?:wins|split) [\d,]+/) || [''])[0].length).replace(/^\s*·\s*/, ''));
-    line = rest.every(x => !x) ? 'Next hand coming up…' : R.length === 1 ? `Winning hand: <b>${esc(rest[0])}</b>` : R.map(esc).join('<br>');
+    // (one pot: its winning hand is on the felt now, in the pot's place, Issue #34)
+    line = rest.every(x => !x) || R.length === 1 && d.result.hand && handOnFelt ? 'Next hand coming up…' : R.length === 1 ? `Winning hand: <b>${esc(rest[0])}</b>` : R.map(esc).join('<br>');
   }
   // (the board: the quick actions, or nothing, with "⋯" at the end of the row, which keeps its height, §3.5)
   // (the board, sitting out: the words on the info line, "I'm back" in the action row's empty place before "⋯". In the
@@ -2934,26 +3139,76 @@ function renderControls(d, mySeat, mine){
 // One action per turn: the first tap locks the buttons (a second tap, or a pre-action racing the button, sends
 // nothing) until the table moves on. If nothing has moved after a few seconds (a lost message), the buttons come
 // back so the action can be sent again; the server takes only the first action for a turn.
-let actLockTimer = 0;
+// Disconnects (Issue #34): while the connection is down the tap waits in the outbox (one action per turn; a newer tap
+// replaces it) and the controls say so, never "sending…". After the reconnect, once the fresh table state is in, it is
+// sent only if that state is still the same hand, the same seq and this player's turn; otherwise it is dropped, a short
+// notice says so at that moment ("Call wasn't sent — the hand moved on."), and the controls show the new state. An
+// action sent just before the connection fell (or found dead by the watchdog) goes back to the outbox: the server takes
+// an act only for the current hand and seq, so sending it again can never count twice.
+let actLockTimer = 0, live = false, outbox = null;   // outbox: this turn's action { key, tid, a, sent } until the server's state moves on
+const actWords = a => ({ fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' }[a.t] || '') + (a.t === 'raise' ? ' to ' + fmt(a.to) : '');
 function sendAction(d, a){
   const key = d.tid + ':' + d.handNo + ':' + d.seq;
   if(lastSent === key) return;
+  if(d.tid !== 'demo' && !(live && ws && ws.readyState === 1)){
+    outbox = { key, tid: d.tid, a, sent: false }; offlineNote();
+    if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){}
+    return drawQueued(d);
+  }
   lastSent = key;
   $('controls').querySelectorAll('button').forEach(b => { b.disabled = true; });
   clearTimeout(actLockTimer);
   actLockTimer = setTimeout(() => {
     const t = tables.get(d.tid);
     if(lastSent !== key || !t || t.tid + ':' + t.handNo + ':' + t.seq !== key || t.actUid !== club.me.id) return;
-    lastSent = null; $('controls').dataset.turn = ''; if(view === 'table' && watchTid === d.tid) renderTable();
+    lastSent = null; outbox = null; $('controls').dataset.turn = ''; if(view === 'table' && watchTid === d.tid) renderTable();
   }, 4000);
   // (quiet design: the free-play notice steps aside at my first action, so it never sits on the helper while I play,
   // Muse on Issue #31 from the owner's iPhone; the board, spec §3.4, the same)
   if(QUIET || BOARD) hidePlayNote();
   if(d.tid === 'demo' && demo){ if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){} $('controls').innerHTML = '<div class="info-line">…</div>'; return demo.answer(a); }
-  const words = { fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise' };
-  $('controls').innerHTML = `<div class="info-line">${words[a.t] || ''}${a.t === 'raise' ? ' to ' + fmt(a.to) : ''} · sending…</div>`;
+  $('controls').innerHTML = `<div class="info-line">${actWords(a)} · sending…</div>`;
   if(navigator.vibrate) try{ navigator.vibrate(20); }catch(e){}
+  outbox = { key, tid: d.tid, a, sent: true, at: Date.now() };
   send({ t: 'act', tid: d.tid, hand: d.handNo, seq: d.seq, a });
+}
+// the action buttons stay live while an action waits (a newer tap replaces it); the line over them says what waits
+function drawQueued(d){
+  if(!outbox || view !== 'table' || d.tid !== (watchTid || club.myTable) || d.tid + ':' + d.handNo + ':' + d.seq !== outbox.key) return;
+  const me = d.seats.find(p => p && p.uid === club.me.id); if(!me || !d.legal) return;
+  $('controls').dataset.turn = outbox.key; drawActions(d, me); queuedNote(d);
+}
+function queuedNote(d){
+  if(!outbox || outbox.sent || d.tid + ':' + d.handNo + ':' + d.seq !== outbox.key) return;
+  const row = $('controls').querySelector('.turnrow');
+  if(row) row.outerHTML = `<div class="info-line">Reconnecting… ${actWords(outbox.a)} will be sent when you're back.</div>`;
+  if(BOARD && row) $('helper').hidden = true;   // (the board's top band shows one line: this one, not the hand helper)
+}
+// a waiting action the fresh state no longer fits (the hand moved on while the connection was down): it is dropped,
+// and the player is told at that moment, so a tap never just vanishes
+function outboxDrop(){
+  const o = outbox; outbox = null;
+  if(o && !o.sent) toast(`${actWords(o.a)} wasn't sent — the hand moved on.`, 4000, true);
+}
+// the "Reconnecting…" pill says the same, so it shows wherever the controls are
+const offlineNote = () => { $('offline').textContent = outbox && !outbox.sent ? `Reconnecting… ${actWords(outbox.a)} will be sent when you're back.` : 'Reconnecting…'; };
+// the connection fell: an action not yet answered by the server waits again (it may never have arrived)
+function outboxDown(){
+  live = false;
+  if(!outbox || !outbox.sent) return offlineNote();
+  outbox.sent = false; clearTimeout(actLockTimer); offlineNote();
+  if(lastSent === outbox.key) lastSent = null;
+  const d = tables.get(outbox.tid); if(d) drawQueued(d);
+}
+// a table state from the server: the turn moved on (the echo of the action, or the hand went on without it) → the
+// outbox empties; still this turn, back online and not yet sent → it goes now
+function outboxCheck(d){
+  if(!outbox || outbox.tid !== d.tid) return;
+  if(d.tid + ':' + d.handNo + ':' + d.seq !== outbox.key || d.actUid !== club.me.id || !d.legal || d.phase !== 'hand'){
+    if(outbox.sent && outbox.at && actRtts.length < 20) actRtts.push(Date.now() - outbox.at);
+    return outboxDrop();
+  }
+  if(!outbox.sent && live) sendAction(d, outbox.a);
 }
 // the action clock, plus the extra-time button: 3 cards a tournament (5 more at the final table), +30 seconds each
 function turnBarHTML(d){
@@ -3019,10 +3274,10 @@ function drawSizing(d, meSeat){
   $('minus').onclick = () => set(v - stepAmt);
   $('plus').onclick = () => set(v + stepAmt);
   c.querySelectorAll('[data-to]').forEach(btn => btn.onclick = () => set(+btn.dataset.to));
-  $('szBack').onclick = () => drawActions(d, meSeat);
+  $('szBack').onclick = () => { drawActions(d, meSeat); queuedNote(d); };
   $('szGo').onclick = () => sendAction(d, { t: 'raise', to: v });
   set(d.street === 0 && presets.length > 2 ? presets[1][1] : presets[0][1]);
-  tickClock();
+  tickClock(); queuedNote(d);
 }
 // ---------- the board's action row (UI_BOARD, Step-0 spec §3.5) ----------
 // Fold red, Call blue with the amount, Raise gold "Raise to N" (the sizing it would open on), and "⋯" for the rest.
@@ -3081,13 +3336,14 @@ function boardSizing(d, meSeat){
   $('minus').onclick = () => set(v - stepAmt);
   $('plus').onclick = () => set(v + stepAmt);
   c.querySelectorAll('[data-to]').forEach(btn => btn.onclick = () => set(+btn.dataset.to));
-  $('szBack').onclick = () => drawActions(d, meSeat);
+  $('szBack').onclick = () => { drawActions(d, meSeat); queuedNote(d); };
   $('szGo').onclick = () => sendAction(d, { t: 'raise', to: v });
   set(first);
-  tickClock();
+  tickClock(); queuedNote(d);
 }
 // "⋯": the table menu (§3.5): Chat (its unread dot shows on "⋯" too), extra time on your turn, the hand helper on or off,
-// your hand history, leave the table. (Sit out next hand and Sound are on the spec's list but the app has neither yet.)
+// Sound (the break music, Issue #34), your hand history, leave the table. (Sit out next hand is on the spec's list but the
+// app does not have it yet.)
 let bHelperOff = false; try{ bHelperOff = localStorage.getItem('stacked:helper-board') === 'off'; }catch(e){}
 function boardMenu(){
   if(!BOARD) return;
@@ -3100,6 +3356,7 @@ function boardMenu(){
     ${row('chat', 'Chat', chatUnread ? 'New messages' : '', chatUnread ? ' data-unread' : '')}
     ${mineT && !demo ? row('time', 'Add 30 seconds', `${x} left`, x ? '' : ' disabled') : ''}
     ${row('helper', 'Hand helper', bHelperOff ? 'Off' : 'On', ` role="switch" aria-checked="${!bHelperOff}"`)}
+    ${row('sound', 'Sound', SND.on() ? 'On · music on breaks' : 'Off', ` role="switch" aria-checked="${SND.on()}"`)}
     ${demo ? '' : row('hands', 'Hand history', 'Opens your hands in the lobby')}
     ${row('leave', 'Leave table', 'Back to the lobby')}
     <button type="button" class="b-row b-close" data-bm="close"><span>Close</span></button></div>`;
@@ -3109,6 +3366,7 @@ function boardMenu(){
     const k = b.dataset.bm; closeMenu();
     if(k === 'chat') openChat(true);
     else if(k === 'time') send({ t: 'extend' });
+    else if(k === 'sound'){ SND.set(!SND.on()); tickClock(); }
     else if(k === 'helper'){ bHelperOff = !bHelperOff; try{ localStorage.setItem('stacked:helper-board', bHelperOff ? 'off' : ''); }catch(e){} renderTable(); }
     else if(k === 'hands'){ $('lobbyBtn').click(); tab = 'learn'; learnSeg = 'hands'; openHand = null; send({ t: 'hands' }); renderLobby(); }
     else if(k === 'leave') $('lobbyBtn').click();
@@ -3134,11 +3392,14 @@ if(BOARD){
   top.className = 'b-top'; top.id = 'bTop';
   top.innerHTML = `<div class="b-top-l"></div><div class="b-hudw"><button type="button" class="b-hud" id="bHud" data-bhud aria-haspopup="dialog">
     <span class="bh-lvl"><small>Level</small><b class="num" id="bhLvl"></b></span><span class="bh-bl"><b class="num" id="bhBl"></b><small class="num" id="bhAnte"></small></span>
-    <span class="bh-rk" id="bhRk"><small><span class="bh-yr">Your rank</span><span class="bh-r">Rank</span></small><b class="num" id="bhRank"></b></span><span class="bh-tm"><b class="num" id="bhTime"></b><small class="num" id="bhPl"></small></span>
+    <span class="bh-rk" id="bhRk"><small><span class="bh-yr">Your rank</span><span class="bh-r">Rank</span></small><b class="num" id="bhRank"></b></span><span class="bh-wt" id="bhWt"><b class="num" id="bhWn"></b><small>watching</small></span><span class="bh-tm"><b class="num" id="bhTime"></b><small class="num" id="bhPl"></small></span>
     <span class="bh-idle" id="bhIdle"></span><span class="bh-go" aria-hidden="true">›</span></button></div><div class="b-top-r"></div>`;
   g.prepend(top);
   top.querySelector('.b-top-l').appendChild($('chatBtn'));
   top.querySelector('.b-top-r').appendChild($('lobbyBtn'));
+  // (upright, "N watching" stands under the Lobby pill; sideways it is in the pill, after the players: owner's ruling,
+  // Issue #32 item 11. The card's label reads it out, so this copy is hidden from screen readers)
+  top.querySelector('.b-top-r').insertAdjacentHTML('beforeend', '<span class="b-watch num" id="bWatch" aria-hidden="true" hidden></span>');
   top.querySelector('.b-hudw').appendChild($('spn'));
   $('bHud').onclick = () => boardSheet();
 }
@@ -3172,13 +3433,19 @@ function boardTop(T, d, me, brk){
   if($('bhPl').innerHTML !== pl) $('bhPl').innerHTML = pl;
   bSet('bhRank', rank ? ord(rank) : '');
   $('bhRk').hidden = !rank; top.classList.toggle('b-brk', !!brk);
-  const key = [T.level, sb, bb, an, f.players, f.total, rank, brk ? 1 : 0, $('cTime').textContent.length, $('bHud').clientWidth, $('game').dataset.bcls, $('game').classList.contains('land')].join('|');
+  // how many are watching this table, live (the count the details sheet shows too)
+  const wn = f.watchers == null ? null : f.watchers;
+  bSet('bhWn', wn == null ? '' : wn); bSet('bWatch', wn == null ? '' : `${wn} watching`);
+  $('bhWt').hidden = wn == null; $('bWatch').hidden = wn == null;
+  const key = [T.level, sb, bb, an, f.players, f.total, rank, wn, brk ? 1 : 0, $('cTime').textContent.length, $('bHud').clientWidth, $('game').dataset.bcls, $('game').classList.contains('land')].join('|');
   if(key === bTopKey) return;
   bTopKey = key;
-  $('bHud').setAttribute('aria-label', `Level ${T.level + 1}, blinds ${fmt(sb)}/${fmt(bb)}${an ? ', ante ' + fmt(an) : ''}. ${f.players} of ${f.total} players left.${rank ? ' Your rank ' + ord(rank) + '.' : ''} ${brk ? 'On a break' : 'Time left'} ${$('cTime').textContent}. Opens the tournament details.`);
+  $('bHud').setAttribute('aria-label', `Level ${T.level + 1}, blinds ${fmt(sb)}/${fmt(bb)}${an ? ', ante ' + fmt(an) : ''}. ${f.players} of ${f.total} players left.${rank ? ' Your rank ' + ord(rank) + '.' : ''}${wn != null ? ` ${wn} watching.` : ''} ${brk ? 'On a break' : 'Time left'} ${$('cTime').textContent}. Opens the tournament details.`);
   // (long blinds on a narrow phone: the values a size smaller, then the ante and the caption go)
-  const card = $('bHud'); card.classList.remove('tight', 'tighter');
+  const card = $('bHud'); card.classList.remove('tight', 'snug', 'tighter');
   if(card.scrollWidth > card.clientWidth + 1) card.classList.add('tight');
+  // (sideways, with "N watching" in the pill: the dots between the values closer first, before any caption goes)
+  if(card.scrollWidth > card.clientWidth + 1) card.classList.add('snug');
   if(card.scrollWidth > card.clientWidth + 1) card.classList.add('tighter');
 }
 // the board's four tiles (the sheet; sideways, the column)
@@ -3246,7 +3513,7 @@ function sponsorHTML(sp, big, prize){
 function wireSponsor(el, T){
   const b = el.querySelector('[data-spbiz]'); if(!b) return;
   const go = async () => {
-    const t = club.tourney && club.tourney.id === T.id ? club.tourney : T, brk = t.paused || t.breakUntil && t.breakUntil > Date.now() + clockSkew, d = tables.get(club.myTable);
+    const t = club.tourney && club.tourney.id === T.id ? club.tourney : T, brk = t.paused || t.breakPending || t.breakUntil && t.breakUntil > Date.now() + clockSkew, d = tables.get(club.myTable);
     if(!brk && d && d.phase === 'hand' && d.seats.some(p => p && p.uid === club.me.id && p.inHand && !p.folded)
       && !await modal(`<h2>Open ${esc(T.sponsor.name)}'s page?</h2><p>Your hand plays on while you look: when it is your turn you check or fold. Come back with Go to my table.</p>`, [{ label: 'Stay here', value: false }, { label: 'Open their page', value: true, primary: true }])) return;
     if(brk) leftForSponsor = t.id;
@@ -3258,17 +3525,23 @@ function fillLogo(el, sp){
   const slot = el.querySelector('[data-splogo]');
   if(slot && window.BizClub && window.BizClub.logo) slot.replaceChildren(window.BizClub.logo({ uid: sp.uid, name: sp.name, logoV: sp.logoV }, 'sp'));
 }
+// (Issue #34: drawn from the server's break state alone, on every 'club' update and every clock tick, so it shows the moment
+// the break begins for everyone, a fresh join or a reconnect included. It also shows at a table whose hand is over while
+// the break waits for the last hand at another table: before, that table sat empty and looked frozen.)
 function breakUI(T, d, now){
   const el = $('brk'); if(!el) return;
-  const paused = T && T.paused && T.pausedBreakLeft > 0;
-  const on = T && T.status === 'running' && (paused || T.breakUntil && T.breakUntil > now);
+  const paused = T && T.paused && T.pausedBreakLeft > 0, pend = !!(T && T.breakPending && !T.breakUntil);
+  const on = T && T.status === 'running' && (paused || pend || T.breakUntil && T.breakUntil > now);
   if(!on || (d && d.phase === 'hand')){ if(!el.hidden){ el.hidden = true; el.innerHTML = ''; brkKey = ''; $('tableArea').classList.remove('on-break'); } return; }
   $('tableArea').classList.add('on-break');
-  const key = T.id + ':' + (T.breakUntil || 'p') + ':' + (T.sponsor ? T.sponsor.uid : '') + ':' + (T.prize || '');
+  const key = T.id + ':' + (pend ? 'w' : T.breakUntil || 'p') + ':' + (T.sponsor ? T.sponsor.uid : '') + ':' + (T.prize || '');
   if(key !== brkKey){
+    const again = brkKey.startsWith(T.id + ':w:'); // the waiting card turning into the countdown: no second fade-in
     brkKey = key;
     const [sb, bb, an] = E.levelFor(T.level, T.anteMode);
-    el.innerHTML = `<div class="brk-card"><span class="brk-eye">Tournament break</span><b class="brk-time num" id="brkTime"></b>
+    el.innerHTML = `<div class="brk-card${again ? ' still' : ''}"><span class="brk-eye"><i class="brk-dot" aria-hidden="true"></i>Tournament break</span>
+      ${pend ? '<b class="brk-time brk-wait"><small class="brk-lead">On break</small>Starts when the last hand ends</b>'
+        : '<b class="brk-time num"><small class="brk-lead">On break — back in</small> <span id="brkTime"></span></b>'}
       <small class="brk-sub">Play resumes by itself · Level ${T.level + 1} · ${fmt(sb)}/${fmt(bb)}${an ? ' · ante ' + fmt(an) : ''}</small>
       ${T.sponsor ? sponsorHTML(T.sponsor, true, T.prize) : T.prize ? `<small class="brk-prize">Prize: ${esc(T.prize)}</small>` : ''}</div>`;
     if(T.sponsor) fillLogo(el, T.sponsor);
@@ -3279,7 +3552,7 @@ function breakUI(T, d, now){
   const sig = [...document.querySelectorAll('#seats .seat')].map(q => q.offsetLeft + ',' + q.offsetTop).join(' ') + '|' + $('tableArea').clientWidth + 'x' + $('tableArea').clientHeight;
   if(el.dataset.sig !== sig){ el.dataset.sig = sig; fitBreak(el); }
   else if(el.dataset.fit === 'ok'){ const r = el.getBoundingClientRect(); if(brkSeats().some(q => r.left < q.right && q.left < r.right && r.top < q.bottom && q.top < r.bottom)) fitBreak(el); }
-  $('brkTime').textContent = paused ? 'Paused · ' + mmss(T.pausedBreakLeft) : mmss(T.breakUntil - now);
+  if($('brkTime')) $('brkTime').textContent = paused ? 'Paused · ' + mmss(T.pausedBreakLeft) : mmss(T.breakUntil - now);
 }
 // Place the break card where it clears every player's seat: try a few heights on the felt, narrowing it between the seats
 // on either side. On a felt too small for that it stays compact in the middle (there is no hand being played under it).
@@ -3326,6 +3599,101 @@ function sponsorUI(T, now, onTable){
   if(key !== spnKey){ spnKey = key; el.innerHTML = sponsorHTML(sp, false, T.prize); fillLogo(el, sp); el.hidden = false; }
   el.classList.toggle('out', left < 600);
 }
+// ---------- break music (Issue #34, owner-approved) ----------
+// A short sting as the break begins, then a quiet lounge loop until play resumes, both played by the phone itself with
+// WebAudio from the notes below: no audio file, nothing streamed (the code is cached with the app). Started and stopped
+// only by the server's break state (tickClock), never by a game action, and nothing in the game waits for it. An
+// enhancement only: browsers allow sound after the member's first tap, so the first tap anywhere unlocks it; where the
+// phone mutes web audio (an iPhone on silent) there is simply no music. Sound in the table "⋯" menu turns it off, per
+// member on this phone, on by default.
+const SND = (() => {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let ctx = null, out = null, timer = null, key = '', bar = 0, barAt = 0;
+  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  const pref = () => 'sound:' + (club && club.me ? club.me.id : '');
+  const on = () => local.get(pref(), 1) !== 0;
+  // the first tap (or key) anywhere: create the context inside it and play one silent sample, which is what iOS needs
+  const unlock = () => {
+    if(!AC) return;
+    try{
+      if(!ctx){ ctx = new AC(); const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); }
+      if(ctx.state === 'suspended') ctx.resume();
+    }catch(e){ ctx = null; }
+    if(ctx && ctx.state === 'running') ['pointerdown', 'keydown', 'touchend'].forEach(t => document.removeEventListener(t, unlock, true));
+  };
+  ['pointerdown', 'keydown', 'touchend'].forEach(t => document.addEventListener(t, unlock, { capture: true, passive: true }));
+  // one soft electric-piano-like note: a sine with a quiet octave above, quick attack, long decay
+  function note(m, t, dur, vel, dest){
+    for(const [mul, g0] of [[1, 1], [2, .18], [3, .05]]){
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = mul === 1 ? 'triangle' : 'sine'; o.frequency.value = hz(m) * mul; o.detune.value = (mul === 1 ? 3 : -4);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel * g0, t + .012); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + .05);
+    }
+  }
+  function bass(m, t, dur, vel, dest){
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = hz(m);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + .05);
+  }
+  // a soft brush on the off-beats: a short burst of filtered noise
+  let noise = null;
+  function brush(t, vel, dest){
+    if(!noise){ noise = ctx.createBuffer(1, ctx.sampleRate * .25, ctx.sampleRate); const d = noise.getChannelData(0); for(let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = noise;
+    f.type = 'bandpass'; f.frequency.value = 6000; f.Q.value = .7;
+    g.gain.setValueAtTime(vel, t); g.gain.exponentialRampToValueAtTime(.0001, t + .18);
+    s.connect(f); f.connect(g); g.connect(dest); s.start(t); s.stop(t + .25);
+  }
+  // the sting, about 3 seconds: a rising D major ninth, then the chord held and let go
+  function sting(t, dest){
+    [62, 69, 74, 78, 81].forEach((m, i) => note(m, t + i * .11, 1.6, .22, dest));
+    [50, 57, 64, 66, 69, 74].forEach(m => note(m, t + .62, 2.6, .12, dest));
+    bass(38, t + .62, 2.4, .3, dest);
+    return t + 3.1;
+  }
+  // the loop: 84 beats a minute, four bars (Dmaj9, Bm9, Em9, A13), piano on 1 and the and of 2, bass on 1 and 3
+  const BEAT = 60 / 84, CHORDS = [[38, [54, 57, 61, 64]], [47, [50, 54, 57, 61]], [40, [55, 59, 62, 66]], [45, [55, 59, 61, 66]]];
+  function scheduleBar(t, i, dest){
+    const [root, v] = CHORDS[i % 4];
+    v.forEach(m => note(m, t, BEAT * 2.6, .1, dest)); v.slice(1).forEach(m => note(m, t + BEAT * 1.5, BEAT * 2.2, .06, dest));
+    bass(root, t, BEAT * 1.8, .22, dest); bass(root + (i % 2 ? 5 : 7), t + BEAT * 2, BEAT * 1.6, .16, dest);
+    brush(t + BEAT, .05, dest); brush(t + BEAT * 3, .05, dest);
+  }
+  function stop(){
+    clearInterval(timer); timer = null; key = '';
+    if(out && ctx){ const g = out; try{ g.gain.setTargetAtTime(0, ctx.currentTime, .04); }catch(e){} setTimeout(() => { try{ g.disconnect(); }catch(e){} }, 400); }
+    out = null; $('game').dataset.music = '';
+  }
+  // k: this break; withSting: the break has only just begun (a member who opens the table later gets the loop only)
+  function start(k, withSting){
+    if(key === k) return true;
+    if(!ctx || ctx.state !== 'running') return false; // not unlocked yet (no tap): tried again on the next tick
+    stop(); key = k;
+    out = ctx.createGain(); out.gain.value = .55; out.connect(ctx.destination);
+    const sOut = ctx.createGain(); sOut.gain.value = .9; sOut.connect(out);
+    const lOut = ctx.createGain(); lOut.gain.value = .3; lOut.connect(out); // the loop sits low, under any conversation
+    let t = ctx.currentTime + .05;
+    if(withSting) t = sting(t, sOut);
+    const loopAt = t; bar = 0; barAt = t;
+    // (the game's root says what is playing, for tests: sting, then loop)
+    const pump = () => {
+      if(!out) return;
+      $('game').dataset.music = ctx.currentTime < loopAt ? 'sting' : 'loop';
+      while(barAt < ctx.currentTime + 1.2){ scheduleBar(barAt, bar++, lOut); barAt += BEAT * 4; }
+    };
+    pump(); timer = setInterval(pump, 250);
+    return true;
+  }
+  return { on, set(v){ local.set(pref(), v ? 1 : 0); if(!v) stop(); }, start, stop, unlock, playing: () => key };
+})();
+// called with every clock tick: music while this member's tournament is on a break (at the table, or on the sponsor's
+// page from the break card), silence the moment it is not
+function musicUI(T, now){
+  const brk = BOARD && !demo && T && T.status === 'running' && !T.paused && T.breakUntil && T.breakUntil > now && !document.hidden && (view === 'table' || leftForSponsor === T.id);
+  if(!brk || !SND.on()){ if(SND.playing()) SND.stop(); return; }
+  SND.start(T.id + ':' + T.breakUntil, now - (T.breakAt || now) < 10000);
+}
 // ---------- quiet design: the whole tournament in one line, the details one tap away ----------
 // Players still playing, the chip leader of all tables and your place among everyone (players' feedback, 2026-10-21),
 // from the field every table update carries. Before the first update it shows this table only.
@@ -3342,7 +3710,7 @@ function qFacts(T, d, me){
   const leader = F ? F.leader : top && { name: top.name, stack: top.stack, table: d.n };
   const rank = F ? F.rank : me ? 1 + seats.filter(p => p.stack > me.stack).length : null;
   const bb = E.levelFor(T.level, T.anteMode)[1], avg = T.entrants * T.stack / Math.max(1, T.remaining);
-  return { players, total: T.entrants || players, tables: F ? F.tables : 1, leader, rank, me, bb, avg, watchers: F ? F.watchers : null, whole: !!F,
+  return { players, total: T.entrants || players, tables: F ? F.tables : 1, leader, rank, me, bb, avg, watchers: F ? watchersOf(d) : null, whole: !!F,
     meLead: !!(leader && me && rank === 1 && leader.name === me.name) };
 }
 function qLine(T, d, me){
@@ -3374,6 +3742,7 @@ function qSheet(){
 function tickClock(){
   const T = demo ? demo.T : club && club.tourney;
   const now = Date.now() + clockSkew;
+  musicUI(T, now);
   if(!T || T.status !== 'running' || view !== 'table'){ breakUI(null); sponsorUI(T, now, false); if(QUIET) $('qline').hidden = true; if(BOARD) boardTop(null); return; }
   const [sb, bb, an] = E.levelFor(T.level, T.anteMode), [nsb, nbb, nan] = E.levelFor(T.level + 1, T.anteMode);
   $('cLevel').textContent = T.level + 1;
@@ -3460,9 +3829,12 @@ function celebrate(){
 
 
 const on2 = (id, f) => { const el = $(id); if(el) el.onclick = f; };
-function toast(text){
+function toast(text, ms, onTable){
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = text;
-  document.body.appendChild(t); setTimeout(() => t.remove(), 2600);
+  // (about the table, while it shows: on the felt's open middle, below the board, above your own cards)
+  const area = onTable && !$('game').hidden && $('tableArea').getBoundingClientRect();
+  if(area && area.height){ t.classList.add('on-table'); t.style.top = Math.round(area.top + area.height * .62) + 'px'; }
+  document.body.appendChild(t); setTimeout(() => t.remove(), ms || 2600);
 }
 
 // ---------- fair deal ----------
@@ -3677,13 +4049,32 @@ function onCoach(h){
   if(h.weakFold){ weakStreak++; if(weakStreak % 5 === 0) showTip('good', 'Patience', `You've folded ${weakStreak} weak hands in a row. Waiting for good spots is exactly what pros do.`); }
   else if(h.played) weakStreak = 0;
 }
+// The board (Issue #32 item 14, owner): a coach tip never covers your cards, the board, the pot or the action buttons.
+// It is a slim one-line banner in the dock's own band, where the helper's line and the "Free social play" notice
+// stand (the dock's height is kept for them, so it sits over no seat, card, chip or button). One line: its title and
+// the start of its text; a tap opens the whole tip in the band, a second tap puts it away; it goes by itself after 6 s
+// (8 s for a mindset tip), or as soon as it is your turn. A tip that comes while it is your turn waits until your
+// turn is over: nothing new appears while you decide.
+let tipWait = null;
 function showTip(kind, title, text){
   const el = $('coachTip'); clearTimeout(tipTimer);
+  if(BOARD){
+    const d = tables.get(watchTid || (club && club.myTable));
+    if(d && d.actUid === club.me.id && !d.result){ tipWait = [kind, title, text]; return; }
+    el.className = 'coachtip b-tip ' + kind; el.hidden = false; el.setAttribute('role', 'status');
+    el.setAttribute('aria-label', `Coach: ${title}. ${text}`);
+    el.innerHTML = `<span class="ct-ic" aria-hidden="true">${NOTE_ICON[kind] || '💡'}</span><span class="ct-tx"><b>${esc(title)}</b> <span>${esc(text)}</span></span>`;
+    tipTimer = setTimeout(() => { el.hidden = true; }, kind === 'mind' ? 8000 : 6000);
+    return;
+  }
   el.className = 'coachtip ' + kind; el.hidden = false;
   el.innerHTML = `<span class="ct-ic">${NOTE_ICON[kind] || '💡'}</span><div><b>${esc(title)}</b><p>${esc(text)}</p></div><button aria-label="Close">×</button>`;
   tipTimer = setTimeout(() => { el.hidden = true; }, kind === 'mind' ? 14000 : 10000);
 }
-$('coachTip').onclick = () => { $('coachTip').hidden = true; clearTimeout(tipTimer); };
+$('coachTip').onclick = () => { const el = $('coachTip');
+  // (the board: the first tap opens the whole tip, for a little longer; the second puts it away)
+  if(BOARD && !el.classList.contains('open')){ el.classList.add('open'); clearTimeout(tipTimer); tipTimer = setTimeout(() => { el.hidden = true; }, 10000); return; }
+  el.hidden = true; clearTimeout(tipTimer); };
 // the coach's tips show in the bar under the table (where the helper and the action buttons are), never over the
 // cards and seats; a tip is put away when it's your turn
 $('dock').appendChild($('coachTip'));

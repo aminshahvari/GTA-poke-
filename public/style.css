@@ -299,6 +299,16 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .copy-row{display:flex;gap:8px;align-items:center}
 .copy-row input{flex:1;min-width:0;font:inherit;font-size:13px;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#141113;color:var(--text)}
 .offline{position:fixed;left:50%;top:8px;transform:translateX(-50%);background:var(--red);color:#fff;padding:6px 14px;border-radius:99px;font-size:13px;font-weight:600;z-index:80}
+/* the connection lost (closed, or found dead by the app's watchdog): the table dims and greys and says so, so an old
+   table never passes for the live one; it takes no taps (the action buttons below stay usable) and leaves with the
+   reconnect. (The grey is a backdrop filter on the overlay itself: a filter on the seats' own boxes would move them.) */
+.connlost{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:16px;background:rgba(8,10,16,.66);-webkit-backdrop-filter:grayscale(.9);backdrop-filter:grayscale(.9);color:#fff;text-align:center;pointer-events:none;border-radius:18px}
+.connlost[hidden]{display:none}
+.connlost b{font-size:20px;font-weight:700}
+.connlost span{font-size:14px;opacity:.85}
+/* a notice about the table (an action that was not sent) stands on the felt's open middle, clear of the hand helper,
+   the buttons and your own seat */
+.toast.on-table{bottom:auto;transform:translate(-50%,-50%);max-width:calc(100% - 32px);text-align:center}
 .share-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
 .share-row a{display:flex;align-items:center;justify-content:center;text-decoration:none;padding:10px 6px;font-size:14px}
 /* learn */
@@ -2090,10 +2100,26 @@ body{background:var(--lx-ink)}
 .brk.tight .brk-card{padding:10px 10px 9px;gap:2px}.brk.tight .brk-time{font-size:28px}.brk.tight .sp-card.big .sp-logo .bz-logo.sp{width:36px;height:36px}.brk.tight .sp-card.big .sp-txt b{font-size:16px}.brk.tight .sp-card{gap:8px}
 .brk-card{display:grid;justify-items:center;gap:4px;padding:14px 16px 12px;border-radius:var(--lx-r-lg,18px);text-align:center;
   background:radial-gradient(120% 120% at 50% 0%,rgba(216,180,106,.16),transparent 60%),linear-gradient(180deg,rgba(17,26,46,.94),rgba(7,11,20,.94));
-  border:1px solid var(--lx-hair2,rgba(241,223,176,.26));box-shadow:0 14px 40px rgba(0,0,0,.45);animation:brkIn .5s cubic-bezier(.2,.8,.2,1) both}
+  border:1px solid var(--lx-hair2,rgba(241,223,176,.26));box-shadow:0 14px 40px rgba(0,0,0,.45);animation:brkIn .15s ease-out both}
+.brk-card.still{animation:none}
 .brk-eye{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--lx-gold,#d8b46a)}
 .brk-time{font-size:34px;line-height:1.05;font-weight:600;color:var(--lx-ivory,#f4eee2)}
 .brk-sub{font-size:12px;color:var(--lx-mute,#a3abbb)}
+/* "On break — back in 4:59" (Issue #34): the words over the countdown, and a slow live dot, so a break never reads as a
+   frozen hand */
+.brk-lead{display:block;font-size:14px;line-height:1.3;font-weight:600;letter-spacing:0;color:var(--lx-gold-hi,#f1dfb0)}
+.brk-time.brk-wait{font-size:18px;line-height:1.25}
+.brk-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px;background:currentColor;animation:brkDot 1.6s ease-in-out infinite}
+@keyframes brkDot{50%{opacity:.25}}
+/* the winner beat: the winning hand in the pot's place for as long as the server holds the result */
+.pot.beat{padding:3px 12px;font-size:15px;max-width:min(92vw,calc(var(--bw,40px) * 5 + 40px));background:var(--lx-navy,#111a2e)}
+#tableArea.win-beat .center .msg.up{background:var(--lx-navy,#111a2e);border-radius:99px;padding:2px 12px}
+.pot.beat .win-hand{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#tableArea.win-beat .center .msg{color:var(--lx-gold-hi,#f1dfb0)}
+/* the winner's chips leave from the pot's place, where the hand's name now is: while the result shows, the middle of the
+   table (the hand's name, the board, the result line) sits over the chips, so they come out from under it and never
+   cover it (the free-play notice stays on top) */
+#tableArea.win-beat .center{z-index:21}#tableArea.win-beat .playnote{z-index:22}
 .brk .sp-card{margin-top:8px;padding-top:10px;border-top:1px solid var(--lx-hair,rgba(241,223,176,.13));width:100%;justify-content:center}
 .sp-card{display:flex;align-items:center;gap:10px;min-width:0}
 .sp-txt{display:grid;min-width:0;text-align:left}
@@ -2116,7 +2142,7 @@ body{background:var(--lx-ink)}
 @keyframes brkIn{from{opacity:0}to{opacity:1}}
 @keyframes spnIn{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:none}}
 @keyframes spnSheen{to{transform:translateX(100%)}}
-@media (prefers-reduced-motion:reduce){.brk-card,.spn,.spn::after{animation:none}.spn{transition:none}}
+@media (prefers-reduced-motion:reduce){.brk-card,.spn,.spn::after,.brk-dot{animation:none}.spn{transition:none}}
 .brk-note{margin:6px 0 2px;color:var(--lx-gold-hi,#f1dfb0)}
 .brk [data-spbiz]{pointer-events:auto;cursor:pointer;transition:opacity .2s}
 .brk [data-spbiz]:active{opacity:.75}

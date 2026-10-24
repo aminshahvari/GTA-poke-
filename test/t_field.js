@@ -45,19 +45,40 @@ const end = code => { srv.kill(); try{ fs.rmSync(tmp, { recursive: true, force: 
   check(f1.field.leader && typeof f1.field.leader.name === 'string' && f1.field.leader.stack > 0 && f1.field.leader.table >= 1, 'and who the chip leader of all tables is, with their chips and table');
   check(f1.field.rank >= 1 && f1.field.rank <= 8, 'a seated player gets their place among all 8: ' + f1.field.rank);
   check(JSON.stringify(Object.keys(f1.field).sort()) === JSON.stringify(['leader', 'players', 'rank', 'tables', 'watchers']), 'nothing else is in it');
-  // the founder (not playing) watches a table, and Pia watches from Harbour Club: 2 watchers
+  // the founder (not playing) watches a table, and Pia watches the same table from Harbour Club: 2 watchers of that table
+  // (Issue #32 item 11: each table's update counts the watchers of that table)
   const tids = so.view.tables.length ? so.view.tables.map(t => t.tid) : (await so.waitFor(m => m.t === 'club' && m.club.tables.length === 2)).club.tables.map(t => t.tid);
   so.send({ t: 'watch', tid: tids[0] });
-  const sp = await session(P, X, 'main'); sp.send({ t: 'watch', tid: tids[1] });
-  const fw = await sp.waitFor(m => m.t === 'table' && m.field && m.field.watchers === 2, 10000);
-  check(!!fw, 'watchers are counted: the founder at a table and a member of another club');
+  const sp = await session(P, X, 'main'); sp.send({ t: 'watch', tid: tids[0] });
+  const fw = await sp.waitFor(m => m.t === 'table' && m.table.tid === tids[0] && m.field && m.field.watchers === 2, 10000);
+  check(!!fw, 'watchers are counted: the founder at a table and a member of another club, at the same table: 2');
   check(fw.field.rank === null, 'a watcher gets no place');
   check(!JSON.stringify(fw.field).includes('Founder') && !JSON.stringify(fw.field).includes('Pia'), 'watchers are a count, never names');
+  // the other table: nobody watches it yet
+  const seatedAt = s => { const m = [...s.msgs].reverse().find(x => x.t === 'club' && x.club.myTable); return m && m.club.myTable; };
+  const atB = ss.find(s => seatedAt(s) === tids[1]), atA = ss.find(s => seatedAt(s) === tids[0]);
+  check(!!atA && !!atB, 'players are seated at both tables');
+  const fB0 = await atB.waitFor(m => m.t === 'table' && m.table.tid === tids[1] && m.field && m.field.watchers === 0, 10000);
+  check(!!fB0, "table B's own update says 0 watching (its seated players are not watchers)");
+  // a player seated at table A who looks at table B counts as watching B (before: anyone seated anywhere was left out,
+  // so the owner watching a table while seated at another read "0 watching")
+  atA.send({ t: 'watch', tid: tids[1] });
+  check(!!await atB.waitFor(m => m.t === 'table' && m.table.tid === tids[1] && m.field && m.field.watchers === 1, 10000), 'a player seated at table A watching table B: B reads 1 watching, live');
+  // ...and goes back to their own table: B drops to 0 straight away, without waiting for B's next hand to be sent
+  atB.msgs.length = 0; atA.send({ t: 'watch', tid: tids[0] });
+  check(!!await atB.waitFor(m => m.t === 'table' && m.table.tid === tids[1] && m.field && m.field.watchers === 0, 4000), 'they go back to their own table: B reads 0 watching again, live');
+  // a watcher who closes the app is no longer counted: table A back to 1 (the founder), at once
+  const owner = ss.find(s => seatedAt(s) === tids[0]);
+  owner.msgs.length = 0; sp.ws.close();
+  check(!!await owner.waitFor(m => m.t === 'table' && m.table.tid === tids[0] && m.field && m.field.watchers === 1, 4000), 'a watcher leaves (socket closed): table A reads 1 watching, live');
+  // the founder goes to the lobby: A reads 0
+  owner.msgs.length = 0; so.send({ t: 'watch', tid: null });
+  check(!!await owner.waitFor(m => m.t === 'table' && m.table.tid === tids[0] && m.field && m.field.watchers === 0, 4000), 'the founder goes back to the lobby: table A reads 0 watching, live');
   // the leader's chips are the most anyone at any table has
   const last = await ss[0].waitFor(m => m.t === 'table' && m.field);
   const lead = last.field.leader.stack, me = last.field.rank;
   check(lead > 0 && me >= 1 && me <= 8, 'the leader has chips and every place is between 1 and 8');
-  for(const s of [so, sp, ...ss]) s.ws.close();
+  for(const s of [so, ...ss]) s.ws.close();
   console.log(`\n${n} checks passed`);
   end(0);
 })().catch(e => { console.error('FAIL', e.message); end(1); });

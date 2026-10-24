@@ -71,6 +71,11 @@ function prizeOf(v, keep){
 // Disconnect protection (Issue #9): when the player to act has no live connection, their decision gets 30 more seconds by
 // itself, once per hand, without using an extra-time card or marking them away. Tests (FAST=1 only) can set DC_PROTECT_MS.
 const DC_MS = FAST && +process.env.DC_PROTECT_MS || 30000;
+// The winner beat (Issue #34, owner's live game 2026-10-23): once the pot is awarded, the winner's name, the winning hand
+// and the pot stay on the table for at least this long before the table moves on. Held here on the server (the hand stays
+// open, so the result stays in every snapshot), never by a client animation. FAST=1 shortens it like every other wait;
+// tests can set WIN_BEAT_MS there to see the real length.
+const WIN_BEAT_MS = FAST ? (+process.env.WIN_BEAT_MS || Math.round(3000 * SPEED)) : 3000;
 
 let hooks = { onClub(){}, onTable(){}, onTableClosed(){}, onCoach(){}, onNotice(){}, isConnected: () => true,
   // halted(): a reason this club may not start tournaments right now (suspended or cancelled by Blindrise), or null
@@ -265,7 +270,7 @@ function tick(){
   if(t.breakPending){
     if(active().some(x => x.inHand)) return;
     const until = Math.max(t.levelEndsAt, Date.now()) + breakMs(t);
-    saveT({ breakPending: false, breakUntil: until, levelEndsAt: until + levelMs(t) });
+    saveT({ breakPending: false, breakUntil: until, breakAt: Date.now(), levelEndsAt: until + levelMs(t) });
     hooks.onClub(); return;
   }
   if(Date.now() >= t.levelEndsAt){
@@ -312,6 +317,10 @@ function tableIO(tb){
     rng: rand,
     async deck(handNo){ const t = T(); if(!t || !t.fairSeed) return null; const r = await fair.deckForHand(t, tb.tid, handNo); tb.fairRec = r.rec; return r.deck; },
     async event(type, data){
+      // (the button of the hand being shown: the engine moves the button for the next hand before that hand replaces
+      // this one on the table, while the deck is drawn, and a table update sent then showed the last hand's cards with
+      // the next hand's button; Issue #32 item 10)
+      if(type === 'deal' && tb.g.hand) tb.btnOf = { no: tb.g.hand.no, btn: tb.g.btn };
       try{ tb.record(type, tb.g, data); }catch(e){ console.error('hand record failed', e); }
       // commit the deal and each new street before anyone sees it (bounded wait: a slow db never stalls the table)
       if((type === 'deal' || type === 'board') && tb.fairRec && tb.g.hand && T()){
@@ -320,7 +329,7 @@ function tableIO(tb){
       }
       if(!running) return;
       const h = tb.g.hand;
-      if(type === 'showdown' && h && h.result) resultExtras(tb, h);
+      if(type === 'showdown' && h && h.result){ resultExtras(tb, h); tb.resultAt = Date.now(); }
       publish(tb);
       // Pacing close to the big online rooms: quick between actions, a beat longer on an all-in run-out.
       const runout = h && h.players.filter(E.canAct).length < 2;
@@ -482,6 +491,9 @@ async function loop(tb){
     let out;
     try{ out = await E.playHand(g, tableIO(tb)); }
     catch(e){ console.error('hand failed', tb.tid, e); tb.inHand = false; await sleep(1000); continue; }
+    // the winner beat: the result stays up until WIN_BEAT_MS after the pot was awarded (a showdown's 4.5 s is longer already)
+    if(tb.resultAt && running && !tb.broken){ const left = tb.resultAt + WIN_BEAT_MS - Date.now(); if(left > 0) await sleep(left); }
+    tb.resultAt = 0;
     if(tb.fairRec && g.hand && T()){ try{ fair.saveHand(T().id, tb.fairRec, g.hand); }catch(e){ console.error('fair record failed', e); } tb.fairRec = null; }
     tb.inHand = false; if(!hfh.on) tb.note = '';
     if(!running) return;
@@ -489,6 +501,8 @@ async function loop(tb){
     afterHand(tb, out || []);
     if(inRound && hfh.on){ hfh.done.add(tb.tid); hfhCheck(); }
     if(!T() || T().status !== 'running') return;
+    // a break that was waiting for this hand starts now, not on the clock's next second (Issue #34: the break card was late)
+    if(T().breakPending) tick();
     await sleep(1200 * SPEED);
   }
 }
@@ -656,10 +670,10 @@ function snapshot(tb){
         shown: inHand && p.shown && !p.folded ? p.cards.map(E.cardStr) : inHand && res && tb.show ? shownByChoice(tb, h, p) : null, cat: inHand && res && res.showdown && !p.folded && p.shown ? E.CAT[E.category(p.val)] : '', away: !!p.away };
     }),
     size: size(), allowed: allowedSeats(), cur: live ? h.currentBet : 0, board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((s, p) => s + p.bet, 0) : 0,
-    btn: g.btn, blinds: E.levelFor(t.level || 0, t.anteMode),
+    btn: live && tb.btnOf && tb.btnOf.no === h.no ? tb.btnOf.btn : g.btn, blinds: E.levelFor(t.level || 0, t.anteMode),
     acting: live && tb.acting ? tb.acting.seat : -1, actUid: live && tb.acting ? tb.acting.uid : null, seq: tb.acting ? tb.acting.seq : tb.seq,
     deadline: tb.acting ? tb.acting.deadline : 0, bank: tb.acting ? tb.acting.ms : actMs(), usingBank: !!(tb.acting && tb.acting.usingBank), extras: tb.acting ? extrasLeft(tb.acting.uid) : 0, legal: tb.acting ? tb.acting.legal : null,
-    result: res ? { lines: resultLines(g, h), winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null,
+    result: res ? { lines: resultLines(g, h), winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown, hand: winP && winP.val ? E.describe(winP.val) : '' } : null,
     note: tb.note || '',
     ...(tb.acting && tb.acting.dc ? { dcProtect: true } : {}), // the player to act is offline, on protection time
     ...(res && h.rabbit ? { rabbit: h.rabbit.map(E.cardStr) } : {}),
@@ -702,4 +716,4 @@ function totalChips(){
 }
 
 module.exports = { setHooks: h => { hooks = { ...hooks, ...h }; }, T, lateOpen, create, edit, join, leave, cancel, start, resume, pause, unpause, act, extend, back, offline,
-  snapshot, cardsFor, show, gp: GP, onBreak, breaksOn, BREAK_EVERY, _extras: { resultMs, rabbitCards, resultExtras }, _seat: { breakTable, newTable }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };
+  snapshot, cardsFor, show, gp: GP, onBreak, WIN_BEAT_MS, breaksOn, BREAK_EVERY, _extras: { resultMs, rabbitCards, resultExtras }, _seat: { breakTable, newTable }, tableOf, handsFor, setLinker, hfhState: () => ({ on: hfh.on, round: hfh.round }), tablesSummary, stacks, tables, payoutPcts, totalChips, isRunning: () => running, stopAll, TIME_BANK, DC_MS };

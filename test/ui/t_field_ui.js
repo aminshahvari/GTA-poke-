@@ -45,7 +45,10 @@ async function boardField(pg, tag, sz, seated){
   const ct = (await card.innerText()).replace(/\s+/g, ' ');
   check(/\d+\s*\/\s*\d+/.test(ct), `${tag} (board): players left of the field on the card: ${ct}`);
   check(seated ? /\d+(st|nd|rd|th)/.test(ct) : !/(st|nd|rd|th)\b/.test(ct.replace(/\d+:\d+/, '')), `${tag} (board): ${seated ? 'your rank on the card' : 'no place of their own'}`);
-  check(!/leader|Avg|watching/i.test(ct), `${tag} (board): and nothing more on the card`);
+  check(!/leader|Avg/i.test(ct), `${tag} (board): and nothing more on the card`);
+  // (owner's ruling, Issue #32 item 11: "N watching" is back in the collapsed bar: sideways in the pill, upright under Lobby)
+  const wt = (await pg.evaluate(() => { const e = document.getElementById(document.getElementById('game').classList.contains('land') ? 'bhWt' : 'bWatch'); return e && e.getClientRects().length ? e.innerText : ''; })).replace(/\s+/g, ' ').trim();
+  check(/^\d+ watching$/.test(wt), `${tag} (board): "${wt}" in the collapsed bar`);
   if(sz[0] >= 740 && sz[1] <= 600){ const col = (await pg.locator('#fieldBar').innerText()).replace(/\s+/g, ' ');
     check(await pg.locator('#fieldBar').isVisible() && /Chip leader/.test(col) && /\d+ watching/.test(col), `${tag} (board): sideways the column holds the tiles: ${col}`); }
   await card.click(); await sleep(500);
