@@ -216,7 +216,7 @@ function connect(){
     if(m.t === 'auth'){ live = !!m.ok; if(!m.ok){ outbox = null; local.del('token'); ws.onclose = null; ws.close(); authScreen('login'); if(m.reason === 'noclub') modal('<h2>Your club has closed</h2><p>The club you belonged to is no longer on Blindrise, so there is nothing to open with this account right now. A club owner can invite you with a new link.</p>', [{ label: 'OK', value: 1, primary: true }]); } else { $('offline').hidden = true; if(view === 'lobby') showScreen('lobby'); if(watchTid) send({ t: 'watch', tid: watchTid }); send({ t: 'back' }); } return; }
     if(m.t === 'club'){ if(outbox && m.club.myTable !== outbox.tid) outbox = null; onClub(m.club); return; }
     if(m.t === 'domino'){ window.Domino.onState(m.v); return; }
-    if(m.t === 'table'){ if(m.field) field = m.field; tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); outboxCheck(m.table); onTable(m.table); return; }
+    if(m.t === 'table'){ if(m.field){ field = m.field; if(m.field.watchers != null) watchBy.set(m.table.tid, m.field.watchers); } tables.set(m.table.tid, m.table); if(m.you) myCards.set(m.table.tid, m.you); outboxCheck(m.table); onTable(m.table); return; }
     if(m.t === 'closed'){ tables.delete(m.tid); if(view === 'table') renderTable(); return; }
     if(m.t === 'invite'){ showInvite(m.code, m.group, m.max); return; }
     if(m.t === 'skillq'){ askSkill(m.rid, m.q); return; }
@@ -285,6 +285,10 @@ async function pickClub(){
 // The whole tournament, like a TV broadcast (players' feedback, 2026-10-21): how many are still playing and at how many
 // tables, the chip leader of every table, and how many are watching. From the server with every table update ('field').
 let field = null;
+// how many are watching each table: the server counts the watchers of the table each update is for, so a player seated
+// at one table and looking at another keeps each table's own count (Issue #32 item 11)
+const watchBy = new Map();
+const watchersOf = d => d && watchBy.has(d.tid) ? watchBy.get(d.tid) : field ? field.watchers : null;
 function fieldUI(){
   const el = $('fieldBar'), T = club && club.tourney;
   el.hidden = !field || !T || T.status !== 'running';
@@ -295,13 +299,13 @@ function fieldUI(){
   // laid out like a broadcast HUD (owner's design brief, 2026-10-21): the field, tables and watchers, the average stack,
   // the chip leader in gold, and your rank as a pill coloured by your stack against the average. Tap a chip count to see
   // it in big blinds (and back).
-  const L = field.leader, meLead = L && field.rank === 1 && L.name === club.me.name, total = T.entrants || field.players;
+  const L = field.leader, meLead = L && field.rank === 1 && L.name === club.me.name, total = T.entrants || field.players, wn = watchersOf(tables.get(curTid())) || 0;
   const bb = E.levelFor(T.level, T.anteMode)[1], out = Math.max(0, Math.min(100, (1 - field.players / Math.max(1, total)) * 100));
   const mine = [...tables.values()].flatMap(t => t.seats.filter(Boolean)).find(p => p.uid === club.me.id), avg = T.entrants * T.stack / Math.max(1, T.remaining);
   const tone = !mine ? '' : mine.stack >= avg * 1.25 ? ' up' : mine.stack >= avg * .75 ? '' : ' down';
   const vs = mine && Math.abs(mine.stack - avg) > avg * .05 ? (mine.stack > avg ? `<span class="hud-vs up" title="Above the average stack">${Icons.svg('up')}</span>` : `<span class="hud-vs down" title="Below the average stack">${Icons.svg('down')}</span>`) : '';
   el.innerHTML = `<div class="hud-mod hud-field"><span class="hud-ico" aria-hidden="true">${Icons.svg('users')}</span><span class="hud-lbl"><i class="hud-dot" aria-hidden="true"></i>Players</span><b class="hud-val">${odo('players', field.players)}<small>/${total}</small></b><span class="hud-prog" aria-hidden="true"><i style="width:${out.toFixed(1)}%"></i></span></div>`
-    + `<div class="hud-mod hud-badges"><span class="hud-badge hud-tb" title="Tables in play" aria-label="${field.tables} tables">${Icons.svg('table')}<b>${odo('tables', field.tables)}</b></span><span class="hud-badge" title="Watching now" aria-label="${field.watchers} watching">${Icons.svg('eye')}<b>${odo('watch', field.watchers)}</b><small class="hud-wl">watching</small></span></div>`
+    + `<div class="hud-mod hud-badges"><span class="hud-badge hud-tb" title="Tables in play" aria-label="${field.tables} tables">${Icons.svg('table')}<b>${odo('tables', field.tables)}</b></span><span class="hud-badge" title="Watching now" aria-label="${wn} watching">${Icons.svg('eye')}<b>${odo('watch', wn)}</b><small class="hud-wl">watching</small></span></div>`
     + `<button type="button" class="hud-mod hud-avg" data-bbtoggle aria-label="Average stack. Tap to switch chips and big blinds"><span class="hud-lbl">Avg stack</span><b class="hud-val">${stackHTML('avg', avg, bb)}</b></button>`
     + (L ? `<button type="button" class="hud-mod hud-lead${meLead ? ' me' : ''}" data-bbtoggle aria-label="Chip leader ${esc(L.name)}. Tap to switch chips and big blinds">${Icons.svg('crown')}<span class="hud-lt"><span class="hud-lbl">Chip leader</span><b class="hud-name">${meLead ? 'You' : esc(L.name)}</b></span><span class="hud-chips"><b>${stackHTML('lead', L.stack, bb)}</b></span></button>` : '')
     + (field.rank ? `<div class="hud-mod hud-rank${tone}" title="Your place among everyone still playing"><span class="hud-lbl">Your rank</span><b class="hud-val">${vs}${odo('rank', ord(field.rank))}<small>/${field.players}</small></b></div>` : '');
@@ -1917,9 +1921,11 @@ function boardSizes(area, cls){
   return S;
 }
 // The board's layout for n seats in the table area (pixels of the area), in the shape tableGeo returns
-function boardGeo(n, empty = []){
+// (`watch`: nobody at this table is you, so the seat at the foot is drawn as any other seat, its avatar where your plate
+// would be, and its D button goes by that avatar)
+function boardGeo(n, empty = [], watch = false){
   const a = $('tableArea'), W = a.clientWidth || 360, H = a.clientHeight || 520, cls = boardClass(), C = BCLS[cls];
-  const vw = scr().w, key = `b:${n}:${W}:${H}:${cls}:${vw}:${empty.join('.')}`;
+  const vw = scr().w, key = `b:${n}:${W}:${H}:${cls}:${vw}:${empty.join('.')}${watch ? ':w' : ''}`;
   if(GEO && GEO.key === key) return GEO;
   if(GEOS.has(key)) return GEO = GEOS.get(key);
   const land = cls === 'L', AV = C.av, R = C.band, S = boardSizes(a, cls);
@@ -2043,7 +2049,13 @@ function boardGeo(n, empty = []){
   // crowded sideways table the search took a third of a second, enough to stall a phone as it turned)
   const memo = f => { const M = new Map(); return (...a) => { const k = a.join(','); let v = M.get(k); if(v === undefined){ v = f(...a); M.set(k, v); } return v; }; };
   // (an empty seat has no chips to be confused with: a spot near its "+" still reads as its neighbour's)
-  const mine = memo((x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || empty.includes(i) || Math.hypot(x - X, y - Y) > d * 1.08 + 2); });
+  const mineC = memo((x, y, own) => { const d = Math.hypot(x - anchors[own][0], y - anchors[own][1]); return anchors.every(([X, Y], i) => i === own || empty.includes(i) || Math.hypot(x - X, y - Y) > d * 1.08 + 2); });
+  // (the dealer button is different: it may stand on an empty seat (a dead button), so a D near a "+" reads as that
+  // seat's. The D belongs to its seat only where it is nearer it than any other seat, the empty ones too, by a clear
+  // margin: Issue #32 item 10, the D read as the seat beside it on some hands)
+  // (watching, the seat at the foot is drawn as any other: its own point is its avatar)
+  const anchorsD = watch ? anchors.map((p, i) => i ? p : [seats[0].x, seats[0].y]) : anchors;
+  const mineD = memo((x, y, own) => { const d = Math.hypot(x - anchorsD[own][0], y - anchorsD[own][1]); return anchorsD.every(([X, Y], i) => i === own || Math.hypot(x - X, y - Y) > d * 1.12 + 3); });
   // the point of the ring of `f` of the felt on the line from the middle towards (x, y)
   const onRing = memo((x, y, f) => { let lo = 0, hi = 1; for(let k = 0; k < 22; k++){ const t = (lo + hi) / 2; if(inStadium(cx + (x - cx) * t, cy + (y - cy) * t, cx, cy, fa * f, fb * f)) lo = t; else hi = t; } return [cx + (x - cx) * lo, cy + (y - cy) * lo]; });
   // (a box wholly on the felt, its corners 3 px inside)
@@ -2064,9 +2076,12 @@ function boardGeo(n, empty = []){
   // a seat's places for its chips or its button, in the order they're tried, in steps: the clean spots first, then the
   // fallbacks, each step with what it adds to the miss (each step worked out once per layout, when first needed)
   const SPOTS = new Map(), FALLS = [[solid, true, 1], [cores, true, 5], [solid, false, 8], [cores, false, 12], [[], true, 25], [[], false, 28]];
-  function spotStep(q, own, w, h, rings, i){
-    const key = own + ':' + w + ':' + h + ':' + rings.join(',') + ':' + i;
+  function spotStep(q, own, w, h, rings, i, strict){
+    const key = own + ':' + w + ':' + h + ':' + rings.join(',') + ':' + i + (strict ? ':d' : '');
     let st = SPOTS.get(key); if(st) return st;
+    const mine = strict ? mineD : mineC;
+    // (the button: never a spot that reads as another seat's; where none is left, it stands at its own avatar, below)
+    if(strict && i && !FALLS[i - 1][1]){ st = [[], 0]; SPOTS.set(key, st); return st; }
     const d0 = Math.max(60, Math.hypot(q.x - cx, q.y - cy)), a0 = Math.atan2(q.y - cy, q.x - cx), pts = [];
     if(!i){
       for(const f of rings) for(let s = 0; s <= 96; s += 6) for(const sg of s ? [1, -1] : [1]){
@@ -2092,9 +2107,23 @@ function boardGeo(n, empty = []){
     }
     SPOTS.set(key, st); return st;
   }
+  // the button where no spot on the felt reads as its seat's: right by the seat's own avatar, first on the side towards
+  // the middle, round it until it is nearer this seat than any other, inside the area and off the board, the pot and the
+  // chips (then nearer this seat only). Before, it took the line to the seat, and on a crowded table that could stand
+  // nearer the seat beside it (Issue #32 item 10)
+  function atSeat(q, own, placed = [], stack = [], radii = [AV / 2 + DB + 3, AV / 2 + DB + 9]){
+    const a0 = Math.atan2(cy - q.y, cx - q.x), pts = [];
+    for(const r of radii) for(let k = 0; k < 24; k++){ const a = a0 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 12; pts.push([q.x + Math.cos(a) * r, q.y + Math.sin(a) * r]); }
+    const inA = (x, y) => x - DB >= 2 && x + DB <= W - 2 && y - DB >= 2 && y + DB <= H - 2;
+    // (off every plate and card but its own avatar's first, then off the board, the pot and the chips, then anywhere its own)
+    const others = flat.filter(b => !(b[0] === q.x && b[1] === q.y));
+    return pts.find(([x, y]) => inA(x, y) && mineD(x, y, own) && !hitAny([x, y, DB, DB], stack, 2) && !hitAny([x, y, DB, DB], placed, 2) && !hitAny([x, y, DB, DB], others, 1))
+      || pts.find(([x, y]) => inA(x, y) && mineD(x, y, own) && !hitAny([x, y, DB, DB], stack, 2) && !hitAny([x, y, DB, DB], placed, 2))
+      || pts.find(([x, y]) => inA(x, y) && mineD(x, y, own)) || pts[0];
+  }
   function chipsIn(stack, order, bound = Infinity){
     const placed = [], bets = [], dealers = []; let miss = 0;
-    const clear = (x, y, w, h, own) => { const b = [x, y, w, h]; return !hitAny(b, flat, 3) && !hitAny(b, stack, 3) && !hitAny(b, placed, 2) && mine(x, y, own); };
+    const clear = (x, y, w, h, own) => { const b = [x, y, w, h]; return !hitAny(b, flat, 3) && !hitAny(b, stack, 3) && !hitAny(b, placed, 2) && mineC(x, y, own); };
     // (where a spot may go for the seat alone, kept in order: the board, the pot and the chips already placed are
     // checked against these only, in the same order, so the spot found is the same as checking every point in full)
     const free = (x, y, w, h) => !hitAny([x, y, w, h], stack, 3) && !hitAny([x, y, w, h], placed, 2);
@@ -2143,9 +2172,48 @@ function boardGeo(n, empty = []){
     } }
   const ch0 = best.ch;
   if(ch0.miss){ const ch = chipsFor(best.stack, ORDERS, ch0.miss); if(ch.miss < ch0.miss) best = { ...best, ...ch, miss: best.miss - ch0.miss + ch.miss }; }
-  const mid = best, cost = best.miss, bets = best.bets, dealers = best.dealers;
-  for(const k of empty) if(seats[k] && !bets[k]){ bets[k] = onRing(seats[k].x, seats[k].y, .7); dealers[k] = onRing(seats[k].x, seats[k].y, .84); }
-  const geo = { key, W, H, cls, land, look: '', sq: 1, k: 0, inset: 7, g: 0, nar: 0, compact: false, mini: false, tight: false, potSide: false, rail: R, cx, cy, tall: !land, fw, fh, top, left,
+  const mid = best, cost = best.miss, bets = best.bets, dealers = best.dealers.slice();
+  // (the button, once the middle, the chips and the buttons are placed as before: a D that does not read as its own seat's
+  // (nearer it than any other seat, empty ones too, by a clear margin) is placed again, on a clean spot of its own on the
+  // felt, else right by its avatar. The middle and the chips stay where they were: Issue #32 item 10)
+  const chipsAt = (except) => bets.filter(Boolean).map(p => [...p, bW / 2, bH / 2]).concat(dealers.filter((p, j) => p && j !== except).map(p => [...p, DB, DB]));
+  for(let i = 0; i <= m; i++){
+    if(empty.includes(i) || !dealers[i] || mineD(dealers[i][0], dealers[i][1], i)) continue;
+    const placed = chipsAt(i); let pt = null;
+    if(i) for(let k = 0; k <= 2 && !pt; k++) pt = spotStep(seats[i], i, DB, DB, [.9, .84, .7, .62, .5], k, true)[0].find(([x, y]) => !hitAny([x, y, DB, DB], mid.stack, 3) && !hitAny([x, y, DB, DB], placed, 2)) || null;
+    // (your own seat: round your cards and plate together, the D just clear of them)
+    const hb = !i && !watch && seats[0].boxes, hr = hb && Math.max(...hb.map(b => Math.hypot(Math.abs(b[0] - anchorsD[0][0]) + b[2], Math.abs(b[1] - anchorsD[0][1]) + b[3]))) * .75;
+    dealers[i] = pt || (hb ? atSeat({ x: anchorsD[0][0], y: anchorsD[0][1] }, 0, placed, mid.stack, [hr, hr + 8, hr + 16]) : atSeat(seats[i], i, placed, mid.stack));
+  }
+  for(const k of empty) if(seats[k] && !bets[k]){ bets[k] = onRing(seats[k].x, seats[k].y, .7); const dk = onRing(seats[k].x, seats[k].y, .84); dealers[k] = mineD(...dk, k) ? dk : atSeat(seats[k], k, dealers.filter(Boolean).map(p => [...p, DB, DB]), mid.stack); }
+  // ---- the felt's name (Issue #32 item 9): a clean spot on the felt, off the board's row, the pot, the result line, every
+  // seat's plate and cards, and every seat's chips and D button wherever they may stand this hand. Under the result line
+  // on the middle first (upright, between it and your chips); where that has no room (sideways), the clean spot nearest
+  // it; with none at all, the result line's own place (no card can cover it there), giving way while a result is written ----
+  // (the status line under a plate, where a seat's last action now shows (Issue #32 item 7): where its middle would lie
+  // under someone's chips or a D, it slides along under its plate, at most to the plate's ends, to a clean place)
+  const chipBoxes = chipsAt(-1);
+  for(let k = 1; k <= m; k++){ const q = seats[k]; if(!q || q.pl || empty.includes(k)) continue;
+    const half = C.pw / 2, pyl = q.core[1] + C.ph / 2 + 10, px0 = q.core[0];
+    for(const dx of [0, -4, 4, -8, 8, -12, 12, -16, 16, -20, 20, -24, 24]){ if(Math.abs(dx) > half - 16) continue; if(!hitAny([px0 + dx, pyl, 20, 8], chipBoxes, 0)){ seats[k] = { ...q, stx: dx }; break; } } }
+  const WMW = 48, WMH = 7, mBot = mid.by + mid.bh / 2 + 6 + mh, rowTop = mid.by - mid.bh / 2 - 6 - potH;
+  // (first clear of the chips and buttons too; on a crowded table, where no such spot is left, clear of the plates, the
+  // cards, the board's row, the pot and every D, over as few seats' chip spots as can be: a seat's chips may then come to
+  // lie over the name while they are out, never a card. Then on the result line's place too, where it gives way while a
+  // result is written. No such spot at all: not drawn)
+  const rowBot = mid.by + mid.bh / 2, wmBox = (x, y) => [x, y, WMW, WMH], betBoxes = bets.filter(Boolean).map(p => [...p, bW / 2, bH / 2]), dBoxes = dealers.filter(Boolean).map(p => [...p, DB, DB]);
+  const wmOk = (x, y, msg) => boxIn(x, y, WMW, WMH) && !(y + WMH + 6 > rowTop && y - WMH - 6 < (msg ? mBot : rowBot)) && !hitAny(wmBox(x, y), flat, 4) && !hitAny(wmBox(x, y), dBoxes, 3)
+    && !hitAny(wmBox(x, y), msg ? mid.stack : mid.stack.slice(0, 2), 4);
+  const under = (x, y) => betBoxes.filter(b => hitAny(wmBox(x, y), [b], 3)).length;
+  let wm = null, wmMsg = false;
+  for(const [chips, msg] of [[true, true], [false, true], [false, false]]){
+    const run = []; for(let y = Math.ceil((msg ? mBot : rowBot) + WMH + 6); y < top + fh; y++){ if(wmOk(cx, y, msg) && !(chips && under(cx, y))) run.push(y); else if(run.length) break; }
+    if(run.length >= 3){ wm = [cx, run[Math.floor(run.length / 2)]]; }
+    else { let bd = Infinity; for(let y = top; y <= top + fh; y += 3) for(let x = left; x <= left + fw; x += 3){ if(!wmOk(x, y, msg)) continue; const u = under(x, y); if(chips && u) continue;
+      const d = u * 1e4 + Math.abs(x - cx) * 1.5 + Math.abs(y - mBot - WMH - 6); if(d < bd){ bd = d; wm = [x, y]; } } }
+    if(wm){ wmMsg = !msg && hitAny(wmBox(...wm), [mid.stack[2]], 2); break; }
+  }
+  const geo = { key, W, H, cls, land, look: '', sq: 1, k: 0, inset: 7, wmX: wm ? wm[0] : null, wmY: wm ? wm[1] : null, wmMsg, g: 0, nar: 0, compact: false, mini: false, tight: false, potSide: false, rail: R, cx, cy, tall: !land, fw, fh, top, left,
     seats, bw: mid.bw, by: mid.by, bx: cx, msgW: mid.msgW, mline: mid.bh / 2 + 6, av: AV, cost, bets, dealers, betAt: k => bets[k], dealerAt: k => dealers[k] };
   GEO = geo; if(GEOS.size > 12) GEOS.delete(GEOS.keys().next().value);
   if(a.clientWidth) GEOS.set(key, geo);
@@ -2163,21 +2231,25 @@ function boardAvHTML(uid, name){
 function boardSeatHTML(d, p, s, o){
   const { isMe, acting, res, hole, pos, oq, stackTxt, winStyle, nick } = o;
   const dc = acting && d.dcProtect, away = !!p.away, won = res && p.won > 0;
-  // the name line: the name, or the seat's last action in its colour, "Winner", or its hand at a showdown
+  // the seat's last action in its colour, "Winner", or its hand at a showdown: in the status line under the plate (the
+  // Away / Disconnected spot), never in place of the name. The name line always shows the name: after acting, and the
+  // blinds before the flop, read "Fold" or "SB" where the player's name was (owner, Issue #32 item 7)
   let word = '', wcls = '';
   if(won){ word = 'Winner'; wcls = 'won'; }
   else if(res && res.showdown && p.cat){ word = p.cat; wcls = 'hand'; }
   else if(p.act && !acting && !res){ word = p.act; wcls = 'act-' + p.act.toLowerCase().replace(/[^a-z]+/g, '-'); }
   if(word === stackTxt) word = '';
-  const status = dc ? '<span class="badge b-st dc" title="Disconnected · protection time">Disconnected</span>' : away ? '<span class="badge b-st away">Away</span>' : '';
-  const label = `${p.name}, ${stackTxt === 'All-in' ? 'all-in' : stackTxt + ' chips'}${dc ? ', disconnected' : away ? ', away' : ''}${acting ? ', to act' : ''}`;
+  // (Disconnected first, then Winner, then Away, then the action: one status at a time, in the one spot)
+  const status = dc ? '<span class="badge b-st dc" title="Disconnected · protection time">Disconnected</span>'
+    : word && (won || !away) ? `<span class="badge b-st b-act ${wcls}" data-act="${esc(word)}">${esc(word)}</span>` : away ? '<span class="badge b-st away">Away</span>' : '';
+  const label = `${p.name}, ${stackTxt === 'All-in' ? 'all-in' : stackTxt + ' chips'}${dc ? ', disconnected' : away ? ', away' : ''}${word ? ', ' + word : ''}${acting ? ', to act' : ''}`;
   const cls = `seat b-seat ${isMe ? 'hero' : ''} ${isMe && oq.hside ? 'hside' : ''} ${p.folded ? 'folded' : ''} ${acting ? 'acting' : ''} ${won ? 'win' : ''} ${p.allIn && !res ? 'allin' : ''} ${oq.pl ? 'pl-' + oq.pl : ''}`;
-  const nm = `<div class="nm${word ? ' nm-act ' + wcls : ''}"${word ? ` data-act="${esc(word)}"` : ''} title="${esc(p.name)}">${esc(word || (isMe ? 'You' : nick(p.name)))}</div>`;
+  const nm = `<div class="nm" title="${esc(p.name)}">${esc(isMe ? 'You' : nick(p.name))}</div>`;
   const st = `<div class="st num${stackTxt === 'All-in' ? ' allin' : ''}">${stackTxt}</div>`;
   const shot = acting ? `<div class="shot"><i class="shotBar${dc ? ' dc' : ''}"></i></div>` : '';
   const at = `data-uid="${esc(p.uid)}" aria-label="${esc(label)}" style="left:${pos[0]}%;top:${pos[1]}%${winStyle}`;
   if(isMe) return `<div class="${cls}" ${at}"><div class="hole">${hole}</div><div class="plate">${boardAvHTML(p.uid, p.name)}<div class="pl-txt">${nm}${st}</div>${shot}</div>${status}</div>`;
-  return `<div class="${cls}" ${at};--sx:${oq.sx || 0}px;--hx:${oq.hx || 0}px;--hy:${oq.hy || 0}px${oq.hys != null ? `;--hys:${oq.hys}px` : ''}${oq.pwx ? `;--pw:${oq.pwx}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${boardAvHTML(p.uid, p.name)}${shot}`
+  return `<div class="${cls}" ${at};--sx:${oq.sx || 0}px;--stx:${oq.stx || 0}px;--hx:${oq.hx || 0}px;--hy:${oq.hy || 0}px${oq.hys != null ? `;--hys:${oq.hys}px` : ''}${oq.pwx ? `;--pw:${oq.pwx}px` : ''}"><div class="hole${/ show\b/.test(hole) ? ' shown' : ''}">${hole}</div>${boardAvHTML(p.uid, p.name)}${shot}`
     + `<i class="b-dot${dc ? ' dc' : away ? ' away' : ''}" aria-hidden="true"></i><div class="plate">${nm}${st}</div>${status}</div>`;
 }
 const pxToPct = ([x, y]) => [x / GEO.W * 100, y / GEO.H * 100];
@@ -2190,7 +2262,7 @@ function layoutOf(d){
   const mySeat = d.seats.findIndex(p => p && club && p.uid === club.me.id), base = Math.max(0, allowed.indexOf(mySeat));
   const rel = s => (allowed.indexOf(s) - base + n) % n;
   // (the board's layout knows which seats are empty, by their place round the table)
-  const G = BOARD ? boardGeo(n, allowed.filter(s => !d.seats[s]).map(rel).filter(Boolean).sort((x, y) => x - y)) : tableGeo(n, bet);
+  const G = BOARD ? boardGeo(n, allowed.filter(s => !d.seats[s]).map(rel).filter(Boolean).sort((x, y) => x - y), mySeat < 0) : tableGeo(n, bet);
   return { allowed, rel, G, posOf: s => pxToPct([G.seats[rel(s)].x, G.seats[rel(s)].y]), betOf: s => G.betAt(rel(s)), dealerOf: s => G.dealerAt(rel(s)) };
 }
 const centerPx = () => GEO ? [GEO.bx, GEO.by] : pctToPx([50, 45]);
@@ -2266,6 +2338,10 @@ function potToWinners(d, handKey, LY){
     // the seat or your cards behind that spot)
     const grow = Math.max(0, el.offsetHeight / 2 - 11), gl = Math.hypot(px - bx, py - by) || 1;
     bx += (px - bx) / gl * grow; by += (py - by) / gl * grow;
+    // (the board: the seat's status line says "Winner" under its plate; the pile keeps clear of it, a little further in)
+    const pill = BOARD && $('seats').querySelector(`.seat[data-uid="${CSS.escape(p.uid)}"] .badge.b-st`);
+    if(pill){ const r = pill.getBoundingClientRect(), hw = el.offsetWidth / 2, hh = el.offsetHeight / 2, L = r.left - ar.left, T = r.top - ar.top, R = r.right - ar.left, B = r.bottom - ar.top;
+      for(let k = 0; k < 24 && bx - hw < R + 2 && bx + hw > L - 2 && by - hh < B + 2 && by + hh > T - 2; k++){ bx += (px - bx) / gl * 4; by += (py - by) / gl * 4; } }
     el.style.cssText = `left:${bx}px;top:${by}px`;
     if(still){ el.classList.add('settled'); return; }
     const dx = px - bx, dy = py - by, lift = Math.min(60, Math.hypot(dx, dy) * .18);
@@ -2727,7 +2803,10 @@ function renderTable(){
   const felt = area.querySelector('.felt');
   // (on the oval the felt's name sits on the message line under the board, which the layout keeps clear of chips)
   const wm = G.inset === 6 ? `;--wm:${(G.by + G.mline - (G.cy - G.fh / 2)) / G.fh * 100}%` : '';
-  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px${wm}`;
+  felt.style.cssText = `inset:auto;left:${G.cx - G.fw / 2}px;top:${G.cy - G.fh / 2}px;width:${G.fw}px;height:${G.fh}px;--rw:${G.rail}px${wm}${BOARD && G.wmY != null ? `;--wm-x:${G.wmX - (G.cx - G.fw / 2)}px;--wm-y:${G.wmY - (G.cy - G.fh / 2)}px` : ''}`;
+  // (the board: the felt's name is an element of its own, champagne gold, placed by the layout; Issue #32 item 9)
+  if(BOARD){ let m = felt.querySelector('.b-wm'); if(!m){ m = document.createElement('i'); m.className = 'b-wm'; m.setAttribute('aria-hidden', 'true'); m.textContent = 'BLINDRISE'; felt.appendChild(m); }
+    m.classList.toggle('on-msg', !!G.wmMsg); m.hidden = G.wmY == null; }
   area.querySelector('.center').style.cssText = `left:${G.bx}px;top:${G.by}px;width:${Math.max(G.bw * 5 + 20, G.msgW)}px`;
   $('msg').style.maxWidth = G.msgW + 'px';
   // a split or several pots can be longer than the felt's one line: then the same result in shorter words, until it
@@ -3164,11 +3243,14 @@ if(BOARD){
   top.className = 'b-top'; top.id = 'bTop';
   top.innerHTML = `<div class="b-top-l"></div><div class="b-hudw"><button type="button" class="b-hud" id="bHud" data-bhud aria-haspopup="dialog">
     <span class="bh-lvl"><small>Level</small><b class="num" id="bhLvl"></b></span><span class="bh-bl"><b class="num" id="bhBl"></b><small class="num" id="bhAnte"></small></span>
-    <span class="bh-rk" id="bhRk"><small><span class="bh-yr">Your rank</span><span class="bh-r">Rank</span></small><b class="num" id="bhRank"></b></span><span class="bh-tm"><b class="num" id="bhTime"></b><small class="num" id="bhPl"></small></span>
+    <span class="bh-rk" id="bhRk"><small><span class="bh-yr">Your rank</span><span class="bh-r">Rank</span></small><b class="num" id="bhRank"></b></span><span class="bh-wt" id="bhWt"><b class="num" id="bhWn"></b><small>watching</small></span><span class="bh-tm"><b class="num" id="bhTime"></b><small class="num" id="bhPl"></small></span>
     <span class="bh-idle" id="bhIdle"></span><span class="bh-go" aria-hidden="true">›</span></button></div><div class="b-top-r"></div>`;
   g.prepend(top);
   top.querySelector('.b-top-l').appendChild($('chatBtn'));
   top.querySelector('.b-top-r').appendChild($('lobbyBtn'));
+  // (upright, "N watching" stands under the Lobby pill; sideways it is in the pill, after the players: owner's ruling,
+  // Issue #32 item 11. The card's label reads it out, so this copy is hidden from screen readers)
+  top.querySelector('.b-top-r').insertAdjacentHTML('beforeend', '<span class="b-watch num" id="bWatch" aria-hidden="true" hidden></span>');
   top.querySelector('.b-hudw').appendChild($('spn'));
   $('bHud').onclick = () => boardSheet();
 }
@@ -3202,13 +3284,19 @@ function boardTop(T, d, me, brk){
   if($('bhPl').innerHTML !== pl) $('bhPl').innerHTML = pl;
   bSet('bhRank', rank ? ord(rank) : '');
   $('bhRk').hidden = !rank; top.classList.toggle('b-brk', !!brk);
-  const key = [T.level, sb, bb, an, f.players, f.total, rank, brk ? 1 : 0, $('cTime').textContent.length, $('bHud').clientWidth, $('game').dataset.bcls, $('game').classList.contains('land')].join('|');
+  // how many are watching this table, live (the count the details sheet shows too)
+  const wn = f.watchers == null ? null : f.watchers;
+  bSet('bhWn', wn == null ? '' : wn); bSet('bWatch', wn == null ? '' : `${wn} watching`);
+  $('bhWt').hidden = wn == null; $('bWatch').hidden = wn == null;
+  const key = [T.level, sb, bb, an, f.players, f.total, rank, wn, brk ? 1 : 0, $('cTime').textContent.length, $('bHud').clientWidth, $('game').dataset.bcls, $('game').classList.contains('land')].join('|');
   if(key === bTopKey) return;
   bTopKey = key;
-  $('bHud').setAttribute('aria-label', `Level ${T.level + 1}, blinds ${fmt(sb)}/${fmt(bb)}${an ? ', ante ' + fmt(an) : ''}. ${f.players} of ${f.total} players left.${rank ? ' Your rank ' + ord(rank) + '.' : ''} ${brk ? 'On a break' : 'Time left'} ${$('cTime').textContent}. Opens the tournament details.`);
+  $('bHud').setAttribute('aria-label', `Level ${T.level + 1}, blinds ${fmt(sb)}/${fmt(bb)}${an ? ', ante ' + fmt(an) : ''}. ${f.players} of ${f.total} players left.${rank ? ' Your rank ' + ord(rank) + '.' : ''}${wn != null ? ` ${wn} watching.` : ''} ${brk ? 'On a break' : 'Time left'} ${$('cTime').textContent}. Opens the tournament details.`);
   // (long blinds on a narrow phone: the values a size smaller, then the ante and the caption go)
-  const card = $('bHud'); card.classList.remove('tight', 'tighter');
+  const card = $('bHud'); card.classList.remove('tight', 'snug', 'tighter');
   if(card.scrollWidth > card.clientWidth + 1) card.classList.add('tight');
+  // (sideways, with "N watching" in the pill: the dots between the values closer first, before any caption goes)
+  if(card.scrollWidth > card.clientWidth + 1) card.classList.add('snug');
   if(card.scrollWidth > card.clientWidth + 1) card.classList.add('tighter');
 }
 // the board's four tiles (the sheet; sideways, the column)
@@ -3372,7 +3460,7 @@ function qFacts(T, d, me){
   const leader = F ? F.leader : top && { name: top.name, stack: top.stack, table: d.n };
   const rank = F ? F.rank : me ? 1 + seats.filter(p => p.stack > me.stack).length : null;
   const bb = E.levelFor(T.level, T.anteMode)[1], avg = T.entrants * T.stack / Math.max(1, T.remaining);
-  return { players, total: T.entrants || players, tables: F ? F.tables : 1, leader, rank, me, bb, avg, watchers: F ? F.watchers : null, whole: !!F,
+  return { players, total: T.entrants || players, tables: F ? F.tables : 1, leader, rank, me, bb, avg, watchers: F ? watchersOf(d) : null, whole: !!F,
     meLead: !!(leader && me && rank === 1 && leader.name === me.name) };
 }
 function qLine(T, d, me){

@@ -312,6 +312,10 @@ function tableIO(tb){
     rng: rand,
     async deck(handNo){ const t = T(); if(!t || !t.fairSeed) return null; const r = await fair.deckForHand(t, tb.tid, handNo); tb.fairRec = r.rec; return r.deck; },
     async event(type, data){
+      // (the button of the hand being shown: the engine moves the button for the next hand before that hand replaces
+      // this one on the table, while the deck is drawn, and a table update sent then showed the last hand's cards with
+      // the next hand's button; Issue #32 item 10)
+      if(type === 'deal' && tb.g.hand) tb.btnOf = { no: tb.g.hand.no, btn: tb.g.btn };
       try{ tb.record(type, tb.g, data); }catch(e){ console.error('hand record failed', e); }
       // commit the deal and each new street before anyone sees it (bounded wait: a slow db never stalls the table)
       if((type === 'deal' || type === 'board') && tb.fairRec && tb.g.hand && T()){
@@ -656,7 +660,7 @@ function snapshot(tb){
         shown: inHand && p.shown && !p.folded ? p.cards.map(E.cardStr) : inHand && res && tb.show ? shownByChoice(tb, h, p) : null, cat: inHand && res && res.showdown && !p.folded && p.shown ? E.CAT[E.category(p.val)] : '', away: !!p.away };
     }),
     size: size(), allowed: allowedSeats(), cur: live ? h.currentBet : 0, board: live ? h.board.map(E.cardStr) : [], pot: live ? E.potTotal(h) - h.players.reduce((s, p) => s + p.bet, 0) : 0,
-    btn: g.btn, blinds: E.levelFor(t.level || 0, t.anteMode),
+    btn: live && tb.btnOf && tb.btnOf.no === h.no ? tb.btnOf.btn : g.btn, blinds: E.levelFor(t.level || 0, t.anteMode),
     acting: live && tb.acting ? tb.acting.seat : -1, actUid: live && tb.acting ? tb.acting.uid : null, seq: tb.acting ? tb.acting.seq : tb.seq,
     deadline: tb.acting ? tb.acting.deadline : 0, bank: tb.acting ? tb.acting.ms : actMs(), usingBank: !!(tb.acting && tb.acting.usingBank), extras: tb.acting ? extrasLeft(tb.acting.uid) : 0, legal: tb.acting ? tb.acting.legal : null,
     result: res ? { lines: resultLines(g, h), winCards: winP && winP.best ? winP.best.map(E.cardStr) : [], showdown: !!res.showdown } : null,

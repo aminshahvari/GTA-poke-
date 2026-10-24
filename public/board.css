@@ -56,7 +56,7 @@
   --b-ground-hi:color-mix(in oklab,var(--b-surface-2) 70%,var(--b-bg)); /* the navy lift at the top of the table screen */
   --b-rail-top:color-mix(in oklab,var(--b-rail),var(--b-text) 7%); --b-rail-foot:color-mix(in oklab,var(--b-rail),var(--b-bg) 40%);
   --b-felt-hi:color-mix(in oklab,var(--b-felt),var(--b-text) 9%);   /* the felt's lit middle (radial: lit middle, --b-felt, --b-felt-edge at the rail) */
-  --b-watermark:color-mix(in srgb,var(--b-text) 7%,transparent);
+  --b-watermark:color-mix(in srgb,var(--b-ring) 62%,transparent); /* the felt's name: the champagne gold of the rings, quieter (Issue #32 item 9) */
   --b-pill:color-mix(in srgb,var(--b-surface) 80%,transparent);     /* the pot and the chips: --b-surface at 80% (§3.4) */
   --b-slot:color-mix(in srgb,var(--b-bg) 25%,transparent);          /* an undealt board card (§3.4) */
   --b-plate:color-mix(in srgb,var(--b-bg) 86%,transparent);         /* a name plate (§3.3) */
@@ -137,8 +137,13 @@
   box-shadow:0 0 0 1px var(--b-hair-gold),0 18px 40px var(--b-shadow),0 4px 10px var(--b-shadow),inset 0 1px 0 var(--b-hair)}
 [data-ui="board"] #game .felt::before{inset:var(--rw);border-radius:999px;background:radial-gradient(ellipse 72% 58% at 50% 42%,var(--b-felt-hi) 0%,var(--b-felt) 46%,var(--b-felt-edge) 100%);
   box-shadow:0 0 0 1px var(--b-rail-hi),inset 0 0 0 1px var(--b-rail-hi),inset 0 0 44px var(--b-shadow)}
-[data-ui="board"] #game .felt::after{content:"BLINDRISE";top:60%;font-family:var(--b-font);font-weight:600;font-size:13px;letter-spacing:.5em;color:var(--b-watermark)}
-[data-ui="board"] #game .table-area.msg-on .felt::after{opacity:0}
+/* the felt's name (Issue #32 item 9): an element placed by the layout (--wm-y, under the board and clear of the result
+   line, the chips, the D and the plates), champagne gold and readable, smaller and quieter than any card, chip or plate.
+   Where it has to take the result line's place it gives way while a result is written there */
+[data-ui="board"] #game .felt::after{content:none}
+[data-ui="board"] #game .felt .b-wm{position:absolute;left:var(--wm-x,50%);top:var(--wm-y,60%);transform:translate(-50%,-50%);z-index:0;pointer-events:none;font-style:normal;white-space:nowrap;
+  font-family:var(--b-font);font-weight:600;font-size:11px;line-height:1;letter-spacing:.34em;margin-right:-.34em;color:var(--b-watermark);transition:opacity .25s}
+[data-ui="board"] #game .table-area.msg-on .felt .b-wm.on-msg{opacity:0}
 
 /* ---------- the middle (§3.4): the pot pill with its chip, the board, the winner line ---------- */
 [data-ui="board"] #game .pot{background:var(--b-pill);box-shadow:inset 0 0 0 1px var(--b-hair);color:var(--b-text);font-size:var(--b-t-14);font-weight:600;padding:3px 12px 3px 6px;min-height:26px;gap:6px}
@@ -174,11 +179,6 @@
 [data-ui="board"] #game .table-area[data-bcls="P-S"] #seats .seat.b-seat .nm{font-size:var(--b-t-13)}
 [data-ui="board"] #game .table-area[data-bcls="P-S"] #seats .seat.b-seat .st,[data-ui="board"] #game .table-area[data-bcls="L"] #seats .seat.b-seat .st{font-size:12px}
 [data-ui="board"] #game .table-area[data-bcls="L"] #seats .seat.b-seat .nm{font-size:var(--b-t-13)}
-/* the last action, "Winner" or a showdown hand, in the name line, in its colour */
-[data-ui="board"] #game #seats .seat.b-seat .nm.nm-act{color:var(--b-text)}
-[data-ui="board"] #game #seats .seat.b-seat .nm.nm-act:is(.act-raise,.act-bet,.act-all-in,.won,.hand){color:var(--b-gold-text)}
-[data-ui="board"] #game #seats .seat.b-seat .nm.nm-act:is(.act-call,.act-check){color:var(--b-act-call)}
-[data-ui="board"] #game #seats .seat.b-seat .nm.nm-act.act-fold{color:var(--b-text-3)}
 [data-ui="board"] #game #seats .seat.b-seat .st.allin{color:var(--b-gold-text)}
 /* a folded seat: its avatar, dot and cards at half; its plate stays readable, the name and stack in --b-text-2 */
 [data-ui="board"] #game #seats .seat.b-seat.folded:not(.hero){opacity:1}
@@ -187,10 +187,19 @@
 [data-ui="board"] #game #seats .seat.b-seat.folded:not(.hero) .plate :is(.nm,.nm.nm-act.act-fold,.st){color:var(--b-text-2)}
 [data-ui="board"] #game #seats .seat.b-seat.win .plate{border-color:var(--b-gold);box-shadow:0 0 0 1px var(--b-gold),0 0 18px var(--b-gold-glow)}
 /* the status in words under the plate (Muse's amendment 1): Away, Disconnected */
-[data-ui="board"] #game #seats .seat.b-seat .badge.b-st{position:absolute;left:0;bottom:auto;top:calc(var(--av) / 2 - 6px + var(--ph) + 2px);transform:translateX(calc(-50% + var(--sx,0px)));
+[data-ui="board"] #game #seats .seat.b-seat .badge.b-st{position:absolute;left:0;bottom:auto;top:calc(var(--av) / 2 - 6px + var(--ph) + 2px);transform:translateX(calc(-50% + var(--sx,0px) + var(--stx,0px)));
   font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:14px;padding:1px 6px;border-radius:var(--b-r-chip);white-space:nowrap;z-index:2;
   background:var(--b-surface-2);color:var(--b-text);box-shadow:inset 0 0 0 1px var(--b-hair)}
 [data-ui="board"] #game #seats .seat.b-seat .badge.b-st.dc{background:var(--b-warn);color:var(--b-on-warn);box-shadow:none}
+/* the last action, "Winner" or a showdown hand: in the status line in its colour, the name line keeps the name (owner,
+   Issue #32 item 7). A plate's width at most; a showdown hand in words as written, not in capitals */
+[data-ui="board"] #game #seats .seat.b-seat .badge.b-st.b-act{max-width:var(--pw);overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+[data-ui="board"] #game #seats .seat.b-seat .badge.b-st.b-act.hand{max-width:calc(var(--pw) + 20px)}
+[data-ui="board"] #game #seats .seat.b-seat .badge.b-st.b-act:is(.act-raise,.act-bet,.act-all-in,.hand){color:var(--b-gold-text)}
+[data-ui="board"] #game #seats .seat.b-seat .badge.b-st.b-act:is(.act-call,.act-check){color:var(--b-act-call)}
+[data-ui="board"] #game #seats .seat.b-seat .badge.b-st.b-act.act-fold{color:var(--b-text-2)}
+[data-ui="board"] #game #seats .seat.b-seat .badge.b-st.b-act.hand{text-transform:none;letter-spacing:0;font-size:11px}
+[data-ui="board"] #game #seats .seat.b-seat .badge.b-st.b-act.won{background:var(--b-gold);color:var(--b-raise-label);box-shadow:none}
 [data-ui="board"] #game #seats .seat.b-seat.pl-l .badge.b-st{top:calc(var(--ph) / 2 + 2px);transform:translateX(calc(-50% - var(--av) / 2 - 4px - var(--pw) / 2))}
 [data-ui="board"] #game #seats .seat.b-seat.pl-r .badge.b-st{top:calc(var(--ph) / 2 + 2px);transform:translateX(calc(-50% + var(--av) / 2 + 4px + var(--pw) / 2))}
 /* the two cards, tucked behind the avatar at its top, on the outer side (--hx); face up at a showdown */
@@ -423,7 +432,7 @@
 /* (the tightest card, 320 wide: no room to spare, the "›" a size smaller in the card's own 10 px padding) */
 [data-ui="board"] #game:not(.land) #bHud.tighter{padding-right:10px}
 [data-ui="board"] #game:not(.land) #bHud.tighter>.bh-go{right:3px;font-size:var(--b-t-13)}
-[data-ui="board"] #game.land .b-hud>.bh-go{order:6;margin-left:8px;font-size:var(--b-t-17);align-self:center}
+[data-ui="board"] #game.land .b-hud>.bh-go{order:7;margin-left:8px;font-size:var(--b-t-17);align-self:center}
 [data-ui="board"] #game .b-hud .bh-idle{display:none;font-size:var(--b-t-15);font-weight:600}
 [data-ui="board"] #game .b-top.idle .b-hud>span{display:none}
 [data-ui="board"] #game .b-top.idle .b-hud>.bh-idle{display:flex}
@@ -445,6 +454,16 @@
 [data-ui="board"] #game .b-hud.tighter .bh-tm b{font-size:var(--b-t-17)}
 [data-ui="board"] #game .b-hud .bh-r,[data-ui="board"] #game .b-hud.tighter .bh-yr,[data-ui="board"] #game .b-hud.tighter .bh-plw{display:none}
 [data-ui="board"] #game .b-hud.tighter .bh-r{display:inline}
+/* "N watching" (owner's ruling, Issue #32 item 11): upright, one line under the Lobby pill, in the card's height (the
+   one-row header's card is 44 tall: there the pill is 32 tall, its hit area still 44, as the sideways pill's); sideways,
+   in the pill after the players */
+[data-ui="board"] #game .b-hud .bh-wt{display:none}
+[data-ui="board"] #game .b-top .b-watch{display:block;font-size:var(--b-t-11);font-weight:500;line-height:12px;color:var(--b-text-2);text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
+[data-ui="board"] #game .b-top .b-watch[hidden],[data-ui="board"] #game.land .b-top .b-watch{display:none}
+[data-ui="board"] #game:not(.land) .b-top-r{flex-direction:column;align-items:stretch;justify-content:center}
+[data-ui="board"] #game.row1:not(.land) .b-top-r:has(.b-watch:not([hidden])) #lobbyBtn{min-height:32px;height:32px;position:relative}
+[data-ui="board"] #game.land .b-hud .bh-wt:not([hidden]){display:flex;order:4}
+[data-ui="board"] #game.land .b-hud .bh-wt b{color:var(--b-text)}
 /* Lobby: a pill; Chat (sideways): a round button */
 [data-ui="board"] #game .b-top #lobbyBtn{min-height:44px;min-width:44px;padding:0 16px;border-radius:var(--b-r-pill);background:var(--b-surface-2);border:1px solid var(--b-hair);color:var(--b-text);
   font-family:var(--b-font);font-size:var(--b-t-15);font-weight:600;letter-spacing:0;text-transform:none;box-shadow:none}
@@ -477,11 +496,14 @@
 [data-ui="board"] #game.land .b-hud .bh-lvl{order:1}
 [data-ui="board"] #game.land .b-hud .bh-bl{order:2}
 [data-ui="board"] #game.land .b-hud #bhPl{order:3;color:var(--b-text)}
-[data-ui="board"] #game.land .b-hud .bh-rk{order:4}
-[data-ui="board"] #game.land .b-hud #bhTime{order:5;color:var(--b-gold)}
-[data-ui="board"] #game.land .b-hud :is(.bh-bl,#bhPl,.bh-rk,#bhTime)::before{content:'·';margin:0 8px;color:var(--b-text-3);font-weight:400}
+[data-ui="board"] #game.land .b-hud .bh-rk{order:5}
+[data-ui="board"] #game.land .b-hud #bhTime{order:6;color:var(--b-gold)}
+[data-ui="board"] #game.land .b-hud :is(.bh-bl,#bhPl,.bh-wt,.bh-rk,#bhTime)::before{content:'·';margin:0 8px;color:var(--b-text-3);font-weight:400}
 [data-ui="board"] #game.land .b-hud.tight .bh-rk small,[data-ui="board"] #game.land .b-hud.tighter .bh-lvl small,[data-ui="board"] #game.land .b-hud.tighter .bh-plw{display:none}
 [data-ui="board"] #game.land .b-hud.tight b{font-size:var(--b-t-14)}
+[data-ui="board"] #game.land .b-hud.snug :is(.bh-bl,#bhPl,.bh-wt,.bh-rk,#bhTime)::before{margin:0 4px}
+[data-ui="board"] #game.land .b-hud.snug{padding:0 12px}
+[data-ui="board"] #game.land .b-hud.snug .bh-plw{display:none}
 [data-ui="board"] #game.land .b-hud.tight small{font-size:12px}
 [data-ui="board"] #game.land .b-top #lobbyBtn{min-height:30px;height:30px;padding:0 14px;font-size:var(--b-t-14)}
 [data-ui="board"] #game.land .b-top #chatBtn{min-height:30px;width:44px;height:30px;font-size:15px}
@@ -501,6 +523,21 @@
 [data-ui="board"] #game .b-hsheet .bs-head .b-sheet-t{font-size:var(--b-t-17);color:var(--b-text);padding:0;letter-spacing:0}
 [data-ui="board"] #game .b-hsheet .bs-head small{font-size:var(--b-t-13);color:var(--b-text-2);font-variant-numeric:tabular-nums}
 [data-ui="board"] #game.land .b-hsheet .b-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+/* the sheet fits the screen at every phone width, with larger text too (owner's priority, Issue #32 item 8): its one
+   column is the sheet's width, never its widest line's (an implicit grid column grew to the longest name, the "Your
+   place" line or the sponsor's, past the screen's edge); the type follows the reader's text size (rem: 16 px at the
+   default size, as before); and every line wraps whole words instead of being cut off */
+[data-ui="board"] #game .b-hsheet{--b-t-11:.6875rem;--b-t-13:.8125rem;--b-t-15:.9375rem;--b-t-17:1.0625rem}
+[data-ui="board"] #game .b-hsheet .b-sheet-in{grid-template-columns:minmax(0,1fr);max-width:100%;min-width:0;overflow-x:hidden}
+[data-ui="board"] #game .b-hsheet .b-sheet-in>*{min-width:0;max-width:100%}
+[data-ui="board"] #game .b-hsheet :is(.bs-head small,.b-tile small,.b-tile b,.b-tile span,.b-place span,.b-place b,.b-place small,.sp-txt small,.sp-txt b,.side-prize b,.side-prize small){white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;min-width:0}
+[data-ui="board"] #game .b-hsheet .b-place{min-width:0}
+[data-ui="board"] #game .b-hsheet .b-tile.bt-watch{display:flex;flex-direction:row;flex-wrap:wrap;align-content:flex-start;align-items:baseline;column-gap:5px}
+[data-ui="board"] #game .b-hsheet .b-tile.bt-watch small{flex:1 0 100%}
+[data-ui="board"] #game .b-hsheet .b-tile.bt-watch span{overflow-wrap:normal}
+[data-ui="board"] #game .b-hsheet .b-pres .sp-card{min-width:0;max-width:100%;box-sizing:border-box}
+[data-ui="board"] #game .b-hsheet .b-pres .sp-txt{flex:1 1 auto}
+
 [data-ui="board"] #game .b-place{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px;row-gap:0;padding:10px 12px;border-radius:var(--b-r-plate);border:1px solid var(--b-hair-gold);background:var(--b-gold-fill)}
 [data-ui="board"] #game .b-place span{font-size:var(--b-t-13);font-weight:500;color:var(--b-text-2)}
 [data-ui="board"] #game .b-place b{font-size:var(--b-t-17);font-weight:600;color:var(--b-gold-text)}
