@@ -706,13 +706,16 @@ async function navSuite(browser){
     check(/Last Friday/.test(await pg.textContent('#lobbyBody .b-feed')) && await bodyHas(pg, '.b-feed [data-bgo="board"]'), `${tag}: results (last tournament) on Home (Community Activity, opening Standings)`);
     check(!(await bodyHas(pg, '.lx-hello, .lx-door, .home-nav')), `${tag}: the Lounge greeting and its doors are gone from Home`);
     await tapTab(pg, 'poker');
-    check(await bodyHas(pg, '.bo-card') && /Blindrise Open Test/.test(await pg.textContent('#lobbyBody')), `${tag}: the Blindrise Open card on Poker`);
-    check(await bodyHas(pg, '.poker-hero #joinBtn') && /Friday Night/.test(await pg.textContent('#lobbyBody')), `${tag}: the club tournament card (Join) on Poker`);
+    // (B5, spec §6: the club tournament is the Upcoming hero card, the Blindrise Open a row under it)
+    check(await bodyHas(pg, '[data-bpick="open"]') && /Blindrise Open Test/.test(await pg.textContent('#lobbyBody')), `${tag}: the Blindrise Open on Poker`);
+    check(await bodyHas(pg, '.b-hero[data-bhero="club"] #joinBtn') && /Friday Night/.test(await pg.textContent('#lobbyBody')), `${tag}: the club tournament card (Join) on Poker`);
     if(owner) check(await bodyHas(pg, '#againBtn') || await bodyHas(pg, '#startBtn'), `${tag}: the director's tournament controls on Poker`);
     else check(await bodyHas(pg, '[data-demo]'), `${tag}: the demo table on Poker`);
     await pg.tap('#lobbyBody [data-bgo="board"]'); await sleep(500);
     check(await bodyHas(pg, '[data-bseg="prizes"]') && await lit(pg) === 'poker' && await bodyHas(pg, '.b-back'), `${tag}: Poker → "Standings & prizes" opens today's leaderboard and prizes, Poker still lit, a way back`);
     await pg.tap('#lobbyBody .b-back'); await sleep(400);
+    // (B5, spec §6: My hands is under Poker → My Tournaments)
+    await pg.tap('#lobbyBody [data-pseg="mine"]'); await sleep(400);
     await pg.tap('#lobbyBody [data-bgo="learn"][data-seg="hands"]'); await sleep(600);
     check(await bodyHas(pg, '[data-seg="hands"][aria-pressed="true"]') && await lit(pg) === 'poker', `${tag}: Poker → "My hands" opens today's hand review`);
     await tapTab(pg, 'poker'); await pg.tap('#lobbyBody [data-bgo="learn"][data-seg="lessons"]'); await sleep(500);

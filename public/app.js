@@ -588,17 +588,6 @@ function bNav(){
 const bRow = (attrs, ic, title, sub) => `<button type="button" class="b-row" ${attrs}>${bIc(ic, 'b-row-ic')}<span class="b-row-t"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span>${bIc('chev', 'b-chev')}</button>`;
 const bRows = (label, rows) => rows.length ? `<nav class="b-rows" aria-label="${label}">${rows.join('')}</nav>` : '';
 const bHead = (title, sub) => `<header class="b-pagehead"><h2>${title}</h2>${sub ? `<small>${sub}</small>` : ''}</header>`;
-// today's tournament cards (eventHTML), split as the Lounge splits them: the hero (and the director's "Start the next
-// tournament" box), then older results
-function bEventSplit(){
-  const ev = document.createElement('div'); ev.innerHTML = eventHTML();
-  const cards = [...ev.children];
-  let n = cards.length ? 1 : 0;
-  if(cards[0] && cards[0].classList.contains('next-box') && cards[1] && !cards[1].querySelector('table')) n = 2;
-  const main = cards.slice(0, n).find(c => !c.classList.contains('next-box') && c.querySelector('.status-pill'));
-  if(main){ main.classList.add('poker-hero'); main.insertAdjacentHTML('afterbegin', HERO_ART); }
-  return { top: cards.slice(0, n), rest: cards.slice(n) };
-}
 function boardLobby(body, clubsOn, clubsVisible){
   const owner = club.me.owner, playing = !!(club.myTable && club.tourney && club.tourney.status === 'running');
   if(tab === 'event') tab = 'poker';
@@ -611,18 +600,14 @@ function boardLobby(body, clubsOn, clubsVisible){
   document.querySelector('.app').classList.remove('wide');   // (one column on every tab: board.css)
   if(tab === 'biz'){ body.replaceChildren(); window.BizClub.render(body); return; }
   const back = (t, l) => `<button type="button" class="b-back" data-bgo="${t}">${bIc('chev', 'b-back-ic')}${l}</button>`;
-  if(tab === 'board'){ body.innerHTML = back('poker', 'Poker') + pageHead('Poker · The Strategy Table', 'Standings &amp; prizes') + boardHTML(); wireLobby(); return; }
+  // (and the last tournament's full results under it: places, points, the report card, the shuffle check)
+  if(tab === 'board'){ body.innerHTML = back('poker', 'Poker') + pageHead('Poker · The Strategy Table', 'Standings &amp; prizes') + boardHTML() + (boardSeg === 'prizes' && !club.events ? '' : lastResultHTML()); wireLobby(); return; }
   if(tab === 'learn'){ body.innerHTML = back('poker', 'Poker') + pageHead('Poker', 'Learn') + learnHTML(); wireLobby(); return; }
   if(tab === 'director'){ body.innerHTML = back('club', 'Club') + directorHTML(); wireLobby(); return; }
   const showClubs = clubsVisible && !playing;
   if(tab === 'poker'){
-    const { top } = bEventSplit();
-    body.innerHTML = bHead(club.events ? 'Blindrise Open' : 'Poker', club.events ? 'Open to every club' : 'The Strategy Table') + beventHTML();
-    body.append(...top);
-    body.insertAdjacentHTML('beforeend', (owner || playing ? '' : demoCard()) + bRows('Poker', [
-      bRow('data-bgo="board"', 'trophy', 'Standings &amp; prizes', 'The leaderboard, prizes and past tournaments'),
-      bRow('data-bgo="learn" data-seg="hands"', 'hands', 'My hands', 'Review the hands you played'),
-      bRow('data-bgo="learn" data-seg="lessons"', 'learn', 'Learn', 'Lessons, rules and the fair deal')]));
+    body.innerHTML = bPokerHTML(playing);
+    const sp = club.tourney && club.tourney.sponsor, h = body.querySelector('.b-hero[data-bhero="club"]'); if(sp && h) fillLogo(h, sp);
   } else if(tab === 'club'){
     const switching = club.clubSwitching && club.clubs && club.clubs.length > 1, invite = owner || club.membersInvite;
     body.innerHTML = bHead(esc(club.club ? club.club.name : 'Club'), owner ? 'Club director' : 'Members') + bRows('Club', [
@@ -653,6 +638,146 @@ function boardLobby(body, clubsOn, clubsVisible){
   }
   odoPlay(body);
   wireLobby();
+}
+// ---------- the Poker tab (UI_BOARD, Step-0 spec §6, phase B5: the board's "Tournament Lobby") ----------
+// Live / Upcoming / My Tournaments over what the club already has: its tournament (club.tourney: its prize and sponsor
+// as the director entered them), the Blindrise Open (club.bevent), the club's dominoes (Domino.state()), the results
+// (club.history). The first game of a segment is the hero card; the others are rows under it, and a tap on a row puts
+// that game in the hero. Then the organizer's controls (the director only), and rows to Standings & prizes, Learn and
+// the practice table. Display only: joining, cancelling and watching are today's messages and buttons.
+let pokerSeg = null, pokerPick = null, pokerMore = false;
+const B_TROPHY = '<svg class="b-hero-art" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><path d="M20 10h24v14a12 12 0 0 1-24 0zM20 15h-8c0 8 4 12 10 13M44 15h8c0 8-4 12-10 13M32 36v9M24 54h16M27 45h10l2 9H25z"/><path class="b-hero-art-s" d="M32 15l2 4.2 4.6.6-3.3 3.2.8 4.6-4.1-2.2-4.1 2.2.8-4.6-3.3-3.2 4.6-.6z"/></svg>';
+const bClock = at => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+// when a game starts, short: "Starts in 18 min", "Today 8:00 PM", "Tomorrow 8:00 PM", or the day
+function bStarts(at, short){
+  if(!at) return short ? 'Start time to come' : 'Starts when the organizer is ready';
+  const d = at - Date.now(), day = x => new Date(x).toDateString(), now = Date.now();
+  if(d <= 60000) return 'Starting now';
+  if(d < 3600000) return `Starts in ${Math.ceil(d / 60000)} min`;
+  if(day(at) === day(now)) return (short ? '' : 'Today ') + bClock(at);
+  if(day(at) === day(now + 864e5)) return 'Tomorrow ' + bClock(at);
+  return short ? new Date(at).toLocaleDateString([], { weekday: 'short' }) + ' ' + bClock(at) : esc(when(at));
+}
+const bJoined = n => `${n} joined`;
+// the games of each segment, in order: the club's tournament first, then the Blindrise Open, then dominoes
+function bPokerItems(){
+  const T = club.tourney, e = club.bevent, dm = club.domino ? window.Domino.state() : null, dt = dm && dm.t, me = club.me.id;
+  const open = T && (T.status === 'registering' || T.status === 'running') ? T : null, run = !!open && open.status === 'running';
+  const live = [], up = [], mine = [];
+  if(open) (run ? live : up).push({ k: 'club', T: open });
+  if(e) (e.status === 'running' ? live : up).push({ k: 'open', e });
+  if(dt && dt.status === 'running') live.push({ k: 'dom', dt, mineMatch: !!dm.mine });
+  if(open && (bMine(open) || run && (club.myTable || (open.places || []).some(r => r.uid === me)))) mine.push({ k: 'club', T: open });
+  if(e && (e.registered || e.playing)) mine.push({ k: 'open', e });
+  return { live, up, mine };
+}
+// the hero card: the board's lobby card (spec §6): what, the prize, the sponsor, when and how many, the one action
+function bHeroHTML(it){
+  const sp = it.k === 'club' && it.T.sponsor && it.T.sponsor.name ? it.T.sponsor : null;
+  let kicker, title, prize = '', meta, acts = '', more = '', note = '', tail = '';
+  if(it.k === 'club'){
+    const T = it.T, run = T.status === 'running', mine = bMine(T), out = run && (T.places || []).find(r => r.uid === club.me.id);
+    kicker = run ? '<span class="b-hero-k live"><i class="b-live-dot on" aria-hidden="true"></i>Live now</span>' : `<span class="b-hero-k">${club.events ? 'Blindrise Open' : 'Registration open'}</span>`;
+    title = esc(T.name); prize = T.prize ? esc(T.prize) : '';
+    if(run){
+      const [sb, bb] = E.levelFor(T.level, T.anteMode);
+      meta = `${T.breakUntil ? 'On break until ' + esc(clockAt(T.breakUntil - clockSkew)) : T.paused ? 'Paused' : `Level ${T.level + 1} · <span class="num">${fmt(sb)}/${fmt(bb)}</span>`} · ${T.remaining} of ${T.entrants} left`;
+      const first = (club.tables || [])[0];
+      acts = club.myTable ? `<button class="btn b-gold" data-watch="${esc(club.myTable)}">Go to my table</button>`
+        : !mine && T.lateOpen ? '<button class="btn b-gold" id="joinBtn">Join Now</button>'
+        : first ? `<button class="btn b-gold" data-watch="${esc(first.tid)}">Watch</button>` : '';
+      note = club.myTable ? '' : out ? `You finished ${ord(out.place)}. You can still watch.` : mine ? 'Finding your seat… your table opens by itself in a moment.'
+        : T.lateOpen ? `Late registration is open until the end of level ${T.lateLevels}. You start with ${fmt(T.stack)} chips.` : '';
+      more = `<div class="kv num"><div><small>Players left</small><b>${T.remaining} of ${T.entrants}</b></div><div><small>Level</small><b>${T.level + 1}</b></div><div><small>Blinds</small><b>${fmt(sb)}/${fmt(bb)}</b></div></div>
+        ${(club.tables || []).length ? `<div class="table-list">${club.tables.map(t => `<div class="trow"><b>Table ${t.n}</b><small>${t.players} players</small><button class="back" data-watch="${esc(t.tid)}">Watch</button></div>`).join('')}</div>` : ''}
+        ${T.seal ? `<p class="note seal">🔒 Shuffle seal <code>${esc(T.seal.slice(0, 16))}</code> · <a href="#" data-sealinfo>what's this?</a></p>` : ''}`;
+    } else {
+      meta = `${bStarts(T.startAt)} · ${bJoined(T.regs.length)}`;
+      acts = mine ? `<span class="b-hero-reg">Registered${bIc('check')}</span><button type="button" class="b-textbtn" id="leaveBtn">Cancel</button>` : '<button class="btn b-gold" id="joinBtn">Join Now</button>';
+      note = mine ? 'Your table opens by itself when the tournament starts.' : 'Free to join. Register to save your seat.';
+      more = `<div class="kv num"><div><small>Starts</small><b>${T.startAt ? esc(when(T.startAt)) : 'When the organizer starts it'}</b></div><div><small>Stack</small><b>${fmt(T.stack)}</b></div><div><small>Levels</small><b>${T.levelMin} min</b></div></div>
+        <p class="note">${T.tableSize === 6 ? '6-max tables' : `${T.tableSize || 9} players per table`}: a new table opens for every ${T.tableSize || 9} players and tables merge down to the final table. ${T.lateLevels ? `Late registration stays open until the end of level ${T.lateLevels}. ` : ''}${T.anteMode === 'each' ? 'Every player posts an ante each hand' : 'The big blind posts the ante for the table'} · ${T.actSec || 20} seconds to act.${extrasNote(T)}${breakNote(T)}</p>
+        ${T.repeat && T.repeat !== 'none' ? `<p class="note">Repeats ${T.repeat === 'daily' ? 'every day' : 'every week'} at this time.</p>` : ''}
+        <div class="plist">${T.regs.map(u => pchip(u, false)).join('') || '<span class="note">Nobody has joined yet.</span>'}</div>`;
+      if(mine) tail = remindHTML(T);
+    }
+  } else if(it.k === 'open'){
+    const e = it.e, live = e.status === 'running';
+    kicker = live ? '<span class="b-hero-k live"><i class="b-live-dot on" aria-hidden="true"></i>Live · Blindrise Open</span>' : '<span class="b-hero-k">Blindrise Open · every club</span>';
+    title = esc(e.name);
+    meta = live ? `${e.remaining} of ${e.count} players left` : `${bStarts(e.startAt)} · ${bJoined(e.count)}`;
+    acts = e.playing ? '<button class="btn b-gold" data-bev="go">Go to my table</button>'
+      : e.registered ? (live ? '<button class="btn b-gold" data-bev="go">Open</button>' : '<span class="b-hero-reg">Registered' + bIc('check') + '</span><button type="button" class="b-textbtn" data-bev="leave">Cancel</button>')
+      : e.open ? '<button class="btn b-gold" data-bev="join">Join Now</button>' : '';
+    if(live && !e.playing) acts += `<button class="btn${acts ? '' : ' b-gold'}" data-live="watch-events">Watch</button>`;
+    note = 'Play members of every Blindrise club. Everyone plays under their table name.';
+    more = `<p class="bo-meta"><span><b class="num">${fmt(e.stack)}</b> chips</span><span><b class="num">${e.levelMin}</b>-min levels</span></p>`;
+  } else {
+    const t = it.dt;
+    kicker = '<span class="b-hero-k live"><i class="b-live-dot on" aria-hidden="true"></i>Live · Dominoes</span>';
+    title = esc(t.name); meta = `${(t.entrants || []).length} players`;
+    acts = '<button class="btn b-gold" data-dm="tv">Watch the board</button>' + (it.mineMatch ? '<button class="btn" data-bgo="club">My match</button>' : '');
+  }
+  return `<section class="b-hero" aria-labelledby="bHeroH" data-bhero="${it.k}">${B_TROPHY}<div class="b-hero-top">${kicker}<h3 id="bHeroH">${title}</h3>${prize ? `<p class="b-hero-prize">${prize}</p>` : ''}</div>
+    ${sp ? `<${sponsorTap() ? `button type="button" data-bsponsor="${esc(sp.uid)}"` : 'div'} class="b-hero-sp"><span class="b-hero-logo" data-splogo></span><span class="b-hero-sp-t"><small>Sponsored by</small><b>${esc(sp.name)}</b></span>${sponsorTap() ? bIc('chev', 'b-chev') : ''}</${sponsorTap() ? 'button' : 'div'}>` : ''}
+    <p class="b-hero-meta">${meta}</p>${acts ? `<div class="b-hero-acts">${acts}</div>` : ''}${note ? `<p class="b-hero-note">${note}</p>` : ''}${tail}
+    ${more ? `<details class="b-hero-more"${pokerMore ? ' open' : ''}><summary>Details</summary>${more}</details>` : ''}</section>`;
+}
+// a row under the hero: name, prize, "8:00 PM · 18 joined", chevron
+function bTRowHTML(it){
+  let name, prize = '', meta, live = false;
+  if(it.k === 'club'){ const T = it.T; live = T.status === 'running'; name = T.name; prize = T.prize || ''; meta = live ? `Live · ${T.remaining} of ${T.entrants} left` : `${bStarts(T.startAt, true)} · ${bJoined(T.regs.length)}${bMine(T) ? ' · Registered' : ''}`; }
+  else if(it.k === 'open'){ const e = it.e; live = e.status === 'running'; name = e.name; meta = (live ? `Live · ${e.remaining} of ${e.count} left` : `${bStarts(e.startAt, true)} · ${bJoined(e.count)}${e.registered ? ' · Registered' : ''}`) + ' · Blindrise Open'; }
+  else { live = true; name = it.dt.name; meta = `Live · Dominoes · ${(it.dt.entrants || []).length} players`; }
+  return `<button type="button" class="b-row b-trow" data-bpick="${it.k}"><span class="b-trow-ic">${live ? '<i class="b-live-dot on" aria-hidden="true"></i>' : bIc('trophy')}</span><span class="b-row-t"><b>${esc(name)}</b>${prize ? `<small class="b-trow-prize">${esc(prize)}</small>` : ''}<small>${meta}</small></span>${bIc('chev', 'b-chev')}</button>`;
+}
+// what a segment says when it has nothing
+function bPokerEmpty(seg, items){
+  const T = club.tourney, box = (h, p, b) => `<div class="card-box b-pempty"><h3>${h}</h3><p class="note">${p}</p>${b ? `<div class="btn-row">${b}</div>` : ''}</div>`;
+  const toUp = items.up.length ? '<button class="btn" data-pseg="up">See Upcoming</button>' : '';
+  if(seg === 'live'){ const u = items.up[0], at = u && (u.k === 'club' ? u.T.startAt : u.e.startAt);
+    return box('No live games right now', u ? `Next: ${esc(u.k === 'club' ? u.T.name : u.e.name)}, ${at ? esc(when(at)) : 'when the organizer starts it'}.` : 'Games show here the moment they start.', toUp); }
+  if(seg === 'mine') return box('Nothing on your list yet', items.up.length ? 'Register for a game under Upcoming and it shows here, with your results and hands.' : 'Your registrations, results and hands show here.', toUp);
+  if(club.hosts === false) return box('Tournaments are run by Blindrise', 'Play real tournaments in the <b>Blindrise Open</b>: when one is open, it shows here. Meanwhile, try the practice table any time.');
+  if(T && T.status === 'cancelled') return box(`${esc(T.name)} was cancelled`, esc(T.note || 'The organizer cancelled this tournament.'));
+  return box('No tournament open right now', club.me.owner ? 'Open the next one below, and it shows here for every member.' : 'When the organizer opens the next tournament, it shows up here and you can join.');
+}
+// the director's controls for the club's tournament (as on today's card): open the next, invite, start
+function bOrgHTML(){
+  if(!club.me.owner || club.hosts === false) return '';
+  const T = club.tourney;
+  if(!T || !['registering', 'running'].includes(T.status)) return ownerNextHTML();
+  if(T.status === 'registering') return `<div class="card-box b-org"><span class="eyebrow">Organizer</span><div class="btn-row"><button class="btn" id="inviteBtn">Invite a friend</button><button class="btn red" id="startBtn" ${T.regs.length < 2 ? 'disabled' : ''}>Start now</button></div>
+    ${T.regs.length < 2 ? '<p class="warn-note">You need at least 2 players to start. Send an invite, and ask your friend to tap <b>Join Now</b>.</p>' : ''}<p class="note">Edit, pause or cancel it in Director.</p></div>`;
+  return T.lateOpen ? `<div class="card-box b-org"><span class="eyebrow">Organizer</span><p class="note">Late registration open until the end of level ${T.lateLevels}. <a href="#" id="lateInvite">Invite more players</a></p></div>` : '';
+}
+// my results: one row each, opening my report card
+function bResultsHTML(){
+  const me = club.me.id, rows = (club.history || []).map(h => ({ h, r: h.results.find(x => x.uid === me) })).filter(x => x.r).slice(0, 10);
+  return rows.map(({ h, r }) => `<button type="button" class="b-row b-trow" data-report="${esc(h.id)}"><span class="b-trow-ic b-place">${r.place}</span><span class="b-row-t"><b>${esc(h.name)}</b><small>${ord(r.place)} of ${h.entrants} · ${esc(new Date(h.endedAt).toLocaleDateString([], { month: 'short', day: 'numeric' }))} · ${r.pts} ${r.pts === 1 ? 'point' : 'points'}</small></span>${bIc('chev', 'b-chev')}</button>`);
+}
+function bPokerHTML(playing){
+  const items = bPokerItems(), segs = [['live', 'Live', items.live.length], ['up', 'Upcoming', items.up.length], ['mine', 'My Tournaments', 0]];
+  if(!pokerSeg || !segs.some(s => s[0] === pokerSeg)) pokerSeg = items.live.length ? 'live' : 'up';
+  const list = pokerSeg === 'live' ? items.live : pokerSeg === 'up' ? items.up : items.mine;
+  const pick = list.findIndex(x => x.k === pokerPick), hero = list[pick < 0 ? 0 : pick], rest = list.filter(x => x !== hero).map(bTRowHTML);
+  if(pokerSeg === 'mine') rest.push(...bResultsHTML(), bRow('data-bgo="learn" data-seg="hands"', 'hands', 'My hands', 'Review the hands you played'));
+  return bHead(club.events ? 'Blindrise Open' : 'Poker', club.events ? 'Open to every club' : 'Tournament lobby')
+    + `<div class="b-seg" role="tablist" aria-label="Games">${segs.map(([k, l, n]) => `<button type="button" role="tab" data-pseg="${k}" aria-selected="${k === pokerSeg}">${l}${n && k === 'live' ? `<i class="b-seg-n">${n}</i>` : ''}</button>`).join('')}</div>`
+    + `<div class="b-pseg" role="tabpanel" aria-label="${segs.find(s => s[0] === pokerSeg)[1]}">${hero ? bHeroHTML(hero) : bPokerEmpty(pokerSeg, items)}${rest.length ? `<nav class="b-rows" aria-label="${pokerSeg === 'mine' ? 'My tournaments' : 'More games'}">${rest.join('')}</nav>` : ''}</div>`
+    + bOrgHTML()
+    + bRows('Poker', [
+      bRow('data-bgo="board"', 'trophy', 'Standings &amp; prizes', 'The leaderboard, prizes and past tournaments'),
+      bRow('data-bgo="learn" data-seg="lessons"', 'learn', 'Learn', 'Lessons, rules and the fair deal'),
+      playing ? '' : bRow('data-demo', 'poker', 'Practice table', 'Play a 6-max table on your own. Nothing is saved.')].filter(Boolean));
+}
+if(BOARD){
+  document.addEventListener('click', e => {
+    const s = e.target.closest('[data-pseg]'); if(s){ pokerSeg = s.dataset.pseg; pokerPick = null; return renderLobby(); }
+    const p = e.target.closest('[data-bpick]'); if(p){ pokerPick = p.dataset.bpick; renderLobby(); const h = document.querySelector('#lobbyBody .b-hero'); if(h) h.scrollIntoView({ block: 'nearest' }); }
+  });
+  // (the lobby is drawn again on every update: Details stays as the member left it)
+  document.addEventListener('toggle', e => { if(e.target.classList && e.target.classList.contains('b-hero-more')) pokerMore = e.target.open; }, true);
 }
 // ---------- the board's first visit (UI_BOARD, Issue #39 problems 2, 3 and 5) ----------
 // A new account (club.me.onb 1, set by the server when it joins with an invite) gets a three-card welcome once, then a
