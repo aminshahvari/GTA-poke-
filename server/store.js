@@ -10,11 +10,18 @@ const os = require('os');
 
 const LEASE = 'lease', BEAT_MS = 3000;
 const UPSERT = 'insert into kv (k, v) values ($1, $2) on conflict (k) do update set v = excluded.v';
+// (a whole batch in one statement: every changed key in one multi-row upsert, every removed key in the same statement, so a
+// flush costs the same 4 round trips, begin, lease, write, commit, whatever the number of keys; it was keys + 3)
+const WRITE = 'with gone as (delete from kv where k = any($3::text[])) insert into kv (k, v) select k, v::jsonb from unnest($1::text[], $2::text[]) as x(k, v) on conflict (k) do update set v = excluded.v';
 const INSTANCE = (process.env.RENDER_INSTANCE_ID || os.hostname()) + ':' + process.pid;
 const cache = new Map();
 let pool = null, file = null, saveTimer = null;
 const dirty = new Set();
 let flushP = null, epoch = null, lost = false, frozen = false, beat = false, lastWriteError = null, onLost = () => {};
+// (marks counts changes; saved is the count the last committed batch covered. flush() waits for the changes made before it
+// was called, not for the queue to run dry: under load new changes kept every deal waiting on the whole store)
+let marks = 0, saved = 0, waiting = [];
+const wake = () => { const w = waiting; waiting = []; w.forEach(r => r()); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // one transaction on one pooled connection; any throw rolls back
@@ -54,38 +61,38 @@ function schedule(){
   if(file){ clearTimeout(saveTimer); saveTimer = setTimeout(writeFile, 150); return; }
   if(flushP || lost) return;
   // starts on the next tick, so writes made in one synchronous step of game logic land in the same batch
-  flushP = new Promise(r => setImmediate(r)).then(drain).finally(() => { flushP = null; });
+  flushP = new Promise(r => setImmediate(r)).then(drain).finally(() => { flushP = null; wake(); });
 }
 async function drain(){
   while((dirty.size || beat) && !lost){
-    const keys = [...dirty], hb = beat; dirty.clear(); beat = false;
+    const keys = [...dirty], hb = beat, upto = marks; dirty.clear(); beat = false;
     try{
       await tx(async c => {
         const cur = await leaseRow(c);
         if(cur.epoch !== epoch){ const e = new Error(`lease lost: epoch ${cur.epoch} held by ${cur.instance}, ours was ${epoch}`); e.lost = true; throw e; }
-        for(const k of keys){
-          if(cache.has(k)) await c.query(UPSERT, [k, JSON.stringify(cache.get(k))]);
-          else await c.query('delete from kv where k = $1', [k]);
-        }
-        if(hb) await c.query(UPSERT, [LEASE, JSON.stringify({ epoch, instance: INSTANCE, at: Date.now() })]);
+        const ks = [], vs = [], gone = [];
+        for(const k of keys) if(cache.has(k)){ if(!(hb && k === LEASE)){ ks.push(k); vs.push(JSON.stringify(cache.get(k))); } } else gone.push(k);
+        if(hb){ ks.push(LEASE); vs.push(JSON.stringify({ epoch, instance: INSTANCE, at: Date.now() })); }
+        if(ks.length || gone.length) await c.query(WRITE, [ks, vs, gone]);
       });
-      lastWriteError = null;
+      lastWriteError = null; saved = upto;
     }catch(e){
       keys.forEach(k => dirty.add(k)); // the whole batch stays dirty and is retried
       if(e.lost){ lost = true; console.error('store:', e.message); try{ onLost(e); }catch(_){} return; }
       lastWriteError = { message: String(e.message).replace(/\w+:\/\/\S+/g, '<url>'), at: Date.now() };
       console.error('store write failed', keys.length, 'keys:', e.message);
       await sleep(1000);
-    }
+    }finally{ wake(); }
   }
 }
-// Final save on shutdown: resolves true once nothing is left dirty (false if the lease is lost or the db is down).
+// Resolves true once every change made before the call is committed (false if the lease is lost). The final save on
+// shutdown (after freeze()) is then everything; a deal waits only for its own record and what was queued before it.
 async function flush(){
   if(file){ clearTimeout(saveTimer); writeFile(); return true; }
   if(lost) return false;
-  schedule();
-  while(flushP) await flushP;
-  return !lost && !dirty.size;
+  const want = marks;
+  while(saved < want && !lost){ schedule(); await new Promise(r => waiting.push(r)); }
+  return !lost && saved >= want;
 }
 
 const get = k => cache.get(k);
@@ -93,8 +100,8 @@ const get = k => cache.get(k);
 // lists for every member's socket, and each look used to walk every key in the store, hand records included)
 let kver = 0;
 const kcache = new Map();
-function set(k, v){ if(frozen) return v; if(!cache.has(k)) kver++; cache.set(k, v); dirty.add(k); schedule(); return v; }
-function del(k){ if(frozen) return; if(cache.has(k)) kver++; cache.delete(k); dirty.add(k); schedule(); }
+function set(k, v){ if(frozen) return v; if(!cache.has(k)) kver++; cache.set(k, v); dirty.add(k); marks++; schedule(); return v; }
+function del(k){ if(frozen) return; if(cache.has(k)) kver++; cache.delete(k); dirty.add(k); marks++; schedule(); }
 const keys = prefix => {
   let e = kcache.get(prefix);
   if(!e || e.v !== kver){ if(kcache.size > 400) kcache.clear(); e = { v: kver, ks: [...cache.keys()].filter(k => k.startsWith(prefix)) }; kcache.set(prefix, e); }

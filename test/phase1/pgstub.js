@@ -62,6 +62,7 @@ function check(written){
   }
 }
 async function run(sql, params, txn){
+  global.__pgstubQueries = (global.__pgstubQueries || 0) + 1; // (round trips, for tests that count them)
   if(LATENCY) await new Promise(r => setTimeout(r, LATENCY));
   if(down) throw new Error('p1 fake pg: connection refused');
   const s = sql.trim().toLowerCase();
@@ -73,6 +74,11 @@ async function run(sql, params, txn){
   if(s.startsWith('select')){
     const rows = readAll();
     return { rows: / where k = \$1/.test(s) ? rows.filter(r => r.k === params[0]) : rows };
+  }
+  // the store's batch: $1 keys and $2 values (JSON text) upserted, $3 keys deleted, in one statement
+  if(s.startsWith('with gone as')){
+    const [ks, vs, gone] = params;
+    return later(w => { ks.forEach((k, i) => { put(k, vs[i]); w.push([k, vs[i]]); }); for(const k of gone) try{ fs.unlinkSync(fileOf(k)); }catch(e){} });
   }
   if(s.startsWith('insert')){
     const [k, json] = params;
