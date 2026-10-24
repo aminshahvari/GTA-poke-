@@ -2090,10 +2090,21 @@ body{background:var(--lx-ink)}
 .brk.tight .brk-card{padding:10px 10px 9px;gap:2px}.brk.tight .brk-time{font-size:28px}.brk.tight .sp-card.big .sp-logo .bz-logo.sp{width:36px;height:36px}.brk.tight .sp-card.big .sp-txt b{font-size:16px}.brk.tight .sp-card{gap:8px}
 .brk-card{display:grid;justify-items:center;gap:4px;padding:14px 16px 12px;border-radius:var(--lx-r-lg,18px);text-align:center;
   background:radial-gradient(120% 120% at 50% 0%,rgba(216,180,106,.16),transparent 60%),linear-gradient(180deg,rgba(17,26,46,.94),rgba(7,11,20,.94));
-  border:1px solid var(--lx-hair2,rgba(241,223,176,.26));box-shadow:0 14px 40px rgba(0,0,0,.45);animation:brkIn .5s cubic-bezier(.2,.8,.2,1) both}
+  border:1px solid var(--lx-hair2,rgba(241,223,176,.26));box-shadow:0 14px 40px rgba(0,0,0,.45);animation:brkIn .15s ease-out both}
+.brk-card.still{animation:none}
 .brk-eye{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--lx-gold,#d8b46a)}
 .brk-time{font-size:34px;line-height:1.05;font-weight:600;color:var(--lx-ivory,#f4eee2)}
 .brk-sub{font-size:12px;color:var(--lx-mute,#a3abbb)}
+/* "On break — back in 4:59" (Issue #34): the words over the countdown, and a slow live dot, so a break never reads as a
+   frozen hand */
+.brk-lead{display:block;font-size:14px;line-height:1.3;font-weight:600;letter-spacing:0;color:var(--lx-gold-hi,#f1dfb0)}
+.brk-time.brk-wait{font-size:18px;line-height:1.25}
+.brk-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px;background:currentColor;animation:brkDot 1.6s ease-in-out infinite}
+@keyframes brkDot{50%{opacity:.25}}
+/* the winner beat: the winning hand in the pot's place for as long as the server holds the result */
+.pot.beat{padding:3px 12px;font-size:15px;max-width:min(92vw,calc(var(--bw,40px) * 5 + 40px))}
+.pot.beat .win-hand{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#tableArea.win-beat .center .msg{color:var(--lx-gold-hi,#f1dfb0)}
 .brk .sp-card{margin-top:8px;padding-top:10px;border-top:1px solid var(--lx-hair,rgba(241,223,176,.13));width:100%;justify-content:center}
 .sp-card{display:flex;align-items:center;gap:10px;min-width:0}
 .sp-txt{display:grid;min-width:0;text-align:left}
@@ -2116,7 +2127,7 @@ body{background:var(--lx-ink)}
 @keyframes brkIn{from{opacity:0}to{opacity:1}}
 @keyframes spnIn{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:none}}
 @keyframes spnSheen{to{transform:translateX(100%)}}
-@media (prefers-reduced-motion:reduce){.brk-card,.spn,.spn::after{animation:none}.spn{transition:none}}
+@media (prefers-reduced-motion:reduce){.brk-card,.spn,.spn::after,.brk-dot{animation:none}.spn{transition:none}}
 .brk-note{margin:6px 0 2px;color:var(--lx-gold-hi,#f1dfb0)}
 .brk [data-spbiz]{pointer-events:auto;cursor:pointer;transition:opacity .2s}
 .brk [data-spbiz]:active{opacity:.75}
